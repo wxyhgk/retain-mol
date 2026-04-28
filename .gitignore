@@ -6,3 +6,19 @@ dist/
 **/.ipynb_checkpoints/
 *.tsbuildinfo
 packages/mol-viewer/node_modules
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# xTB 运行时临时文件
+software/backend/.xtboptok
+software/backend/charges
+software/backend/wbo
+software/backend/gfnff_topo
+software/backend/xtbrestart
+software/backend/xtbtopo.mol
+software/backend/xtbopt.log
+software/backend/xtbopt.xyz
+software/backend/xtb.out
