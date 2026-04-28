@@ -1,0 +1,56 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "default",
+    "name": "默认 (Jmol CPK)",
+    "description": "基于 Jmol 的经典 CPK 配色。",
+    "source": "http://jmol.sourceforge.net/jscolors/",
+    "author": "RetainMol",
+    "version": "1.0.0"
+  },
+  "scene": {
+    "backgroundColor": "#f0f4f8",
+    "highlightColor": "#00d4ff",
+    "highlightOpacity": 0.35
+  },
+  "render": {
+    "ballScale": 0.4,
+    "bondRadiusStick": 0.08,
+    "bondGap": 0.18,
+    "spacefillScale": 0.8
+  },
+  "bonds": {
+    "defaultColor": "inherit-from-atoms"
+  },
+  "fallbackColor": "#ff69b4",
+  "elements": {
+    "H":  { "color": "#888888" },
+    "He": { "color": "#60c8c8" },
+    "Li": { "color": "#cc80ff" },
+    "Be": { "color": "#c2ff00" },
+    "B":  { "color": "#ffb5b5" },
+    "C":  { "color": "#404040" },
+    "N":  { "color": "#3050f8" },
+    "O":  { "color": "#ff2020" },
+    "F":  { "color": "#90e050" },
+    "Ne": { "color": "#80c8e0" },
+    "Na": { "color": "#ab5cf2" },
+    "Mg": { "color": "#8aff00" },
+    "Al": { "color": "#bfa6a6" },
+    "Si": { "color": "#f0c8a0" },
+    "P":  { "color": "#ff8000" },
+    "S":  { "color": "#d0d000" },
+    "Cl": { "color": "#1ff01f" },
+    "Ar": { "color": "#80d1e3" },
+    "K":  { "color": "#8f40d4" },
+    "Ca": { "color": "#3dff00" },
+    "Fe": { "color": "#e06633" },
+    "Co": { "color": "#f090a0" },
+    "Ni": { "color": "#50d050" },
+    "Cu": { "color": "#c88033" },
+    "Zn": { "color": "#7d80b0" },
+    "Br": { "color": "#a62929" },
+    "I":  { "color": "#940094" }
+  }
+}

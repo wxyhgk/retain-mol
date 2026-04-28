@@ -1,0 +1,357 @@
+"""
+/optimize — xTB 几何优化接口
+
+用 xtb CLI（subprocess）做几何优化，避免依赖 ASE。
+流程：写临时 XYZ → xtb --opt → 读 xtbopt.xyz + 解析能量 → 删临时目录。
+
+/optimize/stream — SSE 实时流式优化接口
+流程：写临时 XYZ → xtb --opt（异步子进程）→ tail xtbopt.log → 逐帧 SSE 推送。
+"""
+
+import asyncio
+import json
+import re
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import AsyncGenerator
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+router = APIRouter(prefix="/optimize", tags=["optimize"])
+
+
+# ── 数据模型 ──────────────────────────────────────────────────────────────────
+
+class Atom(BaseModel):
+    symbol: str
+    x: float
+    y: float
+    z: float
+
+class OptimizeRequest(BaseModel):
+    atoms: list[Atom]
+    charge: int = 0
+    multiplicity: int = 1
+    method: str = Field(default="gfn2", description="gfn2 | gfn1 | gfnff")
+    max_steps: int = Field(default=200, ge=1, le=1000)
+    optlevel: str = Field(default="normal", description="crude|sloppy|loose|lax|normal|tight|vtight|extreme")
+
+class AtomResult(BaseModel):
+    symbol: str
+    x: float
+    y: float
+    z: float
+
+class OptimizeResponse(BaseModel):
+    atoms: list[AtomResult]
+    energy: float       # Hartree
+    converged: bool
+    steps: int
+    method: str
+
+
+# ── XYZ 读写 ──────────────────────────────────────────────────────────────────
+
+def _write_xyz(path: Path, atoms: list[Atom]) -> None:
+    lines = [str(len(atoms)), ""]
+    for a in atoms:
+        lines.append(f"{a.symbol.capitalize():4s}  {a.x:16.10f}  {a.y:16.10f}  {a.z:16.10f}")
+    path.write_text("\n".join(lines) + "\n")
+
+
+def _read_xyz(path: Path) -> list[dict]:
+    lines = path.read_text().splitlines()
+    n = int(lines[0].strip())
+    result = []
+    for line in lines[2 : 2 + n]:
+        parts = line.split()
+        result.append({"symbol": parts[0], "x": float(parts[1]), "y": float(parts[2]), "z": float(parts[3])})
+    return result
+
+
+_ENERGY_RE = re.compile(r"TOTAL ENERGY\s+([-\d.]+)\s+Eh")
+_STEPS_RE  = re.compile(r"GEOMETRY OPTIMIZATION CONVERGED AFTER\s+(\d+)\s+ITERATIONS")
+_STEPS_RE2 = re.compile(r"FAILED TO CONVERGE GEOMETRY OPTIMIZATION IN\s+(\d+)\s+CYCLES")
+
+
+def _parse_energy_steps(log: str) -> tuple[float, int, bool]:
+    energies = _ENERGY_RE.findall(log)
+    energy = float(energies[-1]) if energies else 0.0
+
+    m = _STEPS_RE.search(log)
+    if m:
+        return energy, int(m.group(1)), True
+
+    m = _STEPS_RE2.search(log)
+    if m:
+        return energy, int(m.group(1)), False
+
+    # 没找到收敛标志：视为未收敛，步数取最后一个 cycle 号
+    cycle_nums = re.findall(r"\*\s+(\d+)\s+\*", log)
+    steps = int(cycle_nums[-1]) if cycle_nums else 0
+    return energy, steps, False
+
+
+# ── xtbopt.log 帧解析 ─────────────────────────────────────────────────────────
+
+_FRAME_ENERGY_RE = re.compile(r"energy:\s*([-\d.]+)")
+_FRAME_GNORM_RE  = re.compile(r"gnorm:\s*([-\d.]+)")
+
+
+def _parse_opt_log_frames(content: str) -> list[dict]:
+    """
+    解析 xtbopt.log 的多帧 XYZ 内容，返回帧列表。
+    每帧格式：
+        N
+         energy: <float> gnorm: <float> ...
+        sym x y z
+        ...
+    """
+    lines = content.splitlines()
+    frames = []
+    i = 0
+    while i < len(lines):
+        # 找到原子数行
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+        try:
+            n = int(line)
+        except ValueError:
+            i += 1
+            continue
+
+        # 需要至少 2 + n 行
+        if i + 1 + n >= len(lines):
+            break
+
+        comment = lines[i + 1]
+        m_e = _FRAME_ENERGY_RE.search(comment)
+        m_g = _FRAME_GNORM_RE.search(comment)
+        if not m_e or not m_g:
+            i += 1
+            continue
+
+        energy = float(m_e.group(1))
+        gnorm  = float(m_g.group(1))
+
+        atoms = []
+        valid = True
+        for j in range(n):
+            parts = lines[i + 2 + j].split()
+            if len(parts) < 4:
+                valid = False
+                break
+            atoms.append({
+                "symbol": parts[0],
+                "x": float(parts[1]),
+                "y": float(parts[2]),
+                "z": float(parts[3]),
+            })
+
+        if valid and len(atoms) == n:
+            frames.append({"energy": energy, "gnorm": gnorm, "atoms": atoms})
+
+        i += 2 + n
+
+    return frames
+
+
+# ── SSE 生成器 ────────────────────────────────────────────────────────────────
+
+async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None]:
+    """异步生成器：运行 xtb，tail xtbopt.log，逐帧发送 SSE 事件。"""
+
+    if len(req.atoms) < 2:
+        yield f"data: {json.dumps({'type': 'error', 'message': '至少需要 2 个原子'})}\n\n"
+        return
+
+    method_flag = {"gfn2": "2", "gfn1": "1", "gfnff": "ff"}.get(req.method.lower(), "2")
+
+    tmpdir_obj = tempfile.TemporaryDirectory(prefix="retainmol_xtb_stream_")
+    try:
+        work = Path(tmpdir_obj.name)
+        xyz_in = work / "input.xyz"
+        _write_xyz(xyz_in, req.atoms)
+
+        cmd = [
+            "xtb", str(xyz_in),
+            "--opt", req.optlevel,
+            f"--gfn{method_flag}",
+            "--chrg", str(req.charge),
+            "--uhf", str(req.multiplicity - 1),
+            "--cycles", str(req.max_steps),
+            "--parallel", "1",
+        ]
+
+        xtb_out = work / "xtb.out"
+        try:
+            with open(xtb_out, "w") as out_fh:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    cwd=str(work),
+                    stdout=out_fh,
+                    stderr=out_fh,
+                )
+        except FileNotFoundError:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'xtb 命令未找到，请确认已安装并在 PATH 中'})}\n\n"
+            return
+
+        opt_log = work / "xtbopt.log"
+        frames_sent = 0
+
+        # 轮询 xtbopt.log，直到 xtb 进程结束
+        while proc.returncode is None:
+            await asyncio.sleep(0.05)
+
+            if not opt_log.exists():
+                continue
+
+            content = opt_log.read_text(errors="replace")
+            frames = _parse_opt_log_frames(content)
+
+            for idx in range(frames_sent, len(frames)):
+                frame = frames[idx]
+                event = {
+                    "type": "frame",
+                    "step": idx + 1,
+                    "energy": frame["energy"],
+                    "gnorm": frame["gnorm"],
+                    "atoms": frame["atoms"],
+                }
+                yield f"data: {json.dumps(event)}\n\n"
+
+            frames_sent = len(frames)
+
+        # xtb 已结束，冲刷剩余帧
+        if opt_log.exists():
+            content = opt_log.read_text(errors="replace")
+            frames = _parse_opt_log_frames(content)
+
+            for idx in range(frames_sent, len(frames)):
+                frame = frames[idx]
+                event = {
+                    "type": "frame",
+                    "step": idx + 1,
+                    "energy": frame["energy"],
+                    "gnorm": frame["gnorm"],
+                    "atoms": frame["atoms"],
+                }
+                yield f"data: {json.dumps(event)}\n\n"
+
+            frames_sent = len(frames)
+
+        # 读 xtb.out 文件解析最终能量 / 收敛信息
+        log = xtb_out.read_text(errors="replace") if xtb_out.exists() else ""
+
+        energy, steps, converged = _parse_energy_steps(log)
+
+        # 如果 stdout 里没有步数信息，用已发帧数作为 steps
+        if steps == 0 and frames_sent > 0:
+            steps = frames_sent
+
+        # 如果 stdout 里没有能量，用最后一帧能量
+        if energy == 0.0 and frames_sent > 0 and opt_log.exists():
+            content = opt_log.read_text(errors="replace")
+            frames = _parse_opt_log_frames(content)
+            if frames:
+                energy = frames[-1]["energy"]
+
+        done_event = {
+            "type": "done",
+            "converged": converged,
+            "steps": steps if steps > 0 else frames_sent,
+            "energy": energy,
+        }
+        yield f"data: {json.dumps(done_event)}\n\n"
+
+    except Exception as exc:
+        yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+    finally:
+        tmpdir_obj.cleanup()
+
+
+# ── 端点 ──────────────────────────────────────────────────────────────────────
+
+@router.post("", response_model=OptimizeResponse)
+async def optimize(req: OptimizeRequest) -> OptimizeResponse:
+    if len(req.atoms) < 2:
+        raise HTTPException(status_code=400, detail="至少需要 2 个原子")
+
+    method_flag = {"gfn2": "2", "gfn1": "1", "gfnff": "ff"}.get(req.method.lower(), "2")
+
+    with tempfile.TemporaryDirectory(prefix="retainmol_xtb_") as tmpdir:
+        work = Path(tmpdir)
+        xyz_in = work / "input.xyz"
+        _write_xyz(xyz_in, req.atoms)
+
+        cmd = [
+            "xtb", str(xyz_in),
+            "--opt", req.optlevel,
+            f"--gfn{method_flag}",
+            "--chrg", str(req.charge),
+            "--uhf", str(req.multiplicity - 1),
+            "--cycles", str(req.max_steps),
+            "--parallel", "1",
+        ]
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(work),
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+        except FileNotFoundError:
+            raise HTTPException(status_code=503, detail="xtb 命令未找到，请确认已安装并在 PATH 中")
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=504, detail="xTB 计算超时（> 5 min）")
+
+        log = proc.stdout + proc.stderr
+
+        # xtb 把优化结果写到 xtbopt.xyz（和输入文件同名加 opt 后缀）
+        opt_xyz = work / "xtbopt.xyz"
+        if not opt_xyz.exists():
+            # 也可能叫 input.xtbopt.xyz（旧版）
+            alt = work / "input.xtbopt.xyz"
+            if alt.exists():
+                opt_xyz = alt
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"xTB 未输出优化坐标。返回码 {proc.returncode}。\n{log[-800:]}",
+                )
+
+        opt_atoms = _read_xyz(opt_xyz)
+        energy, steps, converged = _parse_energy_steps(log)
+
+    result_atoms = [
+        AtomResult(symbol=req.atoms[i].symbol, x=a["x"], y=a["y"], z=a["z"])
+        for i, a in enumerate(opt_atoms)
+    ]
+
+    return OptimizeResponse(
+        atoms=result_atoms,
+        energy=energy,
+        converged=converged,
+        steps=steps,
+        method=req.method,
+    )
+
+
+@router.post("/stream")
+async def optimize_stream(req: OptimizeRequest) -> StreamingResponse:
+    """SSE 流式几何优化：逐帧推送 xtbopt.log 中的优化轨迹。"""
+    return StreamingResponse(
+        _stream_optimization(req),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

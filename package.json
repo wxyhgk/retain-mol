@@ -1,0 +1,8 @@
+{
+  "name": "retainmol-workspace",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ]
+}

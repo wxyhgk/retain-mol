@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.cache/
+*.local
+.DS_Store
+**/.ipynb_checkpoints/
+*.tsbuildinfo
+packages/mol-viewer/node_modules

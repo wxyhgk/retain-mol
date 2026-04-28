@@ -1,0 +1,35 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "mono",
+    "name": "单色 (Mono)",
+    "description": "纯黑白灰主题，与 Apple 风格 UI 匹配。",
+    "author": "RetainMol",
+    "version": "1.0.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#fafafa",
+    "highlightColor": "#111827",
+    "highlightOpacity": 0.28
+  },
+  "fallbackColor": "#9ca3af",
+  "elements": {
+    "H":  { "color": "#e5e7eb" },
+    "C":  { "color": "#374151" },
+    "N":  { "color": "#6b7280" },
+    "O":  { "color": "#1f2937" },
+    "F":  { "color": "#9ca3af" },
+    "P":  { "color": "#4b5563" },
+    "S":  { "color": "#9ca3af" },
+    "Cl": { "color": "#6b7280" },
+    "Br": { "color": "#4b5563" },
+    "I":  { "color": "#1f2937" },
+    "Na": { "color": "#d1d5db" },
+    "K":  { "color": "#d1d5db" },
+    "Ca": { "color": "#d1d5db" },
+    "Mg": { "color": "#d1d5db" },
+    "Fe": { "color": "#374151" }
+  }
+}

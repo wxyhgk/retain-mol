@@ -1,0 +1,8 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.0.0
+python-multipart>=0.0.12
+
+# xtb 通过 conda-forge 安装（包含命令行二进制）：
+#   conda install -c conda-forge xtb
+# 不依赖 xtb-python 或 ASE

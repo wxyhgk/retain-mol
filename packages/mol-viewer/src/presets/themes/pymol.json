@@ -1,0 +1,26 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "pymol",
+    "name": "PyMOL 风",
+    "description": "碳原子用 PyMOL 标志性的绿色，其他元素接近 Jmol CPK。",
+    "source": "https://pymolwiki.org/index.php/Color_Values",
+    "author": "RetainMol",
+    "version": "1.0.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#000000",
+    "highlightColor": "#ffff00",
+    "highlightOpacity": 0.4
+  },
+  "elements": {
+    "C":  { "color": "#33ff33" },
+    "H":  { "color": "#ffffff" },
+    "N":  { "color": "#3333ff" },
+    "O":  { "color": "#ff3333" },
+    "S":  { "color": "#ffff33" },
+    "P":  { "color": "#ff8800" }
+  }
+}

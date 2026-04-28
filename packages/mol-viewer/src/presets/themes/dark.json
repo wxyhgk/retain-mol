@@ -1,0 +1,29 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "dark",
+    "name": "深色",
+    "description": "深色背景 + 更亮的元素配色，适合暗环境。",
+    "author": "RetainMol",
+    "version": "1.0.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#0f172a",
+    "highlightColor": "#38bdf8",
+    "highlightOpacity": 0.45
+  },
+  "elements": {
+    "C":  { "color": "#94a3b8" },
+    "H":  { "color": "#f1f5f9" },
+    "N":  { "color": "#60a5fa" },
+    "O":  { "color": "#f87171" },
+    "F":  { "color": "#a3e635" },
+    "P":  { "color": "#fb923c" },
+    "S":  { "color": "#fde047" },
+    "Cl": { "color": "#4ade80" },
+    "Br": { "color": "#f472b6" },
+    "I":  { "color": "#c084fc" }
+  }
+}
