@@ -25,6 +25,11 @@ export const RENDER = {
   /** 键的选中 / 未选中色（非主题控制，一般不改） */
   bondSelectedColor: 0xffaa00,
   bondDefaultColor: 0xaaaaaa,
+
+  /** 芳香键虚线参数（单位：Å） */
+  aromaticDashColor: 0x888888,
+  aromaticDashSize:  0.12,   // 每段实心小圆柱长度
+  aromaticGapSize:   0.10,   // 段间空隙
 }
 
 export const GHOST_LINE = {

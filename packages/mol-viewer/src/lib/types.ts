@@ -4,7 +4,7 @@
  */
 
 export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe'
-export type Tool = 'select' | 'add-atom' | 'add-bond' | 'delete' | 'measure'
+export type Tool = 'select' | 'add-atom' | 'add-bond' | 'delete' | 'measure' | 'move-object'
 export type MeasureType = 'auto' | 'distance' | 'angle' | 'dihedral'
 
 export const MEASURE_ATOM_COUNT: Record<MeasureType, number> = {

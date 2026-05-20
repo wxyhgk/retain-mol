@@ -1,23 +1,22 @@
 import { RotateCcw, Link2, Download, Upload, Eraser, FlaskConical, FlaskRound, Hash, MoreHorizontal, Palette, Search } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
+import {
+  useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty,
+  useMoleculeTemporal, listThemes, centerMolecule, SAMPLE_MOLECULES, cn,
+} from '@retainmol/mol-viewer'
 import PubChemSearch from '@/components/search/PubChemSearch'
-import { listThemes } from '@/presets'
 import { useStore } from 'zustand'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useFileIO } from '@/hooks/useFileIO'
-import { centerMolecule } from '@/lib/molecule'
-import { SAMPLE_MOLECULES } from '@/lib/samples'
-import { cn } from '@/lib/utils'
 
 export default function Toolbar({ showProperties, onToggleProperties }: {
   showProperties: boolean
   onToggleProperties: () => void
 }) {
-  const { setMolecule, clearMolecule, autoInferBonds, addHydrogens,
-    showAtomLabels, toggleAtomLabels, themeId, setTheme } = useMoleculeStore()
+  const { setMolecule, clearMolecule, autoInferBonds, addHydrogens } = useMoleculeStore()
+  const { showAtomLabels, toggleAtomLabels, themeId, setTheme } = useEditorStore()
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
   const themes = listThemes()
   const [searchOpen, setSearchOpen] = useState(false)
@@ -33,8 +32,8 @@ export default function Toolbar({ showProperties, onToggleProperties }: {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const { undo, redo, pastStates, futureStates } = useStore(useMoleculeStore.temporal)
-  const { importXYZ, importMolSdf, exportCurrentXYZ, exportCurrentMol, exportCurrentSdf } = useFileIO()
+  const { undo, redo, pastStates, futureStates } = useStore(useMoleculeTemporal)
+  const { importXYZ, importMolSdf, importXYZToScene, importMolSdfToScene, exportCurrentXYZ, exportCurrentMol, exportCurrentSdf } = useFileIO()
 
   const molName = molecule.name ?? 'New Molecule'
 
@@ -68,14 +67,14 @@ export default function Toolbar({ showProperties, onToggleProperties }: {
         <Tip label="撤销 (Ctrl+Z)" side="bottom">
           <Button variant="ghost" size="icon"
             className="w-8 h-8 rounded-[8px] text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-30"
-            onClick={undo} disabled={pastStates.length === 0}>
+            onClick={() => undo()} disabled={pastStates.length === 0}>
             <RotateCcw size={14} />
           </Button>
         </Tip>
         <Tip label="重做 (Ctrl+Y)" side="bottom">
           <Button variant="ghost" size="icon"
             className="w-8 h-8 rounded-[8px] text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-30"
-            onClick={redo} disabled={futureStates.length === 0}>
+            onClick={() => redo()} disabled={futureStates.length === 0}>
             <RotateCcw size={14} className="scale-x-[-1]" />
           </Button>
         </Tip>
@@ -92,8 +91,13 @@ export default function Toolbar({ showProperties, onToggleProperties }: {
             </DropdownMenuTrigger>
           </Tip>
           <DropdownMenuContent side="bottom" className="bg-white border-gray-200 shadow-lg">
-            <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={importXYZ}>导入 XYZ</DropdownMenuItem>
-            <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={importMolSdf}>导入 MOL / SDF</DropdownMenuItem>
+            <div className="px-2 py-1 text-[10px] text-gray-400 uppercase tracking-wider">替换当前</div>
+            <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={importXYZ}>XYZ</DropdownMenuItem>
+            <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={importMolSdf}>MOL / SDF</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1 text-[10px] text-gray-400 uppercase tracking-wider">添加到场景</div>
+            <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={importXYZToScene}>XYZ</DropdownMenuItem>
+            <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={importMolSdfToScene}>MOL / SDF</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 

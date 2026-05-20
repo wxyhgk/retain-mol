@@ -11,7 +11,7 @@ RetainMol 后端 — FastAPI
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import optimize
+from routers import optimize, prepare
 
 app = FastAPI(
     title="RetainMol Backend",
@@ -19,19 +19,17 @@ app = FastAPI(
     description="计算化学后端：xTB 优化、Gaussian/ORCA 任务管理（规划中）",
 )
 
-# ── CORS（开发阶段允许前端 localhost:5173 跨域）────────────────────────────────
+# ── CORS（开发阶段全放开）────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 app.include_router(optimize.router)
+app.include_router(prepare.router)
 
 
 @app.get("/health")

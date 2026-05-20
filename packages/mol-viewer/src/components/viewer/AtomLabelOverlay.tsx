@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
-import { MolRenderer } from '@/lib/molRenderer'
-import { ticker, Phase } from '@/lib/animation'
-import { ATOM_LABEL as L } from '@/config/overlay.config'
-import { CAMERA } from '@/config/camera.config'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
+import { useEditorStore } from '../../store/editorStore'
+import { MolRenderer } from '../../lib/molRenderer'
+import { ticker, Phase } from '../../lib/animation'
+import { ATOM_LABEL as L } from '../../config/overlay.config'
+import { CAMERA } from '../../config/camera.config'
 
 interface Props {
   renderer: MolRenderer | null
@@ -21,7 +22,7 @@ export default function AtomLabelOverlay({ renderer }: Props) {
     // 原因：dirty flag 在 zundo beginTransaction 期间容易丢失状态，
     //       而 draw 本身很轻（canvas 2D 文字），无需额外节流。
     const draw = () => {
-      const { showAtomLabels } = useMoleculeStore.getState()
+      const { showAtomLabels } = useEditorStore.getState()
       const molecule = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
 
       const ctx = canvas.getContext('2d')
@@ -82,7 +83,7 @@ export default function AtomLabelOverlay({ renderer }: Props) {
       invalidate
     )
     const unsubPositions = useMoleculeStore.subscribe(s => s.atomPositionVersion,   invalidate)
-    const unsubLabels    = useMoleculeStore.subscribe(s => s.showAtomLabels, () => {
+    const unsubLabels    = useEditorStore.subscribe(s => s.showAtomLabels, () => {
       ticker.invalidate()
       draw() // 切换时同步画一次，即时响应
     })

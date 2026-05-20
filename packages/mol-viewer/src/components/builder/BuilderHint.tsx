@@ -2,8 +2,8 @@
  * BuilderHint — 根据当前工具显示操作提示
  */
 
-import { useMoleculeStore } from '@/store/moleculeStore'
-import { getElementConfig } from '@/config/elements.config'
+import { useEditorStore } from '../../store/editorStore'
+import { getElementConfig } from '../../config/elements.config'
 
 const HINTS: Record<string, string> = {
   'select':   '点击选择原子或键 · Shift 多选 · Shift+点击键切换键级',
@@ -14,7 +14,7 @@ const HINTS: Record<string, string> = {
 }
 
 export default function BuilderHint() {
-  const { activeTool, activeElement, bondingAtomId } = useMoleculeStore()
+  const { activeTool, activeElement, bondingAtomId } = useEditorStore()
   const el = getElementConfig(activeElement)
 
   if (bondingAtomId) {

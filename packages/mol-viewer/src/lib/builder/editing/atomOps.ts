@@ -3,9 +3,9 @@
  * 纯函数，不修改入参，返回新 Molecule。
  */
 
-import type { Molecule } from '@/lib/molecule'
-import { newAtom, newBond } from '@/lib/molecule'
-import { getElementConfig } from '@/config/elements.config'
+import type { Molecule } from '../../molecule'
+import { newAtom, newBond } from '../../molecule'
+import { getElementConfig } from '../../../config/elements.config'
 import { calcAddAtomOnExisting } from '../geometry/vsepr'
 
 /** 替换指定原子的元素符号，保留位置、id 和已有键 */
@@ -36,10 +36,10 @@ export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
     const el = getElementConfig(target.symbol)
     if (el.maxBonds === 0) continue
 
-    const currentBonds = current.bonds.filter(
-      b => b.atomId1 === target.id || b.atomId2 === target.id
-    ).length
-    const needed = el.maxBonds - currentBonds
+    const targetBonds = current.bonds
+      .filter(b => b.atomId1 === target.id || b.atomId2 === target.id)
+    const usedValence = targetBonds.reduce((sum, b) => sum + b.order, 0)
+    const needed = Math.max(0, el.maxBonds - usedValence)
     if (needed <= 0) continue
 
     for (let i = 0; i < needed; i++) {

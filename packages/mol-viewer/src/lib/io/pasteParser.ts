@@ -3,15 +3,16 @@
  * 支持：MOL/SDF、XYZ、Gaussian .gjf、裸原子坐标
  */
 
-import type { Atom, Molecule } from '@/lib/molecule'
-import { parseXYZ, inferBonds } from '@/lib/molecule'
+import type { Atom, Molecule } from '../molecule'
+import { parseXYZ, inferBonds } from '../molecule'
+import { genId } from '../utils'
 import { parseMol } from './molFormat'
 
 export type PasteFormat = 'mol' | 'gjf' | 'xyz' | 'raw' | 'unknown'
 
 // 工具：生成 atom
 function makeAtom(symbol: string, x: number, y: number, z: number): Atom {
-  return { id: crypto.randomUUID(), symbol, x, y, z }
+  return { id: genId(), symbol, x, y, z }
 }
 
 // ─── 格式识别 ───────────────────────────────

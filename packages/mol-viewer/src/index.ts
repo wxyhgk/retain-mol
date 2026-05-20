@@ -14,7 +14,8 @@ export type { SceneObject } from './lib/sceneObject'
 export { createSceneObject } from './lib/sceneObject'
 
 // ── Store & Selectors ─────────────────────────────────────────────────────────
-export { useMoleculeStore, selectActiveMolecule, selectActiveMoleculeOrEmpty } from './store/moleculeStore'
+export { useMoleculeStore, useMoleculeTemporal, selectActiveMolecule, selectActiveMoleculeOrEmpty } from './store/moleculeStore'
+export { useEditorStore } from './store/editorStore'
 export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement } from './lib/types'
 export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from './lib/types'
 
@@ -27,7 +28,8 @@ export { resolveTheme, listThemes, hexToInt } from './presets'
 export type { ResolvedTheme } from './presets'
 
 // ── 元素配置 ──────────────────────────────────────────────────────────────────
-export { getElementConfig } from './config/elements.config'
+export { getElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from './config/elements.config'
+export type { ElementConfig, Hybridization } from './config/elements.config'
 
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 export { cn } from './lib/utils'
@@ -37,6 +39,8 @@ export { useBuilder, bondSelectedAtoms } from './hooks/useBuilder'
 export {
   calcDistance, calcAngle, calcDihedral, canBond, calcAddAtomOnExisting,
 } from './lib/builder/BuilderEngine'
+
+export { getConnectedFragment, splitConnectedComponents } from './lib/builder/analysis/fragments'
 
 // ── PubChem ───────────────────────────────────────────────────────────────────
 export { fetchCompoundSdf } from './lib/pubchem'

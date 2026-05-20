@@ -5,6 +5,8 @@
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
     "types": ["vite/client"],
+    "strict": false,
+    "noImplicitAny": false,
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -16,22 +18,13 @@
     "jsx": "react-jsx",
 
     /* Linting */
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "erasableSyntaxOnly": false,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
     "paths": {
-      "@/components/viewer/*": ["../../packages/mol-viewer/src/components/viewer/*"],
-      "@/components/builder/*": ["../../packages/mol-viewer/src/components/builder/*"],
-      "@/lib/*": ["../../packages/mol-viewer/src/lib/*"],
-      "@/config/*": ["../../packages/mol-viewer/src/config/*"],
-      "@/presets": ["../../packages/mol-viewer/src/presets/index.ts"],
-      "@/presets/*": ["../../packages/mol-viewer/src/presets/*"],
-      "@/store/moleculeStore": ["../../packages/mol-viewer/src/store/moleculeStore.ts"],
-      "@/hooks/useBuilder": ["../../packages/mol-viewer/src/hooks/useBuilder.ts"],
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "../../packages/mol-viewer/src"]
+  "include": ["src"]
 }

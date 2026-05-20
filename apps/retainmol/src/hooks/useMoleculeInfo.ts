@@ -4,9 +4,8 @@
  */
 
 import { useMemo } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
-import { getElementConfig } from '@/config/elements.config'
-import type { Atom } from '@/lib/molecule'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty, getElementConfig } from '@retainmol/mol-viewer'
+import type { Atom } from '@retainmol/mol-viewer'
 
 export interface MoleculeInfo {
   formula: string
@@ -15,7 +14,7 @@ export interface MoleculeInfo {
   bondCount: number
 }
 
-function calcFormula(atoms: Atom[]): string {
+function calcFormula(atoms: readonly Atom[]): string {
   if (atoms.length === 0) return '—'
   const counts: Record<string, number> = {}
   // Hill order: C first, H second, then alphabetical
@@ -30,7 +29,7 @@ function calcFormula(atoms: Atom[]): string {
   return symbols.map(s => `${s}${counts[s] > 1 ? counts[s] : ''}`).join('')
 }
 
-function calcMW(atoms: Atom[]): number {
+function calcMW(atoms: readonly Atom[]): number {
   return atoms.reduce((sum, a) => sum + getElementConfig(a.symbol).atomicMass, 0)
 }
 

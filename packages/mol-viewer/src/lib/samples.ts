@@ -1,9 +1,10 @@
+import { genId } from './utils'
 import type { Molecule } from './molecule'
 import { inferBonds } from './molecule'
 
 function makeMol(name: string, atomDefs: [string, number, number, number][]): Molecule {
   const atoms = atomDefs.map(([symbol, x, y, z]) => ({
-    id: crypto.randomUUID(), symbol, x, y, z,
+    id: genId(), symbol, x, y, z,
   }))
   return { name, atoms, bonds: inferBonds(atoms) }
 }

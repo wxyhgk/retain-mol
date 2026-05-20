@@ -1,4 +1,5 @@
 import type { Molecule } from './molecule'
+import { genId } from './utils'
 
 export interface SceneObject {
   readonly id: string
@@ -12,7 +13,7 @@ export interface SceneObject {
 
 export function createSceneObject(molecule: Molecule, name?: string): SceneObject {
   return {
-    id: crypto.randomUUID().slice(0, 8),
+    id: genId().slice(0, 8),
     molecule,
     name: name ?? molecule.name ?? 'Molecule',
     visible: true,

@@ -1,6 +1,9 @@
-import { useMoleculeStore, selectActiveMoleculeOrEmpty, DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '@/store/moleculeStore'
-import type { MeasureType } from '@/store/moleculeStore'
-import { calcDistance, calcAngle, calcDihedral } from '@/lib/builder/BuilderEngine'
+import {
+  useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty,
+  DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT,
+  calcDistance, calcAngle, calcDihedral,
+} from '@retainmol/mol-viewer'
+import type { MeasureType } from '@retainmol/mol-viewer'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
 
@@ -28,7 +31,7 @@ export default function MeasurePanel() {
     measurements, measureType, pendingAtomIds, activeTool,
     removeMeasurement, clearMeasurements, setMeasureType,
     measureStyle, setMeasureStyle,
-  } = useMoleculeStore()
+  } = useEditorStore()
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
 
   const atomById = new Map(molecule.atoms.map(a => [a.id, a]))

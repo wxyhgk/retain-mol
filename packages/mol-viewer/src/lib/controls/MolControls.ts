@@ -15,7 +15,7 @@
  */
 
 import * as THREE from 'three'
-import { CONTROLS } from '@/config/camera.config'
+import { CONTROLS } from '../../config/camera.config'
 
 type State = 'none' | 'rotate' | 'pan' | 'dolly'
 

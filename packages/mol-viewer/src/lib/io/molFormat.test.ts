@@ -44,12 +44,21 @@ describe('parseMol', () => {
     expect(parseMol(METHANE).name).toBe('methane')
   })
 
-  it('正确解析原子符号和坐标', () => {
+  it('正确解析原子符号和坐标（含 y/z，OCL 内部取反应被还原）', () => {
     const mol = parseMol(METHANE)
     expect(mol.atoms[0].symbol).toBe('C')
     expect(mol.atoms[0].x).toBeCloseTo(0)
+    expect(mol.atoms[0].y).toBeCloseTo(0)
+    expect(mol.atoms[0].z).toBeCloseTo(0)
+    // SDF 中 H1 = (0.6293, 0.6293, 0.6293)，解析后应与 SDF 一致
     expect(mol.atoms[1].symbol).toBe('H')
-    expect(mol.atoms[1].x).toBeCloseTo(0.6293)
+    expect(mol.atoms[1].x).toBeCloseTo( 0.6293)
+    expect(mol.atoms[1].y).toBeCloseTo( 0.6293)
+    expect(mol.atoms[1].z).toBeCloseTo( 0.6293)
+    // H2 = (-0.6293, -0.6293, 0.6293)
+    expect(mol.atoms[2].x).toBeCloseTo(-0.6293)
+    expect(mol.atoms[2].y).toBeCloseTo(-0.6293)
+    expect(mol.atoms[2].z).toBeCloseTo( 0.6293)
   })
 
   it('正确解析键级', () => {

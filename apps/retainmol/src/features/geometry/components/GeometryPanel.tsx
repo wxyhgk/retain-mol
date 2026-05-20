@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
-import { getElementConfig as getElement } from '@/config/elements.config'
+import {
+  useMoleculeStore, selectActiveMoleculeOrEmpty,
+  getElementConfig as getElement,
+  bondSelectedAtoms,
+  calcDistance, calcAngle, calcDihedral,
+} from '@retainmol/mol-viewer'
 import { useMoleculeInfo } from '@/hooks/useMoleculeInfo'
-import { bondSelectedAtoms } from '@/hooks/useBuilder'
-import { calcDistance, calcAngle, calcDihedral } from '@/lib/builder/BuilderEngine'
 import { Button } from '@/components/ui/button'
 import { Trash2, ArrowUpDown, Link, FlaskRound } from 'lucide-react'
 

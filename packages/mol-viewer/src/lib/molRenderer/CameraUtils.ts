@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Atom } from '../molecule'
-import { CAMERA } from '@/config/camera.config'
+import { CAMERA } from '../../config/camera.config'
 
 export function resetCamera(
   camera: THREE.PerspectiveCamera,

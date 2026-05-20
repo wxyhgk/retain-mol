@@ -72,6 +72,13 @@ def _read_xyz(path: Path) -> list[dict]:
     return result
 
 
+def _read_first_existing_xyz(*paths: Path) -> list[dict] | None:
+    for path in paths:
+        if path.exists():
+            return _read_xyz(path)
+    return None
+
+
 _ENERGY_RE = re.compile(r"TOTAL ENERGY\s+([-\d.]+)\s+Eh")
 _STEPS_RE  = re.compile(r"GEOMETRY OPTIMIZATION CONVERGED AFTER\s+(\d+)\s+ITERATIONS")
 _STEPS_RE2 = re.compile(r"FAILED TO CONVERGE GEOMETRY OPTIMIZATION IN\s+(\d+)\s+CYCLES")
@@ -161,6 +168,15 @@ def _parse_opt_log_frames(content: str) -> list[dict]:
     return frames
 
 
+def _frame_signature(frame: dict) -> tuple[int, float | None]:
+    atoms = frame.get("atoms") or []
+    first = atoms[0] if atoms else {}
+    return (
+        len(atoms),
+        round(float(first.get("x", 0.0)), 8) if first else None,
+    )
+
+
 # ── SSE 生成器 ────────────────────────────────────────────────────────────────
 
 async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None]:
@@ -188,44 +204,61 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
             "--parallel", "1",
         ]
 
+        yield f"data: {json.dumps({'type': 'status', 'message': 'xTB 已启动，等待优化轨迹...'})}\n\n"
+
         xtb_out = work / "xtb.out"
+        opt_log = work / "xtbopt.log"
+
+        # 用文件接收 stdout，避免 PIPE 缓冲区阻塞
+        xtb_fh = open(xtb_out, "w")
         try:
-            with open(xtb_out, "w") as out_fh:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    cwd=str(work),
-                    stdout=out_fh,
-                    stderr=out_fh,
-                )
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(work),
+                stdout=xtb_fh,
+                stderr=xtb_fh,
+            )
         except FileNotFoundError:
+            xtb_fh.close()
             yield f"data: {json.dumps({'type': 'error', 'message': 'xtb 命令未找到，请确认已安装并在 PATH 中'})}\n\n"
             return
 
-        opt_log = work / "xtbopt.log"
         frames_sent = 0
+        last_sent_signature: tuple[int, float | None] | None = None
+        last_status_at = 0.0
+        try:
+            # 轮询 xtbopt.log，直到 xtb 进程结束
+            while proc.returncode is None:
+                await asyncio.sleep(0.05)
 
-        # 轮询 xtbopt.log，直到 xtb 进程结束
-        while proc.returncode is None:
-            await asyncio.sleep(0.05)
+                if not opt_log.exists():
+                    loop_time = asyncio.get_running_loop().time()
+                    if loop_time - last_status_at > 2.0:
+                        last_status_at = loop_time
+                        yield f"data: {json.dumps({'type': 'status', 'message': 'xTB 计算中，尚未生成轨迹帧...'})}\n\n"
+                    continue
 
-            if not opt_log.exists():
-                continue
+                content = opt_log.read_text(errors="replace")
+                frames = _parse_opt_log_frames(content)
 
-            content = opt_log.read_text(errors="replace")
-            frames = _parse_opt_log_frames(content)
+                for idx in range(frames_sent, len(frames)):
+                    frame = frames[idx]
+                    last_sent_signature = _frame_signature(frame)
+                    event = {
+                        "type": "frame",
+                        "step": idx + 1,
+                        "energy": frame["energy"],
+                        "gnorm": frame["gnorm"],
+                        "atoms": frame["atoms"],
+                    }
+                    yield f"data: {json.dumps(event)}\n\n"
 
-            for idx in range(frames_sent, len(frames)):
-                frame = frames[idx]
-                event = {
-                    "type": "frame",
-                    "step": idx + 1,
-                    "energy": frame["energy"],
-                    "gnorm": frame["gnorm"],
-                    "atoms": frame["atoms"],
-                }
-                yield f"data: {json.dumps(event)}\n\n"
+                frames_sent = len(frames)
 
-            frames_sent = len(frames)
+            # 等待进程彻底结束
+            await proc.wait()
+        finally:
+            xtb_fh.close()
 
         # xtb 已结束，冲刷剩余帧
         if opt_log.exists():
@@ -234,6 +267,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
 
             for idx in range(frames_sent, len(frames)):
                 frame = frames[idx]
+                last_sent_signature = _frame_signature(frame)
                 event = {
                     "type": "frame",
                     "step": idx + 1,
@@ -254,18 +288,51 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
         if steps == 0 and frames_sent > 0:
             steps = frames_sent
 
-        # 如果 stdout 里没有能量，用最后一帧能量
+        final_atoms: list[dict] | None = None
+
+        # 如果 stdout 里没有能量，用最后一帧能量，同时获取最终原子坐标
         if energy == 0.0 and frames_sent > 0 and opt_log.exists():
             content = opt_log.read_text(errors="replace")
             frames = _parse_opt_log_frames(content)
             if frames:
                 energy = frames[-1]["energy"]
+                final_atoms = frames[-1]["atoms"]
+
+        # 如果还没有最终原子坐标，从 xtbopt.xyz 读取
+        if final_atoms is None:
+            final_atoms = _read_first_existing_xyz(
+                work / "xtbopt.xyz",
+                work / "input.xtbopt.xyz",
+                work / "xtblast.xyz",
+                work / "input.xtblast.xyz",
+            )
+
+        if proc.returncode not in (0, None) and final_atoms is None:
+            tail = log[-1200:] if log else f"xTB exited with code {proc.returncode}"
+            yield f"data: {json.dumps({'type': 'error', 'message': tail})}\n\n"
+            return
+
+        # 有些 xtb 版本不会在运行中持续写 xtbopt.log，至少把最终结构作为最后一帧推给前端。
+        if final_atoms:
+            final_signature = _frame_signature({"atoms": final_atoms})
+            if final_signature != last_sent_signature:
+                frames_sent += 1
+                final_frame_event = {
+                    "type": "frame",
+                    "step": frames_sent,
+                    "energy": energy,
+                    "gnorm": 0.0,
+                    "atoms": final_atoms,
+                }
+                yield f"data: {json.dumps(final_frame_event)}\n\n"
 
         done_event = {
             "type": "done",
-            "converged": converged,
+            "converged": converged and proc.returncode == 0,
             "steps": steps if steps > 0 else frames_sent,
             "energy": energy,
+            "atoms": final_atoms,
+            "warning": log[-1200:] if proc.returncode not in (0, None) else None,
         }
         yield f"data: {json.dumps(done_event)}\n\n"
 

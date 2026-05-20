@@ -4,10 +4,11 @@
  * Three.js 逻辑全部在 RotateGizmoController.ts 中。
  */
 import { useEffect } from 'react'
-import { useMoleculeStore } from '@/store/moleculeStore'
-import { MolRenderer } from '@/lib/molRenderer'
-import { ticker, Phase } from '@/lib/animation'
-import { RotateGizmoController } from '@/lib/molRenderer/RotateGizmoController'
+import { useMoleculeStore } from '../../store/moleculeStore'
+import { useEditorStore } from '../../store/editorStore'
+import { MolRenderer } from '../../lib/molRenderer'
+import { ticker, Phase } from '../../lib/animation'
+import { RotateGizmoController } from '../../lib/molRenderer/RotateGizmoController'
 
 interface Props {
   renderer: MolRenderer | null
@@ -16,7 +17,7 @@ interface Props {
 export default function RotateGizmo({ renderer }: Props) {
   const selectedAtomIds = useMoleculeStore(s => s.selectedAtomIds)
   const selectedBondIds = useMoleculeStore(s => s.selectedBondIds)
-  const activeTool = useMoleculeStore(s => s.activeTool)
+  const activeTool = useEditorStore(s => s.activeTool)
 
   useEffect(() => {
     if (!renderer || activeTool !== 'select') return
@@ -26,11 +27,10 @@ export default function RotateGizmo({ renderer }: Props) {
 
     // 接入共享 Ticker（Phase.Gizmo 在 Render 之前执行）
     const unsubTicker = ticker.subscribe('rotate-gizmo', Phase.Gizmo, () => ctrl.update())
-    ticker.startContinuous('gizmo')
+    ticker.invalidate()
 
     return () => {
       unsubTicker()
-      ticker.stopContinuous('gizmo')
       ctrl.dispose()
     }
   }, [renderer, selectedAtomIds, selectedBondIds, activeTool])

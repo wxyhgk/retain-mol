@@ -3,10 +3,11 @@
  * 计算新原子应放置的位置，基于中心原子的配位几何。
  */
 
-import { getElementConfig } from '@/config/elements.config'
-import { inferGeometry, GEOMETRY_RULES, STANDARD_BOND_LENGTHS } from '@/config/geometry.config'
-import type { Atom, Bond } from '@/lib/molecule'
-import { add, sub, scale, dot, cross, length, normalize, Vec3 } from '../math/vec3'
+import { getElementConfig } from '../../../config/elements.config'
+import { inferGeometry, GEOMETRY_RULES, STANDARD_BOND_LENGTHS } from '../../../config/geometry.config'
+import type { Atom, Bond } from '../../molecule'
+import { add, sub, scale, dot, cross, length, normalize } from '../math/vec3'
+import type { Vec3 } from '../math/vec3'
 
 // ── 键长 ──────────────────────────────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ export function calcBondLength(sym1: string, sym2: string): number {
 
 export function getNeighborDirs(
   center: Atom,
-  bonds: Bond[],
+  bonds: readonly Bond[],
   atomById: Map<string, Atom>,
 ): Vec3[] {
   return bonds
@@ -115,8 +116,8 @@ export interface AddAtomResult {
 
 export function calcAddAtomOnExisting(
   centerAtom: Atom,
-  bonds: Bond[],
-  atoms: Atom[],
+  bonds: readonly Bond[],
+  atoms: readonly Atom[],
   newSymbol: string,
 ): AddAtomResult {
   const atomById = new Map(atoms.map(a => [a.id, a]))

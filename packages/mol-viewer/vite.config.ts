@@ -1,15 +1,53 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import path from 'path'
 
-export default defineConfig({
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+const externals = [
+  'react',
+  'react-dom',
+  'three',
+  'zustand',
+  'zundo',
+  'class-variance-authority',
+  'clsx',
+  'tailwind-merge',
+  'lucide-react',
+]
+
+const external = (id: string) => externals.some(dep => id === dep || id.startsWith(`${dep}/`))
+
+export default defineConfig(({ command }) => {
+  const base = {
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
     },
-  },
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-  },
+  }
+
+  if (command === 'build') {
+    return {
+      ...base,
+      build: {
+        lib: {
+          entry: path.resolve(__dirname, './src/index.ts'),
+          formats: ['es'],
+          fileName: () => 'index.js',
+        },
+        outDir: 'dist',
+        emptyOutDir: true,
+        rollupOptions: {
+          external,
+        },
+      },
+    }
+  }
+
+  return {
+    ...base,
+    test: {
+      globals: true,
+      environment: 'node',
+      include: ['src/**/*.test.ts'],
+    },
+  }
 })

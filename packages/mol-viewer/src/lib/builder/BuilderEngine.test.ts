@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { newAtom, newBond } from '@/lib/molecule'
+import { newAtom, newBond } from '../molecule'
 import {
   calcBondLength,
   findNextBondDir,
@@ -12,7 +12,7 @@ import {
   autoAddHydrogens,
   replaceAtomSymbol,
 } from './BuilderEngine'
-import type { Atom, Bond } from '@/lib/molecule'
+import type { Atom, Bond } from '../molecule'
 
 // 允许的角度误差（度）
 const ANGLE_TOL = 0.5
@@ -285,6 +285,45 @@ describe('autoAddHydrogens', () => {
     const result = autoAddHydrogens(mol)
     const hCount = result.atoms.filter(a => a.symbol === 'H').length
     expect(hCount).toBe(6)  // 每个 C 加 3 个 H
+  })
+
+  it('C=C 乙烯骨架按键级补 4 个 H → C2H4', () => {
+    const c1 = newAtom('C', 0,    0, 0)
+    const c2 = newAtom('C', 1.34, 0, 0)
+    const bond = newBond(c1.id, c2.id, 2)
+    const mol = { atoms: [c1, c2], bonds: [bond] }
+    const result = autoAddHydrogens(mol)
+    const hCount = result.atoms.filter(a => a.symbol === 'H').length
+    expect(hCount).toBe(4)
+  })
+
+  it('共轭二烯 C=C-C=C 骨架补 6 个 H → C4H6', () => {
+    const c1 = newAtom('C', 0,    0, 0)
+    const c2 = newAtom('C', 1.34, 0, 0)
+    const c3 = newAtom('C', 2.80, 0, 0)
+    const c4 = newAtom('C', 4.14, 0, 0)
+    const mol = {
+      atoms: [c1, c2, c3, c4],
+      bonds: [
+        newBond(c1.id, c2.id, 2),
+        newBond(c2.id, c3.id, 1),
+        newBond(c3.id, c4.id, 2),
+      ],
+    }
+    const result = autoAddHydrogens(mol)
+    const hCount = result.atoms.filter(a => a.symbol === 'H').length
+    expect(hCount).toBe(6)
+  })
+
+  it('苯环芳香碳每个只补 1 个 H → C6H6', () => {
+    const atoms = Array.from({ length: 6 }, (_, i) => {
+      const angle = i * Math.PI / 3
+      return newAtom('C', Math.cos(angle), Math.sin(angle), 0)
+    })
+    const bonds = atoms.map((a, i) => newBond(a.id, atoms[(i + 1) % 6].id, i % 2 === 0 ? 2 : 1))
+    const result = autoAddHydrogens({ atoms, bonds })
+    const hCount = result.atoms.filter(a => a.symbol === 'H').length
+    expect(hCount).toBe(6)
   })
 
   it('已满价的 CH4 不添加额外 H', () => {

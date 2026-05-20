@@ -4,9 +4,11 @@
  */
 
 import { useCallback } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
-import { parseXYZ, exportXYZ, centerMolecule } from '@/lib/molecule'
-import { parseMol, parseSdf, exportMol, exportSdf, is2D } from '@/lib/io/molFormat'
+import {
+  useMoleculeStore, selectActiveMoleculeOrEmpty,
+  parseXYZ, exportXYZ, centerMolecule,
+  parseMol, parseSdf, exportMol, exportSdf, is2D,
+} from '@retainmol/mol-viewer'
 
 function download(text: string, filename: string, mime = 'text/plain') {
   const blob = new Blob([text], { type: mime })

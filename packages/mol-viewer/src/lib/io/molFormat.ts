@@ -3,9 +3,9 @@
  * 底层使用 OpenChemLib，自动处理 V2000 / V3000、各种非标准输出
  */
 
-import OCL from 'openchemlib'
-import type { Atom, Bond, Molecule } from '@/lib/molecule'
-import { newAtom, newBond } from '@/lib/molecule'
+import * as OCL from 'openchemlib'
+import type { Atom, Bond, Molecule } from '../molecule'
+import { newAtom, newBond } from '../molecule'
 
 // OCL 返回的 Molecule 对象类型
 type OCLMol = ReturnType<typeof OCL.Molecule.fromMolfile>
@@ -16,22 +16,26 @@ function oclToMolecule(oclMol: OCLMol, fallbackName = 'Imported'): Molecule {
   const atoms: Atom[] = []
   const na = oclMol.getAllAtoms()
   for (let i = 0; i < na; i++) {
+    // OCL 内部对 y 和 z 取反（toMolfile 写 -y/-z，fromMolfile 读时再次取反）。
+    // 用 -getAtomY / -getAtomZ 还原为 SDF 文件中的原始坐标。
     atoms.push(newAtom(
       oclMol.getAtomLabel(i),
-      oclMol.getAtomX(i),
-      oclMol.getAtomY(i),
-      oclMol.getAtomZ(i),
+       oclMol.getAtomX(i),
+      -oclMol.getAtomY(i),
+      -oclMol.getAtomZ(i),
     ))
   }
 
   const bonds: Bond[] = []
   const nb = oclMol.getAllBonds()
+  const isAromaticBondFn = (oclMol as unknown as { isAromaticBond?: (i: number) => boolean }).isAromaticBond?.bind(oclMol)
   for (let i = 0; i < nb; i++) {
     const a1 = oclMol.getBondAtom(0, i)
     const a2 = oclMol.getBondAtom(1, i)
     const bo = oclMol.getBondOrder(i)
     const order: 1 | 2 | 3 = bo === 2 ? 2 : bo === 3 ? 3 : 1
-    bonds.push(newBond(atoms[a1].id, atoms[a2].id, order))
+    const aromatic = isAromaticBondFn?.(i) === true || undefined
+    bonds.push({ ...newBond(atoms[a1].id, atoms[a2].id, order), ...(aromatic ? { aromatic: true } : {}) })
   }
 
   // OCL 在部分版本里可能有 getName()，没有则用首行兜底
@@ -48,8 +52,8 @@ function moleculeToOCL(mol: Molecule): OCLMol {
     const atomicNo = getAtomicNo(a.symbol) || 6  // 未识别时退化为碳
     const idx = oclMol.addAtom(atomicNo)
     oclMol.setAtomX(idx, a.x)
-    oclMol.setAtomY(idx, a.y)
-    oclMol.setAtomZ(idx, a.z)
+    oclMol.setAtomY(idx, -a.y)   // OCL 导出时再次取反，补偿以写出正确值
+    oclMol.setAtomZ(idx, -a.z)
     idxMap.set(a.id, idx)
   }
   const BOND_TYPE: Record<1 | 2 | 3, number> = {

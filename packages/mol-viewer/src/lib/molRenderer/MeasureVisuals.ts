@@ -3,11 +3,11 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { Atom } from '../molecule'
-import type { MeasureStyle, MeasureType } from '@/lib/types'
-import { DEFAULT_MEASURE_STYLE } from '@/lib/types'
-import type { ResolvedTheme } from '@/presets'
-import { getElementConfig as getElement } from '@/config/elements.config'
-import { RENDER } from '@/config/render.config'
+import type { MeasureStyle, MeasureType } from '../types'
+import { DEFAULT_MEASURE_STYLE } from '../types'
+import type { ResolvedTheme } from '../../presets'
+import { getElementConfig as getElement } from '../../config/elements.config'
+import { RENDER } from '../../config/render.config'
 
 /**
  * 管理测量可视化：已提交测量的几何体 + pending 光晕 + 标注锚点。

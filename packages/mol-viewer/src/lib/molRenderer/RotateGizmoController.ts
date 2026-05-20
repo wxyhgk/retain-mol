@@ -5,9 +5,11 @@
  */
 
 import * as THREE from 'three'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
+import type { Molecule } from '../molecule'
 import type { MolRenderer } from './MolRenderer'
-import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '@/config/rotateGizmo.config'
+import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../config/rotateGizmo.config'
+import { ticker } from '../animation'
 
 // ── 内部类型 ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,7 @@ export class RotateGizmoController {
   private _dragRel     = new THREE.Vector3()
   private _dragNewLocal= new THREE.Vector3()
   private _dragPositions: Map<string, { x: number; y: number; z: number }> = new Map()
+  private _dragRaf: number | null = null
 
   constructor(
     private renderer: MolRenderer,
@@ -228,9 +231,12 @@ export class RotateGizmoController {
     window.removeEventListener('pointerup', this.onPointerUp)
 
     if (this.drag) {
+      this.flushDragPositions()
       useMoleculeStore.getState().endTransaction()
       renderer.controls.enabled = true
     }
+    if (this._dragRaf !== null) cancelAnimationFrame(this._dragRaf)
+    this._dragRaf = null
     renderer.canvas.style.cursor = ''
 
     for (const r of this.rings) {
@@ -267,6 +273,7 @@ export class RotateGizmoController {
     const hit = this.hitTest(e.clientX, e.clientY)
     for (const r of this.rings) r.hovered = (r === hit)
     this.renderer.canvas.style.cursor = hit ? 'grab' : ''
+    ticker.invalidate()
   }
 
   private onPointerDown = (e: PointerEvent) => {
@@ -323,6 +330,17 @@ export class RotateGizmoController {
     this.renderer.controls.enabled = false
     this.renderer.canvas.style.cursor = 'grabbing'
     this.renderer.canvas.setPointerCapture?.(e.pointerId)
+    ticker.startContinuous('gizmo-drag')
+  }
+
+  private flushDragPositions() {
+    if (this._dragRaf !== null) {
+      cancelAnimationFrame(this._dragRaf)
+      this._dragRaf = null
+    }
+    if (this._dragPositions.size > 0) {
+      useMoleculeStore.getState().setAtomPositions(this._dragPositions)
+    }
   }
 
   private onPointerMoveDrag = (e: PointerEvent) => {
@@ -345,7 +363,12 @@ export class RotateGizmoController {
       pos.y = this._dragNewLocal.y
       pos.z = this._dragNewLocal.z
     }
-    useMoleculeStore.getState().setAtomPositions(this._dragPositions)
+    if (this._dragRaf === null) {
+      this._dragRaf = requestAnimationFrame(() => {
+        this._dragRaf = null
+        useMoleculeStore.getState().setAtomPositions(this._dragPositions)
+      })
+    }
   }
 
   private onCaptureClick = (e: MouseEvent) => {
@@ -354,6 +377,7 @@ export class RotateGizmoController {
 
   private onPointerUp = (e: PointerEvent) => {
     if (!this.drag) return
+    this.flushDragPositions()
     this.drag.ring.dragAngle = 0
     this.drag = null
     this.suppressNextClick = true
@@ -362,13 +386,15 @@ export class RotateGizmoController {
     this.renderer.canvas.style.cursor = ''
     this.renderer.canvas.releasePointerCapture?.(e.pointerId)
     this.onPointerMoveHover(e)
+    ticker.stopContinuous('gizmo-drag')
+    ticker.invalidate()
   }
 }
 
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
 function buildSpecs(
-  mol: ReturnType<typeof useMoleculeStore.getState>['molecule'],
+  mol: Molecule,
   selectedAtomIds: Set<string>,
   selectedBondIds: Set<string>,
 ): RingSpec[] {

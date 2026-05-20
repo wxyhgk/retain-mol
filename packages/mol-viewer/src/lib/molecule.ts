@@ -1,3 +1,4 @@
+import { genId } from './utils'
 export interface Atom {
   readonly id: string
   readonly symbol: string
@@ -13,6 +14,7 @@ export interface Bond {
   readonly atomId1: string
   readonly atomId2: string
   readonly order: 1 | 2 | 3
+  readonly aromatic?: boolean
 }
 
 export interface Molecule {
@@ -31,7 +33,7 @@ export function parseXYZ(text: string): Molecule {
     const parts = lines[i].trim().split(/\s+/)
     if (parts.length >= 4) {
       atoms.push({
-        id: crypto.randomUUID(),
+        id: genId(),
         symbol: parts[0],
         x: parseFloat(parts[1]),
         y: parseFloat(parts[2]),
@@ -52,13 +54,13 @@ export function exportXYZ(mol: Molecule): string {
   return lines.join('\n')
 }
 
-import { BONDING, BOND_RADII } from '@/config/bonding.config'
+import { BONDING, BOND_RADII } from '../config/bonding.config'
 
 function bondRadius(sym: string) {
   return BOND_RADII[sym] ?? BOND_RADII.default
 }
 
-export function inferBonds(atoms: Atom[]): Bond[] {
+export function inferBonds(atoms: readonly Atom[]): Bond[] {
   const bonds: Bond[] = []
 
   for (let i = 0; i < atoms.length; i++) {
@@ -68,7 +70,7 @@ export function inferBonds(atoms: Atom[]): Bond[] {
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
       const maxBond = (bondRadius(a.symbol) + bondRadius(b.symbol)) * BONDING.tolerance
       if (dist < maxBond && dist > BONDING.minBondLength) {
-        bonds.push({ id: crypto.randomUUID(), atomId1: a.id, atomId2: b.id, order: 1 })
+        bonds.push({ id: genId(), atomId1: a.id, atomId2: b.id, order: 1 })
       }
     }
   }
@@ -76,11 +78,11 @@ export function inferBonds(atoms: Atom[]): Bond[] {
 }
 
 export function newAtom(symbol: string, x = 0, y = 0, z = 0): Atom {
-  return { id: crypto.randomUUID(), symbol, x, y, z }
+  return { id: genId(), symbol, x, y, z }
 }
 
 export function newBond(atomId1: string, atomId2: string, order: 1 | 2 | 3 = 1): Bond {
-  return { id: crypto.randomUUID(), atomId1, atomId2, order }
+  return { id: genId(), atomId1, atomId2, order }
 }
 
 export function centerMolecule(mol: Molecule): Molecule {

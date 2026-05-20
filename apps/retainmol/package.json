@@ -1,18 +1,22 @@
 {
   "name": "retainmol",
   "private": true,
-  "version": "0.0.4",
+  "version": "0.0.5",
   "type": "module",
   "scripts": {
+    "predev": "npm run build --workspace @retainmol/mol-viewer",
     "dev": "vite --host 0.0.0.0",
+    "prebuild": "npm run build --workspace @retainmol/mol-viewer",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "pretest": "npm run build --workspace @retainmol/mol-viewer",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@retainmol/mol-viewer": "file:../../packages/mol-viewer",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-scroll-area": "^1.2.10",

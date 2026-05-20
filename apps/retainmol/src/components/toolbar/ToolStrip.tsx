@@ -1,23 +1,23 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { MousePointer2, Atom, Link2, Trash2, Ruler } from 'lucide-react'
+import { MousePointer2, Atom, Link2, Trash2, Ruler, Move } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useMoleculeStore, type Tool } from '@/store/moleculeStore'
-import { getElementConfig } from '@/config/elements.config'
-import { cn } from '@/lib/utils'
+import { useEditorStore, getElementConfig, cn } from '@retainmol/mol-viewer'
+import type { Tool } from '@retainmol/mol-viewer'
 
 const TOOLS: { id: Tool; icon: React.ReactNode; label: string; shortcut: string }[] = [
-  { id: 'select',   icon: <MousePointer2 size={16} />, label: '选择',    shortcut: 'S' },
-  { id: 'add-atom', icon: <Atom size={16} />,          label: '添加原子', shortcut: 'A' },
-  { id: 'add-bond', icon: <Link2 size={16} />,         label: '添加键',   shortcut: 'B' },
-  { id: 'delete',   icon: <Trash2 size={16} />,        label: '删除',     shortcut: 'D' },
-  { id: 'measure',  icon: <Ruler size={16} />,         label: '测量',     shortcut: 'M' },
+  { id: 'select',      icon: <MousePointer2 size={16} />, label: '选择',    shortcut: 'S' },
+  { id: 'move-object', icon: <Move size={16} />,          label: '移动分子（Alt=旋转）', shortcut: 'V' },
+  { id: 'add-atom',    icon: <Atom size={16} />,          label: '添加原子', shortcut: 'A' },
+  { id: 'add-bond',    icon: <Link2 size={16} />,         label: '添加键',   shortcut: 'B' },
+  { id: 'delete',      icon: <Trash2 size={16} />,        label: '删除',     shortcut: 'D' },
+  { id: 'measure',     icon: <Ruler size={16} />,         label: '测量',     shortcut: 'M' },
 ]
 
 const COMMON_ELEMENTS = ['H','C','N','O','F','P','S','Cl','Br','I','Si','B'] as const
 
 /** 画布左侧竖向工具条 */
 export default function ToolStrip() {
-  const { activeTool, setActiveTool, activeElement, setActiveElement } = useMoleculeStore()
+  const { activeTool, setActiveTool, activeElement, setActiveElement } = useEditorStore()
   const [pickerOpen, setPickerOpen] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
 

@@ -5,9 +5,10 @@
 
 import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
-import { calcAddAtomOnExisting, canBond } from '@/lib/builder/BuilderEngine'
-import { getElementConfig } from '@/config/elements.config'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
+import { useEditorStore } from '../store/editorStore'
+import { calcAddAtomOnExisting, canBond } from '../lib/builder/BuilderEngine'
+import { getElementConfig } from '../config/elements.config'
 
 export interface BuilderHandlers {
   onAtomClick: (atomId: string, event: MouseEvent) => void
@@ -29,11 +30,8 @@ export function useBuilder(): BuilderHandlers {
   const store = useMoleculeStore
 
   const onAtomClick = useCallback((atomId: string, event: MouseEvent) => {
-    const {
-      activeTool, bondingAtomId, activeElement,
-      addAtom, addBond, removeAtom,
-      selectAtom, clearSelection, setBondingAtom,
-    } = store.getState()
+    const { activeTool, bondingAtomId, activeElement, setBondingAtom } = useEditorStore.getState()
+    const { addAtom, addBond, removeAtom, selectAtom, clearSelection } = store.getState()
     const molecule = selectActiveMoleculeOrEmpty(store.getState())
 
     switch (activeTool) {
@@ -91,7 +89,7 @@ export function useBuilder(): BuilderHandlers {
 
       // ── 测量工具：点击原子加入 pending，凑满自动提交 ──
       case 'measure': {
-        store.getState().addMeasureAtom(atomId)
+        useEditorStore.getState().addMeasureAtom(atomId)
         break
       }
 
@@ -104,7 +102,8 @@ export function useBuilder(): BuilderHandlers {
   }, [store])
 
   const onBondClick = useCallback((bondId: string, event: MouseEvent) => {
-    const { activeTool, removeBond, cycleBondOrder, selectBond } = store.getState()
+    const { activeTool } = useEditorStore.getState()
+    const { removeBond, cycleBondOrder, selectBond } = store.getState()
     switch (activeTool) {
       case 'delete':
         removeBond(bondId)
@@ -120,7 +119,8 @@ export function useBuilder(): BuilderHandlers {
   }, [store])
 
   const onBackgroundClick = useCallback((worldPos: THREE.Vector3, event: MouseEvent) => {
-    const { activeTool, activeElement, bondingAtomId, addAtom, clearSelection, setBondingAtom, commitPendingMeasure } = store.getState()
+    const { activeTool, activeElement, bondingAtomId, setBondingAtom, commitPendingMeasure } = useEditorStore.getState()
+    const { addAtom, clearSelection } = store.getState()
     switch (activeTool) {
       case 'add-atom':
         addAtom(activeElement, worldPos.x, worldPos.y, worldPos.z)
@@ -129,7 +129,6 @@ export function useBuilder(): BuilderHandlers {
         if (bondingAtomId) { setBondingAtom(null); clearSelection() }
         break
       case 'measure':
-        // 背景点击 = 提交当前 pending（由 store 按 auto/手动模式决定是否提交）
         commitPendingMeasure()
         break
       default:
@@ -171,9 +170,8 @@ export function useBuilder(): BuilderHandlers {
   }, [])
 
   const onAtomDoubleClick = useCallback((_atomId: string, _event: MouseEvent) => {
-    const { activeTool, addHydrogens } = store.getState()
-    if (activeTool !== 'select') return
-    addHydrogens(_atomId)
+    if (useEditorStore.getState().activeTool !== 'select') return
+    store.getState().addHydrogens(_atomId)
   }, [store])
 
   return { onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick, onAtomDragStart, onAtomDrag, onAtomDragEnd }

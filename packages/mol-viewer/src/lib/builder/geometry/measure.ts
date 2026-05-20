@@ -3,8 +3,9 @@
  * 距离、键角、二面角的纯函数计算。
  */
 
-import type { Atom } from '@/lib/molecule'
-import { sub, dot, cross, length, normalize, Vec3 } from '../math/vec3'
+import type { Atom } from '../../molecule'
+import { sub, dot, cross, length, normalize } from '../math/vec3'
+import type { Vec3 } from '../math/vec3'
 
 /** 两原子间距（Å） */
 export function calcDistance(a1: Atom, a2: Atom): number {

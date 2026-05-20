@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { useMoleculeStore } from '@/store/moleculeStore'
-import { MolRenderer } from '@/lib/molRenderer'
-import { ticker, Phase } from '@/lib/animation'
-import { MEASURE_LABEL as L } from '@/config/overlay.config'
+import { useMoleculeStore } from '../../store/moleculeStore'
+import { useEditorStore } from '../../store/editorStore'
+import { MolRenderer } from '../../lib/molRenderer'
+import { ticker, Phase } from '../../lib/animation'
+import { MEASURE_LABEL as L } from '../../config/overlay.config'
 
 interface Props {
   renderer: MolRenderer | null
@@ -28,7 +29,7 @@ export default function MeasureOverlay({ renderer }: Props) {
 
       renderer.camera.updateMatrixWorld()
 
-      const { fontSize } = useMoleculeStore.getState().measureStyle
+      const { fontSize } = useEditorStore.getState().measureStyle
       ctx.font = `${L.fontWeight} ${fontSize}px ${L.fontFamily}`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -56,9 +57,9 @@ export default function MeasureOverlay({ renderer }: Props) {
     const invalidate = () => ticker.invalidate()
 
     const unsubTicker  = ticker.subscribe('measure-overlay', Phase.Overlay, draw)
-    const unsubMeasure = useMoleculeStore.subscribe(s => s.measurements,      invalidate)
-    const unsubPending = useMoleculeStore.subscribe(s => s.pendingAtomIds,     invalidate)
-    const unsubStyle   = useMoleculeStore.subscribe(s => s.measureStyle,       invalidate)
+    const unsubMeasure = useEditorStore.subscribe(s => s.measurements,      invalidate)
+    const unsubPending = useEditorStore.subscribe(s => s.pendingAtomIds,     invalidate)
+    const unsubStyle   = useEditorStore.subscribe(s => s.measureStyle,       invalidate)
 
     // 相机交互 → 连续模式
     const unsubCamStart = renderer.controls.on('interactionstart', () => {

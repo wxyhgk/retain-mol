@@ -1,18 +1,20 @@
 import { useState } from 'react'
-import { Atom, Ruler } from 'lucide-react'
+import { Atom, Ruler, Layers } from 'lucide-react'
 import { GeometryPanel } from '@/features/geometry'
 import { MeasurePanel } from '@/features/measure'
-import { cn } from '@/lib/utils'
+import ScenePanel from '@/features/scene/components/ScenePanel'
+import { cn } from '@retainmol/mol-viewer'
 
-type TabId = 'geometry' | 'measure'
+type TabId = 'scene' | 'geometry' | 'measure'
 
 const TABS: { id: TabId; icon: React.ReactNode; label: string }[] = [
-  { id: 'geometry', icon: <Atom size={16} />,  label: '几何' },
-  { id: 'measure',  icon: <Ruler size={16} />, label: '测量' },
+  { id: 'scene',    icon: <Layers size={16} />, label: '场景' },
+  { id: 'geometry', icon: <Atom size={16} />,   label: '几何' },
+  { id: 'measure',  icon: <Ruler size={16} />,  label: '测量' },
 ]
 
 export default function RightPanel() {
-  const [active, setActive] = useState<TabId>('geometry')
+  const [active, setActive] = useState<TabId>('scene')
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -38,6 +40,7 @@ export default function RightPanel() {
 
       {/* ── 内容区 ── */}
       <div className="flex-1 overflow-y-auto min-w-0">
+        {active === 'scene'    && <ScenePanel />}
         {active === 'geometry' && <GeometryPanel />}
         {active === 'measure'  && <MeasurePanel />}
       </div>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
-import { MolRenderer } from '@/lib/molRenderer'
-import { getElementConfig } from '@/config/elements.config'
-import { cn } from '@/lib/utils'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
+import { MolRenderer } from '../../lib/molRenderer'
+import { getElementConfig } from '../../config/elements.config'
+import { cn } from '../../lib/utils'
 
 interface Props {
   renderer: MolRenderer | null

@@ -2,14 +2,14 @@
  * bondOps.ts — 键操作业务规则
  */
 
-import { getElementConfig } from '@/config/elements.config'
-import type { Atom, Bond } from '@/lib/molecule'
+import { getElementConfig } from '../../../config/elements.config'
+import type { Atom, Bond } from '../../molecule'
 
 /** 判断两个原子之间是否允许成键 */
 export function canBond(
   atom1: Atom,
   atom2: Atom,
-  bonds: Bond[],
+  bonds: readonly Bond[],
 ): { ok: boolean; reason?: string } {
   const el1 = getElementConfig(atom1.symbol)
   const el2 = getElementConfig(atom2.symbol)

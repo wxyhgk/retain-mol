@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { MolControls } from '../controls/MolControls'
-import { GHOST_LINE } from '@/config/render.config'
+import { GHOST_LINE } from '../../config/render.config'
 
 /**
  * 封装 canvas 上的指针事件：点击拾取、原子拖拽、ghost 键预览线。

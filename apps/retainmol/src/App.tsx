@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react'
 import Toolbar from '@/components/toolbar/Toolbar'
 import ToolStrip from '@/components/toolbar/ToolStrip'
-import { MolViewer } from '@/components/viewer'
+import {
+  MolViewer, useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty,
+  useMoleculeTemporal, bondSelectedAtoms, parseClipboard, centerMolecule, cn,
+} from '@retainmol/mol-viewer'
+import type { DisplayMode } from '@retainmol/mol-viewer'
 import { RightPanel } from '@/components/panels'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/store/moleculeStore'
-import type { DisplayMode } from '@/store/moleculeStore'
 import { useStore } from 'zustand'
-import { bondSelectedAtoms } from '@/hooks/useBuilder'
-import { parseClipboard } from '@/lib/io'
-import { centerMolecule } from '@/lib/molecule'
-import { cn } from '@/lib/utils'
 
 export default function App() {
-  const { setActiveTool, setMolecule } = useMoleculeStore()
-  const { undo, redo } = useStore(useMoleculeStore.temporal)
+  const { setActiveTool } = useEditorStore()
+  const { addToScene } = useMoleculeStore()
+  const { undo, redo } = useStore(useMoleculeTemporal)
   const [showProperties, setShowProperties] = useState(false)
 
   // 全局 Ctrl+V 粘贴：自动识别 MOL / XYZ / GJF / 裸坐标
@@ -25,7 +24,7 @@ export default function App() {
       if (!text || text.length < 10) return
       try {
         const { format, molecule } = parseClipboard(text)
-        setMolecule(centerMolecule(molecule))
+        addToScene(centerMolecule(molecule))
         e.preventDefault()
         const label = format === 'gjf' ? 'Gaussian GJF' : format.toUpperCase()
         console.log(`[粘贴] 识别为 ${label}，导入 ${molecule.atoms.length} 个原子`)
@@ -35,7 +34,7 @@ export default function App() {
     }
     window.addEventListener('paste', handler)
     return () => window.removeEventListener('paste', handler)
-  }, [setMolecule])
+  }, [addToScene])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -44,6 +43,7 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); return }
 
       if (e.key === 's' || e.key === 'S') { setActiveTool('select'); return }
+      if (e.key === 'v' || e.key === 'V') { setActiveTool('move-object'); return }
       if (e.key === 'a' || e.key === 'A') { setActiveTool('add-atom'); return }
       if (e.key === 'd' || e.key === 'D') { setActiveTool('delete'); return }
       if (e.key === 'm' || e.key === 'M') { setActiveTool('measure'); return }
@@ -62,13 +62,13 @@ export default function App() {
 
       // Enter：measure 工具下提交当前 pending
       if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        const { activeTool, commitPendingMeasure } = useMoleculeStore.getState()
+        const { activeTool, commitPendingMeasure } = useEditorStore.getState()
         if (activeTool === 'measure') { commitPendingMeasure(); return }
       }
 
       // Escape：measure 工具下取消 pending（不提交）
       if (e.key === 'Escape') {
-        const { activeTool, pendingAtomIds, cancelPendingMeasure } = useMoleculeStore.getState()
+        const { activeTool, pendingAtomIds, cancelPendingMeasure } = useEditorStore.getState()
         if (activeTool === 'measure' && pendingAtomIds.length > 0) { cancelPendingMeasure(); return }
       }
 
@@ -122,7 +122,7 @@ export default function App() {
 }
 
 // ─── 分子式计算（C 优先，H 其次，其余字母序）───────────────────────
-function computeFormula(atoms: { symbol: string }[]): string {
+function computeFormula(atoms: readonly { symbol: string }[]): string {
   if (atoms.length === 0) return ''
   const counts: Record<string, number> = {}
   for (const a of atoms) counts[a.symbol] = (counts[a.symbol] || 0) + 1
@@ -142,7 +142,8 @@ const DISPLAY_MODES: { id: DisplayMode; label: string }[] = [
 ]
 
 function ContextBar() {
-  const { displayMode, setDisplayMode, selectedAtomIds, selectedBondIds } = useMoleculeStore()
+  const { displayMode, setDisplayMode } = useEditorStore()
+  const { selectedAtomIds, selectedBondIds } = useMoleculeStore()
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
   const formula = computeFormula(molecule.atoms)
   const selAtoms = selectedAtomIds.size
@@ -207,7 +208,8 @@ function CanvasEmptyHint() {
 }
 
 function StatusBar() {
-  const { activeTool, activeElement, selectedAtomIds, selectedBondIds } = useMoleculeStore()
+  const { activeTool, activeElement } = useEditorStore()
+  const { selectedAtomIds, selectedBondIds } = useMoleculeStore()
 
   const toolLabel: Record<string, string> = {
     select: '选择',

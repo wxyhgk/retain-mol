@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { useMoleculeStore } from '@/store/moleculeStore'
-import { getElementConfig as getElement, COMMON_ELEMENT_SYMBOLS as COMMON_ELEMENTS, PERIODIC_TABLE_LAYOUT as PERIODIC_TABLE } from '@/config/elements.config'
+import {
+  useMoleculeStore, useEditorStore, cn,
+  getElementConfig as getElement,
+  COMMON_ELEMENT_SYMBOLS as COMMON_ELEMENTS,
+  PERIODIC_TABLE_LAYOUT as PERIODIC_TABLE,
+} from '@retainmol/mol-viewer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
 
 function colorHexToCss(hex: number) {
   return `#${hex.toString(16).padStart(6, '0')}`
@@ -42,7 +45,8 @@ function ElementButton({ sym, size = 'md', onSelect, activeElement }: {
 }
 
 export default function ElementPicker() {
-  const { activeElement, setActiveElement, selectedAtomIds, replaceAtom } = useMoleculeStore()
+  const { activeElement, setActiveElement } = useEditorStore()
+  const { selectedAtomIds, replaceAtom } = useMoleculeStore()
   const [open, setOpen] = useState(false)
   const el = getElement(activeElement)
   const hasSelection = selectedAtomIds.size > 0

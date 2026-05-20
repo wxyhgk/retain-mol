@@ -1,13 +1,22 @@
-import { useMoleculeStore } from '@/store/moleculeStore'
-import { Eye, EyeOff, Lock, Unlock, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useMoleculeStore, cn, splitConnectedComponents } from '@retainmol/mol-viewer'
+import { Eye, EyeOff, Lock, Unlock, Trash2, Scissors } from 'lucide-react'
 import { useState } from 'react'
 
 export default function ScenePanel() {
-  const { objectsById, objectOrder, activeObjectId, setActiveObject, removeSceneObject, setObjectVisible, setObjectLocked, renameObject } = useMoleculeStore()
+  const { objectsById, objectOrder, activeObjectId, setActiveObject, removeSceneObject, setObjectVisible, setObjectLocked, renameObject, addToScene } = useMoleculeStore()
   const sceneObjects = objectOrder.map(id => objectsById[id]).filter(Boolean)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+
+  const handleSplit = (e: React.MouseEvent, objId: string) => {
+    e.stopPropagation()
+    const obj = objectsById[objId]
+    if (!obj) return
+    const parts = splitConnectedComponents(obj.molecule)
+    if (parts.length <= 1) return
+    removeSceneObject(objId)
+    for (const mol of parts) addToScene(mol, false)
+  }
 
   return (
     <div className="p-2 space-y-1 text-sm">
@@ -58,6 +67,15 @@ export default function ScenePanel() {
 
             {/* 控制按钮 */}
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {splitConnectedComponents(obj.molecule).length > 1 && (
+                <button
+                  onClick={e => handleSplit(e, obj.id)}
+                  title="分离为独立对象"
+                  className="w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:text-[#007AFF]"
+                >
+                  <Scissors size={11} />
+                </button>
+              )}
               <button
                 onClick={e => { e.stopPropagation(); setObjectVisible(obj.id, !obj.visible) }}
                 className={cn('w-5 h-5 rounded flex items-center justify-center', obj.visible ? 'text-gray-400 hover:text-gray-700' : 'text-gray-300 hover:text-gray-500')}

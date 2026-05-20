@@ -1,15 +1,16 @@
 import * as THREE from 'three'
 import { MolControls } from '../controls/MolControls'
-import type { Atom, Molecule } from '../molecule'
-import type { DisplayMode, MeasureStyle, MeasureType } from '@/lib/types'
-import { CAMERA, CONTROLS } from '@/config/camera.config'
-import { LIGHTING } from '@/config/render.config'
-import { resolveTheme, hexToInt, type ResolvedTheme } from '@/presets'
-import { ticker, Phase } from '@/lib/animation'
+import type { Atom, Bond, Molecule } from '../molecule'
+import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
+import { CAMERA, CONTROLS } from '../../config/camera.config'
+import { LIGHTING } from '../../config/render.config'
+import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
+import { ticker, Phase } from '../animation'
 import { MoleculeRenderer } from './MoleculeRenderer'
 import { InteractionHandler } from './InteractionHandler'
 import { MeasureVisuals } from './MeasureVisuals'
 import * as CameraUtils from './CameraUtils'
+import { detectAromaticity } from '../builder/analysis'
 
 /**
  * 薄 orchestrator：负责场景图组装、动画循环、resize，
@@ -36,6 +37,12 @@ export class MolRenderer {
   // Multi-object scene support
   private _molRenderers = new Map<string, MoleculeRenderer>()
   private _objectGroups = new Map<string, THREE.Group>()
+
+  // Aromaticity ring cache: bonds array reference → aromaticRings (atom ID arrays)
+  // 用 bonds 数组引用做 key：setAtomPositions 只改坐标不改 bonds，
+  // 因此优化期间每帧命中缓存，不重复跑 DFS findRings。
+  // 环心从当前坐标实时算（代价低），这样优化时环心也跟着移动。
+  private _aromaticRingCache = new WeakMap<readonly Bond[], string[][]>()
 
   // ── 公共回调（转发给 InteractionHandler）──
   get onAtomClick() { return this._interaction.onAtomClick }
@@ -106,13 +113,13 @@ export class MolRenderer {
         return merged
       },
       () => {
-        const merged = new Map<string, THREE.Mesh>()
+        const merged = new Map<string, THREE.Group>()
         if (this._molRenderers.size > 0) {
           for (const r of this._molRenderers.values()) {
-            for (const [id, mesh] of r.bondMeshes) merged.set(id, mesh)
+            for (const [id, group] of r.bondMeshes) merged.set(id, group)
           }
         } else {
-          for (const [id, mesh] of this._molRenderer.bondMeshes) merged.set(id, mesh)
+          for (const [id, group] of this._molRenderer.bondMeshes) merged.set(id, group)
         }
         return merged
       },
@@ -156,13 +163,48 @@ export class MolRenderer {
 
   // ── 渲染 ──
 
+  // 返回 bondId → 所在环心（THREE.Vector3）
+  // DFS findRings 结果按 bonds 引用缓存，坐标部分每帧实时算（只是取均值，代价低）。
+  private _aromaticData(mol: Molecule): Map<string, THREE.Vector3> {
+    const bonds = mol.bonds
+
+    // DFS 找环：bonds 不变就不重跑
+    if (!this._aromaticRingCache.has(bonds)) {
+      this._aromaticRingCache.set(bonds, detectAromaticity(mol).aromaticRings)
+    }
+    const aromaticRings = this._aromaticRingCache.get(bonds)!
+
+    // 用当前坐标计算环心（positions 每帧都在变，所以每帧重算，但操作量极小）
+    const atomById = new Map(mol.atoms.map(a => [a.id, a]))
+    const bondCentroid = new Map<string, THREE.Vector3>()
+
+    for (const ring of aromaticRings) {
+      let cx = 0, cy = 0, cz = 0
+      for (const id of ring) {
+        const a = atomById.get(id)
+        if (a) { cx += a.x; cy += a.y; cz += a.z }
+      }
+      cx /= ring.length; cy /= ring.length; cz /= ring.length
+      const centroid = new THREE.Vector3(cx, cy, cz)
+
+      const ringSet = new Set(ring)
+      for (const b of mol.bonds) {
+        if (ringSet.has(b.atomId1) && ringSet.has(b.atomId2)) {
+          bondCentroid.set(b.id, centroid)
+        }
+      }
+    }
+
+    return bondCentroid
+  }
+
   render(molecule: Molecule, displayMode: DisplayMode, selectedAtoms: Set<string>, selectedBonds: Set<string>) {
-    this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds)
+    this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds, this._aromaticData(molecule))
     ticker.invalidate()
   }
 
   renderScene(
-    objects: readonly import('@/lib/sceneObject').SceneObject[],
+    objects: readonly import('../sceneObject').SceneObject[],
     activeObjectId: string | null,
     displayMode: DisplayMode,
     selectedAtoms: Set<string>,
@@ -194,7 +236,6 @@ export class MolRenderer {
 
       // 确保 MoleculeRenderer 存在
       if (!this._molRenderers.has(obj.id)) {
-        const theme = this.theme
         this._molRenderers.set(obj.id, new MoleculeRenderer(grp, () => this.theme))
       }
       const molRenderer = this._molRenderers.get(obj.id)!
@@ -205,6 +246,7 @@ export class MolRenderer {
         displayMode,
         isActive ? selectedAtoms : new Set<string>(),
         isActive ? selectedBonds : new Set<string>(),
+        this._aromaticData(obj.molecule),
       )
 
       // 非活跃对象半透明
