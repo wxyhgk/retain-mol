@@ -8,8 +8,23 @@ import {
   useMoleculeStore, selectActiveMoleculeOrEmpty,
   parseXYZ, exportXYZ, exportGJF, centerMolecule,
   parseMol, parseSdf, exportMol, exportSdf, is2D,
+  generate3D, registerForceFieldFromUrl,
   captureViewportImage,
 } from '@retainmol/mol-viewer'
+import type { Molecule } from '@retainmol/mol-viewer'
+
+const OCL_RESOURCE_URL = `${import.meta.env.BASE_URL}ocl/resources.json`
+
+/**
+ * 2D 结构自动立体化（Chem3D 式）：ConformerGenerator 嵌入 3D + MMFF94 清理。
+ * 需要 OCL 力场资源就绪，先 await 注册（幂等）。生成失败则退回原平面结构。
+ */
+async function make3DIfFlat(mol: Molecule): Promise<Molecule> {
+  if (!is2D(mol)) return mol
+  try { await registerForceFieldFromUrl(OCL_RESOURCE_URL) } catch { /* 资源加载失败则用纯嵌入 */ }
+  const r = generate3D(mol)
+  return r.ok ? r.molecule : mol
+}
 
 function download(text: string, filename: string, mime = 'text/plain') {
   const blob = new Blob([text], { type: mime })
@@ -46,7 +61,7 @@ export function useFileIO() {
   }, [setMolecule])
 
   const importMolSdf = useCallback(() => {
-    pickFile('.mol,.sdf', (text, filename) => {
+    pickFile('.mol,.sdf', async (text, filename) => {
       try {
         const isSdf = filename.toLowerCase().endsWith('.sdf')
         let mol
@@ -58,10 +73,9 @@ export function useFileIO() {
         } else {
           mol = parseMol(text)
         }
-        if (is2D(mol)) {
-          alert('检测到 2D 文件（所有 z=0），分子会显示为平面。建议用 RDKit / OpenBabel / Avogadro 先转成 3D 构型再导入。')
-        }
-        setMolecule(centerMolecule(mol))
+        // 2D 结构自动立体化（导入 2D SDF 直接得到可用的 3D）
+        const mol3d = await make3DIfFlat(mol)
+        setMolecule(centerMolecule(mol3d))
       } catch (e) {
         alert(`文件解析失败：${(e as Error).message}`)
       }
@@ -81,7 +95,7 @@ export function useFileIO() {
   }, [addToScene])
 
   const importMolSdfToScene = useCallback(() => {
-    pickFile('.mol,.sdf', (text, filename) => {
+    pickFile('.mol,.sdf', async (text, filename) => {
       try {
         const isSdf = filename.toLowerCase().endsWith('.sdf')
         let mol
@@ -93,10 +107,8 @@ export function useFileIO() {
         } else {
           mol = parseMol(text)
         }
-        if (is2D(mol)) {
-          alert('检测到 2D 文件（所有 z=0），分子会显示为平面。建议用 RDKit / OpenBabel / Avogadro 先转成 3D 构型再导入。')
-        }
-        addToScene(centerMolecule(mol))
+        const mol3d = await make3DIfFlat(mol)
+        addToScene(centerMolecule(mol3d))
       } catch (e) {
         alert(`文件解析失败：${(e as Error).message}`)
       }
@@ -134,7 +146,7 @@ export function useFileIO() {
   }
 }
 
-function pickFile(accept: string, onLoad: (text: string, filename: string) => void) {
+function pickFile(accept: string, onLoad: (text: string, filename: string) => void | Promise<void>) {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = accept

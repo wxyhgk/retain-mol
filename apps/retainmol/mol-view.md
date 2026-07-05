@@ -322,6 +322,18 @@ THREE.Scene
 - 导出：GJF 的电荷 = 形式电荷之和、多重度 = 未配对电子数 + 1，自动写入 —— 带电/
   自由基物种可直接投 Gaussian。
 
+### 2D → 3D 立体化（Chem3D 式，OCL ConformerGenerator + MMFF94）
+
+导入/粘贴 2D 结构（ChemDraw 式平面 SDF/mol，所有 z=0）自动生成合理 3D：
+`generate3D(mol)`（`io/molFormat.ts`）两步——① `ConformerGenerator.getOneConformerAsMolecule`
+按连接关系用距离几何嵌入 3D 坐标（含补氢）② `ForceFieldMMFF94.minimise` 力场抛光。
+返回全新分子（新 id、含氢），调用方整体替换。固定随机种子 → 可复现。
+
+- 接入：`is2D(mol)` 为真时，`useFileIO.make3DIfFlat`（导入）和 App 粘贴处理器
+  自动调用；失败退回原平面结构。都先 `await registerForceFieldFromUrl` 确保资源就绪
+  （ConformerGenerator 同样需要 MMFF 资源表）。
+- 这解决了旧版「2D 文件请用 RDKit/OpenBabel/Avogadro 转」的外部依赖——现在应用内直接做。
+
 ### 几何清理（MMFF94 力场最小化）
 
 手搭/导入的粗糙结构用「清理几何」按钮弛豫到物理合理（正确键长/键角、无重叠）。

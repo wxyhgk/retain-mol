@@ -4,6 +4,7 @@ import ToolStrip from '@/components/toolbar/ToolStrip'
 import {
   MolViewer, useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty,
   useMoleculeTemporal, bondSelectedAtoms, parseClipboard, centerMolecule, getFragment, cn,
+  is2D, generate3D, registerForceFieldFromUrl,
 } from '@retainmol/mol-viewer'
 import { RightPanel } from '@/components/panels'
 import PubChemSearch from '@/components/search/PubChemSearch'
@@ -44,8 +45,18 @@ export default function App() {
       if (!text || text.length < 10) return
       try {
         const { format, molecule } = parseClipboard(text)
-        addToScene(centerMolecule(molecule))
         e.preventDefault()
+        // 粘贴的 2D 结构（如 ChemDraw 复制的 mol 块）自动立体化
+        if (is2D(molecule)) {
+          registerForceFieldFromUrl(`${import.meta.env.BASE_URL}ocl/resources.json`)
+            .catch(() => {})
+            .then(() => {
+              const r = generate3D(molecule)
+              addToScene(centerMolecule(r.ok ? r.molecule : molecule))
+            })
+        } else {
+          addToScene(centerMolecule(molecule))
+        }
         console.log(`[paste] ${format.toUpperCase()} → ${molecule.atoms.length} atoms`)
       } catch { /* not a molecule */ }
     }

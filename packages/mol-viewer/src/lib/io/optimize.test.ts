@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import * as OCL from 'openchemlib'
-import { minimizeGeometry, markForceFieldReady } from './molFormat'
+import { minimizeGeometry, generate3D, markForceFieldReady, parseMol } from './molFormat'
 import { newAtom, newBond } from '../molecule'
 import type { Molecule } from '../molecule'
 
@@ -140,5 +140,50 @@ describe('minimizeGeometry — MMFF94 力场清理', () => {
       }
     }
     expect(minNonBonded).toBeGreaterThan(1.4)   // 无坍缩重叠
+  })
+})
+
+describe('generate3D — 2D 结构立体化（Chem3D 式）', () => {
+  const SDF_2D_BENZENE = `benzene
+  ChemDraw
+
+  6  6  0  0  0  0  0  0  0  0999 V2000
+   -0.7145    0.4125    0.0000 C   0  0
+   -0.7145   -0.4125    0.0000 C   0  0
+    0.0000   -0.8250    0.0000 C   0  0
+    0.7145   -0.4125    0.0000 C   0  0
+    0.7145    0.4125    0.0000 C   0  0
+    0.0000    0.8250    0.0000 C   0  0
+  1  2  2  0
+  2  3  1  0
+  3  4  2  0
+  4  5  1  0
+  5  6  2  0
+  6  1  1  0
+M  END`
+
+  it('2D 苯（平面、无氢）→ 3D 苯（补氢、C–C 1.39）', () => {
+    const mol2d = parseMol(SDF_2D_BENZENE)
+    expect(mol2d.atoms.every(a => Math.abs(a.z) < 1e-6)).toBe(true)
+    expect(mol2d.atoms.filter(a => a.symbol === 'H')).toHaveLength(0)
+
+    const r = generate3D(mol2d)
+    expect(r.ok).toBe(true)
+    const m = r.molecule
+    expect(m.atoms.filter(a => a.symbol === 'C')).toHaveLength(6)
+    expect(m.atoms.filter(a => a.symbol === 'H')).toHaveLength(6)
+    const byId = new Map(m.atoms.map(a => [a.id, a]))
+    const ccBonds = m.bonds.filter(b =>
+      byId.get(b.atomId1)!.symbol === 'C' && byId.get(b.atomId2)!.symbol === 'C')
+    expect(ccBonds).toHaveLength(6)
+    for (const b of ccBonds) {
+      const a1 = byId.get(b.atomId1)!, a2 = byId.get(b.atomId2)!
+      expect(Math.hypot(a1.x - a2.x, a1.y - a2.y, a1.z - a2.z)).toBeCloseTo(1.39, 1)
+    }
+    expect(m.atoms.every(a => isFinite(a.x) && isFinite(a.y) && isFinite(a.z))).toBe(true)
+  })
+
+  it('退化输入：单原子 → 原样返回 ok', () => {
+    expect(generate3D({ atoms: [newAtom('C', 0, 0, 0)], bonds: [] }).ok).toBe(true)
   })
 })
