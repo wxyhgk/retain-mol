@@ -5,6 +5,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { BoxRect } from '../../hooks/useCanvasPointerRouter'
+import { BOX_SELECT } from '../../config/overlay.config'
 
 interface Props {
   rect: BoxRect | null
@@ -43,10 +44,10 @@ export default function BoxSelectOverlay({ rect }: Props) {
     if (!rect || rect.w < 1 || rect.h < 1) return
     ctx.save()
     ctx.scale(dpr, dpr)
-    ctx.fillStyle   = 'rgba(0, 0, 0, 0.08)'
-    ctx.strokeStyle = '#111827'
-    ctx.lineWidth   = 1
-    ctx.setLineDash([4, 3])
+    ctx.fillStyle   = BOX_SELECT.fillColor
+    ctx.strokeStyle = BOX_SELECT.strokeColor
+    ctx.lineWidth   = BOX_SELECT.lineWidth
+    ctx.setLineDash(BOX_SELECT.lineDash)
     ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
     ctx.strokeRect(rect.x, rect.y, rect.w, rect.h)
     ctx.restore()

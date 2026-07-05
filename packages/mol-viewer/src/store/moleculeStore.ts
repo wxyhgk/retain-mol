@@ -10,7 +10,14 @@ import { temporal, type TemporalState } from 'zundo'
 import { subscribeWithSelector } from 'zustand/middleware'
 import type { Atom, Molecule } from '../lib/molecule'
 import { inferBonds, newAtom, newBond, centerMolecule as centerMol, shiftMolecule } from '../lib/molecule'
-import { autoAddHydrogens, replaceAtomSymbol } from '../lib/builder/BuilderEngine'
+import type { MolClipboard } from '../lib/types'
+import { autoAddHydrogens, addOneHydrogen as addOneH, replaceAtomSymbol,
+         growByReplacingH, bondByReplacingH,
+         cycleBondLength as cycleBondLengthOp,
+         setBondLength as setBondLengthOp,
+         setBondAngle as setBondAngleOp,
+         setDihedralAngle as setDihedralAngleOp,
+         type GeomEditResult } from '../lib/builder/BuilderEngine'
 import { type SceneObject, createSceneObject } from '../lib/sceneObject'
 import { genId } from '../lib/utils'
 
@@ -52,11 +59,20 @@ interface MoleculeState {
   addBond:                (atomId1: string, atomId2: string, order?: 1 | 2 | 3) => void
   removeBond:             (id: string) => void
   cycleBondOrder:         (id: string) => void
+  cycleBondLength:        (id: string) => { ok: boolean; reason?: string; moved?: boolean }
+  // GaussView 式几何参数编辑（按选择顺序传入原子 id）
+  setBondLength:          (aId: string, bId: string, length: number) => { ok: boolean; reason?: string }
+  setBondAngle:           (aId: string, bId: string, cId: string, deg: number) => { ok: boolean; reason?: string }
+  setDihedralAngle:       (aId: string, bId: string, cId: string, dId: string, deg: number) => { ok: boolean; reason?: string }
   autoInferBonds:         () => void
   addHydrogens:           (atomId?: string) => void
+  addOneHydrogen:         (atomId: string) => void
   replaceAtom:            (atomId: string, symbol: string) => void
+  growFromHydrogen:       (atomId: string, symbol: string) => void
+  bondViaHydrogen:        (sourceHId: string, targetId: string) => { ok: boolean; reason?: string }
   clearMolecule:          () => void
   centerMolecule:         () => void
+  pasteAtoms:             (clipboard: MolClipboard) => string[]
 
   // ── 选择 actions ──────────────────────────────────────────────────────────
   selectAtom:   (id: string, multi?: boolean) => void
@@ -88,6 +104,51 @@ type MoleculeStoreApi = UseBoundStore<StoreApi<MoleculeState> & SelectorSubscrib
   temporal: StoreApi<TemporalState<MoleculeState>>
 }
 
+// ── undo 配置 ─────────────────────────────────────────────────────────────────
+// 只有分子/场景数据进 undo 历史；选择、版本号等 UI 状态不进，
+// 否则每次点选都会产生一条历史记录，把 limit 吃光。
+
+const UNDO_LIMIT = 50
+
+type UndoSnapshot = Pick<MoleculeState, 'objectsById' | 'objectOrder' | 'activeObjectId'>
+
+function partializeForUndo(s: MoleculeState): UndoSnapshot {
+  return {
+    objectsById:    s.objectsById,
+    objectOrder:    s.objectOrder,
+    activeObjectId: s.activeObjectId,
+  }
+}
+
+function undoSnapshotEqual(a: UndoSnapshot, b: UndoSnapshot): boolean {
+  return a.objectsById === b.objectsById &&
+         a.objectOrder === b.objectOrder &&
+         a.activeObjectId === b.activeObjectId
+}
+
+/**
+ * undo/redo 后处理：
+ *  - 版本号不在快照里，手动 bump 让依赖它们的 overlay 重绘
+ *  - 选择不在快照里，剔除指向已不存在原子/键的 id
+ * 这里的 setState 不会污染历史：快照字段引用未变，equality 会跳过记录。
+ */
+function afterTimeTravel() {
+  useMoleculeStore.setState((s) => {
+    const validAtoms = new Set<string>()
+    const validBonds = new Set<string>()
+    for (const obj of Object.values(s.objectsById)) {
+      for (const a of obj.molecule.atoms) validAtoms.add(a.id)
+      for (const b of obj.molecule.bonds) validBonds.add(b.id)
+    }
+    return {
+      atomPositionVersion: s.atomPositionVersion + 1,
+      selectionVersion:    s.selectionVersion + 1,
+      selectedAtomIds:     new Set([...s.selectedAtomIds].filter(id => validAtoms.has(id))),
+      selectedBondIds:     new Set([...s.selectedBondIds].filter(id => validBonds.has(id))),
+    }
+  })
+}
+
 // ── 内部工具 ──────────────────────────────────────────────────────────────────
 
 function getActiveMol(s: MoleculeState): Molecule | null {
@@ -104,6 +165,27 @@ function patchActiveMol(s: MoleculeState, newMol: Molecule): Partial<MoleculeSta
       [s.activeObjectId]: { ...obj, molecule: newMol, name: newMol.name ?? obj.name },
     },
   }
+}
+
+/** 几何参数编辑（键长/键角/二面角）的统一落盘：单次 set = 单步 undo，附带位置版本号自增 */
+function applyGeomEdit(
+  get: () => MoleculeState,
+  set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
+  edit: (mol: Molecule) => GeomEditResult,
+): { ok: boolean; reason?: string } {
+  const mol = getActiveMol(get())
+  if (!mol) return { ok: false, reason: '没有活跃分子' }
+  const result = edit(mol)
+  if (!result.ok) return result
+  set((s) => {
+    const m = getActiveMol(s)
+    if (!m) return {}
+    return {
+      ...patchActiveMol(s, result.molecule),
+      atomPositionVersion: s.atomPositionVersion + 1,
+    }
+  })
+  return { ok: true }
 }
 
 function computeAutoOffset(objects: SceneObject[]): { x: number; y: number; z: number } {
@@ -202,8 +284,26 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     }
   }),
 
-  beginTransaction: () => useMoleculeStore.temporal.getState().pause(),
-  endTransaction:   () => useMoleculeStore.temporal.getState().resume(),
+  // 事务：把一段连续变更（如拖动）合并为一步 undo。
+  // zundo 的 pause 期间所有变更都不入栈，所以必须在 pause 前手动把
+  // "事务起点"压入 pastStates，否则事务后 undo 会连带撤销上一步操作。
+  beginTransaction: () => {
+    const t = useMoleculeStore.temporal
+    const past = [...(t.getState().pastStates as UndoSnapshot[]), partializeForUndo(get())]
+    if (past.length > UNDO_LIMIT) past.shift()
+    t.setState({ pastStates: past as TemporalState<MoleculeState>['pastStates'], futureStates: [] })
+    t.getState().pause()
+  },
+  endTransaction: () => {
+    const t = useMoleculeStore.temporal
+    t.getState().resume()
+    // 事务内没有实际变更时弹出起点快照，避免产生一步"什么都没发生"的 undo
+    const past = t.getState().pastStates as UndoSnapshot[]
+    const top = past[past.length - 1]
+    if (top && undoSnapshotEqual(top, partializeForUndo(get()))) {
+      t.setState({ pastStates: past.slice(0, -1) as TemporalState<MoleculeState>['pastStates'] })
+    }
+  },
 
   addBond: (atomId1, atomId2, order: 1 | 2 | 3 = 1) => {
     const mol = getActiveMol(get())
@@ -243,6 +343,31 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     })
   }),
 
+  cycleBondLength: (id) => {
+    const mol = getActiveMol(get())
+    if (!mol) return { ok: false, reason: '没有活跃分子' }
+    const result = cycleBondLengthOp(mol, id)
+    if (!result.ok) return result
+    set((s) => {
+      const m = getActiveMol(s)
+      if (!m) return {}
+      return {
+        ...patchActiveMol(s, result.molecule),
+        atomPositionVersion: s.atomPositionVersion + 1,
+      }
+    })
+    return { ok: true, moved: result.moved }
+  },
+
+  setBondLength: (aId, bId, length) => applyGeomEdit(get, set,
+    (mol) => setBondLengthOp(mol, aId, bId, length)),
+
+  setBondAngle: (aId, bId, cId, deg) => applyGeomEdit(get, set,
+    (mol) => setBondAngleOp(mol, aId, bId, cId, deg)),
+
+  setDihedralAngle: (aId, bId, cId, dId, deg) => applyGeomEdit(get, set,
+    (mol) => setDihedralAngleOp(mol, aId, bId, cId, dId, deg)),
+
   autoInferBonds: () => set((s) => {
     const mol = getActiveMol(s)
     if (!mol) return {}
@@ -255,11 +380,41 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     return patchActiveMol(s, autoAddHydrogens(mol, atomId))
   }),
 
+  addOneHydrogen: (atomId) => set((s) => {
+    const mol = getActiveMol(s)
+    if (!mol) return {}
+    return patchActiveMol(s, addOneH(mol, atomId))
+  }),
+
   replaceAtom: (atomId, symbol) => set((s) => {
     const mol = getActiveMol(s)
     if (!mol) return {}
     return patchActiveMol(s, replaceAtomSymbol(mol, atomId, symbol))
   }),
+
+  growFromHydrogen: (atomId, symbol) => set((s) => {
+    const mol = getActiveMol(s)
+    if (!mol) return {}
+    return patchActiveMol(s, growByReplacingH(mol, atomId, symbol))
+  }),
+
+  bondViaHydrogen: (sourceHId, targetId) => {
+    const mol = getActiveMol(get())
+    if (!mol) return { ok: false, reason: '没有活跃分子' }
+    const result = bondByReplacingH(mol, sourceHId, targetId)
+    if (!result.ok) return result
+    set((s) => {
+      const m = getActiveMol(s)
+      if (!m) return {}
+      return {
+        ...patchActiveMol(s, result.molecule),
+        selectedAtomIds: new Set(
+          [...s.selectedAtomIds].filter(i => i !== sourceHId && i !== targetId)
+        ),
+      }
+    })
+    return { ok: true }
+  },
 
   clearMolecule: () => set((s) => ({
     ...patchActiveMol(s, { atoms: [], bonds: [], name: 'New Molecule' }),
@@ -272,6 +427,37 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     if (!mol) return {}
     return patchActiveMol(s, centerMol(mol))
   }),
+
+  pasteAtoms: (clipboard) => {
+    const newIds: string[] = []
+    set((s) => {
+      const mol = getActiveMol(s)
+      if (!mol) return {}
+
+      // 偏移：粘贴在现有分子最右侧原子右边 3Å
+      let maxX = mol.atoms.reduce((m, a) => Math.max(m, a.x), -Infinity)
+      if (!isFinite(maxX)) maxX = 0
+      const clipMinX = clipboard.atoms.reduce((m, a) => Math.min(m, a.x), Infinity)
+      const offsetX = isFinite(clipMinX) ? maxX + 3 - clipMinX : 3
+
+      const newAtoms: Atom[] = clipboard.atoms.map(ca => {
+        const a = newAtom(ca.symbol, ca.x + offsetX, ca.y, ca.z)
+        newIds.push(a.id)
+        return a
+      })
+
+      const newBonds = clipboard.bonds.map(cb =>
+        newBond(newAtoms[cb.a].id, newAtoms[cb.b].id, cb.order)
+      )
+
+      return patchActiveMol(s, {
+        ...mol,
+        atoms: [...mol.atoms, ...newAtoms],
+        bonds: [...mol.bonds, ...newBonds],
+      })
+    })
+    return newIds
+  },
 
   // ── 选择 ────────────────────────────────────────────────────────────────────
 
@@ -322,6 +508,9 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
       return {
         objectsById: { ...s.objectsById, [newId]: newObj },
         objectOrder: [...s.objectOrder, newId],
+        activeObjectId: newId,
+        selectedAtomIds: new Set(),
+        selectedBondIds: new Set(),
       }
     })
     return newId
@@ -362,12 +551,17 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
 
 export const useMoleculeStore = (create<MoleculeState>()(
   temporal(subscribeWithSelector(stateCreator) as unknown as StateCreator<MoleculeState>, {
-    limit: 50,
-    partialize: (s) => {
-      // 版本号不进 undo 历史
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { atomPositionVersion, selectionVersion, ...rest } = s
-      return rest as MoleculeState
+    limit: UNDO_LIMIT,
+    partialize: (s) => partializeForUndo(s) as MoleculeState,
+    // 不配 equality 时 zundo 对每次 set 都无条件入栈（包括纯选择/版本号变更）
+    equality: (a, b) => undoSnapshotEqual(a as UndoSnapshot, b as UndoSnapshot),
+    wrapTemporal: (config) => (set, get, store) => {
+      const state = config(set, get, store)
+      return {
+        ...state,
+        undo: (steps?: number) => { state.undo(steps); afterTimeTravel() },
+        redo: (steps?: number) => { state.redo(steps); afterTimeTravel() },
+      }
     },
   }) as unknown as StateCreator<MoleculeState>,
 )) as unknown as MoleculeStoreApi

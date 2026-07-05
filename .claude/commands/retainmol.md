@@ -51,6 +51,32 @@ npm run build --workspace @retainmol/mol-viewer
 
 ## 架构要点
 
+### 构建交互模型（价态完整，2026-07 定稿）
+
+Tool 类型只有 3 个：**select（指针）/ measure / move-object**，但工具条上「选择」和
+「编辑」是两个独立按钮（互斥高亮）——都对应 select 工具，由 `editorStore.brushArmed`
+区分：编辑按钮亮 = 构建态（点击只构建，十字光标、chip 高亮），选择按钮亮 = 选择态
+（点击只选择；Esc/S 进入，编辑按钮/选元素/B/点灰 chip 恢复）——同一次点击绝不会
+既可能选择又可能编辑。画布上永远是化学完整的分子：
+
+- **放下即饱和**：双击空白放原子，自动补满 H（C→CH₄）；**单击空白只清除选择**（防转视角误触）
+- **点 H 生长**：点一个 H = 替换为当前元素的饱和基团（`growByReplacingH`）；点重原子 = 选中
+- **H 让位成键**：拖 H 到另一个 H = 删两个 H、父原子成键（闭环，`bondByReplacingH`）
+- **键级哲学**（用户明确决定，勿改）：几何是真相，键级只是读数。键级只在导入时
+  和 Shift+点键（`cycleBondLength`：循环标准键长，平移一侧片段，键级跟随；环内键
+  退回纯键级循环）时被设置，拖原子等几何编辑永远不动键级，也不自动增删 H
+- **芳香性用几何判据**：环内键长均匀落在芳香窗口（C–C 1.36~1.43 Å）即芳香，
+  不依赖 Kekulé 单双键交替；SDF aromatic 标记仍优先
+- **几何参数编辑**（GaussView 式）：选 2/3/4 个原子（按选择顺序）→「几何」面板点数值
+  直接改距离/键角/二面角；移动末端一侧刚性片段，环内拒绝。纯函数在
+  `editing/geometryOps.ts`，store action：setBondLength/setBondAngle/setDihedralAngle
+- **并环自动探索**（Ketcher 式）：苯环笔刷点键并环会两侧自动尝试方向，新环原子与
+  已有原子重合（<0.45Å 同元素）自动合并——桥头旁键 → peri 稠合，bay 凹区 → 芘。
+  优先零合并的干净侧；稠环共享键退化拒绝。见 fragmentOps.fuseFragmentOnBond
+- 删除没有专门工具：选中 + Delete 键，或右键菜单
+
+详细语义见 `apps/retainmol/mol-view.md` 第 7 节。
+
 ### 两个 Store 的职责边界
 
 | moleculeStore | editorStore |
@@ -137,3 +163,5 @@ container capture 会优先拦截 move-object，Shift 只在非 move-object 工�
 4. **修改 mol-viewer 后**：必须 `npm run build --workspace @retainmol/mol-viewer`
 5. **新增工具**：在 `editorStore` 的 `Tool` 类型里加，在 `useCanvasPointerRouter` 里
    添加路由分支，在 `ToolStrip` 里加按钮
+6. **mol-viewer 新增运行时依赖**：必须同时加进 `vite.config.ts` 的 externals 名单
+   和 `package.json` dependencies，否则整库内联进 dist（openchemlib 3MB 教训）

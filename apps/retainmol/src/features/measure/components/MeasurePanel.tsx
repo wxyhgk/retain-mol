@@ -54,7 +54,7 @@ export default function MeasurePanel() {
         <div className="grid grid-cols-4 gap-1">
           {(['auto', 'distance', 'angle', 'dihedral'] as MeasureType[]).map(t => (
             <button key={t} onClick={() => setMeasureType(t)}
-              className={`py-1 rounded-[8px] text-[11px] font-medium border transition-colors ${measureType === t ? 'bg-[#007AFF] border-[#007AFF] text-white' : 'border-gray-200 text-gray-500 hover:border-[#007AFF]/40'}`}>
+              className={`py-1 rounded-[8px] text-[11px] font-medium border transition-colors ${measureType === t ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700'}`}>
               {t === 'auto' ? '自动' : t === 'distance' ? '键长' : t === 'angle' ? '键角' : '二面角'}
             </button>
           ))}

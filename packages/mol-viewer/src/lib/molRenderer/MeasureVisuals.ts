@@ -8,6 +8,8 @@ import { DEFAULT_MEASURE_STYLE } from '../types'
 import type { ResolvedTheme } from '../../presets'
 import { getElementConfig as getElement } from '../../config/elements.config'
 import { RENDER } from '../../config/render.config'
+import { MEASURE_VIS } from '../../config/overlay.config'
+import { calcAngle, calcDihedral } from '../builder/geometry/measure'
 
 /**
  * 管理测量可视化：已提交测量的几何体 + pending 光晕 + 标注锚点。
@@ -78,8 +80,8 @@ export class MeasureVisuals {
       linewidth: lineWidth,
       resolution: new THREE.Vector2(this.canvas.clientWidth, this.canvas.clientHeight),
       dashed,
-      dashSize: 0.18,
-      gapSize: 0.09,
+      dashSize: MEASURE_VIS.lineDashSize,
+      gapSize:  MEASURE_VIS.lineGapSize,
     })
     this.lineMaterials.push(mat)
     const line = new Line2(geo, mat)
@@ -90,7 +92,7 @@ export class MeasureVisuals {
   private renderOneMeasure(type: MeasureType, pts: THREE.Vector3[], s: MeasureStyle, ghost: boolean) {
     void ghost
     pts.forEach(p => {
-      const geo = new THREE.SphereGeometry(0.12, 12, 12)
+      const geo = new THREE.SphereGeometry(MEASURE_VIS.pointRadius, MEASURE_VIS.pointSegments, MEASURE_VIS.pointSegments)
       const sphere = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: this.cssHex(s.lineColor) }))
       sphere.position.copy(p)
       this.measureGroup.add(sphere)
@@ -110,7 +112,7 @@ export class MeasureVisuals {
       const arcPos = this.addAngleArc(pts[0], pts[1], pts[2], s)
       if (arcPos) this.measureLabelPositions.push({
         pos: arcPos,
-        text: `${this.calcAngle(pts[0], pts[1], pts[2]).toFixed(2)}°`,
+        text: `${calcAngle(pts[0], pts[1], pts[2]).toFixed(2)}°`,
         color: s.angleColor,
       })
     } else if (type === 'dihedral' && pts.length === 4) {
@@ -118,23 +120,10 @@ export class MeasureVisuals {
       const arcPos = this.addDihedralVisual(pts[0], pts[1], pts[2], pts[3], s)
       if (arcPos) this.measureLabelPositions.push({
         pos: arcPos,
-        text: `${this.calcDihedral(pts[0], pts[1], pts[2], pts[3]).toFixed(2)}°`,
+        text: `${calcDihedral(pts[0], pts[1], pts[2], pts[3]).toFixed(2)}°`,
         color: s.planeColor1,
       })
     }
-  }
-
-  private calcAngle(p1: THREE.Vector3, vertex: THREE.Vector3, p3: THREE.Vector3): number {
-    const v1 = p1.clone().sub(vertex).normalize()
-    const v2 = p3.clone().sub(vertex).normalize()
-    return Math.acos(Math.max(-1, Math.min(1, v1.dot(v2)))) * (180 / Math.PI)
-  }
-
-  private calcDihedral(p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3, p4: THREE.Vector3): number {
-    const b1 = p2.clone().sub(p1), b2 = p3.clone().sub(p2), b3 = p4.clone().sub(p3)
-    const n1 = b1.clone().cross(b2), n2 = b2.clone().cross(b3)
-    const m1 = n1.clone().cross(b2.clone().normalize())
-    return Math.atan2(m1.dot(n2), n1.dot(n2)) * (180 / Math.PI)
   }
 
   private addAngleArc(p1: THREE.Vector3, vertex: THREE.Vector3, p3: THREE.Vector3, s: MeasureStyle): THREE.Vector3 | null {
@@ -145,10 +134,10 @@ export class MeasureVisuals {
     axis.normalize()
 
     const totalAngle = v1.angleTo(v2)
-    const arcR = 0.55
+    const arcR = MEASURE_VIS.arcRadius
     const arcPts: THREE.Vector3[] = []
-    for (let i = 0; i <= 48; i++) {
-      const a = (i / 48) * totalAngle
+    for (let i = 0; i <= MEASURE_VIS.arcSegments; i++) {
+      const a = (i / MEASURE_VIS.arcSegments) * totalAngle
       const v = v1.clone().multiplyScalar(Math.cos(a)).addScaledVector(axis.clone().cross(v1), Math.sin(a))
       arcPts.push(vertex.clone().addScaledVector(v, arcR))
     }
@@ -156,13 +145,13 @@ export class MeasureVisuals {
 
     for (const dir of [v1, v2]) {
       this.measureGroup.add(this.makeLine2(
-        [vertex.clone().addScaledVector(dir, arcR * 0.8), vertex.clone().addScaledVector(dir, arcR * 1.2)],
+        [vertex.clone().addScaledVector(dir, arcR * MEASURE_VIS.arcTickMin), vertex.clone().addScaledVector(dir, arcR * MEASURE_VIS.arcTickMax)],
         s.angleColor, s.lineWidth,
       ))
     }
 
     const midDir = v1.clone().multiplyScalar(Math.cos(totalAngle / 2)).addScaledVector(axis.clone().cross(v1), Math.sin(totalAngle / 2))
-    return vertex.clone().addScaledVector(midDir.normalize(), arcR + 0.35)
+    return vertex.clone().addScaledVector(midDir.normalize(), arcR + MEASURE_VIS.arcLabelOffset)
   }
 
   private addDihedralVisual(
@@ -182,14 +171,14 @@ export class MeasureVisuals {
     const perp1 = projectPerp(p1), perp4 = projectPerp(p4)
 
     const addPlane = (outer: THREE.Vector3, perp: THREE.Vector3, color: string) => {
-      const PAD_U = 0.3
-      const PAD_V = 0.4
+      const PAD_U = MEASURE_VIS.dihedralPadU
+      const PAD_V = MEASURE_VIS.dihedralPadV
       const outerRel = outer.clone().sub(bondMid)
       const uOuter = outerRel.dot(bondDir)
       const vOuter = outerRel.dot(perp)
       const uMin = Math.min(-halfLen, uOuter) - PAD_U
       const uMax = Math.max(halfLen, uOuter) + PAD_U
-      const vMin = -PAD_V * 0.3
+      const vMin = -PAD_V * MEASURE_VIS.dihedralVMinFactor
       const vMax = Math.max(0, vOuter) + PAD_V
 
       const corner = (u: number, v: number) =>
@@ -207,7 +196,7 @@ export class MeasureVisuals {
       const faceMat = new THREE.MeshBasicMaterial({
         color: this.cssHex(color),
         transparent: true,
-        opacity: 0.32,
+        opacity: MEASURE_VIS.dihedralPlaneOpacity,
         side: THREE.DoubleSide,
         depthWrite: false,
       })
@@ -220,14 +209,14 @@ export class MeasureVisuals {
 
     const vMax1 = Math.max(0, p1.clone().sub(bondMid).dot(perp1))
     const vMax4 = Math.max(0, p4.clone().sub(bondMid).dot(perp4))
-    const arcR = Math.min(vMax1, vMax4) * 0.5 + 0.2
+    const arcR = Math.min(vMax1, vMax4) * MEASURE_VIS.dihedralArcRadiusScale + MEASURE_VIS.dihedralArcRadiusBase
 
     const sinA = perp1.clone().cross(perp4).dot(bondDir)
     const cosA = perp1.dot(perp4)
     const dihedralAngle = Math.atan2(sinA, cosA)
     const arcPts: THREE.Vector3[] = []
-    for (let i = 0; i <= 48; i++) {
-      const a = (i / 48) * dihedralAngle
+    for (let i = 0; i <= MEASURE_VIS.arcSegments; i++) {
+      const a = (i / MEASURE_VIS.arcSegments) * dihedralAngle
       const v = perp1.clone().multiplyScalar(Math.cos(a)).addScaledVector(bondDir.clone().cross(perp1), Math.sin(a))
       arcPts.push(bondMid.clone().addScaledVector(v, arcR))
     }
@@ -235,13 +224,13 @@ export class MeasureVisuals {
 
     for (const perp of [perp1, perp4]) {
       this.measureGroup.add(this.makeLine2(
-        [bondMid.clone().addScaledVector(perp, arcR * 0.8), bondMid.clone().addScaledVector(perp, arcR * 1.2)],
+        [bondMid.clone().addScaledVector(perp, arcR * MEASURE_VIS.arcTickMin), bondMid.clone().addScaledVector(perp, arcR * MEASURE_VIS.arcTickMax)],
         s.lineColor, s.lineWidth,
       ))
     }
 
     const midDir = perp1.clone().multiplyScalar(Math.cos(dihedralAngle / 2)).addScaledVector(bondDir.clone().cross(perp1), Math.sin(dihedralAngle / 2))
-    return bondMid.clone().addScaledVector(midDir.normalize(), arcR + 0.35)
+    return bondMid.clone().addScaledVector(midDir.normalize(), arcR + MEASURE_VIS.arcLabelOffset)
   }
 
   dispose() {

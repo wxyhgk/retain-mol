@@ -11,6 +11,7 @@
  */
 
 import type { Atom, Bond, Molecule } from '../../molecule'
+import { inferHybridization } from '../../../config/geometry.config'
 
 // ── 类型 ──────────────────────────────────────────────────────────────────────
 
@@ -29,19 +30,6 @@ export interface ConjugationResult {
 
 // ── 可参与共轭的杂原子（有孤对电子，可贡献给 π 体系） ────────────────────────
 const LONE_PAIR_DONORS = new Set(['N', 'O', 'S'])
-
-// ── 内部工具 ──────────────────────────────────────────────────────────────────
-
-/** 根据键级判断原子杂化 */
-function calcHybridization(atomId: string, bonds: Bond[]): Hybridization {
-  const atomBonds = bonds.filter(b => b.atomId1 === atomId || b.atomId2 === atomId)
-  const doubles = atomBonds.filter(b => b.order === 2).length
-  const triples = atomBonds.filter(b => b.order === 3).length
-
-  if (triples > 0 || doubles >= 2) return 'sp'   // 三键 or 两个双键（丙二烯型）
-  if (doubles === 1)                return 'sp2'
-  return 'sp3'
-}
 
 /**
  * sp3 杂原子是否通过孤对电子参与共轭：
@@ -107,10 +95,10 @@ function connectedComponents(
 export function detectConjugation(mol: Molecule): ConjugationResult {
   const { atoms, bonds } = mol
 
-  // 第一轮：按键级确定杂化
+  // 第一轮：按键级确定杂化（复用 geometry.config 的单一实现）
   const hybridization = new Map<string, Hybridization>()
   for (const atom of atoms) {
-    hybridization.set(atom.id, calcHybridization(atom.id, bonds as Bond[]))
+    hybridization.set(atom.id, inferHybridization(bonds, atom.id))
   }
 
   // 第二轮：sp3 杂原子若与 π 体系相邻，升级为"可共轭"

@@ -35,8 +35,8 @@ export default function AtomLabelOverlay({ renderer }: Props) {
 
       renderer.camera.updateMatrixWorld()
 
-      const scale = Math.max(0.4, Math.min(2.5, CAMERA.initialZ / renderer.camera.position.z))
-      const fontSize = Math.round(10 * scale)
+      const scale = Math.max(L.scaleMin, Math.min(L.scaleMax, CAMERA.initialZ / renderer.camera.position.z))
+      const fontSize = Math.round(L.baseFontSize * scale)
       const paddingX = L.paddingX * scale
       const paddingY = L.paddingY * scale
       const height   = L.height   * scale

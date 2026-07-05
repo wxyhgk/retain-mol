@@ -1,0 +1,298 @@
+import * as THREE from 'three'
+import type { GrowGuideSpec } from '../types'
+import { GHOST_LINE, GROW_GUIDE } from '../../config/render.config'
+import { ticker } from '../animation'
+
+/**
+ * 拖出生长手势的全部预览视觉（与 MeasureVisuals 对称）：
+ *  - 幽灵线：源原子 → 光标/吸附点
+ *  - 幽灵原子：新原子落点的半透明球
+ *  - 候选槽位参考几何：n=1 深度烘焙圆管环 / 离散候选点
+ *  - 屏幕空间拾取：返回参考几何上投影离光标最近的候选位置（带滞回）
+ *
+ * 只做视觉与拾取，不含手势状态机 —— 那是 InteractionHandler 的职责。
+ */
+export class GhostVisuals {
+  private line: THREE.Line | null = null
+  private atom: THREE.Mesh | null = null
+  private guideGroup: THREE.Group | null = null
+
+  private _lineStart: THREE.Vector3 | null = null
+  private _guideSpec: GrowGuideSpec = null
+  private _ringU = new THREE.Vector3()
+  private _ringV = new THREE.Vector3()
+  private _prevRingAngle: number | null = null
+  private _prevPointIndex: number | null = null
+
+  constructor(
+    private canvas: HTMLCanvasElement,
+    private camera: THREE.PerspectiveCamera,
+    private modelGroup: THREE.Group,
+  ) {}
+
+  get hasLine(): boolean { return this.line !== null && this._lineStart !== null }
+  get lineStartPos(): THREE.Vector3 | null { return this._lineStart }
+
+  // ── 幽灵线 ──────────────────────────────────────────────────────────────────
+
+  /** 在 pos 处创建幽灵线（两端重合）；null 则移除 */
+  setLineStart(pos: THREE.Vector3 | null) {
+    this.removeLine()
+    if (!pos) return
+    const geo = new THREE.BufferGeometry().setFromPoints([pos.clone(), pos.clone()])
+    const mat = new THREE.LineBasicMaterial({
+      color: GHOST_LINE.color,
+      linewidth: GHOST_LINE.linewidth,
+      transparent: true,
+      opacity: GHOST_LINE.opacity,
+    })
+    this.line = new THREE.Line(geo, mat)
+    this.modelGroup.add(this.line)
+    this._lineStart = pos.clone()
+  }
+
+  /** 更新终点与颜色（绿色=合法成键目标，蓝色=无目标） */
+  updateLine(end: THREE.Vector3, validTarget: boolean) {
+    if (!this.line || !this._lineStart) return
+    const positions = new Float32Array([
+      this._lineStart.x, this._lineStart.y, this._lineStart.z,
+      end.x, end.y, end.z,
+    ])
+    this.line.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    this.line.geometry.attributes.position.needsUpdate = true
+    ;(this.line.material as THREE.LineBasicMaterial)
+      .color.setHex(validTarget ? GHOST_LINE.targetColor : GHOST_LINE.color)
+    ticker.invalidate()
+  }
+
+  private removeLine() {
+    if (this.line) {
+      this.modelGroup.remove(this.line)
+      this.line.geometry.dispose()
+      this.line = null
+    }
+    this._lineStart = null
+  }
+
+  // ── 幽灵原子 ────────────────────────────────────────────────────────────────
+
+  showAtom(posLocal: THREE.Vector3, radius: number, color: number) {
+    if (!this.atom) {
+      const geo = new THREE.SphereGeometry(1, 24, 24)
+      const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false })
+      this.atom = new THREE.Mesh(geo, mat)
+      this.modelGroup.add(this.atom)
+    }
+    ;(this.atom.material as THREE.MeshBasicMaterial).color.setHex(color)
+    this.atom.scale.setScalar(radius)
+    this.atom.position.copy(posLocal)
+    ticker.invalidate()
+  }
+
+  removeAtom() {
+    if (this.atom) {
+      this.modelGroup.remove(this.atom)
+      this.atom.geometry.dispose()
+      ;(this.atom.material as THREE.Material).dispose()
+      this.atom = null
+      ticker.invalidate()
+    }
+  }
+
+  // ── 候选槽位参考几何 ────────────────────────────────────────────────────────
+
+  /** n=1 画锥底圆环（深度烘焙虚实），离散槽位画半透明小球 */
+  showGuide(guide: NonNullable<GrowGuideSpec>) {
+    this.removeGuide()
+    const group = new THREE.Group()
+    this.guideGroup = group
+    this.modelGroup.add(group)
+    // 先挂进场景图再 updateMatrixWorld，后面才能把相机位置变换进局部坐标
+    this.modelGroup.updateMatrixWorld(true)
+
+    // 供屏幕空间拾取：记录 guide 与环平面内基
+    this._guideSpec = guide
+    if (guide.kind === 'ring') {
+      const q = new THREE.Quaternion()
+        .setFromUnitVectors(new THREE.Vector3(0, 0, 1), guide.axis.clone().normalize())
+      this._ringU.set(1, 0, 0).applyQuaternion(q)
+      this._ringV.set(0, 1, 0).applyQuaternion(q)
+      group.add(this.buildDepthCuedRing(guide))
+    } else {
+      // 候选点：近的实、远的虚
+      const camWorld = this.camera.position
+      const wp = new THREE.Vector3()
+      const dists = guide.positions.map(p => {
+        wp.copy(p).applyMatrix4(this.modelGroup.matrixWorld)
+        return wp.distanceTo(camWorld)
+      })
+      const dMin = Math.min(...dists), dMax = Math.max(...dists)
+      guide.positions.forEach((p, i) => {
+        const t = dMax - dMin < 1e-6 ? 1 : 1 - (dists[i] - dMin) / (dMax - dMin)   // 1=最近
+        const opacity = GROW_GUIDE.pointAlphaFar + (GROW_GUIDE.pointAlphaNear - GROW_GUIDE.pointAlphaFar) * t
+        const geo = new THREE.SphereGeometry(GROW_GUIDE.pointRadius, 16, 16)
+        const mat = new THREE.MeshBasicMaterial({
+          color: GROW_GUIDE.color, transparent: true, opacity, depthWrite: false,
+        })
+        const dot = new THREE.Mesh(geo, mat)
+        dot.position.copy(p)
+        group.add(dot)
+      })
+    }
+
+    ticker.invalidate()
+  }
+
+  get guideSpec(): GrowGuideSpec { return this._guideSpec }
+
+  removeGuide() {
+    this._guideSpec = null
+    this._prevRingAngle = null
+    this._prevPointIndex = null
+    if (this.guideGroup) {
+      this.modelGroup.remove(this.guideGroup)
+      this.guideGroup.traverse(o => {
+        const mesh = o as THREE.Mesh
+        if (mesh.geometry) mesh.geometry.dispose()
+        if (mesh.material) (mesh.material as THREE.Material).dispose()
+      })
+      this.guideGroup = null
+      ticker.invalidate()
+    }
+  }
+
+  /**
+   * 深度烘焙的圆管环：按每个环段到相机的距离插值管径与透明度——
+   * 近侧粗且实，远侧细且虚（近大远小 + 近粗远细 + 虚实）。
+   * 拖拽期间相机锁定，烘焙一次即保持正确。
+   */
+  private buildDepthCuedRing(guide: { center: THREE.Vector3; axis: THREE.Vector3; radius: number }): THREE.Mesh {
+    const segs = GROW_GUIDE.ringSegments
+    const tubeSegs = GROW_GUIDE.ringTubeSegments
+
+    const quaternion = new THREE.Quaternion()
+      .setFromUnitVectors(new THREE.Vector3(0, 0, 1), guide.axis.clone().normalize())
+
+    // 相机位置 → 环局部坐标（需要 modelGroup 的世界矩阵；rigid 变换距离不变）
+    const local = new THREE.Matrix4()
+      .compose(guide.center, quaternion, new THREE.Vector3(1, 1, 1))
+    const toLocal = new THREE.Matrix4()
+      .multiplyMatrices(this.modelGroup.matrixWorld, local)
+      .invert()
+    const camLocal = this.camera.position.clone().applyMatrix4(toLocal)
+
+    // 每个环段的"近度" t ∈ [0,1]
+    const R = guide.radius
+    const nearness: number[] = []
+    let dMin = Infinity, dMax = -Infinity
+    for (let i = 0; i < segs; i++) {
+      const a = (i / segs) * Math.PI * 2
+      const d = camLocal.distanceTo(new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R, 0))
+      nearness.push(d)
+      if (d < dMin) dMin = d
+      if (d > dMax) dMax = d
+    }
+    const range = Math.max(dMax - dMin, 1e-6)
+    for (let i = 0; i < segs; i++) nearness[i] = 1 - (nearness[i] - dMin) / range
+
+    // 生成变径圆管 + RGBA 顶点色
+    const positions: number[] = []
+    const colors: number[] = []
+    const indices: number[] = []
+    const base = new THREE.Color(GROW_GUIDE.color)
+    for (let i = 0; i <= segs; i++) {
+      const t = nearness[i % segs]
+      const a = (i / segs) * Math.PI * 2
+      const rT = GROW_GUIDE.ringTubeFar + (GROW_GUIDE.ringTubeNear - GROW_GUIDE.ringTubeFar) * t
+      const alpha = GROW_GUIDE.ringAlphaFar + (GROW_GUIDE.ringAlphaNear - GROW_GUIDE.ringAlphaFar) * t
+      const cosA = Math.cos(a), sinA = Math.sin(a)
+      for (let j = 0; j <= tubeSegs; j++) {
+        const b = (j / tubeSegs) * Math.PI * 2
+        const r = R + rT * Math.cos(b)
+        positions.push(r * cosA, r * sinA, rT * Math.sin(b))
+        colors.push(base.r, base.g, base.b, alpha)
+      }
+    }
+    const row = tubeSegs + 1
+    for (let i = 0; i < segs; i++) {
+      for (let j = 0; j < tubeSegs; j++) {
+        const a0 = i * row + j
+        const b0 = (i + 1) * row + j
+        indices.push(a0, b0, a0 + 1, b0, b0 + 1, a0 + 1)
+      }
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4))
+    geo.setIndex(indices)
+
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, depthWrite: false,
+    }))
+    mesh.quaternion.copy(quaternion)
+    mesh.position.copy(guide.center)
+    return mesh
+  }
+
+  /**
+   * 屏幕空间拾取：返回 guide 上"投影后离光标最近"的候选位置（模型局部坐标）。
+   * 配滞回：环侧视时前/后半环投影重叠，无滞回会来回跳。
+   */
+  pickOnGuide(clientX: number, clientY: number): THREE.Vector3 | null {
+    const spec = this._guideSpec
+    if (!spec) return null
+    const rect = this.canvas.getBoundingClientRect()
+    const cx = clientX - rect.left
+    const cy = clientY - rect.top
+    this.camera.updateMatrixWorld()
+
+    const toScreen = (local: THREE.Vector3): { x: number; y: number } => {
+      const p = local.clone().applyMatrix4(this.modelGroup.matrixWorld).project(this.camera)
+      return { x: (p.x + 1) / 2 * rect.width, y: (-p.y + 1) / 2 * rect.height }
+    }
+
+    if (spec.kind === 'ring') {
+      const samples = GROW_GUIDE.pickSamples
+      let bestCost = Infinity
+      let bestAngle = 0
+      let bestPos: THREE.Vector3 | null = null
+      const p = new THREE.Vector3()
+      for (let i = 0; i < samples; i++) {
+        const a = (i / samples) * Math.PI * 2
+        p.copy(spec.center)
+          .addScaledVector(this._ringU, Math.cos(a) * spec.radius)
+          .addScaledVector(this._ringV, Math.sin(a) * spec.radius)
+        const s = toScreen(p)
+        let cost = Math.hypot(s.x - cx, s.y - cy)
+        if (this._prevRingAngle !== null) {
+          cost += GROW_GUIDE.hysteresisPx * 0.5 * (1 - Math.cos(a - this._prevRingAngle))
+        }
+        if (cost < bestCost) { bestCost = cost; bestAngle = a; bestPos = p.clone() }
+      }
+      this._prevRingAngle = bestAngle
+      return bestPos
+    }
+
+    // points：屏幕距离最近的候选点，带粘滞防抖
+    let bestCost = Infinity
+    let bestIdx = -1
+    spec.positions.forEach((pos, i) => {
+      const s = toScreen(pos)
+      let cost = Math.hypot(s.x - cx, s.y - cy)
+      if (this._prevPointIndex === i) cost -= GROW_GUIDE.hysteresisPx
+      if (cost < bestCost) { bestCost = cost; bestIdx = i }
+    })
+    if (bestIdx < 0) return null
+    this._prevPointIndex = bestIdx
+    return spec.positions[bestIdx].clone()
+  }
+
+  /** 拖拽结束/取消：移除全部预览视觉 */
+  clear() {
+    this.removeLine()
+    this.removeAtom()
+    this.removeGuide()
+  }
+
+  dispose() { this.clear() }
+}

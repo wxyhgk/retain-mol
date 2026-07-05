@@ -3,12 +3,16 @@
  */
 
 export const CAMERA = {
-  /** 透视相机视场角（度） */
-  fov: 45,
+  /**
+   * 透视相机视场角（度）。
+   * 越大透视越强（近大远小越明显）；fitToMolecule 按 fov 自动补偿距离，
+   * 分子表观大小不变。45 偏长焦显得"平"，60 立体感明显。
+   */
+  fov: 60,
   near: 0.1,
   far: 1000,
   /** 初始相机到原点距离（z 正方向） */
-  initialZ: 20,
+  initialZ: 16,
 }
 
 export const CONTROLS = {
@@ -22,4 +26,11 @@ export const CONTROLS = {
   dragZoomCoef: 0.01,
   /** 滚轮缩放的指数系数 */
   wheelZoomCoef: 0.001,
+}
+
+export const FIT = {
+  /** fitToMolecule 时包围盒尺寸最小值（Å），防止单原子分子相机过近 */
+  minBoundingBox: 4,
+  /** 包围盒对角线到相机距离的拉远系数 */
+  distanceMultiplier: 1.5,
 }

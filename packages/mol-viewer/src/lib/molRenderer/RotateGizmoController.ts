@@ -5,8 +5,15 @@
  */
 
 import * as THREE from 'three'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import type { Molecule } from '../molecule'
+
+/** store 操作由外部（RotateGizmo.tsx）通过 callbacks 注入，保持 lib 层无 store 依赖 */
+export interface GizmoCallbacks {
+  getMolecule: () => Molecule
+  setAtomPositions: (positions: ReadonlyMap<string, { x: number; y: number; z: number }>) => void
+  beginTransaction: () => void
+  endTransaction: () => void
+}
 import type { MolRenderer } from './MolRenderer'
 import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../config/rotateGizmo.config'
 import { ticker } from '../animation'
@@ -88,8 +95,9 @@ export class RotateGizmoController {
     private renderer: MolRenderer,
     selectedAtomIds: Set<string>,
     selectedBondIds: Set<string>,
+    private cb: GizmoCallbacks,
   ) {
-    const mol = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
+    const mol = cb.getMolecule()
     const specs = buildSpecs(mol, selectedAtomIds, selectedBondIds)
 
     if (specs.length === 0) {
@@ -124,7 +132,7 @@ export class RotateGizmoController {
     renderer.camera.getWorldDirection(this._camForward)
 
     // 重用 Map — clear + 重填，避免 new Map() 分配
-    const liveMol = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
+    const liveMol = this.cb.getMolecule()
     this._atomById.clear()
     for (const a of liveMol.atoms) this._atomById.set(a.id, a)
 
@@ -232,7 +240,7 @@ export class RotateGizmoController {
 
     if (this.drag) {
       this.flushDragPositions()
-      useMoleculeStore.getState().endTransaction()
+      this.cb.endTransaction()
       renderer.controls.enabled = true
     }
     if (this._dragRaf !== null) cancelAnimationFrame(this._dragRaf)
@@ -287,7 +295,7 @@ export class RotateGizmoController {
 
     // 用预分配的 Map 存起始世界坐标（避免 new Map）
     const atomsWorldStart = new Map<string, THREE.Vector3>()
-    for (const a of selectActiveMoleculeOrEmpty(useMoleculeStore.getState()).atoms) {
+    for (const a of this.cb.getMolecule().atoms) {
       if (!hit.spec.atomIdsToRotate.has(a.id)) continue
       // 每个原子需要独立的 Vector3 存储初始位置
       atomsWorldStart.set(a.id, this.renderer.modelGroup.localToWorld(new THREE.Vector3(a.x, a.y, a.z)))
@@ -326,7 +334,7 @@ export class RotateGizmoController {
       startAngle: Math.atan2(e.clientY - pivotScreen.y, e.clientX - pivotScreen.x),
       lastContinuous: 0,
     }
-    useMoleculeStore.getState().beginTransaction()
+    this.cb.beginTransaction()
     this.renderer.controls.enabled = false
     this.renderer.canvas.style.cursor = 'grabbing'
     this.renderer.canvas.setPointerCapture?.(e.pointerId)
@@ -339,7 +347,7 @@ export class RotateGizmoController {
       this._dragRaf = null
     }
     if (this._dragPositions.size > 0) {
-      useMoleculeStore.getState().setAtomPositions(this._dragPositions)
+      this.cb.setAtomPositions(this._dragPositions)
     }
   }
 
@@ -366,7 +374,7 @@ export class RotateGizmoController {
     if (this._dragRaf === null) {
       this._dragRaf = requestAnimationFrame(() => {
         this._dragRaf = null
-        useMoleculeStore.getState().setAtomPositions(this._dragPositions)
+        this.cb.setAtomPositions(this._dragPositions)
       })
     }
   }
@@ -381,7 +389,7 @@ export class RotateGizmoController {
     this.drag.ring.dragAngle = 0
     this.drag = null
     this.suppressNextClick = true
-    useMoleculeStore.getState().endTransaction()
+    this.cb.endTransaction()
     this.renderer.controls.enabled = true
     this.renderer.canvas.style.cursor = ''
     this.renderer.canvas.releasePointerCapture?.(e.pointerId)

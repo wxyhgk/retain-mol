@@ -11,6 +11,7 @@ const externals = [
   'clsx',
   'tailwind-merge',
   'lucide-react',
+  'openchemlib',   // ~3MB，绝不能内联进产物
 ]
 
 const external = (id: string) => externals.some(dep => id === dep || id.startsWith(`${dep}/`))

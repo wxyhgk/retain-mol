@@ -1,9 +1,12 @@
 import * as THREE from 'three'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { MolControls } from '../controls/MolControls'
 import type { Atom, Bond, Molecule } from '../molecule'
 import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
 import { CAMERA, CONTROLS } from '../../config/camera.config'
-import { LIGHTING } from '../../config/render.config'
+import { LIGHTING, FOG, DOF } from '../../config/render.config'
 import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
 import { ticker, Phase } from '../animation'
 import { MoleculeRenderer } from './MoleculeRenderer'
@@ -30,6 +33,13 @@ export class MolRenderer {
   private _measureGroup = new THREE.Group()
   private _unsubTicker: () => void = () => {}
 
+  // 景深后处理（虚实）：对焦注视点，远处虚化
+  private _composer: EffectComposer | null = null
+  private _bokehPass: BokehPass | null = null
+
+  // 平面草图模式的网格可视化
+  private _sketchGrid: THREE.GridHelper | null = null
+
   private _molRenderer: MoleculeRenderer
   private _interaction: InteractionHandler
   private _measureVisuals: MeasureVisuals
@@ -53,6 +63,8 @@ export class MolRenderer {
   set onBondClick(v) { this._interaction.onBondClick = v }
   get onBackgroundClick() { return this._interaction.onBackgroundClick }
   set onBackgroundClick(v) { this._interaction.onBackgroundClick = v }
+  get onBackgroundDoubleClick() { return this._interaction.onBackgroundDoubleClick }
+  set onBackgroundDoubleClick(v) { this._interaction.onBackgroundDoubleClick = v }
   get onAtomDragStart() { return this._interaction.onAtomDragStart }
   set onAtomDragStart(v) { this._interaction.onAtomDragStart = v }
   get onAtomDrag() { return this._interaction.onAtomDrag }
@@ -61,6 +73,87 @@ export class MolRenderer {
   set onAtomDragEnd(v) { this._interaction.onAtomDragEnd = v }
   get canDragAtom() { return this._interaction.canDragAtom }
   set canDragAtom(v) { this._interaction.canDragAtom = v }
+  get onBondDragStart() { return this._interaction.onBondDragStart }
+  set onBondDragStart(v) { this._interaction.onBondDragStart = v }
+  get onBondDragEnd() { return this._interaction.onBondDragEnd }
+  set onBondDragEnd(v) { this._interaction.onBondDragEnd = v }
+  get onBondDragHover() { return this._interaction.onBondDragHover }
+  set onBondDragHover(v) { this._interaction.onBondDragHover = v }
+  get getGrowPreview() { return this._interaction.getGrowPreview }
+  set getGrowPreview(v) { this._interaction.getGrowPreview = v }
+  get getGrowGuide() { return this._interaction.getGrowGuide }
+  set getGrowGuide(v) { this._interaction.getGrowGuide = v }
+
+  // ── 平面草图模式 ──────────────────────────────────────────────────────────
+
+  /** 设置/清除草图平面：同步交互约束 + 半透明网格可视化（模型局部坐标） */
+  setSketchPlane(plane: { origin: [number, number, number]; normal: [number, number, number] } | null) {
+    this._interaction.sketchPlane = plane
+      ? { origin: new THREE.Vector3(...plane.origin), normal: new THREE.Vector3(...plane.normal) }
+      : null
+
+    if (this._sketchGrid) {
+      this.modelGroup.remove(this._sketchGrid)
+      this._sketchGrid.geometry.dispose()
+      ;(this._sketchGrid.material as THREE.Material).dispose()
+      this._sketchGrid = null
+    }
+    if (plane) {
+      const grid = new THREE.GridHelper(14, 14, 0x94a3b8, 0xcbd5e1)
+      const mats = grid.material as THREE.LineBasicMaterial | THREE.LineBasicMaterial[]
+      ;(Array.isArray(mats) ? mats : [mats]).forEach(m => { m.transparent = true; m.opacity = 0.3; m.depthWrite = false })
+      // GridHelper 默认躺在 XZ 平面（法向 +Y）
+      grid.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(...plane.normal).normalize(),
+      )
+      grid.position.set(...plane.origin)
+      this.modelGroup.add(grid)
+      this._sketchGrid = grid
+    }
+    ticker.invalidate()
+  }
+
+  /** 相机平滑转到垂直于草图平面的视角（旋转 rotationGroup 使法向朝向相机） */
+  alignViewToPlane(normal: [number, number, number]) {
+    const n = new THREE.Vector3(...normal).normalize()
+    const current = n.clone().applyQuaternion(this.rotationGroup.quaternion)
+    // 取离当前视角近的一侧，避免无谓的 180° 翻转
+    const target = new THREE.Vector3(0, 0, current.z >= 0 ? 1 : -1)
+    const qDelta = new THREE.Quaternion().setFromUnitVectors(current, target)
+    const qStart = this.rotationGroup.quaternion.clone()
+    const qEnd = qDelta.multiply(qStart)
+
+    const DURATION = 400
+    const t0 = performance.now()
+    const step = () => {
+      const t = Math.min(1, (performance.now() - t0) / DURATION)
+      const ease = 1 - Math.pow(1 - t, 3)   // ease-out cubic
+      this.rotationGroup.quaternion.slerpQuaternions(qStart, qEnd, ease)
+      ticker.invalidate()
+      if (t < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+
+  /** 当前相机视角平面（过旋转中心、垂直视线，模型局部坐标）——空场景 pp 的回退 */
+  getViewPlaneLocal(): { origin: [number, number, number]; normal: [number, number, number] } {
+    const camDir = new THREE.Vector3()
+    this.camera.getWorldDirection(camDir)
+    const inv = this.modelGroup.matrixWorld.clone().invert()
+    const normal = camDir.clone().transformDirection(inv).negate()
+    const pivot = new THREE.Vector3()
+    this.rotationGroup.getWorldPosition(pivot)
+    const origin = this.modelGroup.worldToLocal(pivot)
+    return { origin: [origin.x, origin.y, origin.z], normal: [normal.x, normal.y, normal.z] }
+  }
+
+  setDragHoverAtom(atomId: string | null) {
+    for (const r of this._molRenderers.values()) {
+      if (atomId && r.atomMeshes.has(atomId)) r.setDragHover(atomId)
+      else r.clearDragHover()
+    }
+  }
 
   // ── 测量样式（转发给 MeasureVisuals）──
   get measureStyle(): MeasureStyle { return this._measureVisuals.measureStyle }
@@ -131,10 +224,44 @@ export class MolRenderer {
     this.controls.onInteractionEnd = () => { ticker.stopContinuous('viewport'); ticker.invalidate() }
     this.controls.onWheelChange = () => ticker.invalidate()
 
+    // 深度雾化：从注视点往后逐渐变淡，提供前后深度线索
+    this.scene.fog = new THREE.Fog(hexToInt(this.theme.scene.backgroundColor), CAMERA.initialZ, CAMERA.initialZ + FOG.farOffset)
+
+    // 景深（虚实）：MSAA 渲染目标保住抗锯齿，BokehPass 做散焦
+    if (DOF.enabled) {
+      const dpr = window.devicePixelRatio
+      const rt = new THREE.WebGLRenderTarget(
+        canvas.clientWidth * dpr, canvas.clientHeight * dpr, { samples: 4 },
+      )
+      this._composer = new EffectComposer(this.renderer, rt)
+      this._composer.setPixelRatio(dpr)
+      this._composer.setSize(canvas.clientWidth, canvas.clientHeight)
+      this._composer.addPass(new RenderPass(this.scene, this.camera))
+      this._bokehPass = new BokehPass(this.scene, this.camera, {
+        focus: CAMERA.initialZ,
+        aperture: DOF.aperture,
+        maxblur: DOF.maxblur,
+      })
+      this._composer.addPass(this._bokehPass)
+    }
+
     // 注册到共享 Ticker 的 Render 阶段（最后执行）
     this._unsubTicker = ticker.subscribe('mol-render', Phase.Render, () => {
       this.controls.update()
-      this.renderer.render(this.scene, this.camera)
+      // 雾与景深焦点随相机-注视点距离同步；雾色跟随主题背景
+      const fog = this.scene.fog as THREE.Fog
+      const pivot = new THREE.Vector3()
+      this.rotationGroup.getWorldPosition(pivot)
+      const dist = this.camera.position.distanceTo(pivot)
+      fog.near = dist + FOG.nearOffset
+      fog.far  = dist + FOG.farOffset
+      if (this.scene.background instanceof THREE.Color) fog.color.copy(this.scene.background)
+      if (this._composer && this._bokehPass) {
+        ;(this._bokehPass.uniforms as Record<string, { value: number }>)['focus'].value = dist
+        this._composer.render()
+      } else {
+        this.renderer.render(this.scene, this.camera)
+      }
     })
     ticker.invalidate() // 初始帧
 
@@ -156,6 +283,7 @@ export class MolRenderer {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height, false)
+    this._composer?.setSize(width, height)
     this.controls.handleResize()
     this._measureVisuals.onResize(width, height)
     ticker.invalidate()
@@ -300,6 +428,10 @@ export class MolRenderer {
     return this._interaction.pickAtomIdAt(clientX, clientY)
   }
 
+  pickBondIdAt(clientX: number, clientY: number): string | null {
+    return this._interaction.pickBondIdAt(clientX, clientY)
+  }
+
   // ── 成键预览线 ──
 
   setGhostLineStart(atomId: string | null) {
@@ -324,6 +456,7 @@ export class MolRenderer {
     this._molRenderer.dispose()
     this._measureVisuals.dispose()
     this.controls.dispose()
+    this._composer?.dispose()
     this.renderer.dispose()
     for (const [, r] of this._molRenderers) r.dispose()
     this._molRenderers.clear()

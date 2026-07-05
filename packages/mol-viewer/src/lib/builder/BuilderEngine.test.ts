@@ -11,7 +11,12 @@ import {
   getNeighborDirs,
   autoAddHydrogens,
   replaceAtomSymbol,
+  cycleBondLength,
+  setBondLength,
+  setBondAngle,
+  setDihedralAngle,
 } from './BuilderEngine'
+import { detectAromaticity } from './analysis/aromaticity'
 import type { Atom, Bond } from '../molecule'
 
 // 允许的角度误差（度）
@@ -437,5 +442,192 @@ describe('replaceAtomSymbol', () => {
     const mol = { atoms: [c], bonds: [] }
     const result = replaceAtomSymbol(mol, 'non-existent', 'N')
     expect(result.atoms[0].symbol).toBe('C')
+  })
+})
+
+describe('cycleBondLength', () => {
+  // C-C 单键骨架（乙烷去 H，仅拓扑）+ 各挂一个 H
+  function makeEthaneSkeleton() {
+    const c1 = newAtom('C', 0, 0, 0)
+    const c2 = newAtom('C', 1.54, 0, 0)
+    const h1 = newAtom('H', -1.09, 0, 0)
+    const h2 = newAtom('H', 1.54 + 1.09, 0, 0)
+    return {
+      atoms: [c1, c2, h1, h2],
+      bonds: [newBond(c1.id, c2.id, 1), newBond(c1.id, h1.id), newBond(c2.id, h2.id)],
+      ids: { c1: c1.id, c2: c2.id, h2: h2.id },
+    }
+  }
+
+  it('非环键：循环到双键时平移一侧到标准 C=C 键长，键级跟随', () => {
+    const { atoms, bonds, ids } = makeEthaneSkeleton()
+    const ccBond = bonds[0]
+    const result = cycleBondLength({ atoms, bonds }, ccBond.id)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.order).toBe(2)
+    expect(result.moved).toBe(true)
+    const m = result.molecule
+    const c1 = m.atoms.find(a => a.id === ids.c1)!
+    const c2 = m.atoms.find(a => a.id === ids.c2)!
+    const d = Math.hypot(c1.x - c2.x, c1.y - c2.y, c1.z - c2.z)
+    expect(Math.abs(d - 1.34)).toBeLessThan(DIST_TOL)
+    // 被移动一侧的 H 跟着整体平移（C2-H2 距离不变）
+    const h2 = m.atoms.find(a => a.id === ids.h2)!
+    expect(Math.abs(Math.hypot(c2.x - h2.x, c2.y - h2.y, c2.z - h2.z) - 1.09)).toBeLessThan(DIST_TOL)
+    expect(m.bonds[0].order).toBe(2)
+  })
+
+  it('连续循环：1 → 2 → 3 → 1', () => {
+    const { atoms, bonds } = makeEthaneSkeleton()
+    let mol = { atoms, bonds } as { atoms: readonly Atom[]; bonds: readonly Bond[] }
+    const orders: number[] = []
+    for (let i = 0; i < 3; i++) {
+      const r = cycleBondLength(mol, mol.bonds[0].id)
+      expect(r.ok).toBe(true)
+      if (!r.ok) return
+      orders.push(r.order)
+      mol = r.molecule
+    }
+    expect(orders).toEqual([2, 3, 1])
+  })
+
+  it('环内键：只切换键级，几何不变', () => {
+    // 三元环 C3
+    const c1 = newAtom('C', 0, 0, 0)
+    const c2 = newAtom('C', 1.5, 0, 0)
+    const c3 = newAtom('C', 0.75, 1.3, 0)
+    const b12 = newBond(c1.id, c2.id, 1)
+    const mol = {
+      atoms: [c1, c2, c3],
+      bonds: [b12, newBond(c2.id, c3.id, 1), newBond(c3.id, c1.id, 1)],
+    }
+    const result = cycleBondLength(mol, b12.id)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.moved).toBe(false)
+    expect(result.order).toBe(2)
+    // 坐标完全不变
+    for (const a of result.molecule.atoms) {
+      const orig = mol.atoms.find(x => x.id === a.id)!
+      expect(a.x).toBe(orig.x); expect(a.y).toBe(orig.y); expect(a.z).toBe(orig.z)
+    }
+  })
+
+  it('C-H 只有单键档位 → 拒绝', () => {
+    const { atoms, bonds } = makeEthaneSkeleton()
+    const chBond = bonds[1]
+    const result = cycleBondLength({ atoms, bonds }, chBond.id)
+    expect(result.ok).toBe(false)
+  })
+})
+
+describe('geometric aromaticity（键长驱动的芳香判据）', () => {
+  /** 生成平面正六边形 C6 环，每个 C 挂一个径向 H */
+  function makeHexRing(ccLen: number) {
+    const atoms: Atom[] = []
+    const bonds: Bond[] = []
+    const R = ccLen / (2 * Math.sin(Math.PI / 6))  // 外接圆半径 = 边长（六边形）
+    const cs: Atom[] = []
+    for (let i = 0; i < 6; i++) {
+      const ang = (Math.PI / 3) * i
+      const c = newAtom('C', R * Math.cos(ang), R * Math.sin(ang), 0)
+      cs.push(c); atoms.push(c)
+      const h = newAtom('H', (R + 1.09) * Math.cos(ang), (R + 1.09) * Math.sin(ang), 0)
+      atoms.push(h)
+      bonds.push(newBond(c.id, h.id))
+    }
+    for (let i = 0; i < 6; i++) bonds.push(newBond(cs[i].id, cs[(i + 1) % 6].id, 1))
+    return { atoms, bonds }
+  }
+
+  it('1.39 Å 均匀六元碳环（全单键键级）→ 芳香', () => {
+    const mol = makeHexRing(1.39)
+    const result = detectAromaticity(mol)
+    expect(result.aromaticRings.length).toBe(1)
+    expect(result.aromaticAtoms.size).toBe(6)
+  })
+
+  it('1.54 Å 六元碳环（环己烷骨架长度）→ 非芳香', () => {
+    const mol = makeHexRing(1.54)
+    const result = detectAromaticity(mol)
+    expect(result.aromaticRings.length).toBe(0)
+  })
+})
+
+describe('geometryOps（键长/键角/二面角编辑）', () => {
+  /** 丁烷式骨架 a-b-c-d（带一个挂在 c 上的支链 e，验证刚体旋转） */
+  function makeChain() {
+    const a = newAtom('C', 0, 0, 0)
+    const b = newAtom('C', 1.54, 0, 0)
+    const c = newAtom('C', 2.3, 1.3, 0)
+    const d = newAtom('C', 3.84, 1.3, 0.2)
+    const e = newAtom('H', 2.3, 1.9, 1.0)   // c 的支链
+    return {
+      atoms: [a, b, c, d, e],
+      bonds: [newBond(a.id, b.id), newBond(b.id, c.id), newBond(c.id, d.id), newBond(c.id, e.id)],
+      ids: { a: a.id, b: b.id, c: c.id, d: d.id, e: e.id },
+    }
+  }
+  const get = (m: { atoms: readonly Atom[] }, id: string) => m.atoms.find(x => x.id === id)!
+
+  it('setBondLength：平移 B 端片段到目标距离，片段内部几何不变', () => {
+    const mol = makeChain()
+    const result = setBondLength(mol, mol.ids.a, mol.ids.b, 2.0)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const m = result.molecule
+    expect(Math.abs(measureDistance(get(m, mol.ids.a), get(m, mol.ids.b)) - 2.0)).toBeLessThan(1e-6)
+    // b–c 距离（同侧内部）不变
+    const before = measureDistance(get(mol as never, mol.ids.b), get(mol as never, mol.ids.c))
+    const after  = measureDistance(get(m, mol.ids.b), get(m, mol.ids.c))
+    expect(Math.abs(after - before)).toBeLessThan(1e-9)
+  })
+
+  it('setBondAngle：以 B 为顶点转 C 端到目标角，支链跟随刚体旋转', () => {
+    const mol = makeChain()
+    const result = setBondAngle(mol, mol.ids.a, mol.ids.b, mol.ids.c, 90)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const m = result.molecule
+    expect(Math.abs(measureAngle(get(m, mol.ids.a), get(m, mol.ids.b), get(m, mol.ids.c)) - 90)).toBeLessThan(0.01)
+    // c–d、c–e 内部距离不变（刚体）
+    expect(Math.abs(
+      measureDistance(get(m, mol.ids.c), get(m, mol.ids.d)) -
+      measureDistance(get(mol as never, mol.ids.c), get(mol as never, mol.ids.d))
+    )).toBeLessThan(1e-9)
+  })
+
+  it('setDihedralAngle：绕 B–C 轴转到目标二面角（含符号）', () => {
+    const mol = makeChain()
+    for (const target of [60, -60, 175]) {
+      const result = setDihedralAngle(mol, mol.ids.a, mol.ids.b, mol.ids.c, mol.ids.d, target)
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      const m = result.molecule
+      const got = measureDihedral(get(m, mol.ids.a), get(m, mol.ids.b), get(m, mol.ids.c), get(m, mol.ids.d))
+      expect(Math.abs(got - target)).toBeLessThan(0.01)
+      // A、B 不动
+      expect(get(m, mol.ids.a).x).toBe(get(mol as never, mol.ids.a).x)
+      expect(get(m, mol.ids.b).y).toBe(get(mol as never, mol.ids.b).y)
+    }
+  })
+
+  it('环内键长/二面角 → 拒绝', () => {
+    // 三元环
+    const c1 = newAtom('C', 0, 0, 0)
+    const c2 = newAtom('C', 1.5, 0, 0)
+    const c3 = newAtom('C', 0.75, 1.3, 0)
+    const mol = {
+      atoms: [c1, c2, c3],
+      bonds: [newBond(c1.id, c2.id), newBond(c2.id, c3.id), newBond(c3.id, c1.id)],
+    }
+    expect(setBondLength(mol, c1.id, c2.id, 2.0).ok).toBe(false)
+    expect(setDihedralAngle(mol, c3.id, c1.id, c2.id, c3.id, 30).ok).toBe(false)
+  })
+
+  it('无键且同片段的两原子 → 拒绝调距离', () => {
+    const mol = makeChain()
+    expect(setBondLength(mol, mol.ids.a, mol.ids.c, 2.5).ok).toBe(false)
   })
 })

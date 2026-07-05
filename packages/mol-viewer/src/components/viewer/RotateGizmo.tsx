@@ -2,13 +2,15 @@
  * RotateGizmo — 薄 React 壳。
  * 职责：监听选中状态 → 创建 RotateGizmoController → 注册到 Ticker → 清理。
  * Three.js 逻辑全部在 RotateGizmoController.ts 中。
+ * store 依赖全部在此文件，RotateGizmoController 本身无 store 依赖。
  */
 import { useEffect } from 'react'
-import { useMoleculeStore } from '../../store/moleculeStore'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import { useEditorStore } from '../../store/editorStore'
 import { MolRenderer } from '../../lib/molRenderer'
 import { ticker, Phase } from '../../lib/animation'
 import { RotateGizmoController } from '../../lib/molRenderer/RotateGizmoController'
+import type { GizmoCallbacks } from '../../lib/molRenderer/RotateGizmoController'
 
 interface Props {
   renderer: MolRenderer | null
@@ -22,10 +24,16 @@ export default function RotateGizmo({ renderer }: Props) {
   useEffect(() => {
     if (!renderer || activeTool !== 'select') return
 
-    const ctrl = new RotateGizmoController(renderer, selectedAtomIds, selectedBondIds)
+    const cb: GizmoCallbacks = {
+      getMolecule: () => selectActiveMoleculeOrEmpty(useMoleculeStore.getState()),
+      setAtomPositions: (positions) => useMoleculeStore.getState().setAtomPositions(positions),
+      beginTransaction: () => useMoleculeStore.getState().beginTransaction(),
+      endTransaction:   () => useMoleculeStore.getState().endTransaction(),
+    }
+
+    const ctrl = new RotateGizmoController(renderer, selectedAtomIds, selectedBondIds, cb)
     if (!ctrl.isValid) return
 
-    // 接入共享 Ticker（Phase.Gizmo 在 Render 之前执行）
     const unsubTicker = ticker.subscribe('rotate-gizmo', Phase.Gizmo, () => ctrl.update())
     ticker.invalidate()
 

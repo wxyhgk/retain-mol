@@ -1,6 +1,6 @@
 {
   "name": "@retainmol/mol-viewer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
@@ -27,6 +27,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.8.0",
+    "openchemlib": "^9.21.0",
     "tailwind-merge": "^3.5.0",
     "three": "^0.184.0",
     "zundo": "^2.3.0",

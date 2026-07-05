@@ -29,7 +29,7 @@ function ElementButton({ sym, size = 'md', onSelect, activeElement }: {
         'relative rounded-lg font-bold border-2 transition-all flex flex-col items-center justify-center leading-none',
         sizeClass,
         isActive
-          ? 'bg-[#007AFF]/5 border-[#007AFF] text-[#007AFF] shadow-sm scale-105'
+          ? 'bg-gray-100 border-gray-900 text-gray-900 shadow-sm scale-105'
           : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:scale-105'
       )}
     >
@@ -64,7 +64,7 @@ export default function ElementPicker() {
     <div className="p-3 space-y-3">
       {/* 当前元素 */}
       <div className="flex items-center gap-3">
-        <div className="relative w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold border-2 border-[#007AFF] bg-[#007AFF]/5 text-gray-800 shrink-0">
+        <div className="relative w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold border-2 border-gray-900 bg-gray-100 text-gray-900 shrink-0">
           <span
             className="absolute top-1 right-1 w-2 h-2 rounded-full"
             style={{ background: colorHexToCss(el.color) }}
@@ -120,7 +120,7 @@ export default function ElementPicker() {
             </div>
           </div>
           <div className="mt-2 p-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-3">
-            <div className="relative w-10 h-10 rounded-lg flex items-center justify-center font-bold border-2 border-[#007AFF] bg-[#007AFF]/5 text-gray-800 shrink-0">
+            <div className="relative w-10 h-10 rounded-lg flex items-center justify-center font-bold border-2 border-gray-900 bg-gray-100 text-gray-900 shrink-0">
               <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full" style={{ background: colorHexToCss(el.color) }} />
               {el.symbol}
             </div>

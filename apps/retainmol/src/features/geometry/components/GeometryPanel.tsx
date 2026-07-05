@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  useMoleculeStore, selectActiveMoleculeOrEmpty,
+  useMoleculeStore, selectActiveMoleculeOrEmpty, useEditorStore,
   getElementConfig as getElement,
   bondSelectedAtoms,
   calcDistance, calcAngle, calcDihedral,
@@ -67,7 +67,9 @@ export default function GeometryPanel() {
   const {
     selectedAtomIds, selectedBondIds, removeAtom, removeBond,
     cycleBondOrder, addHydrogens, moveAtom,
+    setBondLength, setBondAngle, setDihedralAngle,
   } = useMoleculeStore()
+  const flashHint = useEditorStore(s => s.flashHint)
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
   const { formula, molecularWeight: MW } = useMoleculeInfo()
 
@@ -75,34 +77,47 @@ export default function GeometryPanel() {
   const selectedAtoms = molecule.atoms.filter(a => selectedAtomIds.has(a.id))
   const selectedBonds = molecule.bonds.filter(b => selectedBondIds.has(b.id))
 
-  // Section B: live geometry for 2/3/4 selected atoms
+  // Section B: 2/3/4 个选中原子的几何参数（GaussView 式：点击数值直接修改）
+  // 顺序 = 选择顺序（Set 保持插入序）：3 原子的顶点是第 2 个，4 原子绕 2–3 轴旋转
   const renderLiveGeometry = () => {
-    if (selectedAtoms.length < 2 || selectedAtoms.length > 4) return null
-    const syms = selectedAtoms.map(a => a.symbol)
-    let label = ''
-    let value = ''
+    const sel = [...selectedAtomIds]
+      .map(id => atomById.get(id))
+      .filter((a): a is NonNullable<typeof a> => !!a)
+    if (sel.length < 2 || sel.length > 4) return null
 
-    if (selectedAtoms.length === 2) {
-      const dist = calcDistance(selectedAtoms[0], selectedAtoms[1])
-      label = `${syms[0]}—${syms[1]}`
-      value = `${dist.toFixed(4)} Å`
-    } else if (selectedAtoms.length === 3) {
-      const angle = calcAngle(selectedAtoms[0], selectedAtoms[1], selectedAtoms[2])
-      label = `${syms[0]}—${syms[1]}—${syms[2]}`
-      value = `${angle.toFixed(2)}°`
-    } else if (selectedAtoms.length === 4) {
-      const dihedral = calcDihedral(selectedAtoms[0], selectedAtoms[1], selectedAtoms[2], selectedAtoms[3])
-      label = `${syms[0]}—${syms[1]}—${syms[2]}—${syms[3]}`
-      value = `${dihedral.toFixed(2)}°`
+    const label = sel.map(a => a.symbol).join('—')
+    let value = 0
+    let unit = ''
+    let editHint = ''
+    let commit: (v: number) => { ok: boolean; reason?: string }
+
+    if (sel.length === 2) {
+      value = calcDistance(sel[0], sel[1])
+      unit = 'Å'
+      editHint = '修改距离将平移后选原子一侧'
+      commit = v => setBondLength(sel[0].id, sel[1].id, v)
+    } else if (sel.length === 3) {
+      value = calcAngle(sel[0], sel[1], sel[2])
+      unit = '°'
+      editHint = '键角顶点 = 第 2 个选中原子 · 转动末端一侧'
+      commit = v => setBondAngle(sel[0].id, sel[1].id, sel[2].id, v)
+    } else {
+      value = calcDihedral(sel[0], sel[1], sel[2], sel[3])
+      unit = '°'
+      editHint = '二面角绕 2–3 号原子轴转动末端一侧'
+      commit = v => setDihedralAngle(sel[0].id, sel[1].id, sel[2].id, sel[3].id, v)
     }
 
     return (
       <section>
-        <div className="text-xs font-medium text-gray-700 mb-2">实时几何关系</div>
+        <div className="text-xs font-medium text-gray-700 mb-2">
+          {sel.length === 2 ? '距离' : sel.length === 3 ? '键角' : '二面角'}
+          <span className="text-gray-400 font-normal ml-1">· 点击数值修改</span>
+        </div>
         <div className="rounded-lg border border-gray-200 bg-white p-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1 flex-wrap">
-              {selectedAtoms.map((a, i) => {
+              {sel.map((a, i) => {
                 const el = getElement(a.symbol)
                 return (
                   <span key={a.id} className="flex items-center gap-0.5">
@@ -117,9 +132,20 @@ export default function GeometryPanel() {
                 )
               })}
             </div>
-            <span className="font-mono text-xs text-gray-800 shrink-0">{value}</span>
+            <div className="flex items-center gap-1 font-mono text-xs text-gray-800 shrink-0">
+              <CoordInput
+                label=""
+                value={value}
+                onCommit={v => {
+                  const r = commit(v)
+                  if (!r.ok) flashHint(r.reason ?? '无法调整')
+                }}
+              />
+              <span className="text-gray-400">{unit}</span>
+            </div>
           </div>
           <div className="text-[10px] text-gray-400 mt-1 font-mono">{label}</div>
+          <div className="text-[10px] text-gray-400 mt-0.5">{editHint}</div>
         </div>
       </section>
     )

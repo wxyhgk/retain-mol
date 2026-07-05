@@ -16,7 +16,7 @@ export { createSceneObject } from './lib/sceneObject'
 // ── Store & Selectors ─────────────────────────────────────────────────────────
 export { useMoleculeStore, useMoleculeTemporal, selectActiveMolecule, selectActiveMoleculeOrEmpty } from './store/moleculeStore'
 export { useEditorStore } from './store/editorStore'
-export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement } from './lib/types'
+export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement, MolClipboard } from './lib/types'
 export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from './lib/types'
 
 // ── IO ────────────────────────────────────────────────────────────────────────
@@ -30,6 +30,10 @@ export type { ResolvedTheme } from './presets'
 // ── 元素配置 ──────────────────────────────────────────────────────────────────
 export { getElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from './config/elements.config'
 export type { ElementConfig, Hybridization } from './config/elements.config'
+
+// ── 片段库 ────────────────────────────────────────────────────────────────────
+export { FRAGMENTS, getFragment } from './config/fragments.config'
+export type { FragmentDef } from './config/fragments.config'
 
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 export { cn } from './lib/utils'

@@ -38,4 +38,41 @@ export const ATOM_LABEL = {
   /** 视口外原子的裁剪余量 */
   viewportMargin: 20,
   font: 'bold 10px monospace',
+  /** 基准字体大小（px），随相机距离缩放 */
+  baseFontSize: 10,
+  /** 缩放比例范围（远近限幅） */
+  scaleMin: 0.4,
+  scaleMax: 2.5,
+}
+
+/** 测量可视化（3D 弧线、平面、虚线）常量 */
+export const MEASURE_VIS = {
+  /** 测量虚线参数（Line2，单位 Å） */
+  lineDashSize: 0.18,
+  lineGapSize:  0.09,
+  /** 测量锚点球体 */
+  pointRadius:   0.12,
+  pointSegments: 12,
+  /** 角度 / 二面角弧线 */
+  arcRadius:   0.55,    // 角度弧半径（Å）
+  arcSegments: 48,      // 弧线采样点数
+  arcTickMin:  0.8,     // 弧端刻度线内端系数
+  arcTickMax:  1.2,     // 弧端刻度线外端系数
+  arcLabelOffset: 0.35, // 标签到弧外沿的额外偏移（Å）
+  /** 二面角平面填充 */
+  dihedralPadU:       0.3,  // 键方向填充（Å）
+  dihedralPadV:       0.4,  // 垂直方向填充（Å）
+  dihedralVMinFactor: 0.3,  // vMin = -padV × vMinFactor
+  dihedralPlaneOpacity: 0.32,
+  /** 二面角弧半径 = min(vMax1, vMax4) × arcRadiusScale + arcRadiusBase */
+  dihedralArcRadiusScale: 0.5,
+  dihedralArcRadiusBase:  0.2,
+}
+
+/** 框选矩形外观 */
+export const BOX_SELECT = {
+  fillColor:   'rgba(0, 0, 0, 0.08)',
+  strokeColor: '#111827',
+  lineWidth:   1,
+  lineDash:    [4, 3] as number[],
 }

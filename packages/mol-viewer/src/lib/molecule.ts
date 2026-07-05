@@ -1,27 +1,8 @@
 import { genId } from './utils'
-export interface Atom {
-  readonly id: string
-  readonly symbol: string
-  readonly x: number
-  readonly y: number
-  readonly z: number
-  readonly charge?: number
-  readonly label?: string
-}
-
-export interface Bond {
-  readonly id: string
-  readonly atomId1: string
-  readonly atomId2: string
-  readonly order: 1 | 2 | 3
-  readonly aromatic?: boolean
-}
-
-export interface Molecule {
-  readonly atoms: readonly Atom[]
-  readonly bonds: readonly Bond[]
-  readonly name?: string
-}
+// 核心类型定义在叶子层 types.ts（config 也要用，避免 lib⇄config 循环）；
+// 这里 re-export 保持既有 import 路径兼容
+import type { Atom, Bond, Molecule } from './types'
+export type { Atom, Bond, Molecule }
 
 export function parseXYZ(text: string): Molecule {
   const lines = text.trim().split('\n')
@@ -54,10 +35,18 @@ export function exportXYZ(mol: Molecule): string {
   return lines.join('\n')
 }
 
-import { BONDING, BOND_RADII } from '../config/bonding.config'
+import { BONDING } from '../config/bonding.config'
+import { getElementConfig } from '../config/elements.config'
+import { lookupBondLengthByOrder } from '../config/geometry.config'
 
-function bondRadius(sym: string) {
-  return BOND_RADII[sym] ?? BOND_RADII.default
+function inferBondOrder(sym1: string, sym2: string, dist: number): 1 | 2 | 3 {
+  const d1 = lookupBondLengthByOrder(sym1, sym2, 1)!
+  const d2 = lookupBondLengthByOrder(sym1, sym2, 2)
+  const d3 = lookupBondLengthByOrder(sym1, sym2, 3)
+  const bias = BONDING.orderMidpointBias
+  if (d3 !== null && d2 !== null && dist <= (d2 + d3) / 2 - bias) return 3
+  if (d2 !== null && dist <= (d1 + d2) / 2 - bias) return 2
+  return 1
 }
 
 export function inferBonds(atoms: readonly Atom[]): Bond[] {
@@ -68,9 +57,12 @@ export function inferBonds(atoms: readonly Atom[]): Bond[] {
       const a = atoms[i], b = atoms[j]
       const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-      const maxBond = (bondRadius(a.symbol) + bondRadius(b.symbol)) * BONDING.tolerance
+      const r1 = getElementConfig(a.symbol).covalentRadius
+      const r2 = getElementConfig(b.symbol).covalentRadius
+      const maxBond = (r1 + r2) * BONDING.tolerance
       if (dist < maxBond && dist > BONDING.minBondLength) {
-        bonds.push({ id: genId(), atomId1: a.id, atomId2: b.id, order: 1 })
+        const order = inferBondOrder(a.symbol, b.symbol, dist)
+        bonds.push({ id: genId(), atomId1: a.id, atomId2: b.id, order })
       }
     }
   }

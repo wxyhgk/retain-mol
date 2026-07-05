@@ -126,6 +126,51 @@ function isHuckel(pi: number): boolean {
   return pi >= 2 && (pi - 2) % 4 === 0
 }
 
+// ── 几何芳香判据 ──────────────────────────────────────────────────────────────
+
+/**
+ * 芳香键长窗口 (Å)。计算化学语义：距离即真相 —— 环内所有键长
+ * 落在对应元素对的窗口内（介于典型单键与双键之间的均匀化长度），
+ * 即认定芳香，不依赖 Kekulé 单双键交替的键级簿记。
+ */
+const AROMATIC_LENGTH_WINDOWS: Record<string, [number, number]> = {
+  'C-C': [1.36, 1.43],   // 苯 1.39
+  'C-N': [1.31, 1.39],   // 吡啶 1.34
+  'C-O': [1.33, 1.40],   // 呋喃 1.36
+  'C-S': [1.66, 1.76],   // 噻吩 1.71
+  'N-N': [1.29, 1.37],
+}
+
+/**
+ * 几何判据：5~7 元简单环 + 每个环原子连接数 ≤ 3（sp2 形态，排除
+ * 恰好摆成芳香键长的饱和环）+ 环内每条键落在芳香键长窗口。
+ */
+function isGeometricallyAromatic(
+  ringIds: string[],
+  atoms: readonly Atom[],
+  bonds: readonly Bond[],
+  ringBonds: readonly Bond[],
+): boolean {
+  if (ringIds.length < 5 || ringIds.length > 7) return false
+  if (ringBonds.length !== ringIds.length) return false   // 非简单环（有跨环键）
+  const atomById = new Map(atoms.map(a => [a.id, a]))
+
+  for (const id of ringIds) {
+    const n = bonds.filter(b => b.atomId1 === id || b.atomId2 === id).length
+    if (n > 3) return false
+  }
+  for (const b of ringBonds) {
+    const a1 = atomById.get(b.atomId1)
+    const a2 = atomById.get(b.atomId2)
+    if (!a1 || !a2) return false
+    const win = AROMATIC_LENGTH_WINDOWS[[a1.symbol, a2.symbol].sort().join('-')]
+    if (!win) return false
+    const d = Math.hypot(a1.x - a2.x, a1.y - a2.y, a1.z - a2.z)
+    if (d < win[0] || d > win[1]) return false
+  }
+  return true
+}
+
 // ── 环内 sp2 检查 ─────────────────────────────────────────────────────────────
 
 /**
@@ -173,6 +218,12 @@ export function detectAromaticity(mol: Molecule): AromaticityResult {
 
     // Trust importer aromatic flag (e.g. SDF bond type 4 → OCL isAromaticBond)
     if (ringBonds.length > 0 && ringBonds.every(b => b.aromatic)) {
+      aromaticRings.push(ring)
+      continue
+    }
+
+    // 几何判据：键长均匀落在芳香窗口（手工搭建/片段放置的主路径，不看键级）
+    if (isGeometricallyAromatic(ring, atoms, bonds, ringBonds)) {
       aromaticRings.push(ring)
       continue
     }

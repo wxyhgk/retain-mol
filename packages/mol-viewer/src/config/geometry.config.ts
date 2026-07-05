@@ -3,6 +3,8 @@
  * 键角单位：度
  */
 
+import type { Bond } from '../lib/types'
+
 export type GeometryName =
   | 'linear'            // 直线型        180°
   | 'bent'              // V 形          ~104.5° (sp3 O/S)
@@ -31,7 +33,6 @@ function makeRule(name: GeometryName, angle: number, dirs: [number, number, numb
 // 四面体：4 个方向，均分 109.47°
 const TET_A = Math.sqrt(8 / 9)
 const TET_B = Math.sqrt(2 / 3)
-const TET_C = 1 / Math.sqrt(3)
 const TETRAHEDRAL_DIRS: [number, number, number][] = [
   [0,             1,      0     ],
   [TET_A,        -1 / 3,  0     ],
@@ -69,37 +70,79 @@ export const GEOMETRY_RULES: Record<GeometryName, GeometryRule> = {
   'free':               makeRule('free',               360,    [[1, 0, 0]]),
 }
 
+// ── 杂化 ──────────────────────────────────────────────────────────────────────
+
+export type AtomHybridization = 'sp' | 'sp2' | 'sp3'
+
 /**
- * 根据原子符号和当前已有键数，推断适用的几何规则
+ * 从原子的现有键推断杂化（唯一真理来源）。
+ * conjugation.ts、vsepr.ts 都应调用这里，不再各自实现。
  */
-export function inferGeometry(symbol: string, currentBonds: number): GeometryName {
-  switch (symbol) {
-    case 'C':
-      if (currentBonds <= 1) return 'tetrahedral'
-      if (currentBonds === 2) return 'tetrahedral'  // 默认 sp3；sp2/sp 由键级决定
-      return 'tetrahedral'
-    case 'N':
-      return 'trigonal-pyramidal'
-    case 'O':
-    case 'S':
-      return currentBonds >= 2 ? 'bent' : 'tetrahedral'
-    case 'B':
-      return 'trigonal-planar'
-    case 'P':
-      return currentBonds > 3 ? 'sp3d' as GeometryName : 'tetrahedral'
-    case 'Be':
-      return 'linear'
-    case 'H': case 'F': case 'Cl': case 'Br': case 'I':
-      return 'free'
-    case 'Fe': case 'Co': case 'Ni': case 'Cu': case 'Zn':
-      return 'octahedral'
-    default:
-      return 'tetrahedral'
-  }
+export function inferHybridization(bonds: readonly Bond[], atomId: string): AtomHybridization {
+  const atomBonds = bonds.filter(b => b.atomId1 === atomId || b.atomId2 === atomId)
+  const doubleCount = atomBonds.filter(b => b.order === 2).length
+  const tripleCount = atomBonds.filter(b => b.order === 3).length
+  if (tripleCount > 0 || doubleCount >= 2) return 'sp'   // ≡ 或累积双键
+  if (doubleCount === 1)                    return 'sp2'
+  return 'sp3'
 }
 
-/** 常见键长查找表 (Å)，key = "A-B"（字母序） */
+// ── 几何查表 ──────────────────────────────────────────────────────────────────
+
+type HybridGeometryMap = Record<AtomHybridization, GeometryName>
+
+/**
+ * 元素 → 杂化 → 几何名（纯数据，加新元素只改这张表）
+ * 未列出的元素走 DEFAULT_GEOMETRY（tetrahedral/trigonal-planar/linear）
+ */
+const ELEMENT_GEOMETRY_TABLE: Partial<Record<string, HybridGeometryMap>> = {
+  C:  { sp: 'linear',  sp2: 'trigonal-planar', sp3: 'tetrahedral'         },
+  N:  { sp: 'linear',  sp2: 'trigonal-planar', sp3: 'trigonal-pyramidal'  },
+  O:  { sp: 'linear',  sp2: 'trigonal-planar', sp3: 'bent'                },
+  S:  { sp: 'linear',  sp2: 'trigonal-planar', sp3: 'bent'                },
+  B:  { sp: 'linear',  sp2: 'trigonal-planar', sp3: 'trigonal-planar'     }, // 缺电子，始终 sp2
+  Be: { sp: 'linear',  sp2: 'linear',          sp3: 'linear'              },
+  Si: { sp: 'linear',  sp2: 'trigonal-planar', sp3: 'tetrahedral'         },
+  Al: { sp: 'linear',  sp2: 'trigonal-planar', sp3: 'tetrahedral'         },
+  Ge: { sp: 'linear',  sp2: 'trigonal-planar', sp3: 'tetrahedral'         },
+}
+
+const DEFAULT_GEOMETRY: HybridGeometryMap = {
+  sp: 'linear', sp2: 'trigonal-planar', sp3: 'tetrahedral',
+}
+
+/** 末端原子（无需考虑下一键方向） */
+const TERMINAL_ELEMENTS = new Set(['H', 'F', 'Cl', 'Br', 'I'])
+
+/** 过渡金属，默认八面体 */
+const OCTAHEDRAL_METALS = new Set(['Fe', 'Co', 'Ni', 'Mn', 'Cr', 'Mo', 'W'])
+
+/**
+ * 根据元素、连接数和杂化，查表返回几何名。
+ * 不再有 switch/case，加新元素只需在 ELEMENT_GEOMETRY_TABLE 里加一行。
+ */
+export function inferGeometry(
+  symbol: string,
+  connectionCount: number,
+  hybridization: AtomHybridization = 'sp3',
+): GeometryName {
+  if (TERMINAL_ELEMENTS.has(symbol)) return 'free'
+  if (OCTAHEDRAL_METALS.has(symbol)) return 'octahedral'
+  // 超价磷（5+ 键）
+  if (symbol === 'P' && connectionCount >= 4) return 'octahedral'
+
+  return (ELEMENT_GEOMETRY_TABLE[symbol] ?? DEFAULT_GEOMETRY)[hybridization]
+}
+
+// ── 键长查找表 ────────────────────────────────────────────────────────────────
+
+/**
+ * 键长查找表 (Å)
+ * key 格式："{A}{sep}{B}"，A/B 按字母序排列
+ * sep: '-' 单键, '=' 双键, '#' 三键
+ */
 export const STANDARD_BOND_LENGTHS: Record<string, number> = {
+  // C
   'C-C':  1.540, 'C=C': 1.340, 'C#C': 1.200,
   'C-H':  1.090,
   'C-N':  1.470, 'C=N': 1.280, 'C#N': 1.160,
@@ -109,24 +152,44 @@ export const STANDARD_BOND_LENGTHS: Record<string, number> = {
   'C-Br': 1.940,
   'C-I':  2.140,
   'C-S':  1.820, 'C=S': 1.610,
-  'C-P':  1.840,
+  'C-P':  1.840, 'C=P': 1.665,
   'C-Si': 1.870,
+  // N
   'N-H':  1.010,
   'N-N':  1.450, 'N=N': 1.250, 'N#N': 1.100,
   'N-O':  1.400, 'N=O': 1.210,
+  // O
   'O-H':  0.960,
-  'O-O':  1.480,
+  'O-O':  1.480, 'O=O': 1.210,
+  'O-S':  1.650, 'O=S': 1.480,
+  'O-P':  1.610, 'O=P': 1.480,
+  // misc
   'S-H':  1.340,
+  'S-S':  2.050,
   'P-H':  1.420,
   'Si-H': 1.480,
 }
 
+const ORDER_SEP = { 1: '-', 2: '=', 3: '#' } as const
+
 import { getElementConfig } from './elements.config'
 
-export function lookupBondLength(sym1: string, sym2: string): number {
-  const key = [sym1, sym2].sort().join('-')
-  if (STANDARD_BOND_LENGTHS[key]) return STANDARD_BOND_LENGTHS[key]
+/**
+ * 查询给定键级下两原子间的预期键长（Å）。
+ * 对单键：如不在表中，用共价半径之和估算。
+ * 对双/三键：如不在表中，返回 null（表示该对原子不形成此键级）。
+ */
+export function lookupBondLengthByOrder(sym1: string, sym2: string, order: 1 | 2 | 3): number | null {
+  const [a, b] = [sym1, sym2].sort()
+  const exact = STANDARD_BOND_LENGTHS[`${a}${ORDER_SEP[order]}${b}`]
+  if (exact !== undefined) return exact
+  if (order > 1) return null
   const r1 = getElementConfig(sym1).covalentRadius
   const r2 = getElementConfig(sym2).covalentRadius
   return (r1 + r2) * 1.08
+}
+
+/** 单键键长（向后兼容） */
+export function lookupBondLength(sym1: string, sym2: string): number {
+  return lookupBondLengthByOrder(sym1, sym2, 1)!
 }

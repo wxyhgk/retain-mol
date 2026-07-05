@@ -1,10 +1,48 @@
 /**
  * 跨层共享的纯类型与常量。
- * lib/ 与 store/ 都可以依赖它；反向依赖不允许。
+ * config/ lib/ store/ 都可以依赖它；反向依赖不允许。
  */
 
+import type { Vector3 } from 'three'
+
+// ── 分子核心类型（叶子层）─────────────────────────────────────────────────────
+
+export interface Atom {
+  readonly id: string
+  readonly symbol: string
+  readonly x: number
+  readonly y: number
+  readonly z: number
+  readonly charge?: number
+  readonly label?: string
+}
+
+export interface Bond {
+  readonly id: string
+  readonly atomId1: string
+  readonly atomId2: string
+  readonly order: 1 | 2 | 3
+  readonly aromatic?: boolean
+}
+
+export interface Molecule {
+  readonly atoms: readonly Atom[]
+  readonly bonds: readonly Bond[]
+  readonly name?: string
+}
+
+/** 拖出生长时的候选槽位参考几何（化学层计算，渲染层消费），含幽灵原子外观 */
+export type GrowGuideSpec =
+  | { kind: 'ring'; center: Vector3; axis: Vector3; radius: number; ghostRadius: number; ghostColor: number }
+  | { kind: 'points'; positions: Vector3[]; ghostRadius: number; ghostColor: number }
+  | null
+
 export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe'
-export type Tool = 'select' | 'add-atom' | 'add-bond' | 'delete' | 'measure' | 'move-object'
+/**
+ * select 是合并了选择与构建的智能指针（默认工具）：
+ * 单击选择 / 点 H 生长 / 拖 H 成键 / 双击空白加原子。
+ */
+export type Tool = 'select' | 'measure' | 'move-object'
 export type MeasureType = 'auto' | 'distance' | 'angle' | 'dihedral'
 
 export const MEASURE_ATOM_COUNT: Record<MeasureType, number> = {
@@ -27,6 +65,26 @@ export interface MeasureStyle {
   angleColor: string     // 键角弧
   planeColor1: string    // 二面角平面1
   planeColor2: string    // 二面角平面2
+}
+
+// ── 内部分子剪贴板（Ctrl+C / Ctrl+V）────────────────────────────────────────
+
+export interface ClipboardAtom {
+  symbol: string
+  x: number; y: number; z: number
+  charge?: number
+}
+
+export interface ClipboardBond {
+  a: number   // index into ClipboardAtom[]
+  b: number
+  order: 1 | 2 | 3
+  aromatic?: boolean
+}
+
+export interface MolClipboard {
+  atoms: ClipboardAtom[]
+  bonds: ClipboardBond[]
 }
 
 export const DEFAULT_MEASURE_STYLE: MeasureStyle = {

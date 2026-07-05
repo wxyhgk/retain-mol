@@ -35,12 +35,12 @@ export default function ScenePanel() {
             className={cn(
               'flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors group',
               isActive
-                ? 'bg-[#007AFF]/10 text-[#007AFF]'
-                : 'text-gray-700 hover:bg-gray-100'
+                ? 'bg-gray-100 text-gray-900 font-medium'
+                : 'text-gray-600 hover:bg-gray-100'
             )}
           >
             {/* 活跃指示 */}
-            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', isActive ? 'bg-[#007AFF]' : 'bg-gray-300')} />
+            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', isActive ? 'bg-gray-900' : 'bg-gray-300')} />
 
             {/* 名称（双击重命名） */}
             {editingId === obj.id ? (
@@ -54,7 +54,7 @@ export default function ScenePanel() {
                   if (e.key === 'Escape') setEditingId(null)
                 }}
                 onClick={e => e.stopPropagation()}
-                className="flex-1 text-xs bg-white border border-[#007AFF]/40 rounded px-1 outline-none"
+                className="flex-1 text-xs bg-white border border-gray-400 rounded px-1 outline-none"
               />
             ) : (
               <span
@@ -71,7 +71,7 @@ export default function ScenePanel() {
                 <button
                   onClick={e => handleSplit(e, obj.id)}
                   title="分离为独立对象"
-                  className="w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:text-[#007AFF]"
+                  className="w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:text-gray-900"
                 >
                   <Scissors size={11} />
                 </button>
@@ -84,7 +84,7 @@ export default function ScenePanel() {
               </button>
               <button
                 onClick={e => { e.stopPropagation(); setObjectLocked(obj.id, !obj.locked) }}
-                className={cn('w-5 h-5 rounded flex items-center justify-center', obj.locked ? 'text-[#007AFF]' : 'text-gray-400 hover:text-gray-700')}
+                className={cn('w-5 h-5 rounded flex items-center justify-center', obj.locked ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700')}
               >
                 {obj.locked ? <Lock size={11} /> : <Unlock size={11} />}
               </button>

@@ -18,6 +18,7 @@ import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../store/molecule
 import { useEditorStore } from '../store/editorStore'
 import type { MolRenderer } from '../lib/molRenderer'
 import { getConnectedFragment } from '../lib/builder/analysis/fragments'
+import { INTERACTION } from '../config/interaction.config'
 
 export interface BoxRect { x: number; y: number; w: number; h: number }
 
@@ -70,6 +71,7 @@ function handleTransformDown(
   state.lastX = e.clientX
   state.lastY = e.clientY
   canvas.setPointerCapture(e.pointerId)
+  useMoleculeStore.getState().beginTransaction()
 }
 
 function handleTransformMove(e: PointerEvent, renderer: MolRenderer, state: TransformState) {
@@ -79,7 +81,7 @@ function handleTransformMove(e: PointerEvent, renderer: MolRenderer, state: Tran
   const dy = e.clientY - state.lastY
   state.lastX = e.clientX
   state.lastY = e.clientY
-  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+  if (Math.abs(dx) < INTERACTION.transformMinDisplacement && Math.abs(dy) < INTERACTION.transformMinDisplacement) return
 
   const { objectsById, setObjectAtomPositions } = useMoleculeStore.getState()
   const mol = objectsById[state.targetObjectId]?.molecule
@@ -90,7 +92,7 @@ function handleTransformMove(e: PointerEvent, renderer: MolRenderer, state: Tran
     let cx = 0, cy = 0, cz = 0
     for (const a of moving) { cx += a.x; cy += a.y; cz += a.z }
     cx /= moving.length; cy /= moving.length; cz /= moving.length
-    const ay = dx * 0.008, ax = dy * 0.008
+    const ay = dx * INTERACTION.rotateSpeedFactor, ax = dy * INTERACTION.rotateSpeedFactor
     const cosY = Math.cos(ay), sinY = Math.sin(ay)
     const cosX = Math.cos(ax), sinX = Math.sin(ax)
     const positions = new Map(mol.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
@@ -124,15 +126,20 @@ function makeBoxState(): BoxSelectState {
   return { active: false, startX: 0, startY: 0, currentX: 0, currentY: 0, shift: false, alt: false }
 }
 
-function shouldStartBoxSelect(e: PointerEvent, pickedAtomId: string | null, selectedAtomIds: Set<string>): boolean {
+function shouldStartBoxSelect(
+  e: PointerEvent,
+  pickedAtomId: string | null,
+  pickedBondId: string | null,
+  selectedAtomIds: Set<string>,
+): boolean {
   const isRight      = e.button === 2
   const isShiftLeft  = e.button === 0 && e.shiftKey
   if (!isRight && !isShiftLeft) return false
+  // Shift+左键点中原子/键 → 留给 InteractionHandler（原子多选 / 键长循环）
+  if (isShiftLeft) return !pickedAtomId && !pickedBondId
   if (!pickedAtomId) return true
   // 右键点中已选原子 → 留给 AtomContextMenu
-  if (isRight && selectedAtomIds.has(pickedAtomId)) return false
-  // Shift+左键点原子 → 留给 shift+click 原子多选
-  if (isShiftLeft) return false
+  if (selectedAtomIds.has(pickedAtomId)) return false
   return true
 }
 
@@ -146,7 +153,7 @@ function finishBoxSelect(
   const maxX = Math.max(state.startX, state.currentX)
   const minY = Math.min(state.startY, state.currentY)
   const maxY = Math.max(state.startY, state.currentY)
-  if (maxX - minX < 3 && maxY - minY < 3) return   // 误触不动选择
+  if (maxX - minX < INTERACTION.boxSelectMinSize && maxY - minY < INTERACTION.boxSelectMinSize) return
 
   const { selectAtoms } = useMoleculeStore.getState()
   const molecule = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
@@ -174,10 +181,20 @@ export function useCanvasPointerRouter(
   const transformRef = useRef<TransformState>(makeTransformState())
   const boxRef       = useRef<BoxSelectState>(makeBoxState())
 
-  // 同步相机控制开关
+  // 同步相机控制开关；切换工具时清理可能残留的变换状态（防止 pointerup 未触发导致状态卡死）
   useEffect(() => {
     const r = rendererRef.current
     if (r) r.controls.enabled = activeTool !== 'move-object'
+    if (activeTool !== 'move-object') {
+      const ts = transformRef.current
+      if (ts.dragging) {
+        // 工具切换时强制关闭未完成的 transaction，防止 zundo 永久 paused
+        useMoleculeStore.getState().endTransaction()
+      }
+      ts.dragging = false
+      ts.fragmentIds = null
+      ts.targetObjectId = null
+    }
   }, [activeTool, rendererRef])
 
   useEffect(() => {
@@ -205,7 +222,8 @@ export function useCanvasPointerRouter(
 
       // 2. 框选条件
       const pickedAtomId = renderer.pickAtomIdAt(e.clientX, e.clientY)
-      if (shouldStartBoxSelect(e, pickedAtomId, selectedAtomIds)) {
+      const pickedBondId = pickedAtomId ? null : renderer.pickBondIdAt(e.clientX, e.clientY)
+      if (shouldStartBoxSelect(e, pickedAtomId, pickedBondId, selectedAtomIds)) {
         e.stopImmediatePropagation()
         const rect = canvas.getBoundingClientRect()
         const bx = e.clientX - rect.left
@@ -213,7 +231,7 @@ export function useCanvasPointerRouter(
         const bs = boxRef.current
         bs.active = true; bs.startX = bx; bs.startY = by
         bs.currentX = bx; bs.currentY = by
-        bs.shift = e.shiftKey; bs.alt = e.altKey || e.metaKey
+        bs.shift = e.shiftKey; bs.alt = e.altKey
         setBoxRect({ x: bx, y: by, w: 0, h: 0 })
         canvas.setPointerCapture(e.pointerId)
         return
@@ -254,6 +272,7 @@ export function useCanvasPointerRouter(
       const ts = transformRef.current
       if (ts.dragging) {
         ts.dragging = false; ts.fragmentIds = null; ts.targetObjectId = null
+        useMoleculeStore.getState().endTransaction()
         return
       }
 

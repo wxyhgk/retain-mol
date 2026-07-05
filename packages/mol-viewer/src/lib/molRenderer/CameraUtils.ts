@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Atom } from '../molecule'
-import { CAMERA } from '../../config/camera.config'
+import { CAMERA, FIT } from '../../config/camera.config'
 
 export function resetCamera(
   camera: THREE.PerspectiveCamera,
@@ -26,8 +26,8 @@ export function fitToMolecule(
   box.getCenter(center)
   const size = new THREE.Vector3()
   box.getSize(size)
-  const maxDim = Math.max(size.x, size.y, size.z, 4)
-  const dist = maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360)) * 1.5
+  const maxDim = Math.max(size.x, size.y, size.z, FIT.minBoundingBox)
+  const dist = maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360)) * FIT.distanceMultiplier
 
   rotationGroup.quaternion.identity()
   rotationGroup.position.set(0, 0, 0)

@@ -6,7 +6,42 @@
 import type { Molecule } from '../../molecule'
 import { newAtom, newBond } from '../../molecule'
 import { getElementConfig } from '../../../config/elements.config'
-import { calcAddAtomOnExisting } from '../geometry/vsepr'
+import { calcAddAtomOnExisting, calcBondLength } from '../geometry/vsepr'
+
+/**
+ * 点 H 生长：把一个 H 替换为 newSymbol 的饱和基团（价态完整模型的核心操作）。
+ * 保留原 H 的 id（选择/测量引用不失效），沿 父原子→H 方向按标准键长重定位，
+ * 再给新原子补满 H。孤立 H（无键）只替换元素后补氢。
+ */
+export function growByReplacingH(
+  mol: Molecule,
+  hAtomId: string,
+  newSymbol: string,
+): Molecule {
+  const h = mol.atoms.find(a => a.id === hAtomId)
+  if (!h || h.symbol !== 'H' || newSymbol === 'H') return mol
+
+  const bond = mol.bonds.find(b => b.atomId1 === hAtomId || b.atomId2 === hAtomId)
+  let next: Molecule
+  if (!bond) {
+    next = replaceAtomSymbol(mol, hAtomId, newSymbol)
+  } else {
+    const parentId = bond.atomId1 === hAtomId ? bond.atomId2 : bond.atomId1
+    const parent = mol.atoms.find(a => a.id === parentId)
+    if (!parent) return mol
+    let dx = h.x - parent.x, dy = h.y - parent.y, dz = h.z - parent.z
+    const norm = Math.hypot(dx, dy, dz)
+    if (norm < 1e-6) { dx = 1; dy = 0; dz = 0 } else { dx /= norm; dy /= norm; dz /= norm }
+    const len = calcBondLength(parent.symbol, newSymbol)
+    next = {
+      ...mol,
+      atoms: mol.atoms.map(a => a.id === hAtomId
+        ? { ...a, symbol: newSymbol, x: parent.x + dx * len, y: parent.y + dy * len, z: parent.z + dz * len }
+        : a),
+    }
+  }
+  return autoAddHydrogens(next, hAtomId)
+}
 
 /** 替换指定原子的元素符号，保留位置、id 和已有键 */
 export function replaceAtomSymbol(
@@ -21,8 +56,34 @@ export function replaceAtomSymbol(
   }
 }
 
+/** 计算原子当前的连接数（不计键级，只看有几个邻居）*/
+function bondCount(mol: Molecule, atomId: string): number {
+  return mol.bonds.filter(b => b.atomId1 === atomId || b.atomId2 === atomId).length
+}
+
+/**
+ * 给指定原子加恰好一个 H（如果还有剩余连接位）。
+ * 用连接数而非键级之和判断，SDF 中的键级仅供参考，不作为编辑约束。
+ * 返回新分子；若已满或找不到原子则原样返回。
+ */
+export function addOneHydrogen(mol: Molecule, atomId: string): Molecule {
+  const atom = mol.atoms.find(a => a.id === atomId)
+  if (!atom) return mol
+  const el = getElementConfig(atom.symbol)
+  if (el.maxBonds === 0) return mol
+  if (bondCount(mol, atomId) >= el.maxBonds) return mol
+  const result = calcAddAtomOnExisting(atom, mol.bonds, mol.atoms, 'H')
+  const h = newAtom('H', ...result.position)
+  return {
+    ...mol,
+    atoms: [...mol.atoms, h],
+    bonds: [...mol.bonds, newBond(atomId, h.id)],
+  }
+}
+
 /**
  * 给分子中所有（或指定）原子补满氢原子。
+ * 同样以连接数判断，不依赖键级。
  * @param atomId 可选，只对指定原子补氢；省略时对所有原子补氢
  */
 export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
@@ -36,10 +97,7 @@ export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
     const el = getElementConfig(target.symbol)
     if (el.maxBonds === 0) continue
 
-    const targetBonds = current.bonds
-      .filter(b => b.atomId1 === target.id || b.atomId2 === target.id)
-    const usedValence = targetBonds.reduce((sum, b) => sum + b.order, 0)
-    const needed = Math.max(0, el.maxBonds - usedValence)
+    const needed = Math.max(0, el.maxBonds - bondCount(current, target.id))
     if (needed <= 0) continue
 
     for (let i = 0; i < needed; i++) {

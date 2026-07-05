@@ -5,7 +5,8 @@ import type { DisplayMode } from '../types'
 import type { ResolvedTheme } from '../../presets'
 import { hexToInt } from '../../presets'
 import { getElementConfig as getElement } from '../../config/elements.config'
-import { RENDER } from '../../config/render.config'
+import { RENDER, BOND_DRAG_HOVER } from '../../config/render.config'
+import { ticker } from '../animation'
 
 /**
  * 管理原子、键、高光 mesh 的生命周期与更新。
@@ -16,6 +17,8 @@ export class MoleculeRenderer {
   readonly bondMeshes = new Map<string, THREE.Group>()
   private highlightMeshes = new Map<string, THREE.Mesh>()
   private bondShapeKeys = new Map<string, string>()
+  private _dragHoverMesh: THREE.Mesh | null = null
+  private _dragHoverId: string | null = null
 
   constructor(
     private modelGroup: THREE.Group,
@@ -69,7 +72,7 @@ export class MoleculeRenderer {
       for (const bond of molecule.bonds) {
         const a1 = atomById.get(bond.atomId1)
         const a2 = atomById.get(bond.atomId2)
-        if (a1 && a2) this.renderBond(bond, a1, a2, displayMode, selectedBonds.has(bond.id), aromaticBonds.get(bond.id))
+        if (a1 && a2) this.renderBond(bond, a1, a2, displayMode, selectedBonds.has(bond.id), aromaticBonds.get(bond.id), atomById, molecule.bonds)
       }
     }
   }
@@ -145,7 +148,11 @@ export class MoleculeRenderer {
     }
   }
 
-  private renderBond(bond: Bond, a1: Atom, a2: Atom, _displayMode: DisplayMode, selected: boolean, aromaticCentroid?: THREE.Vector3) {
+  private renderBond(
+    bond: Bond, a1: Atom, a2: Atom, _displayMode: DisplayMode, selected: boolean,
+    aromaticCentroid?: THREE.Vector3,
+    atomById?: Map<string, Atom>, allBonds?: readonly Bond[],
+  ) {
     let grp = this.bondMeshes.get(bond.id)
     const shapeKey = `${bond.order}:${selected ? 1 : 0}:${aromaticCentroid ? 1 : 0}`
     if (grp && this.bondShapeKeys.get(bond.id) !== shapeKey) {
@@ -167,6 +174,11 @@ export class MoleculeRenderer {
     const gap    = theme.render.bondGap
     const color  = selected ? RENDER.bondSelectedColor : RENDER.bondDefaultColor
     const stickR = theme.render.bondRadiusStick
+    // 双/三键用邻居叉积确定偏移方向（在分子平面内），与 3Dmol.js 方法一致
+    const perpX = getSideBondPerp(a1, a2, dirHat, atomById, allBonds)
+    // 双/三键圆柱半径缩小，视觉上更清晰
+    const doubleR = stickR * 0.65
+    const tripleR = stickR * 0.55
 
     if (grp) {
       let idx = 0
@@ -190,7 +202,7 @@ export class MoleculeRenderer {
           const height = (cyl.geometry as THREE.CylinderGeometry).parameters.height || len
           cyl.scale.y = len / height
           cyl.position.copy(mid)
-          if (offset !== 0) cyl.position.addScaledVector(getPerp(dirHat), offset)
+          if (offset !== 0) cyl.position.addScaledVector(perpX, offset)
           cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
         }
         idx++
@@ -201,9 +213,6 @@ export class MoleculeRenderer {
     grp = new THREE.Group()
     grp.userData = { type: 'bond', id: bond.id }
 
-    // 通用 perpX（双键/三键用）
-    const perpX = getPerp(dirHat)
-
     if (aromaticCentroid) {
       // ── 芳香键：实心圆柱 + 朝向环心的虚线小圆柱段 ────────────────────────
       const cyl = this.makeCylinder(stickR, len, color, bond.id)
@@ -211,14 +220,13 @@ export class MoleculeRenderer {
       cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
       grp.add(cyl)
 
-      // 偏移方向：键中点 → 环心，投影掉沿键分量，归一化
       const toCenter = new THREE.Vector3().subVectors(aromaticCentroid, mid)
-      toCenter.addScaledVector(dirHat, -toCenter.dot(dirHat))  // 去除沿键分量
+      toCenter.addScaledVector(dirHat, -toCenter.dot(dirHat))
       if (toCenter.lengthSq() < 1e-6) toCenter.copy(perpX)
       else toCenter.normalize()
 
       const dashColor  = selected ? RENDER.bondSelectedColor : RENDER.aromaticDashColor
-      const dashR      = stickR * 0.55
+      const dashR      = stickR * RENDER.aromaticDashRadiusFactor
       const dashLen    = RENDER.aromaticDashSize
       const gapLen     = RENDER.aromaticGapSize
       const step       = dashLen + gapLen
@@ -239,7 +247,8 @@ export class MoleculeRenderer {
       // ── 普通键：按 order 渲染并排圆柱 ──────────────────────────────────────
       const offsets = bond.order === 1 ? [0] : bond.order === 2 ? [-gap / 2, gap / 2] : [-gap, 0, gap]
       for (const offset of offsets) {
-        const cyl = this.makeCylinder(stickR, len, color, bond.id)
+        const r = bond.order === 2 ? doubleR : bond.order === 3 ? tripleR : stickR
+        const cyl = this.makeCylinder(r, len, color, bond.id)
         cyl.position.copy(mid)
         if (offset !== 0) cyl.position.addScaledVector(perpX, offset)
         cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
@@ -260,6 +269,43 @@ export class MoleculeRenderer {
     return cyl
   }
 
+  /** 在指定原子上显示 bond-drag 悬停光晕 */
+  setDragHover(atomId: string) {
+    if (this._dragHoverId === atomId) return
+    this._clearDragHover()
+    const mesh = this.atomMeshes.get(atomId)
+    if (!mesh) return
+    const r = (mesh.geometry as THREE.SphereGeometry).parameters?.radius ?? 0.4
+    const geo = new THREE.SphereGeometry(r + BOND_DRAG_HOVER.haloOffset, RENDER.sphereSegments, RENDER.sphereSegments)
+    const mat = new THREE.MeshBasicMaterial({
+      color: BOND_DRAG_HOVER.color,
+      transparent: true,
+      opacity: BOND_DRAG_HOVER.opacity,
+      side: THREE.BackSide,
+      depthWrite: false,
+    })
+    this._dragHoverMesh = new THREE.Mesh(geo, mat)
+    this._dragHoverMesh.position.copy(mesh.position)
+    this.modelGroup.add(this._dragHoverMesh)
+    this._dragHoverId = atomId
+    ticker.invalidate()
+  }
+
+  clearDragHover() {
+    this._clearDragHover()
+    ticker.invalidate()
+  }
+
+  private _clearDragHover() {
+    if (this._dragHoverMesh) {
+      this.modelGroup.remove(this._dragHoverMesh)
+      this._dragHoverMesh.geometry.dispose()
+      ;(this._dragHoverMesh.material as THREE.Material).dispose()
+      this._dragHoverMesh = null
+    }
+    this._dragHoverId = null
+  }
+
   dispose() {
     for (const [, mesh] of this.atomMeshes) {
       this.modelGroup.remove(mesh)
@@ -273,6 +319,7 @@ export class MoleculeRenderer {
       this.modelGroup.remove(mesh)
       mesh.geometry.dispose()
     }
+    this._clearDragHover()
     this.atomMeshes.clear()
     this.bondMeshes.clear()
     this.bondShapeKeys.clear()
@@ -280,11 +327,66 @@ export class MoleculeRenderer {
   }
 }
 
-function getPerp(dirHat: THREE.Vector3): THREE.Vector3 {
-  const perp = new THREE.Vector3()
-  perp.crossVectors(dirHat, new THREE.Vector3(0, 1, 0)).normalize()
-  if (perp.lengthSq() < 0.01) perp.set(1, 0, 0)
-  return perp
+/**
+ * 3Dmol.js 方式：用邻居原子确定双/三键偏移方向，使双键在分子平面内展开。
+ * 算法：找 a1（或 a2）最不共线的邻居，计算 (neighbor_dir × bond_dir) × bond_dir，
+ * 即邻居方向在键法线平面内的分量 → 偏移方向在分子平面内，化学上正确。
+ */
+function getSideBondPerp(
+  a1: Atom, a2: Atom, dirHat: THREE.Vector3,
+  atomById?: Map<string, Atom>, allBonds?: readonly Bond[],
+): THREE.Vector3 {
+  const p1 = new THREE.Vector3(a1.x, a1.y, a1.z)
+  const p2 = new THREE.Vector3(a2.x, a2.y, a2.z)
+  let bestV = new THREE.Vector3()
+  let bestLen = 0
+
+  if (atomById && allBonds) {
+    // 优先用 a1 的邻居
+    for (const bond of allBonds) {
+      let nid: string | null = null
+      if (bond.atomId1 === a1.id && bond.atomId2 !== a2.id) nid = bond.atomId2
+      else if (bond.atomId2 === a1.id && bond.atomId1 !== a2.id) nid = bond.atomId1
+      if (!nid) continue
+      const nb = atomById.get(nid)
+      if (!nb) continue
+      const d = new THREE.Vector3(nb.x - p1.x, nb.y - p1.y, nb.z - p1.z)
+      const v = d.clone().cross(dirHat)
+      const l = v.lengthSq()
+      if (l > bestLen) { bestLen = l; bestV = v.clone() }
+    }
+    // a1 无其他邻居，改用 a2 的邻居
+    if (bestLen < 0.001) {
+      for (const bond of allBonds) {
+        let nid: string | null = null
+        if (bond.atomId1 === a2.id && bond.atomId2 !== a1.id) nid = bond.atomId2
+        else if (bond.atomId2 === a2.id && bond.atomId1 !== a1.id) nid = bond.atomId1
+        if (!nid) continue
+        const nb = atomById.get(nid)
+        if (!nb) continue
+        const d = new THREE.Vector3(nb.x - p2.x, nb.y - p2.y, nb.z - p2.z)
+        const v = d.clone().cross(dirHat)
+        const l = v.lengthSq()
+        if (l > bestLen) { bestLen = l; bestV = v.clone() }
+      }
+    }
+  }
+
+  if (bestLen > 0.001) {
+    // (neighbor × bond) × bond = 邻居方向在键垂直平面内的分量（在分子平面内）
+    bestV.cross(dirHat)
+  } else {
+    // 孤立键（无邻居），回退到任意垂直方向
+    bestV.crossVectors(dirHat, new THREE.Vector3(0, 1, 0))
+    if (bestV.lengthSq() < 0.001) bestV.set(1, 0, 0)
+  }
+
+  bestV.normalize()
+  // 固定符号：保证同一根键两端算出的方向一致
+  if (Math.abs(bestV.x) > 0.001) { if (bestV.x < 0) bestV.negate() }
+  else if (Math.abs(bestV.y) > 0.001) { if (bestV.y < 0) bestV.negate() }
+  else if (bestV.z < 0) { bestV.negate() }
+  return bestV
 }
 
 function disposeGroup(group: THREE.Group) {
