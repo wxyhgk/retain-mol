@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore'
 import { getElementConfig } from '../../config/elements.config'
-import { getFragment } from '../../config/fragments.config'
+import { getFragment } from '../../lib/builder/fragmentLibrary'
 
 const HINTS: Record<string, string> = {
   // select 工具按笔刷武装态显示不同提示，见下方组件逻辑

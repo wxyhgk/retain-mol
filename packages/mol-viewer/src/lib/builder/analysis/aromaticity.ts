@@ -11,6 +11,7 @@
  */
 
 import type { Atom, Bond, Molecule } from '../../molecule'
+import { bondsOf, degree } from '../graph'
 
 // ── 类型 ──────────────────────────────────────────────────────────────────────
 
@@ -156,8 +157,7 @@ function isGeometricallyAromatic(
   const atomById = new Map(atoms.map(a => [a.id, a]))
 
   for (const id of ringIds) {
-    const n = bonds.filter(b => b.atomId1 === id || b.atomId2 === id).length
-    if (n > 3) return false
+    if (degree(bonds, id) > 3) return false
   }
   for (const b of ringBonds) {
     const a1 = atomById.get(b.atomId1)
@@ -190,7 +190,7 @@ function isFullyConjugatedRing(
     const atom = atomById.get(id)
     if (!atom) return false
 
-    const atomBonds = bonds.filter(b => b.atomId1 === id || b.atomId2 === id)
+    const atomBonds = bondsOf(bonds, id)
     const hasDouble = atomBonds.some(b => b.order === 2)
     const hasTriple = atomBonds.some(b => b.order === 3)
 

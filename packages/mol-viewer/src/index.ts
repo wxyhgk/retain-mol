@@ -32,8 +32,8 @@ export { getElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from 
 export type { ElementConfig, Hybridization } from './config/elements.config'
 
 // ── 片段库 ────────────────────────────────────────────────────────────────────
-export { FRAGMENTS, getFragment } from './config/fragments.config'
-export type { FragmentDef } from './config/fragments.config'
+export { FRAGMENTS, getFragment } from './lib/builder/fragmentLibrary'
+export type { FragmentDef } from './lib/builder/fragmentLibrary'
 
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 export { cn } from './lib/utils'

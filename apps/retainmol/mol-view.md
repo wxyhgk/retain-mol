@@ -47,9 +47,12 @@ packages/mol-viewer/src/
 │   │
 │   ├── builder/              分子编辑纯逻辑
 │   │   ├── BuilderEngine.ts  re-export 索引
+│   │   ├── graph.ts          分子图基础查询（degree / findBond / neighborsOf / hParentOf，唯一实现）
+│   │   ├── fragmentLibrary.ts 片段库：环系/官能团预构建 3D 结构（FRAGMENTS / getFragment）
 │   │   ├── analysis/
 │   │   │   ├── aromaticity.ts  DFS 环检测 + Hückel 规则芳香性判断
 │   │   │   ├── conjugation.ts  共轭系统分析
+│   │   │   ├── hybridization.ts 杂化推断（inferHybridization，唯一实现）
 │   │   │   └── fragments.ts    连通分量 / getConnectedFragment
 │   │   ├── editing/
 │   │   │   ├── atomOps.ts    growByReplacingH / autoAddHydrogens / replaceAtomSymbol（纯函数）
@@ -580,6 +583,13 @@ React 壳 `RotateGizmo.tsx` 在构造时绑定 store 方法作为回调传入。
 ### `beginTransaction` / `endTransaction` 的批量 undo
 
 原子拖拽期间每帧都会调 `setAtomPositions`，每次都会进 undo 历史。`beginTransaction` 调用 `zundo` 的 `pause()`，期间所有 store 更新不写入历史；`endTransaction` 调用 `resume()`，此时将累积的差值作为一个 undo 步骤提交。**务必成对调用，否则 undo 历史会被永久暂停。**
+
+### 图查询统一走 `graph.ts`
+
+原子连接数、键存在性、邻居/H 宿主等分子图基础查询统一用 `lib/builder/graph.ts`
+（`degree` / `findBond` / `neighborsOf` / `hNeighborsOf` / `hParentOf` / `bondsOf` / `otherEnd`），
+不要再内联 `bonds.filter(b => b.atomId1 === id || b.atomId2 === id)` 重写一份。
+注意 `degree` 数的是邻居条数（不计键级）——价态完整模型的硬规则。
 
 ### Ticker Phase 顺序
 

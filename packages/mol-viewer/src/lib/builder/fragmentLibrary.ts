@@ -1,5 +1,5 @@
 /**
- * 片段库 — 常用环系与官能团的预构建 3D 结构。
+ * fragmentLibrary.ts — 片段库：常用环系与官能团的预构建 3D 结构。
  *
  * 数据驱动：每个片段 = 原子坐标（含全部 H）+ 键 + 连接点。
  *  - attachIndex  连接重原子（接到目标原子上的那个原子）
@@ -11,7 +11,7 @@
  * 加新环 = 加一行 makeRing 调用，不手打坐标。
  */
 
-import { tetrahedralCandidates } from '../lib/builder/geometry/vsepr'
+import { tetrahedralCandidates } from './geometry/vsepr'
 
 export interface FragmentAtom { symbol: string; x: number; y: number; z: number }
 export interface FragmentBond { a: number; b: number; order: 1 | 2 | 3 }
@@ -35,7 +35,7 @@ export interface FragmentDef {
   attachBond?: [number, number]
 }
 
-// ── 内部小工具（避免引入 vec3 依赖，保持 config 自包含）──────────────────────
+// ── 内部小工具（避免引入 vec3 依赖，保持本文件自包含）──────────────────────
 
 type V3 = [number, number, number]
 const norm = (v: V3): V3 => {

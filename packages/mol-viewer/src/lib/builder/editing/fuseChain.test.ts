@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { placeFragmentStandalone, fuseFragmentOnBond } from './fragmentOps'
-import { getFragment } from '../../../config/fragments.config'
+import { getFragment } from '../fragmentLibrary'
 import type { Molecule, Bond } from '../../molecule'
 
 const benzene = getFragment('benzene')!

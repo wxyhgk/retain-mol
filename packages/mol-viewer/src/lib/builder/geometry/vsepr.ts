@@ -4,8 +4,10 @@
  */
 
 import { getElementConfig } from '../../../config/elements.config'
-import { inferGeometry, inferHybridization, GEOMETRY_RULES, STANDARD_BOND_LENGTHS } from '../../../config/geometry.config'
+import { inferGeometry, GEOMETRY_RULES, STANDARD_BOND_LENGTHS } from '../../../config/geometry.config'
 import type { AtomHybridization } from '../../../config/geometry.config'
+import { inferHybridization } from '../analysis/hybridization'
+import { bondsOf, otherEnd } from '../graph'
 import type { Atom, Bond } from '../../molecule'
 import { add, sub, scale, dot, cross, length, normalize } from '../math/vec3'
 import type { Vec3 } from '../math/vec3'
@@ -28,10 +30,9 @@ export function getNeighborDirs(
   bonds: readonly Bond[],
   atomById: Map<string, Atom>,
 ): Vec3[] {
-  return bonds
-    .filter(b => b.atomId1 === center.id || b.atomId2 === center.id)
+  return bondsOf(bonds, center.id)
     .map(b => {
-      const nbId = b.atomId1 === center.id ? b.atomId2 : b.atomId1
+      const nbId = otherEnd(b, center.id)!
       const nb = atomById.get(nbId)
       if (!nb) return null
       const d = sub([nb.x, nb.y, nb.z], [center.x, center.y, center.z])

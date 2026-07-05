@@ -3,8 +3,6 @@
  * 键角单位：度
  */
 
-import type { Bond } from '../lib/types'
-
 export type GeometryName =
   | 'linear'            // 直线型        180°
   | 'bent'              // V 形          ~104.5° (sp3 O/S)
@@ -72,20 +70,11 @@ export const GEOMETRY_RULES: Record<GeometryName, GeometryRule> = {
 
 // ── 杂化 ──────────────────────────────────────────────────────────────────────
 
-export type AtomHybridization = 'sp' | 'sp2' | 'sp3'
-
 /**
- * 从原子的现有键推断杂化（唯一真理来源）。
- * conjugation.ts、vsepr.ts 都应调用这里，不再各自实现。
+ * 杂化类型（GEOMETRY_RULES 查表键的一部分）。
+ * 推断算法见 lib/builder/analysis/hybridization.ts。
  */
-export function inferHybridization(bonds: readonly Bond[], atomId: string): AtomHybridization {
-  const atomBonds = bonds.filter(b => b.atomId1 === atomId || b.atomId2 === atomId)
-  const doubleCount = atomBonds.filter(b => b.order === 2).length
-  const tripleCount = atomBonds.filter(b => b.order === 3).length
-  if (tripleCount > 0 || doubleCount >= 2) return 'sp'   // ≡ 或累积双键
-  if (doubleCount === 1)                    return 'sp2'
-  return 'sp3'
-}
+export type AtomHybridization = 'sp' | 'sp2' | 'sp3'
 
 // ── 几何查表 ──────────────────────────────────────────────────────────────────
 

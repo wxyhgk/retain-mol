@@ -11,6 +11,7 @@
  */
 
 import type { Molecule, Atom } from '../../molecule'
+import { findBond } from '../graph'
 import { reachableWithout } from './bondOps'
 import { calcAngle, calcDihedral } from '../geometry/measure'
 
@@ -19,13 +20,6 @@ export type GeomEditResult =
   | { ok: false; reason: string }
 
 const NO_BOND = '__no_bond__'
-
-function findBondBetween(mol: Molecule, id1: string, id2: string) {
-  return mol.bonds.find(
-    b => (b.atomId1 === id1 && b.atomId2 === id2) ||
-         (b.atomId1 === id2 && b.atomId2 === id1),
-  )
-}
 
 function getAtoms(mol: Molecule, ids: string[]): Atom[] | null {
   if (new Set(ids).size !== ids.length) return null
@@ -87,7 +81,7 @@ export function setBondLength(mol: Molecule, aId: string, bId: string, target: n
   if (!atoms) return { ok: false, reason: '原子不存在或重复' }
   const [a, b] = atoms
 
-  const bond = findBondBetween(mol, aId, bId)
+  const bond = findBond(mol.bonds, aId, bId)
   const side = reachableWithout(mol.bonds, bond?.id ?? NO_BOND, bId)
   if (side.has(aId)) {
     return { ok: false, reason: bond ? '环内键长受约束，无法直接调整' : '两原子间接相连且无直接键，无法平移' }
@@ -112,7 +106,7 @@ export function setBondAngle(mol: Molecule, aId: string, bId: string, cId: strin
   if (!atoms) return { ok: false, reason: '原子不存在或重复' }
   const [a, b, c] = atoms
 
-  const bcBond = findBondBetween(mol, bId, cId)
+  const bcBond = findBond(mol.bonds, bId, cId)
   const side = reachableWithout(mol.bonds, bcBond?.id ?? NO_BOND, cId)
   if (side.has(bId) || side.has(aId)) {
     return { ok: false, reason: '环内键角受约束，无法直接调整' }
@@ -160,7 +154,7 @@ export function setDihedralAngle(
   if (!atoms) return { ok: false, reason: '原子不存在或重复' }
   const [a, b, c, d] = atoms
 
-  const bcBond = findBondBetween(mol, bId, cId)
+  const bcBond = findBond(mol.bonds, bId, cId)
   if (!bcBond) return { ok: false, reason: '2、3 号原子之间需要存在键（旋转轴）' }
   const side = reachableWithout(mol.bonds, bcBond.id, cId)
   if (side.has(bId)) return { ok: false, reason: 'B–C 键在环内，二面角受约束' }

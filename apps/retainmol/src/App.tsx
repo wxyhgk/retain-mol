@@ -5,7 +5,6 @@ import {
   MolViewer, useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty,
   useMoleculeTemporal, bondSelectedAtoms, parseClipboard, centerMolecule, getFragment, cn,
 } from '@retainmol/mol-viewer'
-import type { MolClipboard } from '@retainmol/mol-viewer'
 import { RightPanel } from '@/components/panels'
 import PubChemSearch from '@/components/search/PubChemSearch'
 import { useStore } from 'zustand'
@@ -21,18 +20,9 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (!(e.metaKey || e.ctrlKey) || e.key !== 'c') return
-      const st = useMoleculeStore.getState()
-      const mol = selectActiveMoleculeOrEmpty(st)
-      const { selectedAtomIds } = st
-      if (selectedAtomIds.size === 0) return
+      const cb = useMoleculeStore.getState().copySelection()
+      if (!cb) return
       e.preventDefault()
-      const selAtoms = mol.atoms.filter(a => selectedAtomIds.has(a.id))
-      const idxMap = new Map(selAtoms.map((a, i) => [a.id, i]))
-      const selBonds = mol.bonds.filter(b => idxMap.has(b.atomId1) && idxMap.has(b.atomId2))
-      const cb: MolClipboard = {
-        atoms: selAtoms.map(a => ({ symbol: a.symbol, x: a.x, y: a.y, z: a.z })),
-        bonds: selBonds.map(b => ({ a: idxMap.get(b.atomId1)!, b: idxMap.get(b.atomId2)!, order: b.order, aromatic: b.aromatic })),
-      }
       useEditorStore.getState().setClipboard(cb)
     }
     window.addEventListener('keydown', handler)
@@ -97,9 +87,7 @@ export default function App() {
         if (activeTool === 'measure' && pendingAtomIds.length > 0) { cancelPendingMeasure(); return }
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        const { selectedAtomIds, selectedBondIds, removeAtom, removeBond } = useMoleculeStore.getState()
-        selectedBondIds.forEach(id => removeBond(id))
-        selectedAtomIds.forEach(id => removeAtom(id))
+        useMoleculeStore.getState().removeSelected()
         return
       }
 

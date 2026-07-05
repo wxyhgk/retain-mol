@@ -7,12 +7,14 @@ import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
 import { useEditorStore } from '../store/editorStore'
-import { calcGrowPosition, calcClickGrowPosition, getGrowGuide as calcGrowGuide, canBond, calcBondLength,
+import { calcGrowPosition, calcClickGrowPosition, getGrowGuide as calcGrowGuide, canBond,
+         degree, resolveHSlotGrowth,
          attachFragmentToAtom, placeFragmentStandalone, fuseFragmentOnBond, ringPlaneIntersection } from '../lib/builder/BuilderEngine'
 import type { GrowGuideSpec } from '../lib/types'
+import type { Molecule } from '../lib/molecule'
 import { getConnectedFragment } from '../lib/builder/analysis/fragments'
 import { getElementConfig } from '../config/elements.config'
-import { getFragment } from '../config/fragments.config'
+import { getFragment } from '../lib/builder/fragmentLibrary'
 
 export interface BuilderHandlers {
   onAtomClick: (atomId: string, event: MouseEvent) => void
@@ -30,18 +32,10 @@ export interface BuilderHandlers {
   getGrowGuide: (sourceId: string) => GrowGuideSpec
 }
 
-/** 中心原子的连接数（不计键级，作为价态硬规则） */
-function connectionCount(bonds: readonly { atomId1: string; atomId2: string }[], atomId: string): number {
-  return bonds.filter(b => b.atomId1 === atomId || b.atomId2 === atomId).length
-}
-
 /** 是否是"槽位 H"：带键的 H 原子（价态完整模型下它就是可生长/成键的槽位） */
-function isSlotH(
-  mol: { atoms: readonly { id: string; symbol: string }[]; bonds: readonly { atomId1: string; atomId2: string }[] },
-  atomId: string,
-): boolean {
+function isSlotH(mol: Molecule, atomId: string): boolean {
   const atom = mol.atoms.find(a => a.id === atomId)
-  return !!atom && atom.symbol === 'H' && connectionCount(mol.bonds, atomId) > 0
+  return !!atom && atom.symbol === 'H' && degree(mol.bonds, atomId) > 0
 }
 
 export function useBuilder(): BuilderHandlers {
@@ -105,14 +99,14 @@ export function useBuilder(): BuilderHandlers {
 
         // 点击 H：替换为当前元素的饱和基团（价态完整模型的主生长路径）
         if (centerAtom.symbol === 'H' && activeElement !== 'H' &&
-            connectionCount(molecule.bonds, atomId) > 0) {
+            degree(molecule.bonds, atomId) > 0) {
           st.growFromHydrogen(atomId, activeElement)
           break
         }
 
         // 未饱和重原子（导入的骨架）：VSEPR 生长，新原子自动补 H
         const maxBonds = getElementConfig(centerAtom.symbol).maxBonds
-        if (centerAtom.symbol !== 'H' && connectionCount(molecule.bonds, atomId) < maxBonds) {
+        if (centerAtom.symbol !== 'H' && degree(molecule.bonds, atomId) < maxBonds) {
           const position = calcClickGrowPosition(
             centerAtom, molecule.bonds, molecule.atoms, activeElement,
             useEditorStore.getState().sketchPlane,
@@ -274,7 +268,7 @@ export function useBuilder(): BuilderHandlers {
     // 槽位 H：可拖到其他原子成键 / 拖到空白替换生长（语义在 onBondDragEnd）
     if (isSlotH(mol, sourceId)) return true
     // 饱和重原子拖拽不做成键（转相机/框选不受影响）；未饱和骨架原子保留拖出生长
-    return connectionCount(mol.bonds, sourceId) < getElementConfig(src.symbol).maxBonds
+    return degree(mol.bonds, sourceId) < getElementConfig(src.symbol).maxBonds
   }, [store])
 
   const onBondDragEnd = useCallback((sourceId: string, targetId: string | null, dropLocal: THREE.Vector3 | null) => {
@@ -331,18 +325,14 @@ export function useBuilder(): BuilderHandlers {
     if (!center) return null
     const cfg = getElementConfig(activeElement)
 
-    // 槽位 H：替换落点固定在原 H 方向（父原子→H 方向按标准键长），不随光标吸附
+    // 槽位 H：替换落点固定在原 H 方向（与 growByReplacingH 共用落点计算，
+    // 保证所见即所得），不随光标吸附
     if (isSlotH(mol, sourceId)) {
       if (activeElement === 'H') return null
-      const bond = mol.bonds.find(b => b.atomId1 === sourceId || b.atomId2 === sourceId)!
-      const parentId = bond.atomId1 === sourceId ? bond.atomId2 : bond.atomId1
-      const parent = mol.atoms.find(a => a.id === parentId)
-      if (!parent) return null
-      const dir = new THREE.Vector3(center.x - parent.x, center.y - parent.y, center.z - parent.z)
-      if (dir.lengthSq() < 1e-12) dir.set(1, 0, 0); else dir.normalize()
-      const len = calcBondLength(parent.symbol, activeElement)
+      const p = resolveHSlotGrowth(mol, sourceId, activeElement)
+      if (!p) return null
       return {
-        pos: new THREE.Vector3(parent.x, parent.y, parent.z).addScaledVector(dir, len),
+        pos: new THREE.Vector3(p.x, p.y, p.z),
         radius: cfg.covalentRadius * 0.45,
         color: cfg.color,
       }

@@ -18,6 +18,7 @@ import { autoAddHydrogens, addOneHydrogen as addOneH, replaceAtomSymbol,
          setBondAngle as setBondAngleOp,
          setDihedralAngle as setDihedralAngleOp,
          type GeomEditResult } from '../lib/builder/BuilderEngine'
+import { bondsOf, findBond } from '../lib/builder/graph'
 import { type SceneObject, createSceneObject } from '../lib/sceneObject'
 import { lookupBondLengthByOrder } from '../config/geometry.config'
 import { genId } from '../lib/utils'
@@ -74,6 +75,10 @@ interface MoleculeState {
   clearMolecule:          () => void
   centerMolecule:         () => void
   pasteAtoms:             (clipboard: MolClipboard) => string[]
+  /** 把当前选中原子（及两端都选中的键）序列化为剪贴板格式；无选中返回 null */
+  copySelection:          () => MolClipboard | null
+  /** 删除所有选中的原子和键（一步 undo）；无选中时为 no-op */
+  removeSelected:         () => void
 
   // ── 选择 actions ──────────────────────────────────────────────────────────
   selectAtom:   (id: string, multi?: boolean) => void
@@ -268,9 +273,7 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     const mol = getActiveMol(s)
     if (!mol) return {}
     // 连带删除的键也要从选择集里清掉，避免残留指向已删除键的悬空 id
-    const removedBondIds = new Set(
-      mol.bonds.filter(b => b.atomId1 === id || b.atomId2 === id).map(b => b.id),
-    )
+    const removedBondIds = new Set(bondsOf(mol.bonds, id).map(b => b.id))
     return {
       ...patchActiveMol(s, {
         ...mol,
@@ -340,11 +343,7 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
   addBond: (atomId1, atomId2, order: 1 | 2 | 3 = 1) => {
     const mol = getActiveMol(get())
     if (!mol) return
-    const exists = mol.bonds.find(
-      b => (b.atomId1 === atomId1 && b.atomId2 === atomId2) ||
-           (b.atomId1 === atomId2 && b.atomId2 === atomId1)
-    )
-    if (exists) return
+    if (findBond(mol.bonds, atomId1, atomId2)) return
     const bond = newBond(atomId1, atomId2, order)
     set((s) => {
       const m = getActiveMol(s)
@@ -504,6 +503,29 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
       })
     })
     return newIds
+  },
+
+  copySelection: () => {
+    const s = get()
+    const mol = selectActiveMoleculeOrEmpty(s)
+    const { selectedAtomIds } = s
+    if (selectedAtomIds.size === 0) return null
+    const selAtoms = mol.atoms.filter(a => selectedAtomIds.has(a.id))
+    const idxMap = new Map(selAtoms.map((a, i) => [a.id, i] as const))
+    const selBonds = mol.bonds.filter(b => idxMap.has(b.atomId1) && idxMap.has(b.atomId2))
+    return {
+      atoms: selAtoms.map(a => ({ symbol: a.symbol, x: a.x, y: a.y, z: a.z })),
+      bonds: selBonds.map(b => ({ a: idxMap.get(b.atomId1)!, b: idxMap.get(b.atomId2)!, order: b.order, aromatic: b.aromatic })),
+    }
+  },
+
+  removeSelected: () => {
+    const { selectedAtomIds, selectedBondIds, removeAtom, removeBond, beginTransaction, endTransaction } = get()
+    if (selectedAtomIds.size === 0 && selectedBondIds.size === 0) return
+    beginTransaction()
+    selectedBondIds.forEach(id => removeBond(id))
+    selectedAtomIds.forEach(id => removeAtom(id))
+    endTransaction()
   },
 
   // ── 选择 ────────────────────────────────────────────────────────────────────

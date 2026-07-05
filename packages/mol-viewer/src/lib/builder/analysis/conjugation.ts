@@ -11,7 +11,8 @@
  */
 
 import type { Atom, Bond, Molecule } from '../../molecule'
-import { inferHybridization } from '../../../config/geometry.config'
+import { bondsOf, otherEnd } from '../graph'
+import { inferHybridization } from './hybridization'
 
 // ── 类型 ──────────────────────────────────────────────────────────────────────
 
@@ -41,9 +42,8 @@ function isLonePairConjugated(
   hybrids: Map<string, Hybridization>,
 ): boolean {
   if (!LONE_PAIR_DONORS.has(atom.symbol)) return false
-  const atomBonds = bonds.filter(b => b.atomId1 === atom.id || b.atomId2 === atom.id)
-  return atomBonds.some(b => {
-    const nbId = b.atomId1 === atom.id ? b.atomId2 : b.atomId1
+  return bondsOf(bonds, atom.id).some(b => {
+    const nbId = otherEnd(b, atom.id)!
     const h = hybrids.get(nbId)
     return h === 'sp2' || h === 'sp'
   })
@@ -95,7 +95,7 @@ function connectedComponents(
 export function detectConjugation(mol: Molecule): ConjugationResult {
   const { atoms, bonds } = mol
 
-  // 第一轮：按键级确定杂化（复用 geometry.config 的单一实现）
+  // 第一轮：按键级确定杂化（复用 analysis/hybridization 的单一实现）
   const hybridization = new Map<string, Hybridization>()
   for (const atom of atoms) {
     hybridization.set(atom.id, inferHybridization(bonds, atom.id))

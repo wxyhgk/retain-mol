@@ -10,9 +10,10 @@
 import * as THREE from 'three'
 import type { Molecule, Atom, Bond } from '../../molecule'
 import { newAtom, newBond } from '../../molecule'
-import type { FragmentDef } from '../../../config/fragments.config'
+import type { FragmentDef } from '../fragmentLibrary'
 import { getElementConfig } from '../../../config/elements.config'
-import { inferHybridization } from '../../../config/geometry.config'
+import { bondsOf, degree, findBond, hNeighborsOf, otherEnd } from '../graph'
+import { inferHybridization } from '../analysis/hybridization'
 import { calcBondLength, findNextBondDir, getNeighborDirs } from '../geometry/vsepr'
 
 export type AttachResult = { ok: true; molecule: Molecule } | { ok: false; reason: string }
@@ -80,12 +81,12 @@ export function attachFragmentToAtom(
   let dir: THREE.Vector3
 
   const hBond = target.symbol === 'H'
-    ? mol.bonds.find(b => b.atomId1 === targetAtomId || b.atomId2 === targetAtomId)
+    ? bondsOf(mol.bonds, targetAtomId)[0]
     : undefined
 
   if (target.symbol === 'H' && hBond) {
     // 点 H：替换该 H，方向沿原 C-H 键
-    const hostId = hBond.atomId1 === targetAtomId ? hBond.atomId2 : hBond.atomId1
+    const hostId = otherEnd(hBond, targetAtomId)!
     const h = mol.atoms.find(a => a.id === hostId)
     if (!h) return { ok: false, reason: '原子不存在' }
     host = h
@@ -95,7 +96,7 @@ export function attachFragmentToAtom(
     dir.normalize()
   } else {
     // 点重原子（或游离 H）：检查饱和度，VSEPR 给方向
-    const conn = mol.bonds.filter(b => b.atomId1 === host.id || b.atomId2 === host.id).length
+    const conn = degree(mol.bonds, host.id)
     if (conn >= getElementConfig(host.symbol).maxBonds) {
       return { ok: false, reason: `${host.symbol} 已饱和 · 点击它的 H 可直接替换` }
     }
@@ -211,16 +212,9 @@ export function fuseFragmentOnBond(
   d2Pref.normalize()
 
   // ── 价态预检：共享原子无 H 时需有空位 ─────────────────────────────────────
-  const hNeighborsOf = (atomId: string): Atom[] =>
-    mol.bonds
-      .map(b => (b.atomId1 === atomId ? b.atomId2 : b.atomId2 === atomId ? b.atomId1 : null))
-      .filter((id): id is string => id !== null)
-      .map(id => atomById.get(id))
-      .filter((a): a is Atom => !!a && a.symbol === 'H')
-
   for (const t of [T1, T2]) {
-    if (hNeighborsOf(t.id).length > 0) continue
-    const conn = mol.bonds.filter(b => b.atomId1 === t.id || b.atomId2 === t.id).length
+    if (hNeighborsOf(mol, t.id).length > 0) continue
+    const conn = degree(mol.bonds, t.id)
     if (conn + 1 > getElementConfig(t.symbol).maxBonds) {
       return { ok: false, reason: `${t.symbol} 已饱和，无法并环` }
     }
@@ -281,7 +275,7 @@ export function fuseFragmentOnBond(
     const removeIds = new Set<string>()
     const hostsNeedingH = [T1.id, T2.id, ...mergeByIndex.values()]
     for (const hostId of hostsNeedingH) {
-      const hs = hNeighborsOf(hostId).filter(h => !removeIds.has(h.id))
+      const hs = hNeighborsOf(mol, hostId).filter(h => !removeIds.has(h.id))
       if (hs.length === 0) continue
       let best = hs[0], bestD = Infinity
       for (const h of hs) {
@@ -323,15 +317,13 @@ export function fuseFragmentOnBond(
     // 不重复新建，但若被凯库勒重排（orderOverride）命中，必须更新其键级并清掉
     // aromatic 标记 —— 合并式并环（如菲 bay 区拼芘）的新环路径会途经这些已有键，
     // 保留旧键级会让新环的双键交替在这里断裂
-    const findExistingBond = (x: string, y: string) => mol.bonds.find(
-      b => (b.atomId1 === x && b.atomId2 === y) || (b.atomId1 === y && b.atomId2 === x))
     const orderByExistingId = new Map<string, 1 | 2 | 3>()
     const newBonds: Bond[] = []
     for (const fb of frag.bonds) {
       if (skip.has(fb.a) && skip.has(fb.b)) continue
       if (!idByIndex.has(fb.a) || !idByIndex.has(fb.b)) continue
       const id1 = idByIndex.get(fb.a)!, id2 = idByIndex.get(fb.b)!
-      const existing = findExistingBond(id1, id2)
+      const existing = findBond(mol.bonds, id1, id2)
       const key = `${Math.min(fb.a, fb.b)}-${Math.max(fb.a, fb.b)}`
       if (existing) {
         const o = orderOverride.get(key)
@@ -355,7 +347,7 @@ export function fuseFragmentOnBond(
       ...newBonds,
     ]
     for (const mergedId of mergeByIndex.values()) {
-      const conn = finalBonds.filter(b => b.atomId1 === mergedId || b.atomId2 === mergedId).length
+      const conn = degree(finalBonds, mergedId)
       const sym = atomById.get(mergedId)!.symbol
       if (conn > getElementConfig(sym).maxBonds) return null
     }

@@ -6,6 +6,7 @@ import { getElementConfig } from '../../../config/elements.config'
 import { lookupBondLengthByOrder } from '../../../config/geometry.config'
 import type { Atom, Bond, Molecule } from '../../molecule'
 import { newBond } from '../../molecule'
+import { bondsOf, degree, findBond, otherEnd } from '../graph'
 
 /** 判断两个原子之间是否允许成键 */
 export function canBond(
@@ -16,14 +17,10 @@ export function canBond(
   const el1 = getElementConfig(atom1.symbol)
   const el2 = getElementConfig(atom2.symbol)
 
-  const existing = bonds.find(
-    b => (b.atomId1 === atom1.id && b.atomId2 === atom2.id) ||
-         (b.atomId1 === atom2.id && b.atomId2 === atom1.id)
-  )
-  if (existing) return { ok: false, reason: '两原子之间已存在键' }
+  if (findBond(bonds, atom1.id, atom2.id)) return { ok: false, reason: '两原子之间已存在键' }
 
-  const bonds1 = bonds.filter(b => b.atomId1 === atom1.id || b.atomId2 === atom1.id).length
-  const bonds2 = bonds.filter(b => b.atomId1 === atom2.id || b.atomId2 === atom2.id).length
+  const bonds1 = degree(bonds, atom1.id)
+  const bonds2 = degree(bonds, atom2.id)
 
   if (bonds1 >= el1.maxBonds) return { ok: false, reason: `${atom1.symbol} 已达最大键数 (${el1.maxBonds})` }
   if (bonds2 >= el2.maxBonds) return { ok: false, reason: `${atom2.symbol} 已达最大键数 (${el2.maxBonds})` }
@@ -50,23 +47,19 @@ export function bondByReplacingH(
   const target = mol.atoms.find(a => a.id === targetId)
   if (!srcH || !target || srcH.symbol !== 'H') return { ok: false, reason: '原子不存在' }
 
-  const srcBond = mol.bonds.find(b => b.atomId1 === sourceHId || b.atomId2 === sourceHId)
+  const srcBond = bondsOf(mol.bonds, sourceHId)[0]
   if (!srcBond) return { ok: false, reason: '孤立 H 没有可让位的键' }
-  const parentId = srcBond.atomId1 === sourceHId ? srcBond.atomId2 : srcBond.atomId1
+  const parentId = otherEnd(srcBond, sourceHId)!
   if (targetId === parentId || targetId === sourceHId) return { ok: false, reason: '不能与自身成键' }
-
-  const hasBond = (a: string, b: string) => mol.bonds.some(
-    x => (x.atomId1 === a && x.atomId2 === b) || (x.atomId1 === b && x.atomId2 === a)
-  )
 
   // 目标是带键的 H：两个 H 都让位，父原子相连
   const tgtBond = target.symbol === 'H'
-    ? mol.bonds.find(b => b.atomId1 === targetId || b.atomId2 === targetId)
+    ? bondsOf(mol.bonds, targetId)[0]
     : undefined
   if (tgtBond) {
-    const tgtParentId = tgtBond.atomId1 === targetId ? tgtBond.atomId2 : tgtBond.atomId1
+    const tgtParentId = otherEnd(tgtBond, targetId)!
     if (tgtParentId === parentId) return { ok: false, reason: '两个 H 连在同一个原子上' }
-    if (hasBond(parentId, tgtParentId)) return { ok: false, reason: '两原子之间已存在键' }
+    if (findBond(mol.bonds, parentId, tgtParentId)) return { ok: false, reason: '两原子之间已存在键' }
     // 桥氢可能有多条键（inferBonds 按距离推键，乙硼烷 B₂H₆ 这类结构就会产生），
     // 只删 srcBond/tgtBond 会留下引用已删原子的悬空键 → 必须清掉触及被删 H 的所有键
     const touchesRemovedH = (b: Bond) =>
@@ -86,9 +79,9 @@ export function bondByReplacingH(
   }
 
   // 目标是重原子（或孤立 H）：源 H 让位，父原子与目标成键
-  if (hasBond(parentId, targetId)) return { ok: false, reason: '两原子之间已存在键' }
+  if (findBond(mol.bonds, parentId, targetId)) return { ok: false, reason: '两原子之间已存在键' }
   const el = getElementConfig(target.symbol)
-  const targetCount = mol.bonds.filter(b => b.atomId1 === targetId || b.atomId2 === targetId).length
+  const targetCount = degree(mol.bonds, targetId)
   if (targetCount >= el.maxBonds) {
     return { ok: false, reason: `${target.symbol} 已饱和 · 拖到它的 H 上成键` }
   }
