@@ -159,6 +159,8 @@ export interface OptimizeResult {
   reason?: string
   energyBefore?: number
   energyAfter?: number
+  /** 优化前的初始结构（原子集与 molecule 相同）——供 UI 做 初始→最终 morph 动画 */
+  initial?: Molecule
 }
 
 interface XYZ { x: number; y: number; z: number }
@@ -233,6 +235,9 @@ export function generate3D(mol: Molecule): OptimizeResult {
     const mol3d = new CG(0x5eed).getOneConformerAsMolecule(oclMol)
     if (!mol3d) return { molecule: mol, ok: false, reason: '无法生成 3D 构象（结构可能过于复杂或含不支持的原子）' }
 
+    // 嵌入结果（未清理）——作为 morph 动画的起点
+    const initial = oclToMolecule(mol3d, mol.name ?? '3D structure')
+
     // MMFF 清理（资源就绪时）——嵌入结果再抛光一遍
     if (ffReady) {
       try {
@@ -243,11 +248,17 @@ export function generate3D(mol: Molecule): OptimizeResult {
       } catch { /* MMFF 处理不了就用纯嵌入结果 */ }
     }
 
-    const molecule = oclToMolecule(mol3d, mol.name ?? '3D structure')
-    if (molecule.atoms.some(a => !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z))) {
-      return { molecule: mol, ok: false, reason: '3D 生成产生非法坐标' }
+    // 最终结构：复用 initial 的原子 id（顺序一致），只换坐标——morph 才能按 id 对应
+    const molecule: Molecule = {
+      ...initial,
+      atoms: initial.atoms.map((a, i) => ({
+        ...a, x: mol3d.getAtomX(i), y: -mol3d.getAtomY(i), z: -mol3d.getAtomZ(i),
+      })),
     }
-    return { molecule, ok: true }
+    if (molecule.atoms.some(a => !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z))) {
+      return { molecule: initial, ok: true, initial }   // 清理坏了就用纯嵌入
+    }
+    return { molecule, ok: true, initial }
   } catch (e) {
     return { molecule: mol, ok: false, reason: `3D 生成失败：${(e as Error).message}` }
   }
@@ -280,7 +291,7 @@ export function minimizeGeometry(mol: Molecule): OptimizeResult {
       const c = newCoords.get(a.id)
       return c ? { ...a, x: c.x, y: c.y, z: c.z } : a
     })
-    return { molecule: { ...mol, atoms }, ok: true, energyBefore: eBefore, energyAfter: eAfter }
+    return { molecule: { ...mol, atoms }, ok: true, energyBefore: eBefore, energyAfter: eAfter, initial: mol }
   } catch (e) {
     return { molecule: mol, ok: false, reason: `MMFF94 无法处理该结构：${(e as Error).message}` }
   }

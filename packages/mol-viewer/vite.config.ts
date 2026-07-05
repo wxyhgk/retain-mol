@@ -30,9 +30,12 @@ export default defineConfig(({ command }) => {
       ...base,
       build: {
         lib: {
-          entry: path.resolve(__dirname, './src/index.ts'),
+          entry: {
+            index: path.resolve(__dirname, './src/index.ts'),
+            // 无 DOM 的优化入口，供 Worker 导入（@retainmol/mol-viewer/optimize）
+            optimize: path.resolve(__dirname, './src/optimize.ts'),
+          },
           formats: ['es'],
-          fileName: () => 'index.js',
         },
         outDir: 'dist',
         emptyOutDir: true,

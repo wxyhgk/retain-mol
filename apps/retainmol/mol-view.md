@@ -322,6 +322,21 @@ THREE.Scene
 - 导出：GJF 的电荷 = 形式电荷之和、多重度 = 未配对电子数 + 1，自动写入 —— 带电/
   自由基物种可直接投 Gaussian。
 
+### 优化跑在 Web Worker + morph 动画（不冻结、看得见过程）
+
+3D 生成/清理原来在主线程同步跑，大分子（ConformerGenerator 嵌入 ~3s）会冻结 UI。
+现在：
+- **Worker**：`apps/.../workers/molOpt.worker.ts` 后台跑 generate3D/minimizeGeometry，
+  主线程保持 60fps。Worker **不能 import 包的 barrel**（会拉进渲染器/three，引用 window
+  崩溃）——用无 DOM 的专用入口 `@retainmol/mol-viewer/optimize`（vite 多入口 + package
+  exports 子路径）。`apps/.../lib/moleculeOpt.ts` 是主线程侧转发。
+- **morph 动画**：OCL 的 MMFF `minimise({maxIts:N})` 未收敛时**不写回坐标**（只有跑到
+  收敛才写），拿不到中间帧。所以用 初始→最终 的插值 morph（缓出 ~0.7s）近似弛豫动画，
+  整段包一个 undo 事务 → 一步 undo。generate3D/minimizeGeometry 的结果带 `initial` 字段
+  供 morph 起点。清理按钮走此路径（点了看它弛豫过去）。
+- **景深关闭**：`DOF.enabled=false`——大分子铺开后离焦部分糊成一团、糊掉的原子没法点，
+  科学工具都不用景深。
+
 ### 2D → 3D 立体化（Chem3D 式，OCL ConformerGenerator + MMFF94）
 
 导入/粘贴 2D 结构（ChemDraw 式平面 SDF/mol，所有 z=0）自动生成合理 3D：

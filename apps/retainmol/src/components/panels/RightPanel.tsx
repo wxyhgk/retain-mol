@@ -5,15 +5,21 @@ import ScenePanel from '@/features/scene/components/ScenePanel'
 import StylePanel from '@/features/style/components/StylePanel'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Link2, FlaskRound, Eraser, Sparkles } from 'lucide-react'
+import { minimizeGeometryAsync, morphObjectPositions } from '@/lib/moleculeOpt'
 
 export default function RightPanel() {
-  const { autoInferBonds, addHydrogens, clearMolecule, cleanupGeometry } = useMoleculeStore()
+  const { autoInferBonds, addHydrogens, clearMolecule } = useMoleculeStore()
   const flashHint = useEditorStore(s => s.flashHint)
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
 
-  const handleCleanup = () => {
-    const r = cleanupGeometry()
-    if (!r.ok && r.reason) flashHint(r.reason)
+  // 几何清理：后台 Worker 算最终结构（不冻结 UI），再 morph 动画弛豫过去（看得见过程）
+  const handleCleanup = async () => {
+    if (molecule.atoms.length < 2 || molecule.bonds.length === 0) return
+    flashHint('几何清理中…')
+    const r = await minimizeGeometryAsync(molecule)
+    if (!r.ok) { if (r.reason) flashHint(r.reason); return }
+    const objId = useMoleculeStore.getState().activeObjectId
+    if (objId) await morphObjectPositions(objId, r.initial ?? molecule, r.molecule)
   }
 
   return (

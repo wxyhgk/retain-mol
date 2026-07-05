@@ -8,22 +8,24 @@ import {
   useMoleculeStore, selectActiveMoleculeOrEmpty,
   parseXYZ, exportXYZ, exportGJF, centerMolecule,
   parseMol, parseSdf, exportMol, exportSdf, is2D,
-  generate3D, registerForceFieldFromUrl,
   captureViewportImage,
 } from '@retainmol/mol-viewer'
-import type { Molecule } from '@retainmol/mol-viewer'
-
-const OCL_RESOURCE_URL = `${import.meta.env.BASE_URL}ocl/resources.json`
+import { generate3DAsync, morphObjectPositions, flattenMolecule } from '@/lib/moleculeOpt'
+import { useUiStore } from '@/lib/uiStore'
 
 /**
- * 2D 结构自动立体化（Chem3D 式）：ConformerGenerator 嵌入 3D + MMFF94 清理。
- * 需要 OCL 力场资源就绪，先 await 注册（幂等）。生成失败则退回原平面结构。
+ * 导入并（若是 2D）自动立体化：后台 Worker 生成 3D（不冻结 UI），完成后放到
+ * 场景并以「平面折叠成 3D」动画呈现。非 2D 直接放入。
+ * setActive(mol) 返回落地后的活跃对象 id，供 morph 动画使用。
  */
-async function make3DIfFlat(mol: Molecule): Promise<Molecule> {
-  if (!is2D(mol)) return mol
-  try { await registerForceFieldFromUrl(OCL_RESOURCE_URL) } catch { /* 资源加载失败则用纯嵌入 */ }
-  const r = generate3D(mol)
-  return r.ok ? r.molecule : mol
+async function importWith3D(mol: import('@retainmol/mol-viewer').Molecule, place: (m: import('@retainmol/mol-viewer').Molecule) => string) {
+  if (!is2D(mol)) { place(centerMolecule(mol)); return }
+  useUiStore.getState().setBusy('正在生成 3D 结构…')
+  const r = await generate3DAsync(mol)
+  useUiStore.getState().setBusy(null)
+  const final = centerMolecule(r.ok ? r.molecule : mol)
+  const objId = place(final)
+  if (r.ok) await morphObjectPositions(objId, flattenMolecule(final), final, 900)
 }
 
 function download(text: string, filename: string, mime = 'text/plain') {
@@ -73,9 +75,11 @@ export function useFileIO() {
         } else {
           mol = parseMol(text)
         }
-        // 2D 结构自动立体化（导入 2D SDF 直接得到可用的 3D）
-        const mol3d = await make3DIfFlat(mol)
-        setMolecule(centerMolecule(mol3d))
+        // 2D 结构自动立体化 + 平面折叠动画（替换当前分子）
+        await importWith3D(mol, (m) => {
+          setMolecule(m)
+          return useMoleculeStore.getState().activeObjectId!
+        })
       } catch (e) {
         alert(`文件解析失败：${(e as Error).message}`)
       }
@@ -107,8 +111,8 @@ export function useFileIO() {
         } else {
           mol = parseMol(text)
         }
-        const mol3d = await make3DIfFlat(mol)
-        addToScene(centerMolecule(mol3d))
+        // 2D 结构自动立体化 + 平面折叠动画（添加到场景）
+        await importWith3D(mol, (m) => addToScene(m))
       } catch (e) {
         alert(`文件解析失败：${(e as Error).message}`)
       }

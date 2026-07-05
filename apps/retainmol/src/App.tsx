@@ -4,8 +4,10 @@ import ToolStrip from '@/components/toolbar/ToolStrip'
 import {
   MolViewer, useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty,
   useMoleculeTemporal, bondSelectedAtoms, parseClipboard, centerMolecule, getFragment, cn,
-  is2D, generate3D, registerForceFieldFromUrl,
+  is2D,
 } from '@retainmol/mol-viewer'
+import { generate3DAsync, morphObjectPositions, flattenMolecule } from '@/lib/moleculeOpt'
+import { useUiStore } from '@/lib/uiStore'
 import { RightPanel } from '@/components/panels'
 import PubChemSearch from '@/components/search/PubChemSearch'
 import { useStore } from 'zustand'
@@ -46,14 +48,15 @@ export default function App() {
       try {
         const { format, molecule } = parseClipboard(text)
         e.preventDefault()
-        // 粘贴的 2D 结构（如 ChemDraw 复制的 mol 块）自动立体化
+        // 粘贴的 2D 结构：后台线程生成 3D（不冻结），完成后「平面折叠成 3D」动画
         if (is2D(molecule)) {
-          registerForceFieldFromUrl(`${import.meta.env.BASE_URL}ocl/resources.json`)
-            .catch(() => {})
-            .then(() => {
-              const r = generate3D(molecule)
-              addToScene(centerMolecule(r.ok ? r.molecule : molecule))
-            })
+          useUiStore.getState().setBusy('正在生成 3D 结构…')
+          generate3DAsync(molecule).then(async r => {
+            useUiStore.getState().setBusy(null)
+            const final = centerMolecule(r.ok ? r.molecule : molecule)
+            const objId = addToScene(final)
+            if (r.ok) await morphObjectPositions(objId, flattenMolecule(final), final, 900)
+          })
         } else {
           addToScene(centerMolecule(molecule))
         }
@@ -152,11 +155,25 @@ export default function App() {
           </div>
         )}
 
-        {/* 画布空状态 */}
+        {/* 忙碌指示（3D 生成/优化中，避免看起来像卡死） */}
+        <BusyOverlay />
 
         {/* 底部状态栏 */}
         <StatusBar />
       </div>
+    </div>
+  )
+}
+
+// ─── 忙碌浮层（3D 生成等耗时操作时显示）─────────────────────────────────────
+function BusyOverlay() {
+  const busy = useUiStore(s => s.busy)
+  if (!busy) return null
+  return (
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5
+                    bg-gray-900/90 text-white text-xs px-4 py-2 rounded-full shadow-lg pointer-events-none">
+      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      {busy}
     </div>
   )
 }
