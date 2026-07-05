@@ -30,10 +30,37 @@ export default function AtomLabelOverlay({ renderer }: Props) {
       const w = canvas.offsetWidth, h = canvas.offsetHeight
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
       ctx.clearRect(0, 0, w, h)
-
-      if (!showAtomLabels || molecule.atoms.length === 0) return
+      if (molecule.atoms.length === 0) return
 
       renderer.camera.updateMatrixWorld()
+      const badgeScale = Math.max(L.scaleMin, Math.min(L.scaleMax, CAMERA.initialZ / renderer.camera.position.z))
+
+      // ── 电荷/自由基徽标：始终显示（不受原子标签开关影响，否则看不出带电）──
+      const badgeFont = Math.round(L.baseFontSize * badgeScale * 0.85)
+      ctx.font = `bold ${badgeFont}px monospace`
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      for (const atom of molecule.atoms) {
+        const q = atom.charge ?? 0
+        const rad = atom.radical ?? 0
+        if (q === 0 && rad === 0) continue
+        const p = renderer.projectLocalToScreen(new THREE.Vector3(atom.x, atom.y, atom.z), w, h)
+        if (p.x < -L.viewportMargin || p.x > w + L.viewportMargin || p.y < -L.viewportMargin || p.y > h + L.viewportMargin) continue
+        const mag = Math.abs(q)
+        const sign = q > 0 ? '+' : '−'
+        const chargeTxt = q === 0 ? '' : (mag === 1 ? sign : `${mag}${sign}`)
+        const txt = chargeTxt + (rad > 0 ? '•' : '')
+        const bx = p.x + 8 * badgeScale, by = p.y - 10 * badgeScale
+        const tw = ctx.measureText(txt).width
+        ctx.fillStyle = q > 0 ? 'rgba(59,130,246,0.92)' : q < 0 ? 'rgba(239,68,68,0.92)' : 'rgba(107,114,128,0.92)'
+        ctx.beginPath()
+        ctx.roundRect(bx - 3, by - badgeFont * 0.62, tw + 6, badgeFont * 1.24, 4)
+        ctx.fill()
+        ctx.fillStyle = '#fff'
+        ctx.fillText(txt, bx, by)
+      }
+
+      if (!showAtomLabels) return
 
       const scale = Math.max(L.scaleMin, Math.min(L.scaleMax, CAMERA.initialZ / renderer.camera.position.z))
       const fontSize = Math.round(L.baseFontSize * scale)

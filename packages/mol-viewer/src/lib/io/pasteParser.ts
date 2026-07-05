@@ -120,8 +120,10 @@ export interface GJFOptions {
  */
 export function exportGJF(mol: Molecule, opts: GJFOptions = {}): string {
   const route = opts.route ?? '# hf/6-31g(d)'
-  const charge = opts.charge ?? 0
-  const mult = opts.multiplicity ?? 1
+  // 未显式指定时从分子推导：总电荷 = 形式电荷之和；多重度 = 未配对电子数 + 1（2S+1）
+  const charge = opts.charge ?? mol.atoms.reduce((s, a) => s + (a.charge ?? 0), 0)
+  const totalRadical = mol.atoms.reduce((s, a) => s + Math.abs(a.radical ?? 0), 0)
+  const mult = opts.multiplicity ?? (totalRadical + 1)
   const title = (opts.title ?? mol.name ?? 'molecule').trim() || 'molecule'
   const coords = mol.atoms.map(a =>
     ` ${a.symbol.padEnd(2)}  ${a.x.toFixed(6).padStart(12)}  ${a.y.toFixed(6).padStart(12)}  ${a.z.toFixed(6).padStart(12)}`,

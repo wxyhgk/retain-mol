@@ -307,6 +307,21 @@ THREE.Scene
 
 拖动原子等普通几何编辑**永远不会**改写键级。
 
+### 形式电荷 / 自由基（显式偏离默认饱和）
+
+价态完整模型下，原子默认按中性满价补 H。电荷/自由基是**显式偏离**该默认的机制：
+
+- `effectiveMaxBonds(symbol, charge, radical)`（elements.config）：有效成键数。
+  中性无自由基时严格 == `maxBonds`（不影响任何已有分子）。规则：有孤对的元素
+  （N/O/S/P）正电荷 +q、负电荷 −|q|；缺电子元素（C/B/H）±电荷都 −|q|；每个未配对
+  电子再 −1。
+- 设电荷/自由基（右键原子菜单）→ `setAtomCharge`/`setAtomRadical` → `resaturateAtom`
+  按新有效价态**增删 H**：NH₃ 点 + → NH₄⁺（长第 4 个 H）、H₂O 点 − → OH⁻（掉一个 H）。
+- 所有成键/生长/饱和判断都读 `effectiveMaxBonds`（带电 N⁺ 可成 4 键）。
+- 徽标：`AtomLabelOverlay` 始终绘制电荷/自由基徽标（不受原子标签开关影响，蓝=正/红=负）。
+- 导出：GJF 的电荷 = 形式电荷之和、多重度 = 未配对电子数 + 1，自动写入 —— 带电/
+  自由基物种可直接投 Gaussian。
+
 ### 并环的方向探索与原子自动合并（Ketcher 式铺环系）
 
 苯环笔刷点击已有键（`fuseFragmentOnBond`）的行为：

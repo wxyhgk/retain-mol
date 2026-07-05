@@ -13,7 +13,7 @@ import { calcGrowPosition, calcClickGrowPosition, getGrowGuide as calcGrowGuide,
 import type { GrowGuideSpec } from '../lib/types'
 import type { Molecule } from '../lib/molecule'
 import { getConnectedFragment } from '../lib/builder/analysis/fragments'
-import { getElementConfig } from '../config/elements.config'
+import { getElementConfig, effectiveMaxBonds } from '../config/elements.config'
 import { getFragment } from '../lib/builder/fragmentLibrary'
 
 export interface BuilderHandlers {
@@ -105,7 +105,7 @@ export function useBuilder(): BuilderHandlers {
         }
 
         // 未饱和重原子（导入的骨架）：VSEPR 生长，新原子自动补 H
-        const maxBonds = getElementConfig(centerAtom.symbol).maxBonds
+        const maxBonds = effectiveMaxBonds(centerAtom.symbol, centerAtom.charge ?? 0, centerAtom.radical ?? 0)
         if (centerAtom.symbol !== 'H' && degree(molecule.bonds, atomId) < maxBonds) {
           const position = calcClickGrowPosition(
             centerAtom, molecule.bonds, molecule.atoms, activeElement,
@@ -268,7 +268,7 @@ export function useBuilder(): BuilderHandlers {
     // 槽位 H：可拖到其他原子成键 / 拖到空白替换生长（语义在 onBondDragEnd）
     if (isSlotH(mol, sourceId)) return true
     // 饱和重原子拖拽不做成键（转相机/框选不受影响）；未饱和骨架原子保留拖出生长
-    return degree(mol.bonds, sourceId) < getElementConfig(src.symbol).maxBonds
+    return degree(mol.bonds, sourceId) < effectiveMaxBonds(src.symbol, src.charge ?? 0, src.radical ?? 0)
   }, [store])
 
   const onBondDragEnd = useCallback((sourceId: string, targetId: string | null, dropLocal: THREE.Vector3 | null) => {

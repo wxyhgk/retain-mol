@@ -2,11 +2,16 @@
  * bondOps.ts — 键操作业务规则
  */
 
-import { getElementConfig } from '../../../config/elements.config'
+import { effectiveMaxBonds } from '../../../config/elements.config'
 import { lookupBondLengthByOrder } from '../../../config/geometry.config'
 import type { Atom, Bond, Molecule } from '../../molecule'
 import { newBond } from '../../molecule'
 import { bondsOf, degree, findBond, otherEnd } from '../graph'
+
+/** 原子的有效成键数（读取自身电荷/自由基） */
+function atomMaxBonds(a: Atom): number {
+  return effectiveMaxBonds(a.symbol, a.charge ?? 0, a.radical ?? 0)
+}
 
 /** 判断两个原子之间是否允许成键 */
 export function canBond(
@@ -14,16 +19,13 @@ export function canBond(
   atom2: Atom,
   bonds: readonly Bond[],
 ): { ok: boolean; reason?: string } {
-  const el1 = getElementConfig(atom1.symbol)
-  const el2 = getElementConfig(atom2.symbol)
+  const max1 = atomMaxBonds(atom1)
+  const max2 = atomMaxBonds(atom2)
 
   if (findBond(bonds, atom1.id, atom2.id)) return { ok: false, reason: '两原子之间已存在键' }
 
-  const bonds1 = degree(bonds, atom1.id)
-  const bonds2 = degree(bonds, atom2.id)
-
-  if (bonds1 >= el1.maxBonds) return { ok: false, reason: `${atom1.symbol} 已达最大键数 (${el1.maxBonds})` }
-  if (bonds2 >= el2.maxBonds) return { ok: false, reason: `${atom2.symbol} 已达最大键数 (${el2.maxBonds})` }
+  if (degree(bonds, atom1.id) >= max1) return { ok: false, reason: `${atom1.symbol} 已达最大键数 (${max1})` }
+  if (degree(bonds, atom2.id) >= max2) return { ok: false, reason: `${atom2.symbol} 已达最大键数 (${max2})` }
 
   return { ok: true }
 }
@@ -80,9 +82,7 @@ export function bondByReplacingH(
 
   // 目标是重原子（或孤立 H）：源 H 让位，父原子与目标成键
   if (findBond(mol.bonds, parentId, targetId)) return { ok: false, reason: '两原子之间已存在键' }
-  const el = getElementConfig(target.symbol)
-  const targetCount = degree(mol.bonds, targetId)
-  if (targetCount >= el.maxBonds) {
+  if (degree(mol.bonds, targetId) >= atomMaxBonds(target)) {
     return { ok: false, reason: `${target.symbol} 已饱和 · 拖到它的 H 上成键` }
   }
   return {

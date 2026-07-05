@@ -13,7 +13,10 @@ export interface Atom {
   readonly x: number
   readonly y: number
   readonly z: number
+  /** 形式电荷（价态完整模型下会改变该原子的有效成键数） */
   readonly charge?: number
+  /** 未配对电子数（自由基）；每个占一个价位，并计入分子多重度 */
+  readonly radical?: number
   readonly label?: string
 }
 

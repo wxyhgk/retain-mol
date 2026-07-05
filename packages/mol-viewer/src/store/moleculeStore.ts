@@ -12,7 +12,7 @@ import type { Atom, Molecule } from '../lib/molecule'
 import { inferBonds, newAtom, newBond, centerMolecule as centerMol, shiftMolecule } from '../lib/molecule'
 import type { MolClipboard } from '../lib/types'
 import { autoAddHydrogens, addOneHydrogen as addOneH, replaceAtomSymbol,
-         growByReplacingH, bondByReplacingH,
+         growByReplacingH, bondByReplacingH, resaturateAtom,
          cycleBondLength as cycleBondLengthOp,
          setBondLength as setBondLengthOp,
          setBondAngle as setBondAngleOp,
@@ -70,6 +70,10 @@ interface MoleculeState {
   addHydrogens:           (atomId?: string) => void
   addOneHydrogen:         (atomId: string) => void
   replaceAtom:            (atomId: string, symbol: string) => void
+  /** 设形式电荷并按新有效价态增删 H（N⁺→长第4个H、O⁻→掉一个H） */
+  setAtomCharge:          (atomId: string, charge: number) => void
+  /** 设未配对电子数（自由基）并按新有效价态增删 H */
+  setAtomRadical:         (atomId: string, radical: number) => void
   growFromHydrogen:       (atomId: string, symbol: string) => void
   bondViaHydrogen:        (sourceHId: string, targetId: string) => { ok: boolean; reason?: string }
   clearMolecule:          () => void
@@ -431,6 +435,26 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     const mol = getActiveMol(s)
     if (!mol) return {}
     return patchActiveMol(s, replaceAtomSymbol(mol, atomId, symbol))
+  }),
+
+  setAtomCharge: (atomId, charge) => set((s) => {
+    const mol = getActiveMol(s)
+    if (!mol || !mol.atoms.some(a => a.id === atomId)) return {}
+    const withCharge = {
+      ...mol,
+      atoms: mol.atoms.map(a => a.id === atomId ? { ...a, charge: charge || undefined } : a),
+    }
+    return patchActiveMol(s, resaturateAtom(withCharge, atomId))
+  }),
+
+  setAtomRadical: (atomId, radical) => set((s) => {
+    const mol = getActiveMol(s)
+    if (!mol || !mol.atoms.some(a => a.id === atomId)) return {}
+    const withRadical = {
+      ...mol,
+      atoms: mol.atoms.map(a => a.id === atomId ? { ...a, radical: radical || undefined } : a),
+    }
+    return patchActiveMol(s, resaturateAtom(withRadical, atomId))
   }),
 
   growFromHydrogen: (atomId, symbol) => set((s) => {

@@ -3,11 +3,16 @@
  * 纯函数，不修改入参，返回新 Molecule。
  */
 
-import type { Molecule } from '../../molecule'
+import type { Molecule, Atom } from '../../molecule'
 import { newAtom, newBond } from '../../molecule'
-import { getElementConfig } from '../../../config/elements.config'
-import { degree, hParentOf } from '../graph'
+import { getElementConfig, effectiveMaxBonds } from '../../../config/elements.config'
+import { degree, hParentOf, hNeighborsOf } from '../graph'
 import { calcAddAtomOnExisting, calcBondLength } from '../geometry/vsepr'
+
+/** 原子的有效成键数（读取自身电荷/自由基） */
+function atomMaxBonds(a: Atom): number {
+  return effectiveMaxBonds(a.symbol, a.charge ?? 0, a.radical ?? 0)
+}
 
 /**
  * 槽位 H 被 newSymbol 替换后的落点（growByReplacingH 与拖拽/点击预览共用，
@@ -88,9 +93,8 @@ export function replaceAtomSymbol(
 export function addOneHydrogen(mol: Molecule, atomId: string): Molecule {
   const atom = mol.atoms.find(a => a.id === atomId)
   if (!atom) return mol
-  const el = getElementConfig(atom.symbol)
-  if (el.maxBonds === 0) return mol
-  if (degree(mol.bonds, atomId) >= el.maxBonds) return mol
+  if (atomMaxBonds(atom) === 0) return mol
+  if (degree(mol.bonds, atomId) >= atomMaxBonds(atom)) return mol
   const result = calcAddAtomOnExisting(atom, mol.bonds, mol.atoms, 'H')
   const h = newAtom('H', ...result.position)
   return {
@@ -98,6 +102,30 @@ export function addOneHydrogen(mol: Molecule, atomId: string): Molecule {
     atoms: [...mol.atoms, h],
     bonds: [...mol.bonds, newBond(atomId, h.id)],
   }
+}
+
+/**
+ * 让指定原子的 H 数量对齐到当前有效成键数（设电荷/自由基后调用）：
+ *  - 差额 > 0：补 H（NH₃ 设 +1 → 长出第 4 个 H 成 NH₄⁺）
+ *  - 差额 < 0：删多余的 H（H₂O 设 −1 → 掉一个 H 成 OH⁻）
+ * 只增删 H，不动重原子邻居；重原子已占满时不强删（返回尽力对齐的结果）。
+ */
+export function resaturateAtom(mol: Molecule, atomId: string): Molecule {
+  const atom = mol.atoms.find(a => a.id === atomId)
+  if (!atom) return mol
+  const diff = atomMaxBonds(atom) - degree(mol.bonds, atomId)
+  if (diff > 0) return autoAddHydrogens(mol, atomId)
+  if (diff < 0) {
+    const hs = hNeighborsOf(mol, atomId).slice(0, -diff)
+    if (hs.length === 0) return mol
+    const remove = new Set(hs.map(h => h.id))
+    return {
+      ...mol,
+      atoms: mol.atoms.filter(a => !remove.has(a.id)),
+      bonds: mol.bonds.filter(b => !remove.has(b.atomId1) && !remove.has(b.atomId2)),
+    }
+  }
+  return mol
 }
 
 /**
@@ -113,10 +141,9 @@ export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
   let current = mol
 
   for (const target of targets) {
-    const el = getElementConfig(target.symbol)
-    if (el.maxBonds === 0) continue
+    if (atomMaxBonds(target) === 0) continue
 
-    const needed = Math.max(0, el.maxBonds - degree(current.bonds, target.id))
+    const needed = Math.max(0, atomMaxBonds(target) - degree(current.bonds, target.id))
     if (needed <= 0) continue
 
     for (let i = 0; i < needed; i++) {

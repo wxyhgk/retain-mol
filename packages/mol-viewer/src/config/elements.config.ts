@@ -67,6 +67,25 @@ export function getElementConfig(symbol: string): ElementConfig {
   }
 }
 
+/**
+ * 有效成键数：电荷/自由基对价态的修正。中性且无自由基时严格 == maxBonds
+ * （不改变任何已有分子的行为）。
+ *
+ * 规则：
+ *  - 有孤对电子的元素（价电子 > maxBonds，如 N/O/S/P）：正电荷 +q（用一对孤对
+ *    成键，NH₃→NH₄⁺）、负电荷 −|q|（多一对孤对，H₂O→OH⁻）
+ *  - 缺电子/无余电子元素（价电子 == maxBonds，如 C/B/H/Si）：±电荷都占用一个
+ *    价位，−|q|（碳正/碳负离子都是 3 键）
+ *  - 每个未配对电子（自由基）占一个价位
+ * 注：硼负离子（BH₄⁻ 应为 4 键）等电子缺陷体系此启发式偏保守，非常见手搭场景。
+ */
+export function effectiveMaxBonds(symbol: string, charge = 0, radical = 0): number {
+  const el = getElementConfig(symbol)
+  const hasLonePair = el.valenceElectrons > el.maxBonds
+  const chargeShift = hasLonePair ? charge : -Math.abs(charge)
+  return Math.max(0, el.maxBonds + chargeShift - Math.abs(radical))
+}
+
 export const COMMON_ELEMENT_SYMBOLS = ['H', 'C', 'N', 'O', 'F', 'P', 'S', 'Cl', 'Br', 'I', 'Si', 'B', 'Fe', 'Na', 'Ca']
 
 export const PERIODIC_TABLE_LAYOUT: string[][] = [

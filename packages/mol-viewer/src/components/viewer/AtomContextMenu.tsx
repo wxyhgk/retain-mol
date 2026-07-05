@@ -109,6 +109,17 @@ export default function AtomContextMenu({ renderer }: Props) {
     close()
   }
 
+  const charge = atom.charge ?? 0
+  const radical = atom.radical ?? 0
+  const chargeLabel = charge === 0 ? '0' : charge > 0 ? `+${charge}` : `${charge}`
+  const bumpCharge = (d: number) => {
+    useMoleculeStore.getState().setAtomCharge(menu.atomId, charge + d)
+  }
+  const toggleRadical = () => {
+    useMoleculeStore.getState().setAtomRadical(menu.atomId, radical > 0 ? 0 : 1)
+    close()
+  }
+
   // 定位：避免越出屏幕
   const MENU_W = 160
   const left = Math.min(menu.x, window.innerWidth  - MENU_W - 8)
@@ -159,6 +170,29 @@ export default function AtomContextMenu({ renderer }: Props) {
               ))}
             </div>
           </div>
+        )}
+
+        <div className="my-1 border-t border-gray-100" />
+
+        {/* 形式电荷 +/−（改变有效价态并增删 H） */}
+        {!isHAtom && (
+          <div className="px-3 py-1.5 flex items-center gap-2">
+            <span className="text-gray-600">电荷</span>
+            <div className="ml-auto flex items-center gap-1">
+              <button onClick={() => bumpCharge(-1)}
+                className="w-5 h-5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 leading-none">−</button>
+              <span className="w-6 text-center font-mono text-gray-900">{chargeLabel}</span>
+              <button onClick={() => bumpCharge(1)}
+                className="w-5 h-5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 leading-none">+</button>
+            </div>
+          </div>
+        )}
+
+        {!isHAtom && (
+          <MenuItem onClick={toggleRadical}>
+            <span>自由基</span>
+            <span className="ml-auto text-gray-400">{radical > 0 ? '● 开' : '○ 关'}</span>
+          </MenuItem>
         )}
 
         <div className="my-1 border-t border-gray-100" />
