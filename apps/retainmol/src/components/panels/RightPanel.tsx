@@ -4,11 +4,17 @@ import { MeasurePanel } from '@/features/measure'
 import ScenePanel from '@/features/scene/components/ScenePanel'
 import StylePanel from '@/features/style/components/StylePanel'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Link2, FlaskRound, Eraser } from 'lucide-react'
+import { Link2, FlaskRound, Eraser, Sparkles } from 'lucide-react'
 
 export default function RightPanel() {
-  const { autoInferBonds, addHydrogens, clearMolecule } = useMoleculeStore()
+  const { autoInferBonds, addHydrogens, clearMolecule, cleanupGeometry } = useMoleculeStore()
+  const flashHint = useEditorStore(s => s.flashHint)
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
+
+  const handleCleanup = () => {
+    const r = cleanupGeometry()
+    if (!r.ok && r.reason) flashHint(r.reason)
+  }
 
   return (
     <Tabs defaultValue="scene" className="h-full flex flex-col min-h-0">
@@ -19,6 +25,7 @@ export default function RightPanel() {
           {molecule.name || 'New Molecule'}
         </span>
         <div className="flex items-center gap-0.5">
+          <ActionBtn icon={<Sparkles size={11} />} label="清理几何" onClick={handleCleanup} />
           <ActionBtn icon={<Link2 size={11} />} label="推断键" onClick={autoInferBonds} />
           <ActionBtn icon={<FlaskRound size={11} />} label="补氢" onClick={() => addHydrogens()} />
           <ActionBtn

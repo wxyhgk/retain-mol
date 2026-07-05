@@ -20,7 +20,9 @@ export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement, MolClip
 export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from './lib/types'
 
 // ── IO ────────────────────────────────────────────────────────────────────────
-export { parseMol, parseSdf, exportMol, exportSdf, is2D } from './lib/io/molFormat'
+export { parseMol, parseSdf, exportMol, exportSdf, is2D,
+         minimizeGeometry, registerForceFieldFromUrl, markForceFieldReady } from './lib/io/molFormat'
+export type { OptimizeResult } from './lib/io/molFormat'
 export { parseClipboard, exportGJF } from './lib/io'
 export type { GJFOptions } from './lib/io/pasteParser'
 

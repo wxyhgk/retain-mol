@@ -1,12 +1,12 @@
 {
   "name": "retainmol",
   "private": true,
-  "version": "0.0.10",
+  "version": "0.0.11",
   "type": "module",
   "scripts": {
-    "predev": "npm run build --workspace @retainmol/mol-viewer",
+    "predev": "node scripts/copy-ocl-resources.mjs && npm run build --workspace @retainmol/mol-viewer",
     "dev": "vite --host 0.0.0.0",
-    "prebuild": "npm run build --workspace @retainmol/mol-viewer",
+    "prebuild": "node scripts/copy-ocl-resources.mjs && npm run build --workspace @retainmol/mol-viewer",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

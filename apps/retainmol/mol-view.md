@@ -322,6 +322,20 @@ THREE.Scene
 - 导出：GJF 的电荷 = 形式电荷之和、多重度 = 未配对电子数 + 1，自动写入 —— 带电/
   自由基物种可直接投 Gaussian。
 
+### 几何清理（MMFF94 力场最小化）
+
+手搭/导入的粗糙结构用「清理几何」按钮弛豫到物理合理（正确键长/键角、无重叠）。
+**不自己造力场**——用 OpenChemLib 内置的 MMFF94（小分子力场金标准，已是依赖）：
+
+- `minimizeGeometry(mol)`（`io/molFormat.ts`）：`moleculeToOCL` → `ForceFieldMMFF94`
+  → `minimise()` → 原序读回坐标（`-getAtomY/-getAtomZ` 还原翻转）。只动坐标，
+  保留 id/键/电荷/自由基。一步 undo。
+- **参数表**（`resources.json`，1.35MB）：`registerForceFieldFromUrl(url)` 在 app 启动时
+  后台 fetch 注册（`main.tsx`）；app 的 `predev/prebuild` 用 `scripts/copy-ocl-resources.mjs`
+  把它从 node_modules 拷进 `public/ocl/`。未就绪 / MMFF 无法处理（异种元素/怪价态）时
+  `minimizeGeometry` 原样返回并带 reason，按钮 flashHint 提示。
+- 教训：几何优化这种「别人论证好的算法」直接用成熟库，不手写力场。
+
 ### 并环的方向探索与原子自动合并（Ketcher 式铺环系）
 
 苯环笔刷点击已有键（`fuseFragmentOnBond`）的行为：

@@ -128,6 +128,72 @@ export function exportSdf(mol: Molecule): string {
   return exportMol(mol) + '\n$$$$\n'
 }
 
+// ─── 几何清理（力场最小化，用 OpenChemLib 的 MMFF94）───────────────────────────
+// 不自己造力场：MMFF94 是小分子力场金标准，OCL 已内置。只动坐标，不改拓扑。
+
+const OCLResources = (OCL as unknown as {
+  Resources: { registerFromUrl: (url?: string) => Promise<void> }
+}).Resources
+
+let ffResourcePromise: Promise<void> | null = null
+
+/**
+ * 注册 MMFF94 参数表（浏览器：从 URL 拉 resources.json）。幂等——重复调用返回
+ * 同一个 promise。app 层在启动时后台调用一次；未就绪时 minimizeGeometry 原样返回。
+ */
+export function registerForceFieldFromUrl(url: string): Promise<void> {
+  if (!ffResourcePromise) {
+    ffResourcePromise = OCLResources.registerFromUrl(url).then(() => { ffReady = true })
+  }
+  return ffResourcePromise
+}
+
+let ffReady = false
+/** 测试/Node 环境直接标记就绪（配合 Resources.registerFromNodejs） */
+export function markForceFieldReady(): void { ffReady = true }
+
+export interface OptimizeResult {
+  molecule: Molecule
+  ok: boolean
+  reason?: string
+  energyBefore?: number
+  energyAfter?: number
+}
+
+/**
+ * 几何清理：MMFF94 力场最小化当前分子，只更新坐标（保留 id/键/电荷/自由基）。
+ * 力场资源未注册、分子过小、或 MMFF 无法处理该结构（异种元素/怪价态）时，
+ * 原样返回并带 reason。同步函数——资源需先由 registerForceFieldFromUrl 注册。
+ */
+export function minimizeGeometry(mol: Molecule): OptimizeResult {
+  if (mol.atoms.length < 2 || mol.bonds.length === 0) {
+    return { molecule: mol, ok: true }
+  }
+  if (!ffReady) return { molecule: mol, ok: false, reason: '力场资源加载中，请稍候' }
+  try {
+    const oclMol = moleculeToOCL(mol)
+    const FF = (OCL as unknown as {
+      ForceFieldMMFF94: new (m: OCLMol, table: string, opts: object) => {
+        getTotalEnergy: () => number; minimise: () => void
+      }
+    }).ForceFieldMMFF94
+    const ff = new FF(oclMol, 'MMFF94s', {})
+    const energyBefore = ff.getTotalEnergy()
+    ff.minimise()
+    const energyAfter = ff.getTotalEnergy()
+    // moleculeToOCL 写入 -y/-z，读回同样取反还原到本项目坐标系
+    const atoms = mol.atoms.map((a, i) => ({
+      ...a, x: oclMol.getAtomX(i), y: -oclMol.getAtomY(i), z: -oclMol.getAtomZ(i),
+    }))
+    if (atoms.some(a => !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z))) {
+      return { molecule: mol, ok: false, reason: '优化产生非法坐标，已保留原结构' }
+    }
+    return { molecule: { ...mol, atoms }, ok: true, energyBefore, energyAfter }
+  } catch (e) {
+    return { molecule: mol, ok: false, reason: `MMFF94 无法处理该结构：${(e as Error).message}` }
+  }
+}
+
 /** 判断分子是否为 2D（所有 z 坐标接近 0） */
 export function is2D(mol: Molecule, eps = 1e-3): boolean {
   return mol.atoms.every(a => Math.abs(a.z) < eps)

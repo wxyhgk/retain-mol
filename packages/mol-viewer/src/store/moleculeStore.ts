@@ -18,6 +18,7 @@ import { autoAddHydrogens, addOneHydrogen as addOneH, replaceAtomSymbol,
          setBondAngle as setBondAngleOp,
          setDihedralAngle as setDihedralAngleOp,
          type GeomEditResult } from '../lib/builder/BuilderEngine'
+import { minimizeGeometry } from '../lib/io/molFormat'
 import { bondsOf, findBond } from '../lib/builder/graph'
 import { type SceneObject, createSceneObject } from '../lib/sceneObject'
 import { lookupBondLengthByOrder } from '../config/geometry.config'
@@ -68,6 +69,8 @@ interface MoleculeState {
   setDihedralAngle:       (aId: string, bId: string, cId: string, dId: string, deg: number) => { ok: boolean; reason?: string }
   autoInferBonds:         () => void
   addHydrogens:           (atomId?: string) => void
+  /** 力场几何清理（MMFF94）：弛豫坐标到物理合理（一步 undo，不动拓扑）。返回是否成功 */
+  cleanupGeometry:        () => { ok: boolean; reason?: string }
   addOneHydrogen:         (atomId: string) => void
   replaceAtom:            (atomId: string, symbol: string) => void
   /** 设形式电荷并按新有效价态增删 H（N⁺→长第4个H、O⁻→掉一个H） */
@@ -424,6 +427,18 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     if (!mol) return {}
     return patchActiveMol(s, autoAddHydrogens(mol, atomId))
   }),
+
+  cleanupGeometry: () => {
+    const mol = getActiveMol(get())
+    if (!mol) return { ok: false, reason: '没有活跃分子' }
+    const result = minimizeGeometry(mol)
+    if (!result.ok) return { ok: false, reason: result.reason }
+    set((s) => ({
+      ...patchActiveMol(s, result.molecule),
+      atomPositionVersion: s.atomPositionVersion + 1,
+    }))
+    return { ok: true }
+  },
 
   addOneHydrogen: (atomId) => set((s) => {
     const mol = getActiveMol(s)
