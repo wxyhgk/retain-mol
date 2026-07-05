@@ -74,6 +74,42 @@ describe('minimizeGeometry — MMFF94 力场清理', () => {
     expect(minimizeGeometry({ atoms: [c], bonds: [] }).ok).toBe(true)
   })
 
+  it('交错原子顺序（点击搭建式）：MMFF 重排后仍按标签正确读回，不搅乱（回归）', () => {
+    // 点击搭建的丙烷原子顺序是交错的：C,C,H,H,H,C,H,H,H,H,H（第三个碳夹在氢中间）
+    // MMFF94 会把重原子重排到前面，按 index 读回会张冠李戴 → 曾把结构搅乱
+    const c0 = newAtom('C', 0, 0, 0), c1 = newAtom('C', 1.5, 0, 0), c2 = newAtom('C', 2.0, 1.4, 0)
+    const h = [
+      newAtom('H', -0.5, 0.9, 0), newAtom('H', -0.5, -0.5, 0.8), newAtom('H', -0.5, -0.5, -0.8),
+      newAtom('H', 1.8, -0.5, 0.8), newAtom('H', 1.8, -0.5, -0.8),
+      newAtom('H', 1.6, 2.0, 0.8), newAtom('H', 1.6, 2.0, -0.8), newAtom('H', 3.1, 1.4, 0),
+    ]
+    const mol: Molecule = {
+      atoms: [c0, c1, h[0], h[1], h[2], c2, h[3], h[4], h[5], h[6], h[7]],
+      bonds: [
+        newBond(c0.id, c1.id), newBond(c1.id, c2.id),
+        newBond(c0.id, h[0].id), newBond(c0.id, h[1].id), newBond(c0.id, h[2].id),
+        newBond(c1.id, h[3].id), newBond(c1.id, h[4].id),
+        newBond(c2.id, h[5].id), newBond(c2.id, h[6].id), newBond(c2.id, h[7].id),
+      ],
+    }
+    const r = minimizeGeometry(mol)
+    expect(r.ok).toBe(true)
+    expect(hasNaN(r.molecule)).toBe(false)
+    // 三根 C–C / C–H 键长正确（索引 0=C0,1=C1,5=C2）
+    expect(dist(r.molecule, 0, 1)).toBeGreaterThan(1.4)
+    expect(dist(r.molecule, 0, 1)).toBeLessThan(1.65)
+    expect(dist(r.molecule, 1, 5)).toBeGreaterThan(1.4)
+    expect(dist(r.molecule, 1, 5)).toBeLessThan(1.65)
+    // 无非键重叠
+    const bonded = new Set(r.molecule.bonds.map(b => [b.atomId1, b.atomId2].sort().join()))
+    let mn = Infinity
+    for (let i = 0; i < r.molecule.atoms.length; i++)
+      for (let j = i + 1; j < r.molecule.atoms.length; j++)
+        if (!bonded.has([r.molecule.atoms[i].id, r.molecule.atoms[j].id].sort().join()))
+          mn = Math.min(mn, dist(r.molecule, i, j))
+    expect(mn).toBeGreaterThan(1.4)
+  })
+
   it('多个不相连片段：逐片段独立优化，不坍缩到一起（回归：曾整体搅乱穿插）', () => {
     // 两个相距 3Å 的甲烷放在同一分子对象里
     const methane = (ox: number) => {

@@ -166,7 +166,15 @@ interface XYZ { x: number; y: number; z: number }
 /** 单个连通片段的 MMFF94 最小化，返回 id→新坐标 + 能量；失败返回 null */
 function minimizeConnected(frag: Molecule): { coords: Map<string, XYZ>; eBefore: number; eAfter: number } | null {
   if (frag.atoms.length < 2 || frag.bonds.length === 0) return null
-  const oclMol = moleculeToOCL(frag)
+  const oclMol = moleculeToOCL(frag) as OCLMol & {
+    setAtomCustomLabel: (i: number, s: string) => void
+    getAtomCustomLabel: (i: number) => string | null
+  }
+  // MMFF94 构造时会把原子重排成规范序（重原子提前）——点击搭建的交错顺序
+  // 若按 index 读回坐标就会张冠李戴、把结构搅乱。给每个 OCL 原子打上原始
+  // 序号标签，FF 后按标签而非 index 读回，对任何重排都正确。
+  for (let i = 0; i < frag.atoms.length; i++) oclMol.setAtomCustomLabel(i, String(i))
+
   const FF = (OCL as unknown as {
     ForceFieldMMFF94: new (m: OCLMol, table: string, opts: object) => {
       getTotalEnergy: () => number; minimise: () => void
@@ -177,10 +185,17 @@ function minimizeConnected(frag: Molecule): { coords: Map<string, XYZ>; eBefore:
   ff.minimise()
   const eAfter = ff.getTotalEnergy()
 
-  // moleculeToOCL 写入 -y/-z，读回同样取反还原
-  const optimized = frag.atoms.map((a, i) => ({
-    id: a.id, x: oclMol.getAtomX(i), y: -oclMol.getAtomY(i), z: -oclMol.getAtomZ(i),
-  }))
+  // 按自定义标签映射回原始原子；moleculeToOCL 写入 -y/-z，读回取反还原
+  const optimized = frag.atoms.map(a => ({ id: a.id, x: NaN, y: NaN, z: NaN }))
+  for (let k = 0; k < frag.atoms.length; k++) {
+    const label = oclMol.getAtomCustomLabel(k)
+    const origIdx = label === null ? k : parseInt(label, 10)
+    if (origIdx < 0 || origIdx >= optimized.length) return null
+    optimized[origIdx] = {
+      id: frag.atoms[origIdx].id,
+      x: oclMol.getAtomX(k), y: -oclMol.getAtomY(k), z: -oclMol.getAtomZ(k),
+    }
+  }
   if (optimized.some(a => !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z))) return null
 
   // 重定心到原片段质心：MMFF 可能整体平移/旋转片段，多片段场景下要各归各位，
