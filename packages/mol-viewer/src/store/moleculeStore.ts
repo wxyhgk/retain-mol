@@ -19,6 +19,7 @@ import { autoAddHydrogens, addOneHydrogen as addOneH, replaceAtomSymbol,
          setDihedralAngle as setDihedralAngleOp,
          type GeomEditResult } from '../lib/builder/BuilderEngine'
 import { type SceneObject, createSceneObject } from '../lib/sceneObject'
+import { lookupBondLengthByOrder } from '../config/geometry.config'
 import { genId } from '../lib/utils'
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
@@ -87,6 +88,12 @@ interface MoleculeState {
   setObjectVisible:  (id: string, visible: boolean) => void
   setObjectLocked:   (id: string, locked: boolean) => void
   renameObject:      (id: string, name: string) => void
+
+  /** 激活包含指定原子的场景对象；不可见或锁定的对象拒绝（返回 false）。
+   *  多分子场景下所有编辑手势的统一入口守卫。 */
+  activateObjectContainingAtom: (atomId: string) => boolean
+  /** 同上，按键 id 定位 */
+  activateObjectContainingBond: (bondId: string) => boolean
 }
 
 type SelectorSubscribe<T> = {
@@ -188,6 +195,26 @@ function applyGeomEdit(
   return { ok: true }
 }
 
+/**
+ * activateObjectContainingAtom / activateObjectContainingBond 的共同实现：
+ * 按 objectOrder 找到宿主对象后先做可编辑性守卫——不可见/锁定的对象拒绝激活，
+ * 编辑手势不应"穿透"到用户看不见或已锁定的分子上。
+ */
+function activateObjectWhere(
+  s: MoleculeState,
+  contains: (obj: SceneObject) => boolean,
+): boolean {
+  for (const oid of s.objectOrder) {
+    const obj = s.objectsById[oid]
+    if (!obj || !contains(obj)) continue
+    if (obj.visible === false || obj.locked === true) return false
+    // set 是同步的：返回 true 时调用方立即读到新的 activeObjectId
+    if (s.activeObjectId !== oid) s.setActiveObject(oid)
+    return true
+  }
+  return false
+}
+
 function computeAutoOffset(objects: SceneObject[]): { x: number; y: number; z: number } {
   let maxX = -Infinity
   for (const obj of objects)
@@ -240,13 +267,18 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
   removeAtom: (id) => set((s) => {
     const mol = getActiveMol(s)
     if (!mol) return {}
+    // 连带删除的键也要从选择集里清掉，避免残留指向已删除键的悬空 id
+    const removedBondIds = new Set(
+      mol.bonds.filter(b => b.atomId1 === id || b.atomId2 === id).map(b => b.id),
+    )
     return {
       ...patchActiveMol(s, {
         ...mol,
         atoms: mol.atoms.filter(a => a.id !== id),
-        bonds: mol.bonds.filter(b => b.atomId1 !== id && b.atomId2 !== id),
+        bonds: mol.bonds.filter(b => !removedBondIds.has(b.id)),
       }),
       selectedAtomIds: new Set([...s.selectedAtomIds].filter(i => i !== id)),
+      selectedBondIds: new Set([...s.selectedBondIds].filter(i => !removedBondIds.has(i))),
     }
   }),
 
@@ -333,13 +365,23 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
   cycleBondOrder: (id) => set((s) => {
     const mol = getActiveMol(s)
     if (!mol) return {}
+    const bond = mol.bonds.find(b => b.id === id)
+    if (!bond) return {}
+    const a1 = mol.atoms.find(a => a.id === bond.atomId1)
+    const a2 = mol.atoms.find(a => a.id === bond.atomId2)
+    if (!a1 || !a2) return {}
+    // 只在该元素对存在标准键长的档位间循环（如 C–H 没有双/三键档位），
+    // 与 bondOps.cycleBondLength 的档位过滤保持一致
+    const orders = ([1, 2, 3] as const).filter(
+      o => lookupBondLengthByOrder(a1.symbol, a2.symbol, o) !== null,
+    )
+    if (orders.length < 2) return {}
+    const next = orders[(orders.indexOf(bond.order) + 1) % orders.length]
     return patchActiveMol(s, {
       ...mol,
-      bonds: mol.bonds.map(b => {
-        if (b.id !== id) return b
-        const next = b.order === 1 ? 2 : b.order === 2 ? 3 : 1
-        return { ...b, order: next as 1 | 2 | 3 }
-      }),
+      // 用户显式调整键级 = 覆盖导入的 aromatic 标记
+      bonds: mol.bonds.map(b =>
+        b.id === id ? { ...b, order: next, aromatic: undefined } : b),
     })
   }),
 
@@ -406,10 +448,15 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     set((s) => {
       const m = getActiveMol(s)
       if (!m) return {}
+      // 成键操作会删除 H 及其键：选择集只保留结果分子里仍存活的键
+      const aliveBondIds = new Set(result.molecule.bonds.map(b => b.id))
       return {
         ...patchActiveMol(s, result.molecule),
         selectedAtomIds: new Set(
           [...s.selectedAtomIds].filter(i => i !== sourceHId && i !== targetId)
+        ),
+        selectedBondIds: new Set(
+          [...s.selectedBondIds].filter(i => aliveBondIds.has(i))
         ),
       }
     })
@@ -547,6 +594,12 @@ const stateCreator: StateCreator<MoleculeState, [], []> = (set, get) => ({
     if (!s.objectsById[id]) return {}
     return { objectsById: { ...s.objectsById, [id]: { ...s.objectsById[id], name } } }
   }),
+
+  activateObjectContainingAtom: (atomId) =>
+    activateObjectWhere(get(), obj => obj.molecule.atoms.some(a => a.id === atomId)),
+
+  activateObjectContainingBond: (bondId) =>
+    activateObjectWhere(get(), obj => obj.molecule.bonds.some(b => b.id === bondId)),
 })
 
 export const useMoleculeStore = (create<MoleculeState>()(

@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three'
-import type { Molecule, Atom } from '../../molecule'
+import type { Molecule, Atom, Bond } from '../../molecule'
 import { newAtom, newBond } from '../../molecule'
 import type { FragmentDef } from '../../../config/fragments.config'
 import { getElementConfig } from '../../../config/elements.config'
@@ -319,24 +319,39 @@ export function fuseFragmentOnBond(
       newAtoms.push(atom)
     }
 
-    // 键：重映射到（共享/合并/新建）原子；两端都是已有原子且键已存在 → 跳过
-    const bondExists = (x: string, y: string) => mol.bonds.some(
+    // 键：重映射到（共享/合并/新建）原子。两端都是已有原子且键已存在的边
+    // 不重复新建，但若被凯库勒重排（orderOverride）命中，必须更新其键级并清掉
+    // aromatic 标记 —— 合并式并环（如菲 bay 区拼芘）的新环路径会途经这些已有键，
+    // 保留旧键级会让新环的双键交替在这里断裂
+    const findExistingBond = (x: string, y: string) => mol.bonds.find(
       b => (b.atomId1 === x && b.atomId2 === y) || (b.atomId1 === y && b.atomId2 === x))
-    const newBonds = frag.bonds
-      .filter(fb => !(skip.has(fb.a) && skip.has(fb.b)))
-      .filter(fb => idByIndex.has(fb.a) && idByIndex.has(fb.b))
-      .filter(fb => !bondExists(idByIndex.get(fb.a)!, idByIndex.get(fb.b)!))
-      .map(fb => {
-        const key = `${Math.min(fb.a, fb.b)}-${Math.max(fb.a, fb.b)}`
-        return newBond(idByIndex.get(fb.a)!, idByIndex.get(fb.b)!, orderOverride.get(key) ?? fb.order)
-      })
+    const orderByExistingId = new Map<string, 1 | 2 | 3>()
+    const newBonds: Bond[] = []
+    for (const fb of frag.bonds) {
+      if (skip.has(fb.a) && skip.has(fb.b)) continue
+      if (!idByIndex.has(fb.a) || !idByIndex.has(fb.b)) continue
+      const id1 = idByIndex.get(fb.a)!, id2 = idByIndex.get(fb.b)!
+      const existing = findExistingBond(id1, id2)
+      const key = `${Math.min(fb.a, fb.b)}-${Math.max(fb.a, fb.b)}`
+      if (existing) {
+        const o = orderOverride.get(key)
+        if (o !== undefined) orderByExistingId.set(existing.id, o)
+        continue
+      }
+      newBonds.push(newBond(id1, id2, orderOverride.get(key) ?? fb.order))
+    }
 
     // 退化保护：模板原子全部与已有原子重合（点了稠环共享键）→ 什么都没加，拒绝
     if (newBonds.length === 0) return null
 
     // 合并原子的价态检查：删 1 个 H 后加上新键不能超价
     const finalBonds = [
-      ...mol.bonds.filter(b => !removeIds.has(b.atomId1) && !removeIds.has(b.atomId2)),
+      ...mol.bonds
+        .filter(b => !removeIds.has(b.atomId1) && !removeIds.has(b.atomId2))
+        .map(b => {
+          const o = orderByExistingId.get(b.id)
+          return o === undefined ? b : { ...b, order: o, aromatic: undefined }
+        }),
       ...newBonds,
     ]
     for (const mergedId of mergeByIndex.values()) {

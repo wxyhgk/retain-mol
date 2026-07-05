@@ -11,6 +11,8 @@ import {
   getNeighborDirs,
   autoAddHydrogens,
   replaceAtomSymbol,
+  growByReplacingH,
+  bondByReplacingH,
   cycleBondLength,
   setBondLength,
   setBondAngle,
@@ -443,6 +445,105 @@ describe('replaceAtomSymbol', () => {
     const result = replaceAtomSymbol(mol, 'non-existent', 'N')
     expect(result.atoms[0].symbol).toBe('C')
   })
+
+  it('新元素 maxBonds 小于现有连接数（He maxBonds=0）→ 原样返回，守住价态不变式', () => {
+    const c = newAtom('C')
+    const h1 = newAtom('H')
+    const h2 = newAtom('H')
+    const mol = {
+      atoms: [c, h1, h2],
+      bonds: [newBond(c.id, h1.id), newBond(c.id, h2.id)],
+    }
+    // He maxBonds=0 < 2 个连接 → 拒绝（否则出现带键的稀有气体）
+    const rejected = replaceAtomSymbol(mol, c.id, 'He')
+    expect(rejected).toBe(mol)
+    expect(rejected.atoms.find(a => a.id === c.id)!.symbol).toBe('C')
+    // 对照：O maxBonds=2 刚好撑得起 2 个连接 → 允许
+    const accepted = replaceAtomSymbol(mol, c.id, 'O')
+    expect(accepted.atoms.find(a => a.id === c.id)!.symbol).toBe('O')
+  })
+})
+
+describe('growByReplacingH', () => {
+  it('带父键的 H 不能替换成 maxBonds=0 的稀有气体（He）→ 原样返回', () => {
+    const c = newAtom('C', 0, 0, 0)
+    const h = newAtom('H', 1.09, 0, 0)
+    const mol = { atoms: [c, h], bonds: [newBond(c.id, h.id)] }
+    const result = growByReplacingH(mol, h.id, 'He')
+    // 失败约定 = 返回原分子：He 承接不了父键，不能产生带键的 He
+    expect(result).toBe(mol)
+  })
+
+  it('对照：H → O 正常生长为羟基（O 保留原 H 的 id 并补氢）', () => {
+    const c = newAtom('C', 0, 0, 0)
+    const h = newAtom('H', 1.09, 0, 0)
+    const mol = { atoms: [c, h], bonds: [newBond(c.id, h.id)] }
+    const result = growByReplacingH(mol, h.id, 'O')
+    const o = result.atoms.find(a => a.id === h.id)!
+    expect(o.symbol).toBe('O')
+    // O maxBonds=2：父键 + 补 1 个 H → 共 3 个原子
+    expect(result.atoms).toHaveLength(3)
+  })
+})
+
+// ─────────────────────────────────────────────────────────
+// bondByReplacingH — 桥氢（多键 H）不留悬空键
+// ─────────────────────────────────────────────────────────
+
+describe('bondByReplacingH', () => {
+  /** 断言分子里没有引用已删原子的悬空键 */
+  function expectNoDanglingBonds(mol: { atoms: readonly Atom[]; bonds: readonly Bond[] }) {
+    const ids = new Set(mol.atoms.map(a => a.id))
+    for (const b of mol.bonds) {
+      expect(ids.has(b.atomId1)).toBe(true)
+      expect(ids.has(b.atomId2)).toBe(true)
+    }
+  }
+
+  it('目标是多键桥氢（乙硼烷式）：删除它触及的所有键，不留悬空键', () => {
+    // inferBonds 按距离推键，桥氢可以同时连两个 B
+    const b1 = newAtom('B', 0, 0, 0)
+    const b2 = newAtom('B', 1.78, 0, 0)
+    const bridgeH = newAtom('H', 0.89, 1.0, 0)
+    const c = newAtom('C', -2, 0, 0)
+    const srcH = newAtom('H', -3.09, 0, 0)
+    const mol = {
+      atoms: [b1, b2, bridgeH, c, srcH],
+      bonds: [
+        newBond(b1.id, b2.id),
+        newBond(b1.id, bridgeH.id),
+        newBond(b2.id, bridgeH.id),   // 桥氢的第二条键
+        newBond(c.id, srcH.id),
+      ],
+    }
+    const result = bondByReplacingH(mol, srcH.id, bridgeH.id)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expectNoDanglingBonds(result.molecule)
+    // 父原子（C 与桥氢的第一条键的父 B1）之间成了新键
+    expect(result.molecule.bonds.some(
+      b => (b.atomId1 === c.id && b.atomId2 === b1.id) ||
+           (b.atomId1 === b1.id && b.atomId2 === c.id))).toBe(true)
+  })
+
+  it('源是多键桥氢、目标是重原子：同样清掉源 H 的所有键', () => {
+    const b1 = newAtom('B', 0, 0, 0)
+    const b2 = newAtom('B', 1.78, 0, 0)
+    const bridgeH = newAtom('H', 0.89, 1.0, 0)
+    const c = newAtom('C', -2, 0, 0)
+    const mol = {
+      atoms: [b1, b2, bridgeH, c],
+      bonds: [
+        newBond(b1.id, b2.id),
+        newBond(b1.id, bridgeH.id),
+        newBond(b2.id, bridgeH.id),
+      ],
+    }
+    const result = bondByReplacingH(mol, bridgeH.id, c.id)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expectNoDanglingBonds(result.molecule)
+  })
 })
 
 describe('cycleBondLength', () => {
@@ -611,6 +712,14 @@ describe('geometryOps（键长/键角/二面角编辑）', () => {
       expect(get(m, mol.ids.a).x).toBe(get(mol as never, mol.ids.a).x)
       expect(get(m, mol.ids.b).y).toBe(get(mol as never, mol.ids.b).y)
     }
+  })
+
+  it('setDihedralAngle：1 号原子在 C 端旋转侧 → 拒绝', () => {
+    const mol = makeChain()
+    // e 挂在 c 上，属于旋转侧：绕 b–c 轴转会带着 e 一起转，
+    // 二面角读数永远不变（修复前会失败两次后应用一次反向旋转）
+    const result = setDihedralAngle(mol, mol.ids.e, mol.ids.b, mol.ids.c, mol.ids.d, 60)
+    expect(result).toMatchObject({ ok: false, reason: expect.stringContaining('旋转侧') })
   })
 
   it('环内键长/二面角 → 拒绝', () => {

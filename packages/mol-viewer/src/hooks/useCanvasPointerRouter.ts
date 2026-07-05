@@ -45,22 +45,20 @@ function handleTransformDown(
   state.fragmentIds = null
   state.targetObjectId = null
 
-  const { objectsById, objectOrder, activeObjectId: curActive, setActiveObject } = useMoleculeStore.getState()
   const pickedAtomId = renderer.pickAtomIdAt(e.clientX, e.clientY)
 
   if (pickedAtomId) {
-    let objId: string | null = null
-    for (const id of objectOrder) {
-      if (objectsById[id]?.molecule.atoms.some(a => a.id === pickedAtomId)) { objId = id; break }
-    }
-    if (!objId) return
-    if (objId !== curActive) setActiveObject(objId)
-    const mol = objectsById[objId].molecule
+    // 点中的原子可能属于非 active 分子：激活宿主对象（不可见/锁定则中止手势）
+    if (!useMoleculeStore.getState().activateObjectContainingAtom(pickedAtomId)) return
+    const { objectsById, activeObjectId } = useMoleculeStore.getState()   // 激活是同步 set，重新读取
+    const mol = activeObjectId ? objectsById[activeObjectId]?.molecule : undefined
+    if (!activeObjectId || !mol) return
     state.fragmentIds = getConnectedFragment(mol.atoms, mol.bonds, pickedAtomId)
-    state.targetObjectId = objId
-  } else if (e.altKey && curActive) {
-    const mol = objectsById[curActive]?.molecule
-    if (!mol || mol.atoms.length === 0) return
+    state.targetObjectId = activeObjectId
+  } else if (e.altKey) {
+    const { objectsById, activeObjectId: curActive } = useMoleculeStore.getState()
+    const mol = curActive ? objectsById[curActive]?.molecule : undefined
+    if (!curActive || !mol || mol.atoms.length === 0) return
     state.fragmentIds = new Set(mol.atoms.map(a => a.id))
     state.targetObjectId = curActive
   } else {
@@ -285,15 +283,32 @@ export function useCanvasPointerRouter(
       }
     }
 
+    // ── pointercancel（触屏手势抢占等）────────────────────────────────────────
+    // 拖拽中被 cancel 时若不清理，beginTransaction 会悬挂（zundo 永久 paused）
+    const onCancel = () => {
+      const ts = transformRef.current
+      if (ts.dragging) {
+        ts.dragging = false; ts.fragmentIds = null; ts.targetObjectId = null
+        useMoleculeStore.getState().endTransaction()
+      }
+      const bs = boxRef.current
+      if (bs.active) {
+        bs.active = false
+        setBoxRect(null)   // 取消框选，不提交选择
+      }
+    }
+
     // container capture 拦截 down；canvas bubble 处理 move/up（pointer capture 保证）
     container.addEventListener('pointerdown', onDown, { capture: true })
     container.addEventListener('pointermove', onMove)
     container.addEventListener('pointerup',   onUp)
+    container.addEventListener('pointercancel', onCancel)
 
     return () => {
       container.removeEventListener('pointerdown', onDown, { capture: true } as AddEventListenerOptions)
       container.removeEventListener('pointermove', onMove)
       container.removeEventListener('pointerup',   onUp)
+      container.removeEventListener('pointercancel', onCancel)
     }
   }, [containerRef, rendererRef])
 

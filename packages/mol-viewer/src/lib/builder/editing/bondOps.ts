@@ -67,13 +67,18 @@ export function bondByReplacingH(
     const tgtParentId = tgtBond.atomId1 === targetId ? tgtBond.atomId2 : tgtBond.atomId1
     if (tgtParentId === parentId) return { ok: false, reason: '两个 H 连在同一个原子上' }
     if (hasBond(parentId, tgtParentId)) return { ok: false, reason: '两原子之间已存在键' }
+    // 桥氢可能有多条键（inferBonds 按距离推键，乙硼烷 B₂H₆ 这类结构就会产生），
+    // 只删 srcBond/tgtBond 会留下引用已删原子的悬空键 → 必须清掉触及被删 H 的所有键
+    const touchesRemovedH = (b: Bond) =>
+      b.atomId1 === sourceHId || b.atomId2 === sourceHId ||
+      b.atomId1 === targetId || b.atomId2 === targetId
     return {
       ok: true,
       molecule: {
         ...mol,
         atoms: mol.atoms.filter(a => a.id !== sourceHId && a.id !== targetId),
         bonds: [
-          ...mol.bonds.filter(b => b.id !== srcBond.id && b.id !== tgtBond.id),
+          ...mol.bonds.filter(b => !touchesRemovedH(b)),
           newBond(parentId, tgtParentId),
         ],
       },
@@ -93,7 +98,8 @@ export function bondByReplacingH(
       ...mol,
       atoms: mol.atoms.filter(a => a.id !== sourceHId),
       bonds: [
-        ...mol.bonds.filter(b => b.id !== srcBond.id),
+        // 同上：源 H 也可能是桥氢（多键），清掉它触及的所有键而非只删 srcBond
+        ...mol.bonds.filter(b => b.atomId1 !== sourceHId && b.atomId2 !== sourceHId),
         newBond(parentId, targetId),
       ],
     },

@@ -83,9 +83,8 @@ export default function App() {
           const r = bondSelectedAtoms()
           if (!r.ok) useEditorStore.getState().flashHint(r.reason ?? '无法成键')
         } else {
-          const ed = useEditorStore.getState()
           setActiveTool('select')
-          ed.setActiveElement(ed.activeElement)   // 重新武装当前元素笔刷
+          useEditorStore.getState().armBrush()   // 重新武装（保留上次的元素/片段笔刷）
         }
         return
       }

@@ -164,6 +164,9 @@ export function setDihedralAngle(
   if (!bcBond) return { ok: false, reason: '2、3 号原子之间需要存在键（旋转轴）' }
   const side = reachableWithout(mol.bonds, bcBond.id, cId)
   if (side.has(bId)) return { ok: false, reason: 'B–C 键在环内，二面角受约束' }
+  // A 若也在 C 端旋转侧，旋转会带着 A 一起转，二面角读数永远不变
+  //（方向保险两次都判偏差大，最终还会应用一次反向旋转）→ 明确拒绝
+  if (side.has(aId)) return { ok: false, reason: '1 号原子在旋转侧（B–C 轴的 C 端），请调整选择顺序' }
   if (!side.has(dId)) return { ok: false, reason: '第 4 个原子需在 3 号原子一侧' }
 
   const ax = { x: c.x - b.x, y: c.y - b.y, z: c.z - b.z }

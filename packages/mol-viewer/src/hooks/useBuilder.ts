@@ -53,15 +53,10 @@ export function useBuilder(): BuilderHandlers {
     // ── 自动激活包含被点击原子的分子 ──────────────────────────────────────────
     // 多分子场景下，点击非 active 分子的原子时先切换 activeObjectId，
     // 否则所有编辑操作都会在 active 分子里找不到该原子而静默失败。
+    // 宿主对象不可见/锁定时返回 false → 整个手势中止。
     let st = store.getState()
-    if (!selectActiveMoleculeOrEmpty(st).atoms.some(a => a.id === atomId)) {
-      const targetObj = Object.values(st.objectsById).find(
-        o => o.molecule.atoms.some(a => a.id === atomId)
-      )
-      if (!targetObj) return
-      st.setActiveObject(targetObj.id)
-      st = store.getState()           // setActiveObject 是同步 set，重新读取
-    }
+    if (!st.activateObjectContainingAtom(atomId)) return
+    st = store.getState()             // 激活是同步 set，重新读取
 
     const { selectAtom } = st
     const molecule = selectActiveMoleculeOrEmpty(st)
@@ -139,8 +134,14 @@ export function useBuilder(): BuilderHandlers {
 
   const onBondClick = useCallback((bondId: string, event: MouseEvent) => {
     const { activeTool, activeFragmentId, flashHint } = useEditorStore.getState()
-    const { cycleBondLength, selectBond } = store.getState()
     if (activeTool !== 'select') return
+
+    // 键可能在非 active 分子里：先激活宿主对象（不可见/锁定则中止），
+    // 否则 cycleBondLength / fuseFragmentOnBond 都会静默失败。
+    if (!selectActiveMoleculeOrEmpty(store.getState()).bonds.some(b => b.id === bondId)) {
+      if (!store.getState().activateObjectContainingBond(bondId)) return
+    }
+    const { cycleBondLength, selectBond } = store.getState()
 
     // 片段笔刷点键 = 并环（Ketcher 式，仅构建态）
     const armed = useEditorStore.getState().brushArmed
@@ -243,16 +244,10 @@ export function useBuilder(): BuilderHandlers {
 
   const onAtomDoubleClick = useCallback((atomId: string, _event: MouseEvent) => {
     if (useEditorStore.getState().activeTool !== 'select') return
+    // 双击非 active 分子的原子时先切换（宿主不可见/锁定则中止）
     let st = store.getState()
-    // 双击非 active 分子的原子时先切换
-    if (!selectActiveMoleculeOrEmpty(st).atoms.some(a => a.id === atomId)) {
-      const targetObj = Object.values(st.objectsById).find(
-        o => o.molecule.atoms.some(a => a.id === atomId)
-      )
-      if (!targetObj) return
-      st.setActiveObject(targetObj.id)
-      st = store.getState()
-    }
+    if (!st.activateObjectContainingAtom(atomId)) return
+    st = store.getState()
     const mol = selectActiveMoleculeOrEmpty(st)
     const fragment = getConnectedFragment(mol.atoms, mol.bonds, atomId)
     st.selectAtoms(fragment, 'replace')
@@ -268,16 +263,10 @@ export function useBuilder(): BuilderHandlers {
     // 选中的原子拖拽 = 移动（canDragAtom 路径），不进成键手势
     if (store.getState().selectedAtomIds.has(sourceId)) return false
 
-    // 源原子可能在非 active 分子里：先切换，保证后续操作能找到它
+    // 源原子可能在非 active 分子里：先切换（宿主不可见/锁定则不进手势）
     let st = store.getState()
-    if (!selectActiveMoleculeOrEmpty(st).atoms.some(a => a.id === sourceId)) {
-      const targetObj = Object.values(st.objectsById).find(
-        o => o.molecule.atoms.some(a => a.id === sourceId)
-      )
-      if (!targetObj) return false
-      st.setActiveObject(targetObj.id)
-      st = store.getState()
-    }
+    if (!st.activateObjectContainingAtom(sourceId)) return false
+    st = store.getState()
 
     const mol = selectActiveMoleculeOrEmpty(st)
     const src = mol.atoms.find(a => a.id === sourceId)

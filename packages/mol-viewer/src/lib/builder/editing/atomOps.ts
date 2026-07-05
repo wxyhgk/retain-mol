@@ -26,6 +26,9 @@ export function growByReplacingH(
   if (!bond) {
     next = replaceAtomSymbol(mol, hAtomId, newSymbol)
   } else {
+    // He 等 maxBonds=0 的元素承接不了父键：替换会产生带键的稀有气体，
+    // 打破价态不变式 → 按本函数的失败约定原样返回
+    if (getElementConfig(newSymbol).maxBonds < 1) return mol
     const parentId = bond.atomId1 === hAtomId ? bond.atomId2 : bond.atomId1
     const parent = mol.atoms.find(a => a.id === parentId)
     if (!parent) return mol
@@ -50,6 +53,9 @@ export function replaceAtomSymbol(
   newSymbol: string,
 ): Molecule {
   if (!mol.atoms.some(a => a.id === atomId)) return mol
+  // 新元素撑不起现有连接数（如把带两键的 O 换成 He）→ 拒绝，守住价态不变式：
+  // 画布上永远是完整分子，不允许出现超价原子
+  if (getElementConfig(newSymbol).maxBonds < bondCount(mol, atomId)) return mol
   return {
     ...mol,
     atoms: mol.atoms.map(a => a.id === atomId ? { ...a, symbol: newSymbol } : a),

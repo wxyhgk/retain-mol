@@ -58,6 +58,8 @@ interface EditorState {
   setActiveTool:     (tool: Tool) => void
   setActiveElement:  (symbol: string) => void
   setActiveFragment: (id: string | null) => void
+  /** 武装笔刷 → 构建态（与 disarmBrush 对称；避免用 setActiveElement(当前值) 的副作用 hack） */
+  armBrush:          () => void
   /** 解除笔刷武装 → 纯选择态（Esc / 选择工具按钮） */
   disarmBrush:       () => void
   setBondingAtom:    (id: string | null) => void
@@ -109,6 +111,8 @@ export const useEditorStore = create<EditorState>()(subscribeWithSelector(set =>
   // 选元素清掉片段笔刷：两者互斥，同一时间只有一种"笔刷"；选择即武装
   setActiveElement:  (symbol) => set({ activeElement: symbol, activeFragmentId: null, brushArmed: true }),
   setActiveFragment: (id) => set({ activeFragmentId: id, brushArmed: id !== null }),
+  // 只切换武装态，不动 activeElement / activeFragmentId：恢复上次的笔刷
+  armBrush:          () => set({ brushArmed: true }),
   disarmBrush:       () => set({ brushArmed: false, activeFragmentId: null }),
   setBondingAtom:    (id) => set({ bondingAtomId: id }),
 

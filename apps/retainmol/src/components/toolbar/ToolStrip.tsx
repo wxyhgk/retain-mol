@@ -19,7 +19,7 @@ const COMMON_ELEMENTS = ['H','C','N','O','F','P','S','Cl','Br','I','Si','B'] as 
 /** 画布左侧竖向工具条 */
 export default function ToolStrip() {
   const { activeTool, setActiveTool, activeElement, setActiveElement,
-          activeFragmentId, setActiveFragment, brushArmed, disarmBrush } = useEditorStore()
+          activeFragmentId, setActiveFragment, brushArmed, armBrush, disarmBrush } = useEditorStore()
   const [pickerOpen, setPickerOpen] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
 
@@ -50,7 +50,7 @@ export default function ToolStrip() {
       key: 'build', icon: <Pencil size={16} />, shortcut: 'B',
       label: '编辑（点 H 生长 · 双击空白加原子 · 拖 H 成键）',
       active: activeTool === 'select' && brushArmed,
-      onClick: () => { setActiveTool('select'); setActiveElement(activeElement) },
+      onClick: () => { setActiveTool('select'); armBrush() },
     },
     {
       key: 'move-object', icon: <Move size={16} />, shortcut: 'V',
@@ -77,8 +77,8 @@ export default function ToolStrip() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => {
-                  // 未武装时点 chip 直接恢复构建态（免去重选元素）
-                  if (!brushArmed) { setActiveElement(activeElement); setActiveTool('select') }
+                  // 未武装时点 chip 直接恢复构建态（armBrush 不清片段笔刷，保留上次的笔刷）
+                  if (!brushArmed) { armBrush(); setActiveTool('select') }
                   setPickerOpen(v => !v)
                 }}
                 className="w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-bold transition-all hover:opacity-80"

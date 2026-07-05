@@ -76,6 +76,35 @@ export class InteractionHandler {
     canvas.addEventListener('pointercancel', this.handlePointerCancel)
   }
 
+  /**
+   * three 的 Raycaster 不检查 visible：隐藏对象（Group.visible=false）的子 mesh
+   * 仍会被射线命中。沿 parent 链检查 visible（到 scene 为止），保证隐藏分子
+   * 不进入任何拾取集合——否则它还能被点中、编辑、遮挡点击。
+   */
+  private isPickable(obj: THREE.Object3D): boolean {
+    let cur: THREE.Object3D | null = obj
+    while (cur) {
+      if (!cur.visible) return false
+      if ((cur as THREE.Scene).isScene) break
+      cur = cur.parent
+    }
+    return true
+  }
+
+  /** 可拾取的原子 mesh 集合（过滤祖先链上被隐藏的） */
+  private pickableAtomObjs(): THREE.Object3D[] {
+    return [...this.getAtomMeshes().values()].filter(m => this.isPickable(m))
+  }
+
+  /** 可拾取的键 mesh 集合（过滤祖先链上被隐藏的） */
+  private pickableBondObjs(): THREE.Object3D[] {
+    const objs: THREE.Object3D[] = []
+    for (const grp of this.getBondMeshes().values()) {
+      grp.traverse(c => { if ((c as THREE.Mesh).isMesh && this.isPickable(c)) objs.push(c) })
+    }
+    return objs
+  }
+
   /** 按下→抬起位移超过阈值：是拖拽（转相机等）不是点击 */
   private movedSinceDown(e: MouseEvent): boolean {
     const dx = e.clientX - this._downClient.x
@@ -96,11 +125,8 @@ export class InteractionHandler {
     const raycaster = new THREE.Raycaster()
     raycaster.setFromCamera(mouse, this.camera)
 
-    const atomObjs = [...this.getAtomMeshes().values()]
-    const bondObjs: THREE.Object3D[] = []
-    for (const grp of this.getBondMeshes().values()) {
-      grp.traverse(c => { if ((c as THREE.Mesh).isMesh) bondObjs.push(c) })
-    }
+    const atomObjs = this.pickableAtomObjs()
+    const bondObjs = this.pickableBondObjs()
 
     const atomHits = raycaster.intersectObjects(atomObjs)
     if (atomHits.length > 0) {
@@ -165,7 +191,7 @@ export class InteractionHandler {
     )
     const raycaster = new THREE.Raycaster()
     raycaster.setFromCamera(mouse, this.camera)
-    const hits = raycaster.intersectObjects([...this.getAtomMeshes().values()])
+    const hits = raycaster.intersectObjects(this.pickableAtomObjs())
     if (hits.length === 0) return
     const atomId = hits[0].object.userData.id as string
 
@@ -370,7 +396,7 @@ export class InteractionHandler {
     )
     const raycaster = new THREE.Raycaster()
     raycaster.setFromCamera(mouse, this.camera)
-    const hits = raycaster.intersectObjects([...this.getAtomMeshes().values()])
+    const hits = raycaster.intersectObjects(this.pickableAtomObjs())
     if (hits.length > 0) {
       this.onAtomDoubleClick?.(hits[0].object.userData.id, e)
       return
@@ -393,7 +419,7 @@ export class InteractionHandler {
     )
     const rc = new THREE.Raycaster()
     rc.setFromCamera(m, this.camera)
-    const hits = rc.intersectObjects([...this.getAtomMeshes().values()])
+    const hits = rc.intersectObjects(this.pickableAtomObjs())
     return hits.length > 0 ? (hits[0].object.userData.id as string) : null
   }
 
@@ -406,11 +432,7 @@ export class InteractionHandler {
     )
     const rc = new THREE.Raycaster()
     rc.setFromCamera(m, this.camera)
-    const bondObjs: THREE.Object3D[] = []
-    for (const grp of this.getBondMeshes().values()) {
-      grp.traverse(c => { if ((c as THREE.Mesh).isMesh) bondObjs.push(c) })
-    }
-    const hits = rc.intersectObjects(bondObjs)
+    const hits = rc.intersectObjects(this.pickableBondObjs())
     return hits.length > 0 ? (hits[0].object.userData.id as string) : null
   }
 
