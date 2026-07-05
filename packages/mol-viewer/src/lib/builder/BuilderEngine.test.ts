@@ -294,17 +294,22 @@ describe('autoAddHydrogens', () => {
     expect(hCount).toBe(6)  // 每个 C 加 3 个 H
   })
 
-  it('C=C 乙烯骨架按键级补 4 个 H → C2H4', () => {
+  // ── 键级不参与价态判断（设计决策，见 mol-view.md「键级哲学」）────────────
+  // 补氢按连接数（邻居条数）而非键级之和计算剩余价态：SDF 键级不可靠，
+  // 且本项目里键级只是几何的显示读数。因此 C=C 骨架的每个 C 仍视为
+  // 只占用了 1 个连接位、补 3 个 H。
+
+  it('C=C 骨架按连接数补 6 个 H（键级不作为价态约束）', () => {
     const c1 = newAtom('C', 0,    0, 0)
     const c2 = newAtom('C', 1.34, 0, 0)
     const bond = newBond(c1.id, c2.id, 2)
     const mol = { atoms: [c1, c2], bonds: [bond] }
     const result = autoAddHydrogens(mol)
     const hCount = result.atoms.filter(a => a.symbol === 'H').length
-    expect(hCount).toBe(4)
+    expect(hCount).toBe(6)  // 每个 C 连接数 1 → 各补 3 个
   })
 
-  it('共轭二烯 C=C-C=C 骨架补 6 个 H → C4H6', () => {
+  it('C=C-C=C 骨架按连接数补 10 个 H（端碳 3 个、中碳 2 个）', () => {
     const c1 = newAtom('C', 0,    0, 0)
     const c2 = newAtom('C', 1.34, 0, 0)
     const c3 = newAtom('C', 2.80, 0, 0)
@@ -319,10 +324,10 @@ describe('autoAddHydrogens', () => {
     }
     const result = autoAddHydrogens(mol)
     const hCount = result.atoms.filter(a => a.symbol === 'H').length
-    expect(hCount).toBe(6)
+    expect(hCount).toBe(10)  // 3 + 2 + 2 + 3
   })
 
-  it('苯环芳香碳每个只补 1 个 H → C6H6', () => {
+  it('凯库勒六元环每个 C 连接数 2 → 各补 2 个 H（共 12 个）', () => {
     const atoms = Array.from({ length: 6 }, (_, i) => {
       const angle = i * Math.PI / 3
       return newAtom('C', Math.cos(angle), Math.sin(angle), 0)
@@ -330,7 +335,7 @@ describe('autoAddHydrogens', () => {
     const bonds = atoms.map((a, i) => newBond(a.id, atoms[(i + 1) % 6].id, i % 2 === 0 ? 2 : 1))
     const result = autoAddHydrogens({ atoms, bonds })
     const hCount = result.atoms.filter(a => a.symbol === 'H').length
-    expect(hCount).toBe(6)
+    expect(hCount).toBe(12)  // 想要 C6H6 请用苯环片段（fragmentLibrary），坐标即真相
   })
 
   it('已满价的 CH4 不添加额外 H', () => {
