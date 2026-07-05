@@ -73,4 +73,36 @@ describe('minimizeGeometry — MMFF94 力场清理', () => {
     const c = newAtom('C', 0, 0, 0)
     expect(minimizeGeometry({ atoms: [c], bonds: [] }).ok).toBe(true)
   })
+
+  it('多个不相连片段：逐片段独立优化，不坍缩到一起（回归：曾整体搅乱穿插）', () => {
+    // 两个相距 3Å 的甲烷放在同一分子对象里
+    const methane = (ox: number) => {
+      const c = newAtom('C', ox, 0, 0)
+      const h = [
+        newAtom('H', ox - 0.6, 0.9, 0), newAtom('H', ox - 0.6, -0.5, 0.8),
+        newAtom('H', ox - 0.6, -0.5, -0.8), newAtom('H', ox + 0.6, 0, 0),
+      ]
+      return { c, h, bonds: h.map(x => newBond(c.id, x.id)) }
+    }
+    const m1 = methane(0), m2 = methane(3)
+    const mol: Molecule = {
+      atoms: [m1.c, ...m1.h, m2.c, ...m2.h],
+      bonds: [...m1.bonds, ...m2.bonds],
+    }
+    const r = minimizeGeometry(mol)
+    expect(r.ok).toBe(true)
+    expect(hasNaN(r.molecule)).toBe(false)
+    // 两个碳（索引 0 与 5）保持 ~3Å，不被 vdW 吸引坍缩
+    expect(dist(r.molecule, 0, 5)).toBeGreaterThan(2.5)
+    // 跨片段无原子重叠
+    const bonded = new Set(r.molecule.bonds.map(b => [b.atomId1, b.atomId2].sort().join()))
+    let minNonBonded = Infinity
+    for (let i = 0; i < r.molecule.atoms.length; i++) {
+      for (let j = i + 1; j < r.molecule.atoms.length; j++) {
+        if (bonded.has([r.molecule.atoms[i].id, r.molecule.atoms[j].id].sort().join())) continue
+        minNonBonded = Math.min(minNonBonded, dist(r.molecule, i, j))
+      }
+    }
+    expect(minNonBonded).toBeGreaterThan(1.4)   // 无坍缩重叠
+  })
 })

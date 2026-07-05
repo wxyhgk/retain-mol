@@ -6,6 +6,7 @@
 import * as OCL from 'openchemlib'
 import type { Atom, Bond, Molecule } from '../molecule'
 import { newAtom, newBond } from '../molecule'
+import { splitConnectedComponents } from '../builder/analysis/fragments'
 
 // OCL 返回的 Molecule 对象类型
 type OCLMol = ReturnType<typeof OCL.Molecule.fromMolfile>
@@ -160,35 +161,71 @@ export interface OptimizeResult {
   energyAfter?: number
 }
 
+interface XYZ { x: number; y: number; z: number }
+
+/** 单个连通片段的 MMFF94 最小化，返回 id→新坐标 + 能量；失败返回 null */
+function minimizeConnected(frag: Molecule): { coords: Map<string, XYZ>; eBefore: number; eAfter: number } | null {
+  if (frag.atoms.length < 2 || frag.bonds.length === 0) return null
+  const oclMol = moleculeToOCL(frag)
+  const FF = (OCL as unknown as {
+    ForceFieldMMFF94: new (m: OCLMol, table: string, opts: object) => {
+      getTotalEnergy: () => number; minimise: () => void
+    }
+  }).ForceFieldMMFF94
+  const ff = new FF(oclMol, 'MMFF94s', {})
+  const eBefore = ff.getTotalEnergy()
+  ff.minimise()
+  const eAfter = ff.getTotalEnergy()
+
+  // moleculeToOCL 写入 -y/-z，读回同样取反还原
+  const optimized = frag.atoms.map((a, i) => ({
+    id: a.id, x: oclMol.getAtomX(i), y: -oclMol.getAtomY(i), z: -oclMol.getAtomZ(i),
+  }))
+  if (optimized.some(a => !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z))) return null
+
+  // 重定心到原片段质心：MMFF 可能整体平移/旋转片段，多片段场景下要各归各位，
+  // 否则不同片段会在世界坐标里漂移甚至叠到一起
+  const centroid = (pts: readonly XYZ[]): XYZ => {
+    const c = { x: 0, y: 0, z: 0 }
+    for (const p of pts) { c.x += p.x; c.y += p.y; c.z += p.z }
+    return { x: c.x / pts.length, y: c.y / pts.length, z: c.z / pts.length }
+  }
+  const c0 = centroid(frag.atoms)
+  const c1 = centroid(optimized)
+  const dx = c0.x - c1.x, dy = c0.y - c1.y, dz = c0.z - c1.z
+  const coords = new Map<string, XYZ>()
+  for (const a of optimized) coords.set(a.id, { x: a.x + dx, y: a.y + dy, z: a.z + dz })
+  return { coords, eBefore, eAfter }
+}
+
 /**
- * 几何清理：MMFF94 力场最小化当前分子，只更新坐标（保留 id/键/电荷/自由基）。
- * 力场资源未注册、分子过小、或 MMFF 无法处理该结构（异种元素/怪价态）时，
- * 原样返回并带 reason。同步函数——资源需先由 registerForceFieldFromUrl 注册。
+ * 几何清理：MMFF94 力场最小化，只更新坐标（保留 id/键/电荷/自由基）。
+ * **按连通片段分别优化**——多个不相连片段若一起丢给 MMFF，片段间只有弱 vdW、
+ * 无键约束，会被吸引坍缩到一起造成穿插重叠。逐片段独立优化并重定心避免此问题。
+ * 力场资源未注册、或所有片段都太小/MMFF 无法处理时，原样返回并带 reason。
  */
 export function minimizeGeometry(mol: Molecule): OptimizeResult {
-  if (mol.atoms.length < 2 || mol.bonds.length === 0) {
-    return { molecule: mol, ok: true }
-  }
+  if (mol.atoms.length < 2 || mol.bonds.length === 0) return { molecule: mol, ok: true }
   if (!ffReady) return { molecule: mol, ok: false, reason: '力场资源加载中，请稍候' }
   try {
-    const oclMol = moleculeToOCL(mol)
-    const FF = (OCL as unknown as {
-      ForceFieldMMFF94: new (m: OCLMol, table: string, opts: object) => {
-        getTotalEnergy: () => number; minimise: () => void
+    const components = splitConnectedComponents(mol)
+    const newCoords = new Map<string, XYZ>()
+    let eBefore = 0, eAfter = 0, anyOptimized = false
+    for (const comp of components) {
+      const res = minimizeConnected(comp)
+      if (res) {
+        anyOptimized = true
+        eBefore += res.eBefore; eAfter += res.eAfter
+        for (const [id, xyz] of res.coords) newCoords.set(id, xyz)
       }
-    }).ForceFieldMMFF94
-    const ff = new FF(oclMol, 'MMFF94s', {})
-    const energyBefore = ff.getTotalEnergy()
-    ff.minimise()
-    const energyAfter = ff.getTotalEnergy()
-    // moleculeToOCL 写入 -y/-z，读回同样取反还原到本项目坐标系
-    const atoms = mol.atoms.map((a, i) => ({
-      ...a, x: oclMol.getAtomX(i), y: -oclMol.getAtomY(i), z: -oclMol.getAtomZ(i),
-    }))
-    if (atoms.some(a => !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z))) {
-      return { molecule: mol, ok: false, reason: '优化产生非法坐标，已保留原结构' }
+      // 优化失败/过小的片段保留原坐标（不动）
     }
-    return { molecule: { ...mol, atoms }, ok: true, energyBefore, energyAfter }
+    if (!anyOptimized) return { molecule: mol, ok: false, reason: '没有可优化的片段（原子过少）' }
+    const atoms = mol.atoms.map(a => {
+      const c = newCoords.get(a.id)
+      return c ? { ...a, x: c.x, y: c.y, z: c.z } : a
+    })
+    return { molecule: { ...mol, atoms }, ok: true, energyBefore: eBefore, energyAfter: eAfter }
   } catch (e) {
     return { molecule: mol, ok: false, reason: `MMFF94 无法处理该结构：${(e as Error).message}` }
   }
