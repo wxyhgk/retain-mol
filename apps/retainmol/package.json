@@ -1,7 +1,7 @@
 {
   "name": "retainmol",
   "private": true,
-  "version": "0.0.15",
+  "version": "0.0.16",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-ocl-resources.mjs && npm run build --workspace @retainmol/mol-viewer",

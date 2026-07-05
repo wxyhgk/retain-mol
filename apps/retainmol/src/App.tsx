@@ -6,7 +6,7 @@ import {
   useMoleculeTemporal, bondSelectedAtoms, parseClipboard, centerMolecule, getFragment, cn,
   is2D,
 } from '@retainmol/mol-viewer'
-import { generate3DAsync, morphObjectPositions, flattenMolecule } from '@/lib/moleculeOpt'
+import { generate3DAsync, relaxAnimate, flattenMolecule } from '@/lib/moleculeOpt'
 import { useUiStore } from '@/lib/uiStore'
 import { RightPanel } from '@/components/panels'
 import PubChemSearch from '@/components/search/PubChemSearch'
@@ -48,14 +48,16 @@ export default function App() {
       try {
         const { format, molecule } = parseClipboard(text)
         e.preventDefault()
-        // 粘贴的 2D 结构：后台线程生成 3D（不冻结），完成后「平面折叠成 3D」动画
+        // 粘贴的 2D 结构：CG 距离几何生成高质量 3D（环对、含 H），再逐帧松弛锚定展开
         if (is2D(molecule)) {
-          useUiStore.getState().setBusy('正在生成 3D 结构…')
+          useUiStore.getState().setBusy('正在用距离几何生成 3D 结构…')
           generate3DAsync(molecule).then(async r => {
             useUiStore.getState().setBusy(null)
             const final = centerMolecule(r.ok ? r.molecule : molecule)
-            const objId = addToScene(final)
-            if (r.ok) await morphObjectPositions(objId, flattenMolecule(final), final, 900)
+            if (!r.ok) { addToScene(final); return }
+            const flatFinal = flattenMolecule(final)
+            const objId = addToScene(flatFinal)
+            await relaxAnimate(objId, flatFinal, { target: final })
           })
         } else {
           addToScene(centerMolecule(molecule))

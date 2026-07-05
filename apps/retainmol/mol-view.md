@@ -322,32 +322,34 @@ THREE.Scene
 - 导出：GJF 的电荷 = 形式电荷之和、多重度 = 未配对电子数 + 1，自动写入 —— 带电/
   自由基物种可直接投 Gaussian。
 
-### 优化跑在 Web Worker + morph 动画（不冻结、看得见过程）
+### 2D → 3D 立体化 + 逐帧展开动画（CG 出质量 + 几何松弛锚定展开）
 
-3D 生成/清理原来在主线程同步跑，大分子（ConformerGenerator 嵌入 ~3s）会冻结 UI。
-现在：
-- **Worker**：`apps/.../workers/molOpt.worker.ts` 后台跑 generate3D/minimizeGeometry，
-  主线程保持 60fps。Worker **不能 import 包的 barrel**（会拉进渲染器/three，引用 window
-  崩溃）——用无 DOM 的专用入口 `@retainmol/mol-viewer/optimize`（vite 多入口 + package
-  exports 子路径）。`apps/.../lib/moleculeOpt.ts` 是主线程侧转发。
-- **morph 动画**：OCL 的 MMFF `minimise({maxIts:N})` 未收敛时**不写回坐标**（只有跑到
-  收敛才写），拿不到中间帧。所以用 初始→最终 的插值 morph（缓出 ~0.7s）近似弛豫动画，
-  整段包一个 undo 事务 → 一步 undo。generate3D/minimizeGeometry 的结果带 `initial` 字段
-  供 morph 起点。清理按钮走此路径（点了看它弛豫过去）。
-- **景深关闭**：`DOF.enabled=false`——大分子铺开后离焦部分糊成一团、糊掉的原子没法点，
-  科学工具都不用景深。
+导入/粘贴 2D 平面结构（ChemDraw 式 SDF/mol，z=0）→ 立体化并**动画展开**成 3D，
+用户看着分子从平面摊开（不是「算好后突然出现」）。两半分工：
 
-### 2D → 3D 立体化（Chem3D 式，OCL ConformerGenerator + MMFF94）
+- **终点用 ConformerGenerator**（`generate3D`，`io/molFormat.ts`）：成熟的距离几何，
+  环正确、自动补氢、固定种子可复现。跑在 Worker（`workers/molOpt.worker.ts`）——大分子
+  嵌入 ~7.7s 不冻结 UI；Worker **不能 import 包 barrel**（拉进 three 引用 window 崩），
+  用无 DOM 入口 `@retainmol/mol-viewer/optimize`。**注意 MMFF94 不支持硼/过渡金属**
+  （`Couldn't assign atom type`），故 generate3D 里的 MMFF 抛光步对硼分子会被 catch 跳过、
+  只用 CG 嵌入——但 CG 嵌入本身对全元素都工作，质量足够（硼 OLED 就靠这个）。
+- **过程用 GeometryRelaxer 锚定展开**（`lib/geometry/relax.ts` + `moleculeOpt.relaxAnimate`）：
+  从压平的 CG 结果（平面、环已排布）出发，主线程 rAF 每帧做一步位置约束松弛
+  （键长 / 键角化为 1-3 距离 / 非键斥力，PBD 风格）+ 朝 CG 终点锚定，逐帧重绘。
+  中间帧不穿插，终点精确 snap 回 CG。`relaxAnimate(objId, flat, {target:final})`，
+  整段一个 undo 事务。纯几何、不依赖力场参数 → 硼等 MMFF 不支持的元素也能展开。
 
-导入/粘贴 2D 结构（ChemDraw 式平面 SDF/mol，所有 z=0）自动生成合理 3D：
-`generate3D(mol)`（`io/molFormat.ts`）两步——① `ConformerGenerator.getOneConformerAsMolecule`
-按连接关系用距离几何嵌入 3D 坐标（含补氢）② `ForceFieldMMFF94.minimise` 力场抛光。
-返回全新分子（新 id、含氢），调用方整体替换。固定随机种子 → 可复现。
+**为什么是这个组合（探索排除的两条路，勿重走）：**
+- *MMFF gradTol 轨迹*：同一 FF 反复 `minimise({maxIts, gradTol})` 逐步收紧梯度容差，能拿到
+  真实的 MMFF 逐帧优化轨迹（坐标累积写回、终点=真收敛，纯公开 API 不 patch）——但
+  MMFF94 不支持硼，对硼 OLED（主力分子）无效，故未采用。
+- *挖 CG 中间帧*：debug 版可 monkey-patch `ConformationSelfOrganizer.calculateStrain` 读
+  `mCoordinates` 拿每步坐标——但 CG 起点是 `jumbleAtoms` **随机 3D 云**（`KEEP_INITIAL_COORDINATES`
+  写死无 setter），中间演绎「乱→整」而非「平面→摊开」，视觉不对；且要 debug 版 3.5MB +
+  内部 patch 脆弱。所以改用「CG 出终点 + 自己的松弛器从平面锚定展开」。
 
-- 接入：`is2D(mol)` 为真时，`useFileIO.make3DIfFlat`（导入）和 App 粘贴处理器
-  自动调用；失败退回原平面结构。都先 `await registerForceFieldFromUrl` 确保资源就绪
-  （ConformerGenerator 同样需要 MMFF 资源表）。
-- 这解决了旧版「2D 文件请用 RDKit/OpenBabel/Avogadro 转」的外部依赖——现在应用内直接做。
+- **景深关闭**：`DOF.enabled=false`——大分子铺开后离焦部分糊成一团、点不中，科学工具不用景深。
+- **几何清理**按钮仍走 `minimizeGeometry` + 线性 `morphObjectPositions`（对已 3D 的非硼结构 MMFF 弛豫）。
 
 ### 几何清理（MMFF94 力场最小化）
 
