@@ -289,6 +289,25 @@ export class MolRenderer {
     ticker.invalidate()
   }
 
+  /**
+   * 截取当前视口为 PNG data URL。scale = 设备像素倍数（默认 2 出高清图）。
+   * 临时抬高 pixelRatio 重新分配绘制缓冲，直接渲染（绕过景深 bokeh，出图更锐利），
+   * 同步 toDataURL 读出后复原——preserveDrawingBuffer 未开，必须在渲染当帧同步读取。
+   */
+  captureImage(scale = 2): string {
+    const size = new THREE.Vector2()
+    this.renderer.getSize(size)          // CSS 像素尺寸
+    const prevPR = this.renderer.getPixelRatio()
+    this.renderer.setPixelRatio(prevPR * scale)
+    this.renderer.setSize(size.x, size.y, false)   // 保持 CSS 尺寸，仅重分配高分缓冲
+    this.renderer.render(this.scene, this.camera)  // 直接渲染，不走 composer
+    const url = this.renderer.domElement.toDataURL('image/png')
+    this.renderer.setPixelRatio(prevPR)
+    this.renderer.setSize(size.x, size.y, false)
+    ticker.invalidate()                  // 触发下一帧恢复实时视图（含景深）
+    return url
+  }
+
   // ── 渲染 ──
 
   // 返回 bondId → 所在环心（THREE.Vector3）

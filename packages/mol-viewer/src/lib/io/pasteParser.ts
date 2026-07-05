@@ -103,6 +103,33 @@ export function parseGJF(text: string): Molecule {
   return { atoms, bonds: inferBonds(atoms), name: titleLines.join(' ') || 'pasted' }
 }
 
+// ─── Gaussian .gjf 导出 ─────────────────────
+
+export interface GJFOptions {
+  /** 路由行（计算方法/基组），默认最小可跑的 HF/6-31G(d) */
+  route?: string
+  charge?: number
+  multiplicity?: number
+  title?: string
+}
+
+/**
+ * 导出为 Gaussian 输入文件（.gjf/.com）。补齐 parseGJF 的反向，
+ * 让「导入 Gaussian → 编辑 → 导回 Gaussian」的 round-trip 闭合。
+ * 只写坐标（键不进 Gaussian 输入，Gaussian 自己按距离判键）。
+ */
+export function exportGJF(mol: Molecule, opts: GJFOptions = {}): string {
+  const route = opts.route ?? '# hf/6-31g(d)'
+  const charge = opts.charge ?? 0
+  const mult = opts.multiplicity ?? 1
+  const title = (opts.title ?? mol.name ?? 'molecule').trim() || 'molecule'
+  const coords = mol.atoms.map(a =>
+    ` ${a.symbol.padEnd(2)}  ${a.x.toFixed(6).padStart(12)}  ${a.y.toFixed(6).padStart(12)}  ${a.z.toFixed(6).padStart(12)}`,
+  )
+  // 结尾必须留一个空行，否则 Gaussian 报 "End of file" 错误
+  return [route, '', title, '', `${charge} ${mult}`, ...coords, '', ''].join('\n')
+}
+
 // ─── 裸坐标 ───────────────────────────────
 
 export function parseRawCoords(text: string): Molecule {

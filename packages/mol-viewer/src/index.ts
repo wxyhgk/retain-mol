@@ -21,7 +21,11 @@ export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from './lib/types'
 
 // ── IO ────────────────────────────────────────────────────────────────────────
 export { parseMol, parseSdf, exportMol, exportSdf, is2D } from './lib/io/molFormat'
-export { parseClipboard } from './lib/io'
+export { parseClipboard, exportGJF } from './lib/io'
+export type { GJFOptions } from './lib/io/pasteParser'
+
+// ── 视口截图 ──────────────────────────────────────────────────────────────────
+export { captureViewportImage } from './capture'
 
 // ── 主题 ─────────────────────────────────────────────────────────────────────
 export { resolveTheme, listThemes, hexToInt } from './presets'

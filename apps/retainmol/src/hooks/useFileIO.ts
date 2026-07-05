@@ -6,8 +6,9 @@
 import { useCallback } from 'react'
 import {
   useMoleculeStore, selectActiveMoleculeOrEmpty,
-  parseXYZ, exportXYZ, centerMolecule,
+  parseXYZ, exportXYZ, exportGJF, centerMolecule,
   parseMol, parseSdf, exportMol, exportSdf, is2D,
+  captureViewportImage,
 } from '@retainmol/mol-viewer'
 
 function download(text: string, filename: string, mime = 'text/plain') {
@@ -18,6 +19,13 @@ function download(text: string, filename: string, mime = 'text/plain') {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement('a')
+  a.href = dataUrl
+  a.download = filename
+  a.click()
 }
 
 export function useFileIO() {
@@ -109,7 +117,21 @@ export function useFileIO() {
     download(exportSdf(molecule), `${molName}.sdf`)
   }, [molecule, molName])
 
-  return { importXYZ, importMolSdf, importXYZToScene, importMolSdfToScene, exportCurrentXYZ, exportCurrentMol, exportCurrentSdf }
+  const exportCurrentGJF = useCallback(() => {
+    download(exportGJF(molecule), `${molName}.gjf`)
+  }, [molecule, molName])
+
+  // 视口 PNG 截图（2 倍高清；无原子时不导空图）
+  const exportPNG = useCallback(() => {
+    if (molecule.atoms.length === 0) return
+    const url = captureViewportImage(2)
+    if (url) downloadDataUrl(url, `${molName}.png`)
+  }, [molecule, molName])
+
+  return {
+    importXYZ, importMolSdf, importXYZToScene, importMolSdfToScene,
+    exportCurrentXYZ, exportCurrentMol, exportCurrentSdf, exportCurrentGJF, exportPNG,
+  }
 }
 
 function pickFile(accept: string, onLoad: (text: string, filename: string) => void) {

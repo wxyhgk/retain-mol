@@ -18,6 +18,7 @@ import { useBuilder } from '../../hooks/useBuilder'
 import { useMolViewerSync } from '../../hooks/useMolViewerSync'
 import { useRendererBinding } from '../../hooks/useRendererBinding'
 import { useCanvasPointerRouter } from '../../hooks/useCanvasPointerRouter'
+import { registerViewportCapture } from '../../capture'
 import BuilderHint from '../builder/BuilderHint'
 import MeasureOverlay from './MeasureOverlay'
 import AtomLabelOverlay from './AtomLabelOverlay'
@@ -102,6 +103,12 @@ export default function MolViewer({
     handlers,
     onRendererChange: setRenderer,
   })
+
+  // 向 app 层注册截图能力（不暴露 renderer 本身，保持边界干净）
+  useEffect(() => {
+    registerViewportCapture(renderer ? (scale) => renderer.captureImage(scale) : null)
+    return () => registerViewportCapture(null)
+  }, [renderer])
 
   // ── 平面草图模式：双击 p 进入/退出，Esc 退出 ─────────────────────────────
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { detectPasteFormat, parseGJF, parseRawCoords, parseClipboard } from './pasteParser'
+import { detectPasteFormat, parseGJF, parseRawCoords, parseClipboard, exportGJF } from './pasteParser'
+import { newAtom } from '../molecule'
 
 const XYZ_METHANE = `5
 methane
@@ -116,5 +117,34 @@ describe('parseClipboard（统一入口）', () => {
 
   it('未知格式抛错', () => {
     expect(() => parseClipboard('随便写点什么')).toThrow()
+  })
+})
+
+describe('exportGJF', () => {
+  const mol = {
+    name: '乙烷',
+    atoms: [newAtom('C', 0, 0, 0), newAtom('C', 1.54, 0, 0), newAtom('H', -1.09, 0, 0)],
+    bonds: [],
+  }
+
+  it('产出可被 parseGJF 读回的合法结构（round-trip 坐标一致）', () => {
+    const text = exportGJF(mol)
+    expect(detectPasteFormat(text)).toBe('gjf')
+    const back = parseGJF(text)
+    expect(back.atoms.map(a => a.symbol)).toEqual(['C', 'C', 'H'])
+    back.atoms.forEach((a, i) => {
+      expect(a.x).toBeCloseTo(mol.atoms[i].x, 5)
+      expect(a.y).toBeCloseTo(mol.atoms[i].y, 5)
+      expect(a.z).toBeCloseTo(mol.atoms[i].z, 5)
+    })
+  })
+
+  it('含路由行、标题、电荷/多重度，结尾留空行', () => {
+    const text = exportGJF(mol, { route: '# b3lyp/6-31g(d) opt', charge: 0, multiplicity: 1 })
+    const lines = text.split('\n')
+    expect(lines[0]).toBe('# b3lyp/6-31g(d) opt')
+    expect(lines[2]).toBe('乙烷')
+    expect(lines[4]).toBe('0 1')
+    expect(text.endsWith('\n')).toBe(true)   // Gaussian 要求结尾空行
   })
 })

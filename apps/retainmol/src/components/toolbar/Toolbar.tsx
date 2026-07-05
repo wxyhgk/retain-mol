@@ -16,7 +16,8 @@ interface ToolbarProps {
 
 export default function Toolbar({ showInspector, onToggleInspector, onSearchOpen }: ToolbarProps) {
   const { undo, redo, pastStates, futureStates } = useStore(useMoleculeTemporal)
-  const { importXYZ, importMolSdf, importXYZToScene, importMolSdfToScene, exportCurrentXYZ, exportCurrentMol, exportCurrentSdf } = useFileIO()
+  const { importXYZ, importMolSdf, importXYZToScene, importMolSdfToScene,
+          exportCurrentXYZ, exportCurrentMol, exportCurrentSdf, exportCurrentGJF, exportPNG } = useFileIO()
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -76,8 +77,11 @@ export default function Toolbar({ showInspector, onToggleInspector, onSearchOpen
           </Tip>
           <DropdownMenuContent side="bottom" className="bg-white border-gray-200 shadow-lg">
             <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={exportCurrentXYZ}>导出 XYZ</DropdownMenuItem>
+            <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={exportCurrentGJF}>导出 Gaussian (.gjf)</DropdownMenuItem>
             <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={exportCurrentMol}>导出 MOL</DropdownMenuItem>
             <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={exportCurrentSdf}>导出 SDF</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-xs text-gray-700 cursor-pointer" onClick={exportPNG}>导出 PNG 截图</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
