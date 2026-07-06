@@ -22,7 +22,7 @@ export class DepthOfField {
   ): DepthOfField | null {
     if (!DOF.enabled) return null
     const dpr = window.devicePixelRatio
-    const rt = new THREE.WebGLRenderTarget(width * dpr, height * dpr, { samples: 4 })
+    const rt = new THREE.WebGLRenderTarget(width * dpr, height * dpr, { samples: DOF.samples })
     const composer = new EffectComposer(renderer, rt)
     composer.setPixelRatio(dpr)
     composer.setSize(width, height)

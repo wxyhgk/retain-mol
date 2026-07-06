@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { CAMERA } from '../../config/camera.config'
-import { LIGHTING, FOG } from '../../config/render.config'
+import { LIGHTING, FOG, BACKGROUND_GRID } from '../../config/render.config'
 
 /** 环境光 + 主光（左上、投影）+ 补光。 */
 export function setupLights(scene: THREE.Scene) {
@@ -16,10 +16,11 @@ export function setupLights(scene: THREE.Scene) {
 
 /** 极淡背景网格：不影响分子渲染，仅提供地面参考。 */
 export function addBackgroundGrid(scene: THREE.Scene) {
-  const grid = new THREE.GridHelper(50, 50, 0xe5e7eb, 0xe5e7eb)
-  grid.position.y = -3
+  const g = BACKGROUND_GRID
+  const grid = new THREE.GridHelper(g.size, g.divisions, g.color, g.color)
+  grid.position.y = g.y
   const gridMat = grid.material as THREE.LineBasicMaterial | THREE.LineBasicMaterial[]
-  ;(Array.isArray(gridMat) ? gridMat : [gridMat]).forEach(m => { m.opacity = 0.4; m.transparent = true })
+  ;(Array.isArray(gridMat) ? gridMat : [gridMat]).forEach(m => { m.opacity = g.opacity; m.transparent = true })
   scene.add(grid)
 }
 

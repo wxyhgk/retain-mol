@@ -3,6 +3,7 @@ import { MolControls } from '../controls/MolControls'
 import type { Atom, Molecule } from '../molecule'
 import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
 import { CAMERA, CONTROLS } from '../../config/camera.config'
+import { SKETCH_GRID } from '../../config/render.config'
 import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
 import { ticker, Phase } from '../animation'
 import { MoleculeRenderer } from './MoleculeRenderer'
@@ -96,9 +97,10 @@ export class MolRenderer {
       this._sketchGrid = null
     }
     if (plane) {
-      const grid = new THREE.GridHelper(14, 14, 0x94a3b8, 0xcbd5e1)
+      const sg = SKETCH_GRID
+      const grid = new THREE.GridHelper(sg.size, sg.divisions, sg.color, sg.subColor)
       const mats = grid.material as THREE.LineBasicMaterial | THREE.LineBasicMaterial[]
-      ;(Array.isArray(mats) ? mats : [mats]).forEach(m => { m.transparent = true; m.opacity = 0.3; m.depthWrite = false })
+      ;(Array.isArray(mats) ? mats : [mats]).forEach(m => { m.transparent = true; m.opacity = sg.opacity; m.depthWrite = false })
       // GridHelper 默认躺在 XZ 平面（法向 +Y）
       grid.quaternion.setFromUnitVectors(
         new THREE.Vector3(0, 1, 0),

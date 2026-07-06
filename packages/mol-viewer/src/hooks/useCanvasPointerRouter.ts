@@ -93,18 +93,29 @@ function handleTransformMove(e: PointerEvent, renderer: MolRenderer, state: Tran
   const moving = mol.atoms.filter(a => state.fragmentIds!.has(a.id))
 
   if (e.altKey) {
+    // 屏幕空间 trackball：绕「垂直于拖动方向的屏幕轴」旋转，再换算到模型局部坐标。
+    // 和相机视图旋转（MolControls）同一套手感——任意方向自由 360°，
+    // 修掉原世界轴 Euler（转盘）在视角转过后轴向错位、越转越别扭的问题。
+    // 上游 transformMinDisplacement 已挡掉 <0.5px 的抖动，故 r 恒 >0，可安全做除数
+    const r = Math.hypot(dx, dy)
+    const angle = r * INTERACTION.rotateSpeedFactor
+    // 相机看 -Z、无 roll：屏幕 X=世界 X、屏幕 Y=世界 Y；轴垂直于拖动方向
+    const axisWorld = new THREE.Vector3(dy / r, dx / r, 0)
+    // 世界轴 → 模型局部轴（模型→世界旋转求逆），令可视旋转正好绕该屏幕轴
+    const mWorldQ = new THREE.Quaternion()
+    renderer.modelGroup.getWorldQuaternion(mWorldQ)
+    const axisLocal = axisWorld.applyQuaternion(mWorldQ.invert()).normalize()
+    const rot = new THREE.Quaternion().setFromAxisAngle(axisLocal, angle)
+
     let cx = 0, cy = 0, cz = 0
     for (const a of moving) { cx += a.x; cy += a.y; cz += a.z }
     cx /= moving.length; cy /= moving.length; cz /= moving.length
-    const ay = dx * INTERACTION.rotateSpeedFactor, ax = dy * INTERACTION.rotateSpeedFactor
-    const cosY = Math.cos(ay), sinY = Math.sin(ay)
-    const cosX = Math.cos(ax), sinX = Math.sin(ax)
+
+    const v = new THREE.Vector3()
     const positions = new Map(mol.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
     for (const atom of moving) {
-      let x = atom.x - cx, y = atom.y - cy, z = atom.z - cz
-      const nx = x * cosY + z * sinY; const nz1 = -x * sinY + z * cosY; x = nx; z = nz1
-      const ny = y * cosX - z * sinX; const nz2 = y * sinX + z * cosX; y = ny; z = nz2
-      positions.set(atom.id, { x: cx + x, y: cy + y, z: cz + z })
+      v.set(atom.x - cx, atom.y - cy, atom.z - cz).applyQuaternion(rot)
+      positions.set(atom.id, { x: cx + v.x, y: cy + v.y, z: cz + v.z })
     }
     setObjectAtomPositions(state.targetObjectId, positions)
   } else {

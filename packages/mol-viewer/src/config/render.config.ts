@@ -104,6 +104,27 @@ export const DOF = {
   aperture: 0.00022,
   /** 最大模糊量（屏幕空间比例） */
   maxblur: 0.008,
+  /** MSAA 渲染目标采样数（走 composer 时用来保住抗锯齿） */
+  samples: 4,
+}
+
+export const BACKGROUND_GRID = {
+  /** 地面参考网格：极淡、不参与分子渲染，仅提供地面/深度参考 */
+  size: 50,
+  divisions: 50,
+  color: 0xe5e7eb,
+  /** 网格下沉量（Å），落在分子下方 */
+  y: -3,
+  opacity: 0.4,
+}
+
+export const SKETCH_GRID = {
+  /** 平面草图模式：半透明参考网格（贴在草图平面上，按平面法向/原点摆放） */
+  size: 14,
+  divisions: 14,
+  color: 0x94a3b8,     // 中线色
+  subColor: 0xcbd5e1,  // 网格线色
+  opacity: 0.3,
 }
 
 export const LIGHTING = {
