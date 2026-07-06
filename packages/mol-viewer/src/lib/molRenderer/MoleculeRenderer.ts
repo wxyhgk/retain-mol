@@ -155,7 +155,7 @@ export class MoleculeRenderer {
     for (const atom of molecule.atoms) {
       this.renderAtom(atom, displayMode, selectedAtoms.has(atom.id))
     }
-    if (displayMode !== 'spacefill') {
+    if (displayMode !== 'spacefill' && displayMode !== 'mtube') {
       for (const bond of molecule.bonds) {
         const a1 = atomById.get(bond.atomId1)
         const a2 = atomById.get(bond.atomId2)
@@ -173,6 +173,8 @@ export class MoleculeRenderer {
       radius = el.cpkRadius * r.spacefillScale
     } else if (displayMode === 'tube') {
       radius = r.bondRadiusStick * RENDER.tubeRadiusMultiplier   // 圆头球 = 管半径，连成连续圆管
+    } else if (displayMode === 'mtube') {
+      radius = el.covalentRadius * r.ballScale * RENDER.mtubeScale   // 团簇大球（基于共价半径），只画球不画键
     } else if (displayMode === 'stick' || displayMode === 'wireframe') {
       radius = r.bondRadiusStick * RENDER.stickAtomMultiplier
     } else {
@@ -322,7 +324,10 @@ export class MoleculeRenderer {
 
     const theme  = this.getTheme()
     const gap    = theme.render.bondGap
-    const color  = selected ? RENDER.bondSelectedColor : RENDER.bondDefaultColor
+    // 键两端元素半分色：靠 a1 端半用 a1 元素色、靠 a2 端半用 a2 元素色；
+    // 选中态整根用高亮色（两半同色），不半分。
+    const colorA1 = selected ? RENDER.bondSelectedColor : this.elementColor(a1.symbol)
+    const colorA2 = selected ? RENDER.bondSelectedColor : this.elementColor(a2.symbol)
     const stickR = _displayMode === 'tube'
       ? theme.render.bondRadiusStick * RENDER.tubeRadiusMultiplier
       : theme.render.bondRadiusStick
@@ -333,27 +338,34 @@ export class MoleculeRenderer {
     const tripleR = stickR * 0.55
 
     if (grp) {
+      // 每条键线现在是 2 个 child（a1 半 + a2 半）；芳香键前 2 个是实心主圆柱两半，其余是单色虚线段。
+      const half = len / 2
       let idx = 0
       grp.children.forEach(child => {
         const cyl = child as THREE.Mesh
         if (!cyl.isMesh) return
-        if (aromaticCentroid && idx > 0) {
+        const isAromaticDash = aromaticCentroid ? idx >= 2 : false
+        if (isAromaticDash) {
+          const dashIdx = idx - 2
           const dashLen = RENDER.aromaticDashSize
           const gapLen = RENDER.aromaticGapSize
           const step = dashLen + gapLen
-          const t = gapLen / 2 + (idx - 1) * step
-          const toCenter = new THREE.Vector3().subVectors(aromaticCentroid, mid)
+          const t = gapLen / 2 + dashIdx * step
+          const toCenter = new THREE.Vector3().subVectors(aromaticCentroid!, mid)
           toCenter.addScaledVector(dirHat, -toCenter.dot(dirHat))
           if (toCenter.lengthSq() < 1e-6) toCenter.copy(new THREE.Vector3(1, 0, 0))
           else toCenter.normalize()
           cyl.position.copy(start).addScaledVector(dirHat, t + dashLen / 2).add(toCenter.multiplyScalar(gap / 2))
           cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
         } else {
+          // idx 偶=a1 半、奇=a2 半；line = 第几条并列键线
+          const isA2 = idx % 2 === 1
+          const line = aromaticCentroid ? 0 : Math.floor(idx / 2)
           const offsets = _displayMode === 'tube' || bond.order === 1 || aromaticCentroid ? [0] : bond.order === 2 ? [-gap / 2, gap / 2] : [-gap, 0, gap]
-          const offset = offsets[Math.min(idx, offsets.length - 1)]
-          const height = (cyl.geometry as THREE.CylinderGeometry).parameters.height || len
-          cyl.scale.y = len / height
-          cyl.position.copy(mid)
+          const offset = offsets[Math.min(line, offsets.length - 1)]
+          const height = (cyl.geometry as THREE.CylinderGeometry).parameters.height || half
+          cyl.scale.y = half / height
+          cyl.position.copy(start).addScaledVector(dirHat, isA2 ? half * 1.5 : half * 0.5)
           if (offset !== 0) cyl.position.addScaledVector(perpX, offset)
           cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
         }
@@ -366,11 +378,8 @@ export class MoleculeRenderer {
     grp.userData = { type: 'bond', id: bond.id }
 
     if (aromaticCentroid) {
-      // ── 芳香键：实心圆柱 + 朝向环心的虚线小圆柱段 ────────────────────────
-      const cyl = this.makeCylinder(stickR, len, color, bond.id)
-      cyl.position.copy(mid)
-      cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
-      grp.add(cyl)
+      // ── 芳香键：实心圆柱（半分色两段）+ 朝向环心的虚线小圆柱段（单色） ──────
+      this.addHalfBond(grp, start, dirHat, len, stickR, colorA1, colorA2, bond.id)
 
       const toCenter = new THREE.Vector3().subVectors(aromaticCentroid, mid)
       toCenter.addScaledVector(dirHat, -toCenter.dot(dirHat))
@@ -396,21 +405,41 @@ export class MoleculeRenderer {
         t += step
       }
     } else {
-      // ── 普通键：按 order 渲染并排圆柱（tube 恒单粗管，忽略键级并列） ────────
+      // ── 普通键：按 order 渲染并排圆柱（tube 恒单粗管，忽略键级并列），每根半分色 ──
       const offsets = _displayMode === 'tube' || bond.order === 1 ? [0] : bond.order === 2 ? [-gap / 2, gap / 2] : [-gap, 0, gap]
       for (const offset of offsets) {
         const r = _displayMode === 'tube' ? stickR : bond.order === 2 ? doubleR : bond.order === 3 ? tripleR : stickR
-        const cyl = this.makeCylinder(r, len, color, bond.id)
-        cyl.position.copy(mid)
-        if (offset !== 0) cyl.position.addScaledVector(perpX, offset)
-        cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
-        grp.add(cyl)
+        const off = offset !== 0 ? perpX.clone().multiplyScalar(offset) : undefined
+        this.addHalfBond(grp, start, dirHat, len, r, colorA1, colorA2, bond.id, off)
       }
     }
 
     this.modelGroup.add(grp)
     this.bondMeshes.set(bond.id, grp)
     this.bondShapeKeys.set(bond.id, shapeKey)
+  }
+
+  /**
+   * 向 grp 追加一条半分色键线：两段各 len/2 的圆柱，靠 a1 端用 colorA1、靠 a2 端用 colorA2。
+   * 两段沿 dirHat 首尾相接拼成整键。可选 perpOffset 施加到两段中心（双/三键并列偏移）。
+   * child 顺序固定为 [a1 半, a2 半]，供复用路径按 idx 奇偶定位。
+   */
+  private addHalfBond(
+    grp: THREE.Group, start: THREE.Vector3, dirHat: THREE.Vector3, len: number,
+    radius: number, colorA1: number, colorA2: number, bondId: string,
+    perpOffset?: THREE.Vector3,
+  ) {
+    const half = len / 2
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
+    const centerA1 = start.clone().addScaledVector(dirHat, half * 0.5)
+    const centerA2 = start.clone().addScaledVector(dirHat, half * 1.5)
+    if (perpOffset) { centerA1.add(perpOffset); centerA2.add(perpOffset) }
+    for (const [center, color] of [[centerA1, colorA1], [centerA2, colorA2]] as const) {
+      const cyl = this.makeCylinder(radius, half, color, bondId)
+      cyl.position.copy(center)
+      cyl.quaternion.copy(q)
+      grp.add(cyl)
+    }
   }
 
   private makeCylinder(radius: number, length: number, color: number, bondId: string): THREE.Mesh {

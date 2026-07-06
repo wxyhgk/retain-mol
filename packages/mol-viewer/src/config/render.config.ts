@@ -19,6 +19,9 @@ export const RENDER = {
   /** tube（管状/licorice）模式：管半径 = bondRadiusStick × tubeRadiusMultiplier，
    *  球半径 = 管半径 → 圆头封端连成连续圆管 */
   tubeRadiusMultiplier: 3.2,
+  /** mtube（团簇/只画大球不画键）模式：大球 = covalentRadius × ballScale × mtubeScale，
+   *  比球棍大得多、又不到空填 vdw 那么满 */
+  mtubeScale: 2.6,
 
   /** Phong 材质高光参数 */
   atomShininess: 80,
