@@ -33,6 +33,7 @@ interface RendererBindingOptions {
   selectedAtomIds: Set<string>
   selectedBondIds: Set<string>
   displayMode:    DisplayMode
+  renderStyle:    'realistic' | 'publication'
   theme:          ResolvedTheme
   measurements:   Measurement[]
   pendingAtomIds: string[]
@@ -50,7 +51,7 @@ export function useRendererBinding({
   readOnly, activeTool,
   sceneObjects, activeObjectId,
   selectedAtomIds, selectedBondIds,
-  displayMode, theme,
+  displayMode, renderStyle, theme,
   measurements, pendingAtomIds, measureStyle, sketchPlane,
   handlers,
   onRendererChange,
@@ -118,15 +119,16 @@ export function useRendererBinding({
     const r = rendererRef.current
     if (!r) return
     r.theme = theme
+    r.renderStyle = renderStyle
     r.scene.background = new THREE.Color(parseInt(theme.scene.backgroundColor.replace('#', ''), 16))
-  }, [theme, rendererRef])
+  }, [theme, renderStyle, rendererRef])
 
   // ── 场景渲染 ─────────────────────────────────────────────────────────────
   useEffect(() => {
     rendererRef.current?.renderScene(
       sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds,
     )
-  }, [sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds, theme, rendererRef])
+  }, [sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds, theme, renderStyle, rendererRef])
 
   // ── 视角跟随 ─────────────────────────────────────────────────────────────
   // move-object 激活时跳过：否则 modelGroup 偏移导致所有分子一起移动

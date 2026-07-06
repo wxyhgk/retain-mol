@@ -78,6 +78,7 @@ export default function MolViewer({
   const pendingAtomIds  = useEditorStore(s => s.pendingAtomIds)
   const measureStyle    = useEditorStore(s => s.measureStyle)
   const sketchPlane     = useEditorStore(s => s.sketchPlane)
+  const renderStyle     = useEditorStore(s => s.renderStyle)
 
   const sceneObjects = useMemo(
     () => objectOrder.map(id => objectsById[id]).filter(Boolean),
@@ -99,7 +100,7 @@ export default function MolViewer({
     readOnly, activeTool,
     sceneObjects, activeObjectId,
     selectedAtomIds, selectedBondIds,
-    displayMode, theme,
+    displayMode, renderStyle, theme,
     measurements, pendingAtomIds, measureStyle, sketchPlane,
     handlers,
     onRendererChange: setRenderer,

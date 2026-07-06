@@ -29,6 +29,8 @@ export class MolRenderer {
   readonly canvas: HTMLCanvasElement
 
   theme: ResolvedTheme = resolveTheme('default')
+  /** 渲染风格：realistic（写实光照）| publication（论文：径向渐变球 + 黑描边） */
+  renderStyle: 'realistic' | 'publication' = 'realistic'
 
   private _measureGroup = new THREE.Group()
   private _unsubTicker: () => void = () => {}
@@ -346,7 +348,7 @@ export class MolRenderer {
   }
 
   render(molecule: Molecule, displayMode: DisplayMode, selectedAtoms: Set<string>, selectedBonds: Set<string>) {
-    this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds, this._aromaticData(molecule))
+    this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds, this._aromaticData(molecule), this.renderStyle === 'publication')
     ticker.invalidate()
   }
 
@@ -394,6 +396,7 @@ export class MolRenderer {
         isActive ? selectedAtoms : new Set<string>(),
         isActive ? selectedBonds : new Set<string>(),
         this._aromaticData(obj.molecule),
+        this.renderStyle === 'publication',
       )
 
       // 非活跃对象半透明

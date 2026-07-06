@@ -34,6 +34,7 @@ interface EditorState {
 
   // ── 显示选项 ──────────────────────────────────────────────────────────────
   displayMode:    DisplayMode
+  renderStyle:    'realistic' | 'publication'
   showAtomLabels: boolean
   themeId:        string
   theme:          ResolvedTheme
@@ -65,6 +66,7 @@ interface EditorState {
   setBondingAtom:    (id: string | null) => void
 
   setDisplayMode:    (mode: DisplayMode) => void
+  setRenderStyle:    (s: 'realistic' | 'publication') => void
   setShowAtomLabels: (v: boolean) => void
   toggleAtomLabels:  () => void
   setTheme:          (id: string) => void
@@ -93,6 +95,7 @@ export const useEditorStore = create<EditorState>()(subscribeWithSelector(set =>
   bondingAtomId: null,
 
   displayMode:    'ball-stick',
+  renderStyle:    'realistic',
   showAtomLabels: false,
   themeId:        'default',
   theme:          resolveTheme('default'),
@@ -117,6 +120,7 @@ export const useEditorStore = create<EditorState>()(subscribeWithSelector(set =>
   setBondingAtom:    (id) => set({ bondingAtomId: id }),
 
   setDisplayMode:    (mode) => set({ displayMode: mode }),
+  setRenderStyle:    (s) => set({ renderStyle: s }),
   setShowAtomLabels: (v) => set({ showAtomLabels: v }),
   toggleAtomLabels:  () => set(s => ({ showAtomLabels: !s.showAtomLabels })),
   setTheme:          (id) => set({ themeId: id, theme: resolveTheme(id) }),

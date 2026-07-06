@@ -10,7 +10,7 @@ const DISPLAY_MODES: { id: DisplayMode; label: string; desc: string }[] = [
 ]
 
 export default function StylePanel() {
-  const { displayMode, setDisplayMode, showAtomLabels, toggleAtomLabels, themeId, setTheme } = useEditorStore()
+  const { displayMode, setDisplayMode, renderStyle, setRenderStyle, showAtomLabels, toggleAtomLabels, themeId, setTheme } = useEditorStore()
   const { setMolecule } = useMoleculeStore()
   const themes = listThemes()
 
@@ -34,6 +34,31 @@ export default function StylePanel() {
             >
               <span className="text-xs font-medium">{m.label}</span>
               <span className={cn('text-[10px]', displayMode === m.id ? 'opacity-50' : 'opacity-60')}>{m.desc}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* 渲染风格 */}
+      <section>
+        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">渲染风格</div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {([
+            { id: 'realistic',   label: '写实', desc: 'Realistic'   },
+            { id: 'publication', label: '论文', desc: 'Publication' },
+          ] as const).map(s => (
+            <button
+              key={s.id}
+              onClick={() => setRenderStyle(s.id)}
+              className={cn(
+                'flex flex-col items-start px-2.5 py-2 rounded-lg border text-left transition-all',
+                renderStyle === s.id
+                  ? 'bg-gray-900 border-gray-900 text-white'
+                  : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-100'
+              )}
+            >
+              <span className="text-xs font-medium">{s.label}</span>
+              <span className={cn('text-[10px]', renderStyle === s.id ? 'opacity-50' : 'opacity-60')}>{s.desc}</span>
             </button>
           ))}
         </div>

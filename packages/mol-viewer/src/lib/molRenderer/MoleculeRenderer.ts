@@ -8,6 +8,53 @@ import { getElementConfig as getElement } from '../../config/elements.config'
 import { RENDER, BOND_DRAG_HOVER } from '../../config/render.config'
 import { ticker } from '../animation'
 
+// ── 出版/论文渲染（由 MoleculeRenderer._pub 驱动）──────────────
+// cel 扁平 3 阶灰度 ramp（NearestFilter → 硬边界，出 toon 分层观感）
+function makeToonGradient(): THREE.DataTexture {
+  const c = new Uint8Array([70, 135, 195, 245])
+  const t = new THREE.DataTexture(c, c.length, 1, THREE.RedFormat)
+  t.minFilter = t.magFilter = THREE.NearestFilter
+  t.generateMipmaps = false
+  t.needsUpdate = true
+  return t
+}
+const TOON_GRADIENT = makeToonGradient()
+/** inverted-hull 黑描边相对半径的额外量（Å，POC 用固定值；正式版用屏幕空间 pos.w） */
+const OUTLINE_OFFSET = 0.05
+
+// ── 球径向渐变（复刻 xyzrender：左上高光焦点 fx/fy=.33、3 段 stop 0%/40%/100%）──
+// 在 HSL 空间由基色算高光/边缘暗色（对齐 xyzrender colors.py 的 lighten/darken 语义）
+function sphereShades(hex: number): { hi: THREE.Color; base: THREE.Color; lo: THREE.Color } {
+  const base = new THREE.Color(hex)
+  const hsl = { h: 0, s: 0, l: 0 }
+  base.getHSL(hsl)
+  const hi = new THREE.Color().setHSL(hsl.h, hsl.s, Math.min(1, hsl.l + (1 - hsl.l) * 0.5))
+  const lo = new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s + (1 - hsl.s) * 0.18), hsl.l * 0.52)
+  return { hi, base, lo }
+}
+// view-space 法线的 xy = 球在屏幕的投影坐标（中心→0、边缘→单位圆），正好对应 SVG 圆盘
+const SPHERE_VERT = /* glsl */`
+  varying vec3 vN;
+  void main() { vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+`
+const SPHERE_FRAG = /* glsl */`
+  uniform vec3 uHi; uniform vec3 uBase; uniform vec3 uLo;
+  varying vec3 vN;
+  void main() {
+    float d = clamp(length(vN.xy - vec2(-0.34, 0.34)) / 0.66, 0.0, 1.0);   // 到左上高光焦点的径向距离
+    vec3 col = d < 0.4 ? mix(uHi, uBase, d / 0.4) : mix(uBase, uLo, (d - 0.4) / 0.6);
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }
+`
+function makeSphereMat(hex: number): THREE.ShaderMaterial {
+  const s = sphereShades(hex)
+  return new THREE.ShaderMaterial({
+    uniforms: { uHi: { value: s.hi }, uBase: { value: s.base }, uLo: { value: s.lo } },
+    vertexShader: SPHERE_VERT, fragmentShader: SPHERE_FRAG,
+  })
+}
+
 /**
  * 管理原子、键、高光 mesh 的生命周期与更新。
  * 不持有 scene/camera，只操作注入的 modelGroup。
@@ -16,6 +63,9 @@ export class MoleculeRenderer {
   readonly atomMeshes = new Map<string, THREE.Mesh>()
   readonly bondMeshes = new Map<string, THREE.Group>()
   private highlightMeshes = new Map<string, THREE.Mesh>()
+  private outlineMeshes = new Map<string, THREE.Mesh>()
+  /** 出版渲染开关（由 render 的 publication 参数驱动，替代早期硬编码常量） */
+  private _pub = false
   private bondShapeKeys = new Map<string, string>()
   private _dragHoverMesh: THREE.Mesh | null = null
   private _dragHoverId: string | null = null
@@ -37,7 +87,9 @@ export class MoleculeRenderer {
     selectedAtoms: Set<string>,
     selectedBonds: Set<string>,
     aromaticBonds: Map<string, THREE.Vector3> = new Map(),
+    publication = false,
   ) {
+    this._pub = publication
     const existingAtomIds = new Set(molecule.atoms.map(a => a.id))
     const existingBondIds = new Set(molecule.bonds.map(b => b.id))
 
@@ -61,6 +113,13 @@ export class MoleculeRenderer {
         this.modelGroup.remove(mesh)
         mesh.geometry.dispose()
         this.highlightMeshes.delete(id)
+      }
+    }
+    for (const [id, mesh] of this.outlineMeshes) {
+      if (!existingAtomIds.has(id)) {
+        this.modelGroup.remove(mesh)
+        mesh.geometry.dispose()
+        this.outlineMeshes.delete(id)
       }
     }
 
@@ -93,8 +152,10 @@ export class MoleculeRenderer {
     let mesh = this.atomMeshes.get(atom.id)
     if (!mesh) {
       const geo = new THREE.SphereGeometry(radius, RENDER.sphereSegments, RENDER.sphereSegments)
-      const mat = new THREE.MeshPhongMaterial({ color, shininess: RENDER.atomShininess, specular: RENDER.atomSpecular })
-      if (displayMode === 'wireframe') mat.wireframe = true
+      const mat: THREE.Material = this._pub && displayMode !== 'wireframe'
+        ? makeSphereMat(color)
+        : new THREE.MeshPhongMaterial({ color, shininess: RENDER.atomShininess, specular: RENDER.atomSpecular })
+      if (displayMode === 'wireframe') (mat as THREE.MeshPhongMaterial).wireframe = true
       mesh = new THREE.Mesh(geo, mat)
       mesh.userData = { type: 'atom', id: atom.id }
       mesh.castShadow = true
@@ -108,10 +169,49 @@ export class MoleculeRenderer {
       }
     }
     mesh.position.set(atom.x, atom.y, atom.z)
-    ;(mesh.material as THREE.MeshPhongMaterial).color.setHex(color)
+    const amat = mesh.material as THREE.ShaderMaterial & { color?: THREE.Color }
+    if (amat.isShaderMaterial && amat.uniforms?.uHi) {
+      const s = sphereShades(color)
+      amat.uniforms.uHi.value = s.hi; amat.uniforms.uBase.value = s.base; amat.uniforms.uLo.value = s.lo
+    } else if (amat.color) {
+      amat.color.setHex(color)
+    }
 
     if (selected) this.addHighlight(atom.id, atom.x, atom.y, atom.z, radius + RENDER.selectionHaloOffset)
     else this.removeHighlight(atom.id)
+
+    if (this._pub && displayMode !== 'wireframe') this.addOutline(atom.id, atom.x, atom.y, atom.z, radius)
+    else this.removeOutline(atom.id)
+  }
+
+  /** inverted-hull 黑描边：放大的黑色 BackSide 球，正面被原子挡住、边缘露出黑边 */
+  private addOutline(atomId: string, x: number, y: number, z: number, radius: number) {
+    const rr = radius + Math.max(OUTLINE_OFFSET, radius * 0.14)
+    let o = this.outlineMeshes.get(atomId)
+    if (!o) {
+      const geo = new THREE.SphereGeometry(rr, RENDER.sphereSegments, RENDER.sphereSegments)
+      const mat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide })
+      o = new THREE.Mesh(geo, mat)
+      o.renderOrder = -1
+      this.modelGroup.add(o)
+      this.outlineMeshes.set(atomId, o)
+    } else {
+      const prev = (o.geometry as THREE.SphereGeometry).parameters.radius
+      if (Math.abs(prev - rr) > 1e-4) {
+        o.geometry.dispose()
+        o.geometry = new THREE.SphereGeometry(rr, RENDER.sphereSegments, RENDER.sphereSegments)
+      }
+    }
+    o.position.set(x, y, z)
+  }
+
+  private removeOutline(atomId: string) {
+    const o = this.outlineMeshes.get(atomId)
+    if (o) {
+      this.modelGroup.remove(o)
+      o.geometry.dispose()
+      this.outlineMeshes.delete(atomId)
+    }
   }
 
   private addHighlight(atomId: string, x: number, y: number, z: number, radius: number) {
@@ -263,7 +363,9 @@ export class MoleculeRenderer {
 
   private makeCylinder(radius: number, length: number, color: number, bondId: string): THREE.Mesh {
     const geo = new THREE.CylinderGeometry(radius, radius, length, RENDER.cylinderSegments)
-    const mat = new THREE.MeshPhongMaterial({ color, shininess: RENDER.bondShininess })
+    const mat: THREE.Material = this._pub
+      ? new THREE.MeshToonMaterial({ color, gradientMap: TOON_GRADIENT })
+      : new THREE.MeshPhongMaterial({ color, shininess: RENDER.bondShininess })
     const cyl = new THREE.Mesh(geo, mat)
     cyl.userData = { type: 'bond', id: bondId }
     return cyl

@@ -1,0 +1,27 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "pmol",
+    "name": "论文·PyMOL",
+    "description": "移植自 xyzrender 的 pmol 出版预设：白底 + 灰白碳的 PyMOL 风，球更大、键更粗。原预设的黑描边（atom_stroke / bond_outline）需渲染层实现，主题层暂不覆盖。",
+    "source": "https://github.com/aligfellow/xyzrender",
+    "author": "RetainMol (adapted from xyzrender, MIT)",
+    "version": "1.0.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#ffffff",
+    "highlightColor": "#2563eb",
+    "highlightOpacity": 0.3
+  },
+  "render": {
+    "ballScale": 0.5,
+    "bondRadiusStick": 0.12
+  },
+  "elements": {
+    "C": { "color": "#d9d9d9" },
+    "H": { "color": "#fafafa" },
+    "N": { "color": "#7f7fbf" }
+  }
+}

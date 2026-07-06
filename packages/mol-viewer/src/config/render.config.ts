@@ -101,7 +101,8 @@ export const DOF = {
 }
 
 export const LIGHTING = {
-  ambient: { color: 0xffffff, intensity: 0.7 },
-  keyLight: { color: 0xffffff, intensity: 0.9, position: [10, 15, 10] as const },
-  fillLight: { color: 0xddeeff, intensity: 0.4, position: [-10, -5, -10] as const },
+  // 主光固定在左上前方（xyzrender/出版风：高光偏左上、阴影落右下）
+  ambient: { color: 0xffffff, intensity: 0.55 },
+  keyLight: { color: 0xffffff, intensity: 1.0, position: [-8, 12, 10] as const },
+  fillLight: { color: 0xddeeff, intensity: 0.35, position: [10, -4, -8] as const },
 }
