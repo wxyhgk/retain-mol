@@ -21,16 +21,15 @@ import { computeRingRadius, collectBondSideAtoms } from './gizmoMath'
 
 // ── 内部类型 ──────────────────────────────────────────────────────────────────
 
+// gizmo 只剩「绕键轴旋转」一种（多选原子的世界轴环已移除），故 axisLocal/bondId/pivotAtomId 恒有。
 type RingSpec = {
   id: string
-  space: 'bond' | 'world'
-  axisLocal?: THREE.Vector3
-  axisWorld?: THREE.Vector3
+  axisLocal: THREE.Vector3
   pivotLocal: THREE.Vector3
   color: number
   radius: number
-  bondId?: string
-  pivotAtomId?: string
+  bondId: string
+  pivotAtomId: string
   atomIdsToRotate: Set<string>
 }
 
@@ -139,26 +138,18 @@ export class RotateGizmoController {
 
     for (const r of this.rings) {
       // 更新 pivot / axis（跟踪原子位置）
-      if (r.spec.space === 'bond' && r.spec.bondId && r.spec.pivotAtomId) {
-        const bond = liveMol.bonds.find(b => b.id === r.spec.bondId)
-        if (bond) {
-          const a1 = this._atomById.get(bond.atomId1)
-          const a2 = this._atomById.get(bond.atomId2)
-          const pa = this._atomById.get(r.spec.pivotAtomId)
-          if (a1 && a2 && pa) {
-            this._tmpV1.set(a2.x - a1.x, a2.y - a1.y, a2.z - a1.z)
-            if (this._tmpV1.lengthSq() > 1e-8) {
-              r.spec.axisLocal = this._tmpV1.normalize().clone() // axisLocal 存储需要独立 instance
-              r.spec.pivotLocal.set(pa.x, pa.y, pa.z)
-            }
+      const bond = liveMol.bonds.find(b => b.id === r.spec.bondId)
+      if (bond) {
+        const a1 = this._atomById.get(bond.atomId1)
+        const a2 = this._atomById.get(bond.atomId2)
+        const pa = this._atomById.get(r.spec.pivotAtomId)
+        if (a1 && a2 && pa) {
+          this._tmpV1.set(a2.x - a1.x, a2.y - a1.y, a2.z - a1.z)
+          if (this._tmpV1.lengthSq() > 1e-8) {
+            r.spec.axisLocal = this._tmpV1.normalize().clone() // axisLocal 存储需要独立 instance
+            r.spec.pivotLocal.set(pa.x, pa.y, pa.z)
           }
         }
-      } else if (r.spec.space === 'world') {
-        let cx = 0, cy = 0, cz = 0, n = 0
-        for (const a of liveMol.atoms) {
-          if (r.spec.atomIdsToRotate.has(a.id)) { cx += a.x; cy += a.y; cz += a.z; n++ }
-        }
-        if (n > 0) r.spec.pivotLocal.set(cx / n, cy / n, cz / n)
       }
 
       // pivotWorld — 复用 _tmpV1
@@ -166,12 +157,8 @@ export class RotateGizmoController {
       renderer.modelGroup.localToWorld(this._tmpV1)
       r.group.position.copy(this._tmpV1)
 
-      // axisWorld — 复用 _axisWorld
-      if (r.spec.space === 'bond') {
-        this._axisWorld.copy(r.spec.axisLocal!).applyQuaternion(this._modelWorldQ)
-      } else {
-        this._axisWorld.copy(r.spec.axisWorld!)
-      }
+      // axisWorld — 复用 _axisWorld（键轴 local → world）
+      this._axisWorld.copy(r.spec.axisLocal).applyQuaternion(this._modelWorldQ)
       this._axisWorld.normalize()
 
       r.group.quaternion.setFromUnitVectors(this._tmpV2.set(0, 0, 1), this._axisWorld)
@@ -313,13 +300,9 @@ export class RotateGizmoController {
     this.renderer.modelGroup.localToWorld(this._tmpV1)
     const pivotWorld = this._tmpV1.clone()
 
-    // axisWorld — 用 _axisWorld
-    if (hit.spec.space === 'bond') {
-      this.renderer.modelGroup.getWorldQuaternion(this._modelWorldQ)
-      this._axisWorld.copy(hit.spec.axisLocal!).applyQuaternion(this._modelWorldQ)
-    } else {
-      this._axisWorld.copy(hit.spec.axisWorld!)
-    }
+    // axisWorld — 用 _axisWorld（键轴 local → world）
+    this.renderer.modelGroup.getWorldQuaternion(this._modelWorldQ)
+    this._axisWorld.copy(hit.spec.axisLocal).applyQuaternion(this._modelWorldQ)
     this._axisWorld.normalize()
     const axisWorld = this._axisWorld.clone()
 
@@ -424,7 +407,7 @@ function buildSpecs(
           const d = new THREE.Vector3(a2.x-a1.x, a2.y-a1.y, a2.z-a1.z)
           if (d.length() > 1e-4) {
             specs.push({
-              id: 'bond', space: 'bond', axisLocal: d.normalize(),
+              id: 'bond', axisLocal: d.normalize(),
               pivotLocal: new THREE.Vector3(startAtom.x, startAtom.y, startAtom.z),
               color: GIZMO_COLOR.idle,
               radius: computeRingRadius(mol.atoms, startAtom.x, startAtom.y, startAtom.z, rotating),
@@ -436,20 +419,8 @@ function buildSpecs(
     }
   }
 
-  if (specs.length === 0 && selectedAtomIds.size >= 2) {
-    const sel = mol.atoms.filter(a => selectedAtomIds.has(a.id))
-    if (sel.length >= 2) {
-      const cx = sel.reduce((s, a) => s + a.x, 0) / sel.length
-      const cy = sel.reduce((s, a) => s + a.y, 0) / sel.length
-      const cz = sel.reduce((s, a) => s + a.z, 0) / sel.length
-      const pivot = new THREE.Vector3(cx, cy, cz)
-      const toRotate = new Set(selectedAtomIds)
-      const r = computeRingRadius(mol.atoms, cx, cy, cz, toRotate)
-      specs.push({ id: 'X', space: 'world', axisWorld: new THREE.Vector3(1,0,0), pivotLocal: pivot.clone(), color: GIZMO_COLOR.idle, radius: r, atomIdsToRotate: toRotate })
-      specs.push({ id: 'Y', space: 'world', axisWorld: new THREE.Vector3(0,1,0), pivotLocal: pivot.clone(), color: GIZMO_COLOR.idle, radius: r, atomIdsToRotate: toRotate })
-      specs.push({ id: 'Z', space: 'world', axisWorld: new THREE.Vector3(0,0,1), pivotLocal: pivot.clone(), color: GIZMO_COLOR.idle, radius: r, atomIdsToRotate: toRotate })
-    }
-  }
+  // 多选原子的 X/Y/Z 世界轴旋转环已移除（用户反馈基本没用）——
+  // 仅保留上面「选中 1 个键 + 一个端点」绕键轴旋转（改构象/拧二面角有用）。
 
   return specs
 }
