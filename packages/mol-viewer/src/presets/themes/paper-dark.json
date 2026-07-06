@@ -1,0 +1,35 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "paper-dark",
+    "name": "论文·深底",
+    "description": "深背景 + 亮灰碳 + 明亮杂原子，暗色论文/幻灯片/海报用；描边自动反白。",
+    "source": "https://github.com/aligfellow/xyzrender",
+    "author": "RetainMol",
+    "version": "1.0.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#14161c",
+    "highlightColor": "#38bdf8",
+    "highlightOpacity": 0.35
+  },
+  "render": {
+    "ballScale": 0.45,
+    "bondRadiusStick": 0.1
+  },
+  "elements": {
+    "C":  { "color": "#c8c8c8" },
+    "H":  { "color": "#e8e8e8" },
+    "N":  { "color": "#6699ff" },
+    "O":  { "color": "#ff5a5a" },
+    "S":  { "color": "#e8d84a" },
+    "F":  { "color": "#a0e0a0" },
+    "Cl": { "color": "#90e090" },
+    "P":  { "color": "#ffaa55" },
+    "B":  { "color": "#ffb0b0" },
+    "Br": { "color": "#d08080" },
+    "I":  { "color": "#c080d0" }
+  }
+}

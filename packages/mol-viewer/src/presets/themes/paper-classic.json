@@ -1,0 +1,26 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "paper-classic",
+    "name": "论文·经典",
+    "description": "白底 + 灰白碳 + 鲜艳标准 CPK 杂原子，期刊最常见、辨识度最高的配色。",
+    "source": "https://github.com/aligfellow/xyzrender",
+    "author": "RetainMol",
+    "version": "1.0.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#ffffff",
+    "highlightColor": "#2563eb",
+    "highlightOpacity": 0.3
+  },
+  "render": {
+    "ballScale": 0.42,
+    "bondRadiusStick": 0.09
+  },
+  "elements": {
+    "C": { "color": "#d9d9d9" },
+    "H": { "color": "#fafafa" }
+  }
+}

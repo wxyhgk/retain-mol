@@ -1,0 +1,35 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "paper-soft",
+    "name": "论文·柔和",
+    "description": "白底 + 灰白碳 + 低饱和柔和杂原子，PyMOL 论文风，整块看更耐看、不刺眼；球更大更饱满。",
+    "source": "https://github.com/aligfellow/xyzrender",
+    "author": "RetainMol",
+    "version": "1.0.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#ffffff",
+    "highlightColor": "#2563eb",
+    "highlightOpacity": 0.3
+  },
+  "render": {
+    "ballScale": 0.5,
+    "bondRadiusStick": 0.11
+  },
+  "elements": {
+    "C":  { "color": "#d9d9d9" },
+    "H":  { "color": "#fafafa" },
+    "N":  { "color": "#7f7fbf" },
+    "O":  { "color": "#e06666" },
+    "S":  { "color": "#d4c258" },
+    "F":  { "color": "#8fd98f" },
+    "Cl": { "color": "#7fcf7f" },
+    "P":  { "color": "#e0a060" },
+    "B":  { "color": "#f0b0b0" },
+    "Br": { "color": "#b06060" },
+    "I":  { "color": "#a070a0" }
+  }
+}

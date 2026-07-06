@@ -215,10 +215,11 @@ export class MoleculeRenderer {
   /** inverted-hull 黑描边：放大的黑色 BackSide 球，正面被原子挡住、边缘露出黑边 */
   private addOutline(atomId: string, x: number, y: number, z: number, radius: number) {
     const rr = radius + Math.max(OUTLINE_OFFSET, radius * 0.14)
+    const oc = this._outlineColor()
     let o = this.outlineMeshes.get(atomId)
     if (!o) {
       const geo = new THREE.SphereGeometry(rr, RENDER.sphereSegments, RENDER.sphereSegments)
-      const mat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide })
+      const mat = new THREE.MeshBasicMaterial({ color: oc, side: THREE.BackSide })
       o = new THREE.Mesh(geo, mat)
       o.renderOrder = -1
       this.modelGroup.add(o)
@@ -230,7 +231,15 @@ export class MoleculeRenderer {
         o.geometry = new THREE.SphereGeometry(rr, RENDER.sphereSegments, RENDER.sphereSegments)
       }
     }
+    ;(o.material as THREE.MeshBasicMaterial).color.setHex(oc)
     o.position.set(x, y, z)
+  }
+
+  /** 描边色随背景亮度自适应：亮底黑描边、暗底白描边 */
+  private _outlineColor(): number {
+    const bg = new THREE.Color(hexToInt(this.getTheme().scene.backgroundColor))
+    const lum = 0.299 * bg.r + 0.587 * bg.g + 0.114 * bg.b
+    return lum > 0.5 ? 0x000000 : 0xffffff
   }
 
   private removeOutline(atomId: string) {
@@ -410,7 +419,7 @@ export class MoleculeRenderer {
     if (this._pub) {
       // inverted-hull 描边：径向放大的黑色 BackSide 圆柱（长度不放大，避免端帽超出）
       const s = (radius + Math.max(0.03, radius * 0.35)) / radius
-      const outline = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide }))
+      const outline = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: this._outlineColor(), side: THREE.BackSide }))
       outline.scale.set(s, 1, s)
       outline.renderOrder = -1
       cyl.add(outline)
