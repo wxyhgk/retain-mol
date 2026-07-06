@@ -6,6 +6,7 @@ const DISPLAY_MODES: { id: DisplayMode; label: string; desc: string }[] = [
   { id: 'ball-stick', label: '球棍',  desc: 'Ball & Stick' },
   { id: 'spacefill',  label: '空填',  desc: 'Space Fill'   },
   { id: 'stick',      label: '棍棒',  desc: 'Stick'        },
+  { id: 'tube',       label: '管状',  desc: 'Tube'         },
   { id: 'wireframe',  label: '线框',  desc: 'Wireframe'    },
 ]
 

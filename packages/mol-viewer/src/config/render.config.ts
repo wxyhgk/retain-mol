@@ -16,6 +16,9 @@ export const RENDER = {
 
   /** stick / wireframe 模式下原子半径 = bondRadiusStick × stickAtomMultiplier */
   stickAtomMultiplier: 1.5,
+  /** tube（管状/licorice）模式：管半径 = bondRadiusStick × tubeRadiusMultiplier，
+   *  球半径 = 管半径 → 圆头封端连成连续圆管 */
+  tubeRadiusMultiplier: 3.2,
 
   /** Phong 材质高光参数 */
   atomShininess: 80,

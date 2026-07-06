@@ -171,6 +171,8 @@ export class MoleculeRenderer {
     let radius: number
     if (displayMode === 'spacefill') {
       radius = el.cpkRadius * r.spacefillScale
+    } else if (displayMode === 'tube') {
+      radius = r.bondRadiusStick * RENDER.tubeRadiusMultiplier   // 圆头球 = 管半径，连成连续圆管
     } else if (displayMode === 'stick' || displayMode === 'wireframe') {
       radius = r.bondRadiusStick * RENDER.stickAtomMultiplier
     } else {
@@ -302,7 +304,7 @@ export class MoleculeRenderer {
     atomById?: Map<string, Atom>, allBonds?: readonly Bond[],
   ) {
     let grp = this.bondMeshes.get(bond.id)
-    const shapeKey = `${bond.order}:${selected ? 1 : 0}:${aromaticCentroid ? 1 : 0}`
+    const shapeKey = `${bond.order}:${selected ? 1 : 0}:${aromaticCentroid ? 1 : 0}:${_displayMode}`
     if (grp && this.bondShapeKeys.get(bond.id) !== shapeKey) {
       this.modelGroup.remove(grp)
       disposeGroup(grp)
@@ -321,7 +323,9 @@ export class MoleculeRenderer {
     const theme  = this.getTheme()
     const gap    = theme.render.bondGap
     const color  = selected ? RENDER.bondSelectedColor : RENDER.bondDefaultColor
-    const stickR = theme.render.bondRadiusStick
+    const stickR = _displayMode === 'tube'
+      ? theme.render.bondRadiusStick * RENDER.tubeRadiusMultiplier
+      : theme.render.bondRadiusStick
     // 双/三键用邻居叉积确定偏移方向（在分子平面内），与 3Dmol.js 方法一致
     const perpX = getSideBondPerp(a1, a2, dirHat, atomById, allBonds)
     // 双/三键圆柱半径缩小，视觉上更清晰
@@ -345,7 +349,7 @@ export class MoleculeRenderer {
           cyl.position.copy(start).addScaledVector(dirHat, t + dashLen / 2).add(toCenter.multiplyScalar(gap / 2))
           cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirHat)
         } else {
-          const offsets = bond.order === 1 || aromaticCentroid ? [0] : bond.order === 2 ? [-gap / 2, gap / 2] : [-gap, 0, gap]
+          const offsets = _displayMode === 'tube' || bond.order === 1 || aromaticCentroid ? [0] : bond.order === 2 ? [-gap / 2, gap / 2] : [-gap, 0, gap]
           const offset = offsets[Math.min(idx, offsets.length - 1)]
           const height = (cyl.geometry as THREE.CylinderGeometry).parameters.height || len
           cyl.scale.y = len / height
@@ -392,10 +396,10 @@ export class MoleculeRenderer {
         t += step
       }
     } else {
-      // ── 普通键：按 order 渲染并排圆柱 ──────────────────────────────────────
-      const offsets = bond.order === 1 ? [0] : bond.order === 2 ? [-gap / 2, gap / 2] : [-gap, 0, gap]
+      // ── 普通键：按 order 渲染并排圆柱（tube 恒单粗管，忽略键级并列） ────────
+      const offsets = _displayMode === 'tube' || bond.order === 1 ? [0] : bond.order === 2 ? [-gap / 2, gap / 2] : [-gap, 0, gap]
       for (const offset of offsets) {
-        const r = bond.order === 2 ? doubleR : bond.order === 3 ? tripleR : stickR
+        const r = _displayMode === 'tube' ? stickR : bond.order === 2 ? doubleR : bond.order === 3 ? tripleR : stickR
         const cyl = this.makeCylinder(r, len, color, bond.id)
         cyl.position.copy(mid)
         if (offset !== 0) cyl.position.addScaledVector(perpX, offset)

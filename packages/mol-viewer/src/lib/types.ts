@@ -40,7 +40,7 @@ export type GrowGuideSpec =
   | { kind: 'points'; positions: Vector3[]; ghostRadius: number; ghostColor: number }
   | null
 
-export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe'
+export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe' | 'tube'
 /**
  * select 是合并了选择与构建的智能指针（默认工具）：
  * 单击选择 / 点 H 生长 / 拖 H 成键 / 双击空白加原子。
