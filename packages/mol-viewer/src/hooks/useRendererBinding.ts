@@ -18,6 +18,7 @@ import type { DisplayMode } from '../lib/types'
 import type { SceneObject } from '../lib/sceneObject'
 import type { Measurement, MeasureStyle } from '../lib/types'
 import type { BuilderHandlers } from './useBuilder'
+import { toolCan } from '../config/toolCapabilities.config'
 
 interface RendererBindingOptions {
   containerRef:   RefObject<HTMLDivElement | null>
@@ -90,15 +91,16 @@ export function useRendererBinding({
       r.getGrowPreview = r.getGrowGuide = undefined
       return
     }
+    const canEdit = toolCan(activeTool, 'canEdit')
     r.onAtomClick       = onAtomClick
-    r.onAtomDoubleClick = activeTool === 'select' ? onAtomDoubleClick : undefined
+    r.onAtomDoubleClick = canEdit ? onAtomDoubleClick : undefined
     r.onBondClick       = onBondClick
     r.onBackgroundClick = onBackgroundClick
-    r.onBackgroundDoubleClick = activeTool === 'select' ? onBackgroundDoubleClick : undefined
-    r.onAtomDrag        = activeTool === 'select' ? onAtomDrag        : undefined
-    r.onAtomDragStart   = activeTool === 'select' ? onAtomDragStart   : undefined
-    r.onAtomDragEnd     = activeTool === 'select' ? onAtomDragEnd     : undefined
-    r.canDragAtom       = activeTool === 'select'
+    r.onBackgroundDoubleClick = canEdit ? onBackgroundDoubleClick : undefined
+    r.onAtomDrag        = canEdit ? onAtomDrag        : undefined
+    r.onAtomDragStart   = canEdit ? onAtomDragStart   : undefined
+    r.onAtomDragEnd     = canEdit ? onAtomDragEnd     : undefined
+    r.canDragAtom       = canEdit
       ? (id) => useMoleculeStore.getState().selectedAtomIds.has(id)
       : undefined
     // bond-drag 回调始终挂载，回调内部通过 activeTool 判断是否拦截
@@ -139,7 +141,7 @@ export function useRendererBinding({
     prevMolNameRef.current  = activeObj.molecule.name
     prevActiveIdRef.current = activeObjectId ?? ''
     if (activeObj.molecule.atoms.length === 0) return
-    if (activeTool === 'move-object') return
+    if (toolCan(activeTool, 'transformsObject')) return
     if (changed) {
       r.fitToMolecule([...activeObj.molecule.atoms])
     } else {

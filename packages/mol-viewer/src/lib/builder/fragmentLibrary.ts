@@ -12,6 +12,7 @@
  */
 
 import { tetrahedralCandidates } from './geometry/vsepr'
+import { type Vec3, add, scale } from './math/vec3'
 
 export interface FragmentAtom { symbol: string; x: number; y: number; z: number }
 export interface FragmentBond { a: number; b: number; order: 1 | 2 | 3 }
@@ -35,15 +36,17 @@ export interface FragmentDef {
   attachBond?: [number, number]
 }
 
-// ── 内部小工具（避免引入 vec3 依赖，保持本文件自包含）──────────────────────
+// ── 内部小工具 ────────────────────────────────────────────────────────────
+// add / scale 复用共享 vec3 模块（数值实现逐字节等价）。
+// norm 有意保留本地版本：用 Math.hypot 且零向量原样返回（0/1），
+// 与 vec3.normalize（Math.sqrt(dot) + 退化时返回 [1,0,0]）数值语义不同，
+// 不可替换——替换会改变输出，违反零行为变化。
 
-type V3 = [number, number, number]
+type V3 = Vec3
 const norm = (v: V3): V3 => {
   const l = Math.hypot(v[0], v[1], v[2]) || 1
   return [v[0]/l, v[1]/l, v[2]/l]
 }
-const addV = (a: V3, b: V3): V3 => [a[0]+b[0], a[1]+b[1], a[2]+b[2]]
-const scaleV = (v: V3, s: number): V3 => [v[0]*s, v[1]*s, v[2]*s]
 
 const CH = 1.09   // C-H 键长
 
@@ -81,21 +84,21 @@ function makeRing(opts: {
   let attachHIndex = -1
   for (let i = 0; i < n; i++) {
     const c = carbons[i]
-    const d1 = norm(addV(carbons[(i + 1) % n], scaleV(c, -1)))
-    const d2 = norm(addV(carbons[(i + n - 1) % n], scaleV(c, -1)))
-    const sum = addV(d1, d2)
+    const d1 = norm(add(carbons[(i + 1) % n], scale(c, -1)))
+    const d2 = norm(add(carbons[(i + n - 1) % n], scale(c, -1)))
+    const sum = add(d1, d2)
 
     if (hPerC === 1) {
       // sp2：面内向外
-      const dir = norm(scaleV(sum, -1))
-      const h = addV(c, scaleV(dir, CH))
+      const dir = norm(scale(sum, -1))
+      const h = add(c, scale(dir, CH))
       atoms.push({ symbol: 'H', x: h[0], y: h[1], z: h[2] })
       bonds.push({ a: i, b: atoms.length - 1, order: 1 })
       if (i === 0) attachHIndex = atoms.length - 1
     } else {
       // sp3：两个四面体候选位（复用 vsepr 的唯一实现）
       for (const dir of tetrahedralCandidates(d1, d2)!) {
-        const h = addV(c, scaleV(dir, CH))
+        const h = add(c, scale(dir, CH))
         atoms.push({ symbol: 'H', x: h[0], y: h[1], z: h[2] })
         bonds.push({ a: i, b: atoms.length - 1, order: 1 })
         if (i === 0 && attachHIndex < 0) attachHIndex = atoms.length - 1

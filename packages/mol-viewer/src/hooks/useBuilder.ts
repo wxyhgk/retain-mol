@@ -11,10 +11,10 @@ import { calcGrowPosition, calcClickGrowPosition, getGrowGuide as calcGrowGuide,
          degree, resolveHSlotGrowth,
          attachFragmentToAtom, placeFragmentStandalone, fuseFragmentOnBond, ringPlaneIntersection } from '../lib/builder/BuilderEngine'
 import type { GrowGuideSpec } from '../lib/types'
-import type { Molecule } from '../lib/molecule'
-import { getConnectedFragment } from '../lib/builder/analysis/fragments'
 import { getElementConfig, effectiveMaxBonds } from '../config/elements.config'
 import { getFragment } from '../lib/builder/fragmentLibrary'
+import { isSlotH, activateAndResolve } from '../lib/builder/queries'
+import { toolCan } from '../config/toolCapabilities.config'
 
 export interface BuilderHandlers {
   onAtomClick: (atomId: string, event: MouseEvent) => void
@@ -32,14 +32,18 @@ export interface BuilderHandlers {
   getGrowGuide: (sourceId: string) => GrowGuideSpec
 }
 
-/** 是否是"槽位 H"：带键的 H 原子（价态完整模型下它就是可生长/成键的槽位） */
-function isSlotH(mol: Molecule, atomId: string): boolean {
-  const atom = mol.atoms.find(a => a.id === atomId)
-  return !!atom && atom.symbol === 'H' && degree(mol.bonds, atomId) > 0
-}
-
 export function useBuilder(): BuilderHandlers {
   const store = useMoleculeStore
+
+  // ── activateAndResolve 的 store 适配：激活宿主对象 + 激活后重读活跃分子 ──
+  const activate = useCallback(
+    (atomId: string) => store.getState().activateObjectContainingAtom(atomId),
+    [store],
+  )
+  const getActiveMol = useCallback(
+    () => selectActiveMoleculeOrEmpty(store.getState()),
+    [store],
+  )
 
   const onAtomClick = useCallback((atomId: string, event: MouseEvent) => {
     const { activeTool, activeElement, activeFragmentId, flashHint } = useEditorStore.getState()
@@ -48,9 +52,8 @@ export function useBuilder(): BuilderHandlers {
     // 多分子场景下，点击非 active 分子的原子时先切换 activeObjectId，
     // 否则所有编辑操作都会在 active 分子里找不到该原子而静默失败。
     // 宿主对象不可见/锁定时返回 false → 整个手势中止。
-    let st = store.getState()
-    if (!st.activateObjectContainingAtom(atomId)) return
-    st = store.getState()             // 激活是同步 set，重新读取
+    if (!store.getState().activateObjectContainingAtom(atomId)) return
+    const st = store.getState()       // 激活是同步 set，重新读取
 
     const { selectAtom } = st
     const molecule = selectActiveMoleculeOrEmpty(st)
@@ -128,7 +131,7 @@ export function useBuilder(): BuilderHandlers {
 
   const onBondClick = useCallback((bondId: string, event: MouseEvent) => {
     const { activeTool, activeFragmentId, flashHint } = useEditorStore.getState()
-    if (activeTool !== 'select') return
+    if (!toolCan(activeTool, 'canEdit')) return
 
     // 键可能在非 active 分子里：先激活宿主对象（不可见/锁定则中止），
     // 否则 cycleBondLength / fuseFragmentOnBond 都会静默失败。
@@ -184,7 +187,7 @@ export function useBuilder(): BuilderHandlers {
   // 双击空白 = 放置（仅构建态）：片段笔刷放完整片段，否则放当前元素（自动补满 H）
   const onBackgroundDoubleClick = useCallback((worldPos: THREE.Vector3, _event: MouseEvent, viewDirLocal?: THREE.Vector3) => {
     const { activeTool, activeElement, activeFragmentId, brushArmed } = useEditorStore.getState()
-    if (activeTool !== 'select' || !brushArmed) return
+    if (!toolCan(activeTool, 'canEdit') || !brushArmed) return
     const st = store.getState()
     const fragment = activeFragmentId ? getFragment(activeFragmentId) : undefined
     if (fragment) {
@@ -237,43 +240,39 @@ export function useBuilder(): BuilderHandlers {
   }, [])
 
   const onAtomDoubleClick = useCallback((atomId: string, _event: MouseEvent) => {
-    if (useEditorStore.getState().activeTool !== 'select') return
+    if (!toolCan(useEditorStore.getState().activeTool, 'canEdit')) return
     // 双击非 active 分子的原子时先切换（宿主不可见/锁定则中止）
-    let st = store.getState()
-    if (!st.activateObjectContainingAtom(atomId)) return
-    st = store.getState()
-    const mol = selectActiveMoleculeOrEmpty(st)
-    const fragment = getConnectedFragment(mol.atoms, mol.bonds, atomId)
-    st.selectAtoms(fragment, 'replace')
-  }, [store])
+    const resolved = activateAndResolve(atomId, activate, getActiveMol)
+    if (!resolved) return
+    store.getState().selectAtoms(resolved.fragment, 'replace')
+  }, [store, activate, getActiveMol])
 
   // 返回 true 则 InteractionHandler 进入 bond-drag 候选模式（智能指针的拖拽手势：
   // 拖到原子=成键，拖到空白=生长新原子；位移不足时由 click 处理器接管）
   const onBondDragStart = useCallback((sourceId: string): boolean => {
     const { activeTool, activeFragmentId, brushArmed } = useEditorStore.getState()
     // 成键手势仅在构建态；片段笔刷只用点击语义（拖出整片段的 ghost 预览留作后续）
-    if (activeTool !== 'select' || !brushArmed || activeFragmentId) return false
+    if (!toolCan(activeTool, 'canEdit') || !brushArmed || activeFragmentId) return false
 
     // 选中的原子拖拽 = 移动（canDragAtom 路径），不进成键手势
     if (store.getState().selectedAtomIds.has(sourceId)) return false
 
     // 源原子可能在非 active 分子里：先切换（宿主不可见/锁定则不进手势）
-    let st = store.getState()
-    if (!st.activateObjectContainingAtom(sourceId)) return false
-    st = store.getState()
+    const resolved = activateAndResolve(sourceId, activate, getActiveMol)
+    if (!resolved) return false
+    const mol = resolved.mol
 
-    const mol = selectActiveMoleculeOrEmpty(st)
     const src = mol.atoms.find(a => a.id === sourceId)
     if (!src) return false
     // 槽位 H：可拖到其他原子成键 / 拖到空白替换生长（语义在 onBondDragEnd）
     if (isSlotH(mol, sourceId)) return true
     // 饱和重原子拖拽不做成键（转相机/框选不受影响）；未饱和骨架原子保留拖出生长
     return degree(mol.bonds, sourceId) < effectiveMaxBonds(src.symbol, src.charge ?? 0, src.radical ?? 0)
-  }, [store])
+  }, [store, activate, getActiveMol])
 
   const onBondDragEnd = useCallback((sourceId: string, targetId: string | null, dropLocal: THREE.Vector3 | null) => {
     const { activeTool, activeElement, flashHint } = useEditorStore.getState()
-    if (activeTool !== 'select') return
+    if (!toolCan(activeTool, 'canEdit')) return
     const st = store.getState()
     const mol = selectActiveMoleculeOrEmpty(st)
     const a1 = mol.atoms.find(a => a.id === sourceId)
@@ -319,7 +318,7 @@ export function useBuilder(): BuilderHandlers {
     sourceId: string, cursorLocal: THREE.Vector3, freeDirection: boolean,
   ): { pos: THREE.Vector3; radius: number; color: number } | null => {
     const { activeTool, activeElement } = useEditorStore.getState()
-    if (activeTool !== 'select') return null
+    if (!toolCan(activeTool, 'canEdit')) return null
     const mol = selectActiveMoleculeOrEmpty(store.getState())
     const center = mol.atoms.find(a => a.id === sourceId)
     if (!center) return null
@@ -353,7 +352,7 @@ export function useBuilder(): BuilderHandlers {
   // 拖出生长开始时的候选槽位参考几何（环 / 点）
   const getGrowGuide = useCallback((sourceId: string): GrowGuideSpec => {
     const { activeTool, activeElement } = useEditorStore.getState()
-    if (activeTool !== 'select') return null
+    if (!toolCan(activeTool, 'canEdit')) return null
     const mol = selectActiveMoleculeOrEmpty(store.getState())
     const center = mol.atoms.find(a => a.id === sourceId)
     if (!center) return null

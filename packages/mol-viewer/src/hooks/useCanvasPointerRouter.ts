@@ -17,7 +17,8 @@ import * as THREE from 'three'
 import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
 import { useEditorStore } from '../store/editorStore'
 import type { MolRenderer } from '../lib/molRenderer'
-import { getConnectedFragment } from '../lib/builder/analysis/fragments'
+import { activateAndResolve } from '../lib/builder/queries'
+import { toolCan } from '../config/toolCapabilities.config'
 import { INTERACTION } from '../config/interaction.config'
 
 export interface BoxRect { x: number; y: number; w: number; h: number }
@@ -49,12 +50,17 @@ function handleTransformDown(
 
   if (pickedAtomId) {
     // 点中的原子可能属于非 active 分子：激活宿主对象（不可见/锁定则中止手势）
-    if (!useMoleculeStore.getState().activateObjectContainingAtom(pickedAtomId)) return
-    const { objectsById, activeObjectId } = useMoleculeStore.getState()   // 激活是同步 set，重新读取
-    const mol = activeObjectId ? objectsById[activeObjectId]?.molecule : undefined
-    if (!activeObjectId || !mol) return
-    state.fragmentIds = getConnectedFragment(mol.atoms, mol.bonds, pickedAtomId)
-    state.targetObjectId = activeObjectId
+    const resolved = activateAndResolve(
+      pickedAtomId,
+      id => useMoleculeStore.getState().activateObjectContainingAtom(id),
+      () => {
+        const { objectsById, activeObjectId } = useMoleculeStore.getState()   // 激活是同步 set，重新读取
+        return activeObjectId ? objectsById[activeObjectId]?.molecule : undefined
+      },
+    )
+    if (!resolved) return
+    state.fragmentIds = resolved.fragment
+    state.targetObjectId = useMoleculeStore.getState().activeObjectId
   } else if (e.altKey) {
     const { objectsById, activeObjectId: curActive } = useMoleculeStore.getState()
     const mol = curActive ? objectsById[curActive]?.molecule : undefined
@@ -182,8 +188,8 @@ export function useCanvasPointerRouter(
   // 同步相机控制开关；切换工具时清理可能残留的变换状态（防止 pointerup 未触发导致状态卡死）
   useEffect(() => {
     const r = rendererRef.current
-    if (r) r.controls.enabled = activeTool !== 'move-object'
-    if (activeTool !== 'move-object') {
+    if (r) r.controls.enabled = !toolCan(activeTool, 'transformsObject')
+    if (!toolCan(activeTool, 'transformsObject')) {
       const ts = transformRef.current
       if (ts.dragging) {
         // 工具切换时强制关闭未完成的 transaction，防止 zundo 永久 paused
@@ -212,7 +218,7 @@ export function useCanvasPointerRouter(
       const { selectedAtomIds } = useMoleculeStore.getState()
 
       // 1. move-object 工具 → 对象变换
-      if (tool === 'move-object') {
+      if (toolCan(tool, 'transformsObject')) {
         e.stopImmediatePropagation()
         handleTransformDown(e, canvas, renderer, transformRef.current)
         return

@@ -13,4 +13,8 @@ export const BONDING = {
   /** 用于键级判断：midpoint 偏移量（Å）。
    *  正常用 (d_n + d_{n+1})/2 做阈值；此值让阈值向短键方向收紧，减少误判。 */
   orderMidpointBias: 0.02,
+  /** 并环（fuseFragmentOnBond）：新原子与已有同元素原子距离小于此 → 合并共用 */
+  fuseMergeEps: 0.45,
+  /** 并环（fuseFragmentOnBond）：距离小于此（且不可合并）→ 此侧空间被占，翻面重试 */
+  fuseClashEps: 0.7,
 }

@@ -11,6 +11,7 @@ import { MolRenderer } from '../../lib/molRenderer'
 import { ticker, Phase } from '../../lib/animation'
 import { RotateGizmoController } from '../../lib/molRenderer/RotateGizmoController'
 import type { GizmoCallbacks } from '../../lib/molRenderer/RotateGizmoController'
+import { toolCan } from '../../config/toolCapabilities.config'
 
 interface Props {
   renderer: MolRenderer | null
@@ -22,7 +23,7 @@ export default function RotateGizmo({ renderer }: Props) {
   const activeTool = useEditorStore(s => s.activeTool)
 
   useEffect(() => {
-    if (!renderer || activeTool !== 'select') return
+    if (!renderer || !toolCan(activeTool, 'canEdit')) return
 
     const cb: GizmoCallbacks = {
       getMolecule: () => selectActiveMoleculeOrEmpty(useMoleculeStore.getState()),

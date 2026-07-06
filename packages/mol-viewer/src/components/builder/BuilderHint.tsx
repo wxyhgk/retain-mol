@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore'
 import { getElementConfig } from '../../config/elements.config'
 import { getFragment } from '../../lib/builder/fragmentLibrary'
+import { toolCan } from '../../config/toolCapabilities.config'
 
 const HINTS: Record<string, string> = {
   // select 工具按笔刷武装态显示不同提示，见下方组件逻辑
@@ -47,11 +48,11 @@ export default function BuilderHint() {
       {sketchPlane && (
         <span className="font-bold text-[10px] text-indigo-500 bg-indigo-50 px-1.5 py-px rounded-full">平面</span>
       )}
-      {activeTool === 'select' && brushArmed && (
+      {toolCan(activeTool, 'canEdit') && brushArmed && (
         <span className="font-bold text-xs text-gray-600">{fragment ? fragment.name : el.symbol}</span>
       )}
       <span>
-        {activeTool === 'select'
+        {toolCan(activeTool, 'canEdit')
           ? (brushArmed
               ? (fragment
                   ? '双击空白放置 · 点 H/原子接上 · 点键并环 · Esc 切换到选择'

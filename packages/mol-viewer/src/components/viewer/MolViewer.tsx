@@ -14,6 +14,7 @@ import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/molec
 import { useEditorStore } from '../../store/editorStore'
 import { fitPlane } from '../../lib/builder/geometry/plane'
 import type { DisplayMode } from '../../lib/types'
+import { toolCan } from '../../config/toolCapabilities.config'
 import { useBuilder } from '../../hooks/useBuilder'
 import { useMolViewerSync } from '../../hooks/useMolViewerSync'
 import { useRendererBinding } from '../../hooks/useRendererBinding'
@@ -127,7 +128,7 @@ export default function MolViewer({
       // Esc 解除笔刷武装 → 纯选择态（显式的构建/选择模式切换）
       if (e.key === 'Escape') {
         const ed = useEditorStore.getState()
-        if (ed.activeTool === 'select' && ed.brushArmed && ed.pendingAtomIds.length === 0) {
+        if (toolCan(ed.activeTool, 'canEdit') && ed.brushArmed && ed.pendingAtomIds.length === 0) {
           ed.disarmBrush()
           flashHint('选择模式 · 点元素/片段恢复构建')
         }
@@ -175,8 +176,8 @@ export default function MolViewer({
   const baseCursor =
     readOnly                     ? 'default'   :
     activeTool === 'measure'     ? 'zoom-in'   :
-    activeTool === 'move-object' ? 'grab'      :
-    activeTool === 'select' && brushArmed ? 'crosshair' :
+    toolCan(activeTool, 'transformsObject') ? 'grab'      :
+    toolCan(activeTool, 'canEdit') && brushArmed ? 'crosshair' :
     'default'
 
   return (
