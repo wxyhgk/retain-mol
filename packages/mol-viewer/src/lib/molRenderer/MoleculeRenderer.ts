@@ -9,16 +9,6 @@ import { RENDER, BOND_DRAG_HOVER } from '../../config/render.config'
 import { ticker } from '../animation'
 
 // ── 出版/论文渲染（由 MoleculeRenderer._pub 驱动）──────────────
-// cel 扁平 3 阶灰度 ramp（NearestFilter → 硬边界，出 toon 分层观感）
-function makeToonGradient(): THREE.DataTexture {
-  const c = new Uint8Array([70, 135, 195, 245])
-  const t = new THREE.DataTexture(c, c.length, 1, THREE.RedFormat)
-  t.minFilter = t.magFilter = THREE.NearestFilter
-  t.generateMipmaps = false
-  t.needsUpdate = true
-  return t
-}
-const TOON_GRADIENT = makeToonGradient()
 /** inverted-hull 黑描边相对半径的额外量（Å，POC 用固定值；正式版用屏幕空间 pos.w） */
 const OUTLINE_OFFSET = 0.05
 
@@ -52,6 +42,24 @@ function makeSphereMat(hex: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: { uHi: { value: s.hi }, uBase: { value: s.base }, uLo: { value: s.lo } },
     vertexShader: SPHERE_VERT, fragmentShader: SPHERE_FRAG,
+  })
+}
+// 键圆柱：view 法线做左上光的侧向渐变（比 toon 更贴渐变球的风格）
+const CYL_FRAG = /* glsl */`
+  uniform vec3 uHi; uniform vec3 uBase; uniform vec3 uLo;
+  varying vec3 vN;
+  void main() {
+    float ndl = clamp(dot(normalize(vN), normalize(vec3(-0.4, 0.5, 0.7))) * 0.5 + 0.5, 0.0, 1.0);
+    vec3 col = ndl > 0.5 ? mix(uBase, uHi, (ndl - 0.5) * 2.0) : mix(uLo, uBase, ndl * 2.0);
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }
+`
+function makeCylinderMat(hex: number): THREE.ShaderMaterial {
+  const s = sphereShades(hex)
+  return new THREE.ShaderMaterial({
+    uniforms: { uHi: { value: s.hi }, uBase: { value: s.base }, uLo: { value: s.lo } },
+    vertexShader: SPHERE_VERT, fragmentShader: CYL_FRAG,
   })
 }
 
@@ -89,6 +97,8 @@ export class MoleculeRenderer {
     aromaticBonds: Map<string, THREE.Vector3> = new Map(),
     publication = false,
   ) {
+    // 渲染风格切换：mesh 的复用 key 不含风格，必须清空强制用新材质重建
+    if (this._pub !== publication) this._clearAllMeshes()
     this._pub = publication
     const existingAtomIds = new Set(molecule.atoms.map(a => a.id))
     const existingBondIds = new Set(molecule.bonds.map(b => b.id))
@@ -212,6 +222,17 @@ export class MoleculeRenderer {
       o.geometry.dispose()
       this.outlineMeshes.delete(atomId)
     }
+  }
+
+  /** 清空所有原子/键/描边 mesh（渲染风格切换时强制用新材质重建） */
+  private _clearAllMeshes() {
+    for (const m of this.atomMeshes.values()) { this.modelGroup.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose() }
+    for (const g of this.bondMeshes.values()) { this.modelGroup.remove(g); disposeGroup(g) }
+    for (const o of this.outlineMeshes.values()) { this.modelGroup.remove(o); o.geometry.dispose(); (o.material as THREE.Material).dispose() }
+    this.atomMeshes.clear()
+    this.bondMeshes.clear()
+    this.bondShapeKeys.clear()
+    this.outlineMeshes.clear()
   }
 
   private addHighlight(atomId: string, x: number, y: number, z: number, radius: number) {
@@ -364,10 +385,18 @@ export class MoleculeRenderer {
   private makeCylinder(radius: number, length: number, color: number, bondId: string): THREE.Mesh {
     const geo = new THREE.CylinderGeometry(radius, radius, length, RENDER.cylinderSegments)
     const mat: THREE.Material = this._pub
-      ? new THREE.MeshToonMaterial({ color, gradientMap: TOON_GRADIENT })
+      ? makeCylinderMat(color)
       : new THREE.MeshPhongMaterial({ color, shininess: RENDER.bondShininess })
     const cyl = new THREE.Mesh(geo, mat)
     cyl.userData = { type: 'bond', id: bondId }
+    if (this._pub) {
+      // inverted-hull 描边：径向放大的黑色 BackSide 圆柱（长度不放大，避免端帽超出）
+      const s = (radius + Math.max(0.03, radius * 0.35)) / radius
+      const outline = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide }))
+      outline.scale.set(s, 1, s)
+      outline.renderOrder = -1
+      cyl.add(outline)
+    }
     return cyl
   }
 
