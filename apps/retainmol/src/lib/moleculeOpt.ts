@@ -4,6 +4,7 @@
  */
 import type { Molecule, OptimizeResult } from '@retainmol/mol-viewer'
 import { useMoleculeStore, GeometryRelaxer } from '@retainmol/mol-viewer'
+import { OPTIMIZE_ANIM } from '../config/optimize.config'
 
 export const OCL_RESOURCE_URL = `${import.meta.env.BASE_URL}ocl/resources.json`
 
@@ -63,7 +64,7 @@ export function relaxAnimate(
   opts: { itersPerFrame?: number; maxFrames?: number; target?: Molecule; jitter?: number } = {},
 ): Promise<void> {
   const { target, jitter } = opts
-  const { itersPerFrame = 2, maxFrames = target ? 110 : 500 } = opts
+  const { itersPerFrame = OPTIMIZE_ANIM.itersPerFrame, maxFrames = target ? OPTIMIZE_ANIM.maxFramesTargeted : OPTIMIZE_ANIM.maxFramesFree } = opts
   const store = useMoleculeStore.getState()
   const targetMap = target
     ? new Map(target.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
@@ -97,7 +98,7 @@ export function relaxAnimate(
  * 整段包在一个 undo 事务里 → 只产生一步 undo。from/to 需同一原子集（按 id）。
  */
 export function morphObjectPositions(
-  objectId: string, from: Molecule, to: Molecule, durationMs = 700,
+  objectId: string, from: Molecule, to: Molecule, durationMs = OPTIMIZE_ANIM.morphDurationMs,
 ): Promise<void> {
   const store = useMoleculeStore.getState()
   const fromMap = new Map<string, XYZ>(from.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))

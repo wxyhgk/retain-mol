@@ -162,6 +162,7 @@ export const STANDARD_BOND_LENGTHS: Record<string, number> = {
 const ORDER_SEP = { 1: '-', 2: '=', 3: '#' } as const
 
 import { getElementConfig } from './elements.config'
+import { BONDING } from './bonding.config'
 
 /**
  * 查询给定键级下两原子间的预期键长（Å）。
@@ -175,10 +176,21 @@ export function lookupBondLengthByOrder(sym1: string, sym2: string, order: 1 | 2
   if (order > 1) return null
   const r1 = getElementConfig(sym1).covalentRadius
   const r2 = getElementConfig(sym2).covalentRadius
-  return (r1 + r2) * 1.08
+  return (r1 + r2) * BONDING.singleBondRadiusFactor
 }
 
 /** 单键键长（向后兼容） */
 export function lookupBondLength(sym1: string, sym2: string): number {
   return lookupBondLengthByOrder(sym1, sym2, 1)!
+}
+
+/** 基于几何的芳香性判定的环大小 / 配位数限制。 */
+export const AROMATICITY = {
+  /** findRings 检测的最大简单环原子数（覆盖常见芳香环，避免大环误检） */
+  maxDetectRingSize: 8,
+  /** 判定芳香的环大小窗口（原子数）：5–7 环之外直接否定 */
+  minRingSize: 5,
+  maxRingSize: 7,
+  /** 环上原子的最大配位数（> 此值不可能是 sp2 芳香） */
+  maxSp2Degree: 3,
 }

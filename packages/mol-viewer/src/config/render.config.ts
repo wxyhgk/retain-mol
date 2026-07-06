@@ -38,6 +38,36 @@ export const RENDER = {
   aromaticGapSize:   0.10,   // 段间空隙
   /** 芳香键虚线圆柱半径 = bondRadiusStick × aromaticDashRadiusFactor */
   aromaticDashRadiusFactor: 0.55,
+
+  /** 双 / 三键并列圆柱半径缩小因子（相对单键 stick 半径），视觉更清晰 */
+  doubleBondRadiusFactor: 0.65,
+  tripleBondRadiusFactor: 0.55,
+
+  /** 出版描边（inverted-hull）相对半径的放大量 */
+  outlineRadialFactor: 0.14,        // 原子：rr = r + max(OUTLINE_OFFSET, r × 此值)
+  outlineBondRadialFactor: 0.35,    // 键：scale = (r + max(minOffset, r × 此值)) / r
+  outlineBondMinOffset: 0.03,
+  /** 描边色随背景亮度切换黑/白的亮度阈值（Rec.601 luma > 阈值 → 黑描边） */
+  outlineLumaThreshold: 0.5,
+
+  /** 多对象场景里非活跃对象的透明度 */
+  inactiveObjectOpacity: 0.3,
+  /** 生长预览球半径 = 元素共价半径 × 此因子 */
+  growGhostRadiusFactor: 0.45,
+  /** 导出 PNG 的超采样倍数（视口截图分辨率倍数） */
+  captureScale: 2,
+}
+
+/** 场景绘制层级（renderOrder）：数值越大越后画、越靠上层。 */
+export const RENDER_ORDER = {
+  /** inverted-hull 描边：画在被描物之前 */
+  outline: -1,
+  /** 选中高亮光晕：画在原子之后 */
+  highlight: 1,
+  /** 旋转 gizmo 环（后半 / 前半）与箭头，压在分子之上 */
+  gizmoBack: 998,
+  gizmoFront: 999,
+  gizmoArrow: 1000,
 }
 
 export const GHOST_LINE = {
@@ -75,6 +105,10 @@ export const GROW_GUIDE = {
   pointRadius: 0.14,
   pointAlphaNear: 0.45,
   pointAlphaFar:  0.18,
+  /** 候选点小球几何分段（低模即可） */
+  pointSegments: 16,
+  /** 生长预览 ghost 原子的透明度 */
+  ghostAtomOpacity: 0.45,
   /**
    * 屏幕空间拾取：滑动吸附按"环投影到屏幕后离光标最近的点"求解，
    * 环侧视（投影很扁）时也能顺滑滑动。hysteresisPx 为切换候选的滞回

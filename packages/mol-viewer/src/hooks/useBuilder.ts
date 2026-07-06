@@ -12,6 +12,7 @@ import { calcGrowPosition, calcClickGrowPosition, getGrowGuide as calcGrowGuide,
          attachFragmentToAtom, placeFragmentStandalone, fuseFragmentOnBond, ringPlaneIntersection } from '../lib/builder/BuilderEngine'
 import type { GrowGuideSpec } from '../lib/types'
 import { getElementConfig, effectiveMaxBonds } from '../config/elements.config'
+import { RENDER } from '../config/render.config'
 import { getFragment } from '../lib/builder/fragmentLibrary'
 import { isSlotH, activateAndResolve } from '../lib/builder/queries'
 import { toolCan } from '../config/toolCapabilities.config'
@@ -332,7 +333,7 @@ export function useBuilder(): BuilderHandlers {
       if (!p) return null
       return {
         pos: new THREE.Vector3(p.x, p.y, p.z),
-        radius: cfg.covalentRadius * 0.45,
+        radius: cfg.covalentRadius * RENDER.growGhostRadiusFactor,
         color: cfg.color,
       }
     }
@@ -344,7 +345,7 @@ export function useBuilder(): BuilderHandlers {
     )
     return {
       pos: new THREE.Vector3(pos[0], pos[1], pos[2]),
-      radius: cfg.covalentRadius * 0.45,
+      radius: cfg.covalentRadius * RENDER.growGhostRadiusFactor,
       color: cfg.color,
     }
   }, [store])
@@ -361,7 +362,7 @@ export function useBuilder(): BuilderHandlers {
     const guide = calcGrowGuide(center, mol.bonds, mol.atoms, activeElement)
     if (guide.kind === 'free') return null
     const cfg = getElementConfig(activeElement)
-    const ghostRadius = cfg.covalentRadius * 0.45
+    const ghostRadius = cfg.covalentRadius * RENDER.growGhostRadiusFactor
     const ghostColor = cfg.color
 
     // 平面草图模式：圆锥候选环退化为"环 ∩ 草图平面"的两个点

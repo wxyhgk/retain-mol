@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { GrowGuideSpec } from '../types'
-import { GHOST_LINE, GROW_GUIDE } from '../../config/render.config'
+import { GHOST_LINE, GROW_GUIDE, RENDER } from '../../config/render.config'
 import { ticker } from '../animation'
 import { buildDepthCuedRing } from './ghostGeometry'
 
@@ -79,8 +79,8 @@ export class GhostVisuals {
 
   showAtom(posLocal: THREE.Vector3, radius: number, color: number) {
     if (!this.atom) {
-      const geo = new THREE.SphereGeometry(1, 24, 24)
-      const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false })
+      const geo = new THREE.SphereGeometry(1, RENDER.sphereSegments, RENDER.sphereSegments)
+      const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: GROW_GUIDE.ghostAtomOpacity, depthWrite: false })
       this.atom = new THREE.Mesh(geo, mat)
       this.modelGroup.add(this.atom)
     }
@@ -131,7 +131,7 @@ export class GhostVisuals {
       guide.positions.forEach((p, i) => {
         const t = dMax - dMin < 1e-6 ? 1 : 1 - (dists[i] - dMin) / (dMax - dMin)   // 1=最近
         const opacity = GROW_GUIDE.pointAlphaFar + (GROW_GUIDE.pointAlphaNear - GROW_GUIDE.pointAlphaFar) * t
-        const geo = new THREE.SphereGeometry(GROW_GUIDE.pointRadius, 16, 16)
+        const geo = new THREE.SphereGeometry(GROW_GUIDE.pointRadius, GROW_GUIDE.pointSegments, GROW_GUIDE.pointSegments)
         const mat = new THREE.MeshBasicMaterial({
           color: GROW_GUIDE.color, transparent: true, opacity, depthWrite: false,
         })

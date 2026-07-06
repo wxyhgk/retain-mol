@@ -12,3 +12,14 @@ export const INTERACTION = {
   /** 框选：宽或高低于此值（px）时视为误触，不执行选择 */
   boxSelectMinSize: 3,
 }
+
+/**
+ * 新几何的放置偏移（Å）：把新对象 / 粘贴内容摆到现有分子右侧，避免重叠。
+ * 注意 pasteOffsetX 与 addObjectOffsetX 目前值不同（历史遗留），保持原样、只是集中管理。
+ */
+export const PLACEMENT = {
+  /** 粘贴：新原子相对现有 maxX 的右移量 */
+  pasteOffsetX: 3,
+  /** 新增场景对象：相对现有 maxX 的右移量 */
+  addObjectOffsetX: 5,
+}

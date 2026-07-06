@@ -16,6 +16,7 @@ export interface GizmoCallbacks {
 }
 import type { MolRenderer } from './MolRenderer'
 import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../config/rotateGizmo.config'
+import { RENDER_ORDER } from '../../config/render.config'
 import { ticker } from '../animation'
 import { computeRingRadius, collectBondSideAtoms } from './gizmoMath'
 
@@ -196,7 +197,7 @@ export class RotateGizmoController {
       const col = r.hovered ? GIZMO_COLOR.hover : GIZMO_COLOR.idle
       r.frontMat.color.setHex(col)
       r.backMat.color.setHex(col)
-      r.frontMat.linewidth = r.hovered ? GIZMO_LINE.frontLinewidth + 2 : GIZMO_LINE.frontLinewidth
+      r.frontMat.linewidth = r.hovered ? GIZMO_LINE.frontLinewidth + GIZMO_LINE.hoverLinewidthBump : GIZMO_LINE.frontLinewidth
 
       // 箭头 — 复用 _tmpV1/_tmpV2，避免任何 new Vector3
       for (const a of r.arrows) {
@@ -441,12 +442,12 @@ function buildRing(spec: RingSpec, scene: THREE.Scene): Ring {
   const frontGeo = new THREE.BufferGeometry(); frontGeo.setAttribute('position', frontPosAttr)
   const backGeo  = new THREE.BufferGeometry(); backGeo.setAttribute('position',  backPosAttr)
 
-  const frontLine = new THREE.Line(frontGeo, frontMat); frontLine.renderOrder = 999
-  const backLine  = new THREE.Line(backGeo,  backMat);  backLine.renderOrder  = 998
+  const frontLine = new THREE.Line(frontGeo, frontMat); frontLine.renderOrder = RENDER_ORDER.gizmoFront
+  const backLine  = new THREE.Line(backGeo,  backMat);  backLine.renderOrder  = RENDER_ORDER.gizmoBack
   group.add(frontLine, backLine)
 
   const picker = new THREE.Mesh(
-    new THREE.TorusGeometry(spec.radius, GIZMO_PICKER.tubeRadius, 8, 96),
+    new THREE.TorusGeometry(spec.radius, GIZMO_PICKER.tubeRadius, GIZMO_PICKER.radialSegments, GIZMO_PICKER.tubularSegments),
     new THREE.MeshBasicMaterial({ visible: false, depthTest: false }),
   )
   picker.userData = { ringId: spec.id }
@@ -456,10 +457,10 @@ function buildRing(spec: RingSpec, scene: THREE.Scene): Ring {
   for (let i = 0; i < GIZMO_ARROW.count; i++) {
     const theta = (i / GIZMO_ARROW.count) * Math.PI * 2
     const mat = new THREE.MeshBasicMaterial({ color: GIZMO_COLOR.idle, depthTest: false, transparent: true, opacity: 1.0 })
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(GIZMO_ARROW.coneRadius, GIZMO_ARROW.coneHeight, 10), mat)
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(GIZMO_ARROW.coneRadius, GIZMO_ARROW.coneHeight, GIZMO_ARROW.coneSegments), mat)
     cone.position.set(Math.cos(theta) * spec.radius, Math.sin(theta) * spec.radius, 0)
     cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3(-Math.sin(theta), Math.cos(theta), 0))
-    cone.renderOrder = 1000
+    cone.renderOrder = RENDER_ORDER.gizmoArrow
     group.add(cone)
     arrows.push({ mesh: cone, mat, theta })
   }

@@ -143,7 +143,7 @@ export function useFileIO() {
   // 视口 PNG 截图（2 倍高清；无原子时不导空图）
   const exportPNG = useCallback(() => {
     if (molecule.atoms.length === 0) return
-    const url = captureViewportImage(2)
+    const url = captureViewportImage()
     if (url) downloadDataUrl(url, `${molName}.png`)
   }, [molecule, molName])
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { RENDER } from '../../config/render.config'
 
 /**
  * 截取当前视口为 PNG data URL。scale = 设备像素倍数（默认 2 出高清图）。
@@ -7,7 +8,7 @@ import * as THREE from 'three'
  * 纯函数：不含 ticker 等编排副作用（由调用方负责触发下一帧恢复实时视图）。
  */
 export function captureCanvasPNG(
-  renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, scale = 2,
+  renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, scale = RENDER.captureScale,
 ): string {
   const size = new THREE.Vector2()
   renderer.getSize(size)          // CSS 像素尺寸

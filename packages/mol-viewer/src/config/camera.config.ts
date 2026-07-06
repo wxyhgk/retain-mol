@@ -26,6 +26,8 @@ export const CONTROLS = {
   dragZoomCoef: 0.01,
   /** 滚轮缩放的指数系数 */
   wheelZoomCoef: 0.001,
+  /** 「视角对齐到草图平面」的平滑动画时长（ms） */
+  alignToPlaneDurationMs: 400,
 }
 
 export const FIT = {

@@ -10,6 +10,7 @@
  *   4. Hückel 规则：π 电子数 = 4n+2（n = 0,1,2,…）→ 芳香
  */
 
+import { AROMATICITY } from '../../../config/geometry.config'
 import type { Atom, Bond, Molecule } from '../../molecule'
 import { bondsOf, degree } from '../graph'
 
@@ -38,7 +39,7 @@ const LONE_PAIR_DONORS = new Set(['N', 'O', 'S'])
 export function findRings(
   atoms: readonly Atom[],
   bonds: readonly Bond[],
-  maxSize = 8,
+  maxSize = AROMATICITY.maxDetectRingSize,
 ): string[][] {
   // 邻接表
   const adj = new Map<string, string[]>()
@@ -152,12 +153,12 @@ function isGeometricallyAromatic(
   bonds: readonly Bond[],
   ringBonds: readonly Bond[],
 ): boolean {
-  if (ringIds.length < 5 || ringIds.length > 7) return false
+  if (ringIds.length < AROMATICITY.minRingSize || ringIds.length > AROMATICITY.maxRingSize) return false
   if (ringBonds.length !== ringIds.length) return false   // 非简单环（有跨环键）
   const atomById = new Map(atoms.map(a => [a.id, a]))
 
   for (const id of ringIds) {
-    if (degree(bonds, id) > 3) return false
+    if (degree(bonds, id) > AROMATICITY.maxSp2Degree) return false
   }
   for (const b of ringBonds) {
     const a1 = atomById.get(b.atomId1)

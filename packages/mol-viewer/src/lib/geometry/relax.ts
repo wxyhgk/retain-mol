@@ -19,6 +19,7 @@
 import type { Molecule } from '../molecule'
 import { inferHybridization } from '../builder/analysis/hybridization'
 import { lookupBondLengthByOrder, inferGeometry, GEOMETRY_RULES } from '../../config/geometry.config'
+import { RELAX } from '../../config/relax.config'
 
 interface DistConstraint { i: number; j: number; d: number; k: number }
 
@@ -78,9 +79,9 @@ export class GeometryRelaxer {
 
   constructor(mol: Molecule, opts: RelaxOptions = {}) {
     const {
-      jitter = 0.6, bondK = 1.0, angleK = 0.55,
-      repulseK = 0.5, repulseDist = 2.0, seed = 0x5eed,
-      target, attractK = 0.12,
+      jitter = RELAX.jitter, bondK = RELAX.bondK, angleK = RELAX.angleK,
+      repulseK = RELAX.repulseK, repulseDist = RELAX.repulseDist, seed = RELAX.seed,
+      target, attractK = RELAX.attractK,
     } = opts
     const n = mol.atoms.length
     this.ids = mol.atoms.map(a => a.id)
@@ -216,5 +217,5 @@ export class GeometryRelaxer {
     return m
   }
 
-  get converged(): boolean { return this.maxResidual < 1e-3 }
+  get converged(): boolean { return this.maxResidual < RELAX.convergeThreshold }
 }

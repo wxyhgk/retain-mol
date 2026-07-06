@@ -21,17 +21,24 @@ export const GIZMO_LINE = {
   gapSize: 0.12,
   /** |axis · camForward| 超过此值视为"面对相机"，隐藏后半虚线 */
   faceOnThreshold: 0.88,
+  /** hover 时前环线宽在 frontLinewidth 基础上加粗的量 */
+  hoverLinewidthBump: 2,
 }
 
 export const GIZMO_PICKER = {
   /** 隐形 torus picker 的 tube 半径（决定 hit 区域宽度；数值大 = 更易命中环、更难误触原子） */
   tubeRadius: 0.18,
+  /** picker torus 的径向 / 管向分段 */
+  radialSegments: 8,
+  tubularSegments: 96,
 }
 
 export const GIZMO_ARROW = {
   count: 4,
   coneRadius: 0.04,
   coneHeight: 0.12,
+  /** 箭头圆锥分段 */
+  coneSegments: 10,
 }
 
 export const GIZMO_COLOR = {

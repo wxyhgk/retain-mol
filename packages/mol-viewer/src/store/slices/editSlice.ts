@@ -28,6 +28,7 @@ import { lookupBondLengthByOrder } from '../../config/geometry.config'
 import type { MoleculeState, EditSlice } from './types'
 import { getActiveMol, patchActiveMol, applyGeomEdit, selectActiveMoleculeOrEmpty } from './helpers'
 import { UNDO_LIMIT, partializeForUndo, undoSnapshotEqual, type UndoSnapshot } from './undoConfig'
+import { PLACEMENT } from '../../config/interaction.config'
 
 /** temporal store 访问器：组装层注入，指向 zundo 包裹产生的 temporal。 */
 type GetTemporal = () => StoreApi<TemporalState<MoleculeState>>
@@ -309,7 +310,7 @@ export function createEditSlice(
         let maxX = mol.atoms.reduce((m, a) => Math.max(m, a.x), -Infinity)
         if (!isFinite(maxX)) maxX = 0
         const clipMinX = clipboard.atoms.reduce((m, a) => Math.min(m, a.x), Infinity)
-        const offsetX = isFinite(clipMinX) ? maxX + 3 - clipMinX : 3
+        const offsetX = isFinite(clipMinX) ? maxX + PLACEMENT.pasteOffsetX - clipMinX : PLACEMENT.pasteOffsetX
 
         const newAtoms: Atom[] = clipboard.atoms.map(ca => {
           const a = newAtom(ca.symbol, ca.x + offsetX, ca.y, ca.z)

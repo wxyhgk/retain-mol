@@ -3,6 +3,7 @@
  * 计算新原子应放置的位置，基于中心原子的配位几何。
  */
 
+import { BONDING } from '../../../config/bonding.config'
 import { getElementConfig } from '../../../config/elements.config'
 import { inferGeometry, GEOMETRY_RULES, STANDARD_BOND_LENGTHS } from '../../../config/geometry.config'
 import type { AtomHybridization } from '../../../config/geometry.config'
@@ -20,7 +21,7 @@ export function calcBondLength(sym1: string, sym2: string): number {
   if (STANDARD_BOND_LENGTHS[key]) return STANDARD_BOND_LENGTHS[key]
   const r1 = getElementConfig(sym1).covalentRadius
   const r2 = getElementConfig(sym2).covalentRadius
-  return (r1 + r2) * 1.08
+  return (r1 + r2) * BONDING.singleBondRadiusFactor
 }
 
 // ── 邻居方向 ──────────────────────────────────────────────────────────────────

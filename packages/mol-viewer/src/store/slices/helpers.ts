@@ -8,6 +8,7 @@ import type { Molecule } from '../../lib/molecule'
 import type { SceneObject } from '../../lib/sceneObject'
 import type { GeomEditResult } from '../../lib/builder/BuilderEngine'
 import type { MoleculeState } from './types'
+import { PLACEMENT } from '../../config/interaction.config'
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
 
@@ -83,5 +84,5 @@ export function computeAutoOffset(objects: SceneObject[]): { x: number; y: numbe
   for (const obj of objects)
     for (const atom of obj.molecule.atoms)
       if (atom.x > maxX) maxX = atom.x
-  return { x: isFinite(maxX) ? maxX + 5 : 0, y: 0, z: 0 }
+  return { x: isFinite(maxX) ? maxX + PLACEMENT.addObjectOffsetX : 0, y: 0, z: 0 }
 }

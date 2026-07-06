@@ -7,6 +7,7 @@ import * as OCL from 'openchemlib'
 import type { Atom, Bond, Molecule } from '../molecule'
 import { newAtom, newBond } from '../molecule'
 import { splitConnectedComponents } from '../builder/analysis/fragments'
+import { RELAX } from '../../config/relax.config'
 
 // OCL 返回的 Molecule 对象类型
 type OCLMol = ReturnType<typeof OCL.Molecule.fromMolfile>
@@ -232,7 +233,7 @@ export function generate3D(mol: Molecule): OptimizeResult {
       }
     }).ConformerGenerator
     // 固定种子 → 同一结构每次得到相同 3D（可复现）
-    const mol3d = new CG(0x5eed).getOneConformerAsMolecule(oclMol)
+    const mol3d = new CG(RELAX.seed).getOneConformerAsMolecule(oclMol)
     if (!mol3d) return { molecule: mol, ok: false, reason: '无法生成 3D 构象（结构可能过于复杂或含不支持的原子）' }
 
     // 嵌入结果（未清理）——作为 morph 动画的起点

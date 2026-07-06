@@ -3,7 +3,7 @@ import { MolControls } from '../controls/MolControls'
 import type { Atom, Molecule } from '../molecule'
 import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
 import { CAMERA, CONTROLS } from '../../config/camera.config'
-import { SKETCH_GRID } from '../../config/render.config'
+import { SKETCH_GRID, RENDER } from '../../config/render.config'
 import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
 import { ticker, Phase } from '../animation'
 import { MoleculeRenderer } from './MoleculeRenderer'
@@ -123,7 +123,7 @@ export class MolRenderer {
     const qStart = this.rotationGroup.quaternion.clone()
     const qEnd = qDelta.multiply(qStart)
 
-    const DURATION = 400
+    const DURATION = CONTROLS.alignToPlaneDurationMs
     const t0 = performance.now()
     const step = () => {
       const t = Math.min(1, (performance.now() - t0) / DURATION)
@@ -317,7 +317,7 @@ export class MolRenderer {
       )
 
       // 非活跃对象半透明
-      const targetOpacity = isActive ? 1.0 : 0.3
+      const targetOpacity = isActive ? 1.0 : RENDER.inactiveObjectOpacity
       grp.traverse(child => {
         const mesh = child as THREE.Mesh
         if (!mesh.isMesh) return
