@@ -10,6 +10,7 @@ import { getElementConfig as getElement } from '../../config/elements.config'
 import { RENDER } from '../../config/render.config'
 import { MEASURE_VIS } from '../../config/overlay.config'
 import { calcAngle, calcDihedral } from '../builder/geometry/measure'
+import { angleArcGeometry, dihedralGeometry } from './measureGeometry'
 
 /**
  * 管理测量可视化：已提交测量的几何体 + pending 光晕 + 标注锚点。
@@ -127,67 +128,24 @@ export class MeasureVisuals {
   }
 
   private addAngleArc(p1: THREE.Vector3, vertex: THREE.Vector3, p3: THREE.Vector3, s: MeasureStyle): THREE.Vector3 | null {
-    const v1 = p1.clone().sub(vertex).normalize()
-    const v2 = p3.clone().sub(vertex).normalize()
-    const axis = v1.clone().cross(v2)
-    if (axis.lengthSq() < 1e-12) return null
-    axis.normalize()
-
-    const totalAngle = v1.angleTo(v2)
-    const arcR = MEASURE_VIS.arcRadius
-    const arcPts: THREE.Vector3[] = []
-    for (let i = 0; i <= MEASURE_VIS.arcSegments; i++) {
-      const a = (i / MEASURE_VIS.arcSegments) * totalAngle
-      const v = v1.clone().multiplyScalar(Math.cos(a)).addScaledVector(axis.clone().cross(v1), Math.sin(a))
-      arcPts.push(vertex.clone().addScaledVector(v, arcR))
+    const arc = angleArcGeometry(p1, vertex, p3)
+    if (!arc) return null
+    this.measureGroup.add(this.makeLine2(arc.arcPts, s.angleColor, s.lineWidth))
+    for (const seg of arc.tickSegs) {
+      this.measureGroup.add(this.makeLine2(seg, s.angleColor, s.lineWidth))
     }
-    this.measureGroup.add(this.makeLine2(arcPts, s.angleColor, s.lineWidth))
-
-    for (const dir of [v1, v2]) {
-      this.measureGroup.add(this.makeLine2(
-        [vertex.clone().addScaledVector(dir, arcR * MEASURE_VIS.arcTickMin), vertex.clone().addScaledVector(dir, arcR * MEASURE_VIS.arcTickMax)],
-        s.angleColor, s.lineWidth,
-      ))
-    }
-
-    const midDir = v1.clone().multiplyScalar(Math.cos(totalAngle / 2)).addScaledVector(axis.clone().cross(v1), Math.sin(totalAngle / 2))
-    return vertex.clone().addScaledVector(midDir.normalize(), arcR + MEASURE_VIS.arcLabelOffset)
+    return arc.labelPos
   }
 
   private addDihedralVisual(
     p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3, p4: THREE.Vector3,
     s: MeasureStyle,
   ): THREE.Vector3 | null {
-    const bondVec = p3.clone().sub(p2)
-    const bondDir = bondVec.clone().normalize()
-    const bondMid = p2.clone().add(p3).multiplyScalar(0.5)
-    const halfLen = bondVec.length() * 0.5
-
-    const projectPerp = (p: THREE.Vector3): THREE.Vector3 => {
-      const d = p.clone().sub(bondMid)
-      const perp = d.clone().addScaledVector(bondDir, -d.dot(bondDir))
-      return perp.lengthSq() > 1e-12 ? perp.normalize() : new THREE.Vector3(1, 0, 0)
-    }
-    const perp1 = projectPerp(p1), perp4 = projectPerp(p4)
-
-    const addPlane = (outer: THREE.Vector3, perp: THREE.Vector3, color: string) => {
-      const PAD_U = MEASURE_VIS.dihedralPadU
-      const PAD_V = MEASURE_VIS.dihedralPadV
-      const outerRel = outer.clone().sub(bondMid)
-      const uOuter = outerRel.dot(bondDir)
-      const vOuter = outerRel.dot(perp)
-      const uMin = Math.min(-halfLen, uOuter) - PAD_U
-      const uMax = Math.max(halfLen, uOuter) + PAD_U
-      const vMin = -PAD_V * MEASURE_VIS.dihedralVMinFactor
-      const vMax = Math.max(0, vOuter) + PAD_V
-
-      const corner = (u: number, v: number) =>
-        bondMid.clone().addScaledVector(bondDir, u).addScaledVector(perp, v)
-      const c0 = corner(uMin, vMin)
-      const c1 = corner(uMax, vMin)
-      const c2 = corner(uMax, vMax)
-      const c3 = corner(uMin, vMax)
-
+    const d = dihedralGeometry(p1, p2, p3, p4)
+    const planeColors = [s.planeColor1, s.planeColor2]
+    d.planes.forEach((corners, i) => {
+      const color = planeColors[i]
+      const [c0, c1, c2, c3] = corners
       const faceGeo = new THREE.BufferGeometry()
       faceGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
         ...c0.toArray(), ...c1.toArray(), ...c2.toArray(),
@@ -202,35 +160,13 @@ export class MeasureVisuals {
       })
       this.measureGroup.add(new THREE.Mesh(faceGeo, faceMat))
       this.measureGroup.add(this.makeLine2([c0, c1, c2, c3, c0], color, s.lineWidth))
+    })
+
+    this.measureGroup.add(this.makeLine2(d.arcPts, s.lineColor, s.lineWidth))
+    for (const seg of d.tickSegs) {
+      this.measureGroup.add(this.makeLine2(seg, s.lineColor, s.lineWidth))
     }
-
-    addPlane(p1, perp1, s.planeColor1)
-    addPlane(p4, perp4, s.planeColor2)
-
-    const vMax1 = Math.max(0, p1.clone().sub(bondMid).dot(perp1))
-    const vMax4 = Math.max(0, p4.clone().sub(bondMid).dot(perp4))
-    const arcR = Math.min(vMax1, vMax4) * MEASURE_VIS.dihedralArcRadiusScale + MEASURE_VIS.dihedralArcRadiusBase
-
-    const sinA = perp1.clone().cross(perp4).dot(bondDir)
-    const cosA = perp1.dot(perp4)
-    const dihedralAngle = Math.atan2(sinA, cosA)
-    const arcPts: THREE.Vector3[] = []
-    for (let i = 0; i <= MEASURE_VIS.arcSegments; i++) {
-      const a = (i / MEASURE_VIS.arcSegments) * dihedralAngle
-      const v = perp1.clone().multiplyScalar(Math.cos(a)).addScaledVector(bondDir.clone().cross(perp1), Math.sin(a))
-      arcPts.push(bondMid.clone().addScaledVector(v, arcR))
-    }
-    this.measureGroup.add(this.makeLine2(arcPts, s.lineColor, s.lineWidth))
-
-    for (const perp of [perp1, perp4]) {
-      this.measureGroup.add(this.makeLine2(
-        [bondMid.clone().addScaledVector(perp, arcR * MEASURE_VIS.arcTickMin), bondMid.clone().addScaledVector(perp, arcR * MEASURE_VIS.arcTickMax)],
-        s.lineColor, s.lineWidth,
-      ))
-    }
-
-    const midDir = perp1.clone().multiplyScalar(Math.cos(dihedralAngle / 2)).addScaledVector(bondDir.clone().cross(perp1), Math.sin(dihedralAngle / 2))
-    return bondMid.clone().addScaledVector(midDir.normalize(), arcR + MEASURE_VIS.arcLabelOffset)
+    return d.labelPos
   }
 
   dispose() {

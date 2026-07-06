@@ -17,6 +17,7 @@ export interface GizmoCallbacks {
 import type { MolRenderer } from './MolRenderer'
 import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../config/rotateGizmo.config'
 import { ticker } from '../animation'
+import { computeRingRadius, collectBondSideAtoms } from './gizmoMath'
 
 // ── 内部类型 ──────────────────────────────────────────────────────────────────
 
@@ -408,17 +409,6 @@ function buildSpecs(
 ): RingSpec[] {
   const specs: RingSpec[] = []
 
-  const computeRadius = (refX: number, refY: number, refZ: number, group: Set<string>): number => {
-    let maxD = 0
-    for (const a of mol.atoms) {
-      if (!group.has(a.id)) continue
-      const d = Math.sqrt((a.x-refX)**2 + (a.y-refY)**2 + (a.z-refZ)**2)
-      if (d > maxD) maxD = d
-    }
-    return Math.min(GIZMO_RING.radiusMax, Math.max(GIZMO_RING.radiusMin,
-      maxD * GIZMO_RING.radiusPaddingFactor + GIZMO_RING.radiusPaddingAdd))
-  }
-
   if (selectedBondIds.size === 1) {
     const bondId = [...selectedBondIds][0]
     const bond = mol.bonds.find(b => b.id === bondId)
@@ -430,23 +420,14 @@ function buildSpecs(
         const a2sel = selectedAtomIds.has(a2.id)
         if (a1sel !== a2sel) {
           const startAtom = a1sel ? a1 : a2
-          const rotating = new Set<string>([startAtom.id])
-          const queue = [startAtom.id]
-          while (queue.length) {
-            const cur = queue.shift()!
-            for (const b of mol.bonds) {
-              if (b.id === bondId) continue
-              const nbr = b.atomId1 === cur ? b.atomId2 : b.atomId2 === cur ? b.atomId1 : null
-              if (nbr && !rotating.has(nbr)) { rotating.add(nbr); queue.push(nbr) }
-            }
-          }
+          const rotating = collectBondSideAtoms(mol.bonds, startAtom.id, bondId)
           const d = new THREE.Vector3(a2.x-a1.x, a2.y-a1.y, a2.z-a1.z)
           if (d.length() > 1e-4) {
             specs.push({
               id: 'bond', space: 'bond', axisLocal: d.normalize(),
               pivotLocal: new THREE.Vector3(startAtom.x, startAtom.y, startAtom.z),
               color: GIZMO_COLOR.idle,
-              radius: computeRadius(startAtom.x, startAtom.y, startAtom.z, rotating),
+              radius: computeRingRadius(mol.atoms, startAtom.x, startAtom.y, startAtom.z, rotating),
               bondId: bond.id, pivotAtomId: startAtom.id, atomIdsToRotate: rotating,
             })
           }
@@ -463,7 +444,7 @@ function buildSpecs(
       const cz = sel.reduce((s, a) => s + a.z, 0) / sel.length
       const pivot = new THREE.Vector3(cx, cy, cz)
       const toRotate = new Set(selectedAtomIds)
-      const r = computeRadius(cx, cy, cz, toRotate)
+      const r = computeRingRadius(mol.atoms, cx, cy, cz, toRotate)
       specs.push({ id: 'X', space: 'world', axisWorld: new THREE.Vector3(1,0,0), pivotLocal: pivot.clone(), color: GIZMO_COLOR.idle, radius: r, atomIdsToRotate: toRotate })
       specs.push({ id: 'Y', space: 'world', axisWorld: new THREE.Vector3(0,1,0), pivotLocal: pivot.clone(), color: GIZMO_COLOR.idle, radius: r, atomIdsToRotate: toRotate })
       specs.push({ id: 'Z', space: 'world', axisWorld: new THREE.Vector3(0,0,1), pivotLocal: pivot.clone(), color: GIZMO_COLOR.idle, radius: r, atomIdsToRotate: toRotate })

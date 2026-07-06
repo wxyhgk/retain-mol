@@ -1,19 +1,18 @@
 import * as THREE from 'three'
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { MolControls } from '../controls/MolControls'
-import type { Atom, Bond, Molecule } from '../molecule'
+import type { Atom, Molecule } from '../molecule'
 import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
 import { CAMERA, CONTROLS } from '../../config/camera.config'
-import { LIGHTING, FOG, DOF } from '../../config/render.config'
 import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
 import { ticker, Phase } from '../animation'
 import { MoleculeRenderer } from './MoleculeRenderer'
 import { InteractionHandler } from './InteractionHandler'
 import { MeasureVisuals } from './MeasureVisuals'
 import * as CameraUtils from './CameraUtils'
-import { detectAromaticity } from '../builder/analysis'
+import { AromaticRingCache } from './aromaticData'
+import { captureCanvasPNG } from './capture'
+import { setupLights, addBackgroundGrid, makeDepthFog, syncDepthFog } from './sceneRig'
+import { DepthOfField } from './postprocessing'
 
 /**
  * 薄 orchestrator：负责场景图组装、动画循环、resize，
@@ -36,8 +35,7 @@ export class MolRenderer {
   private _unsubTicker: () => void = () => {}
 
   // 景深后处理（虚实）：对焦注视点，远处虚化
-  private _composer: EffectComposer | null = null
-  private _bokehPass: BokehPass | null = null
+  private _dof: DepthOfField | null = null
 
   // 平面草图模式的网格可视化
   private _sketchGrid: THREE.GridHelper | null = null
@@ -50,11 +48,8 @@ export class MolRenderer {
   private _molRenderers = new Map<string, MoleculeRenderer>()
   private _objectGroups = new Map<string, THREE.Group>()
 
-  // Aromaticity ring cache: bonds array reference → aromaticRings (atom ID arrays)
-  // 用 bonds 数组引用做 key：setAtomPositions 只改坐标不改 bonds，
-  // 因此优化期间每帧命中缓存，不重复跑 DFS findRings。
-  // 环心从当前坐标实时算（代价低），这样优化时环心也跟着移动。
-  private _aromaticRingCache = new WeakMap<readonly Bond[], string[][]>()
+  // 芳香环心缓存（DFS 结果按 bonds 引用缓存，环心每帧实时算）
+  private _aromatic = new AromaticRingCache()
 
   // ── 公共回调（转发给 InteractionHandler）──
   get onAtomClick() { return this._interaction.onAtomClick }
@@ -181,11 +176,7 @@ export class MolRenderer {
     this.modelGroup.add(this._measureGroup)
 
     // 网格：极淡颜色，不影响分子渲染
-    const grid = new THREE.GridHelper(50, 50, 0xe5e7eb, 0xe5e7eb)
-    grid.position.y = -3
-    const gridMat = grid.material as THREE.LineBasicMaterial | THREE.LineBasicMaterial[]
-    ;(Array.isArray(gridMat) ? gridMat : [gridMat]).forEach(m => { m.opacity = 0.4; m.transparent = true })
-    this.scene.add(grid)
+    addBackgroundGrid(this.scene)
 
     this.controls = new MolControls(this.camera, this.rotationGroup, this.modelGroup, canvas)
     this.controls.rotateSpeed = CONTROLS.rotateSpeed
@@ -227,65 +218,32 @@ export class MolRenderer {
     this.controls.onWheelChange = () => ticker.invalidate()
 
     // 深度雾化：从注视点往后逐渐变淡，提供前后深度线索
-    this.scene.fog = new THREE.Fog(hexToInt(this.theme.scene.backgroundColor), CAMERA.initialZ, CAMERA.initialZ + FOG.farOffset)
+    this.scene.fog = makeDepthFog(hexToInt(this.theme.scene.backgroundColor))
 
-    // 景深（虚实）：MSAA 渲染目标保住抗锯齿，BokehPass 做散焦
-    if (DOF.enabled) {
-      const dpr = window.devicePixelRatio
-      const rt = new THREE.WebGLRenderTarget(
-        canvas.clientWidth * dpr, canvas.clientHeight * dpr, { samples: 4 },
-      )
-      this._composer = new EffectComposer(this.renderer, rt)
-      this._composer.setPixelRatio(dpr)
-      this._composer.setSize(canvas.clientWidth, canvas.clientHeight)
-      this._composer.addPass(new RenderPass(this.scene, this.camera))
-      this._bokehPass = new BokehPass(this.scene, this.camera, {
-        focus: CAMERA.initialZ,
-        aperture: DOF.aperture,
-        maxblur: DOF.maxblur,
-      })
-      this._composer.addPass(this._bokehPass)
-    }
+    // 景深（虚实）：MSAA 渲染目标保住抗锯齿，BokehPass 做散焦（DOF.enabled=false → null）
+    this._dof = DepthOfField.create(this.renderer, this.scene, this.camera, canvas.clientWidth, canvas.clientHeight)
 
     // 注册到共享 Ticker 的 Render 阶段（最后执行）
     this._unsubTicker = ticker.subscribe('mol-render', Phase.Render, () => {
       this.controls.update()
       // 雾与景深焦点随相机-注视点距离同步；雾色跟随主题背景
-      const fog = this.scene.fog as THREE.Fog
       const pivot = new THREE.Vector3()
       this.rotationGroup.getWorldPosition(pivot)
       const dist = this.camera.position.distanceTo(pivot)
-      fog.near = dist + FOG.nearOffset
-      fog.far  = dist + FOG.farOffset
-      if (this.scene.background instanceof THREE.Color) fog.color.copy(this.scene.background)
-      if (this._composer && this._bokehPass) {
-        ;(this._bokehPass.uniforms as Record<string, { value: number }>)['focus'].value = dist
-        this._composer.render()
-      } else {
-        this.renderer.render(this.scene, this.camera)
-      }
+      syncDepthFog(this.scene.fog as THREE.Fog, dist, this.scene.background)
+      if (this._dof) this._dof.render(dist)
+      else this.renderer.render(this.scene, this.camera)
     })
     ticker.invalidate() // 初始帧
 
-    this.setupLights()
-  }
-
-  private setupLights() {
-    this.scene.add(new THREE.AmbientLight(LIGHTING.ambient.color, LIGHTING.ambient.intensity))
-    const dir1 = new THREE.DirectionalLight(LIGHTING.keyLight.color, LIGHTING.keyLight.intensity)
-    dir1.position.set(...LIGHTING.keyLight.position)
-    dir1.castShadow = true
-    this.scene.add(dir1)
-    const dir2 = new THREE.DirectionalLight(LIGHTING.fillLight.color, LIGHTING.fillLight.intensity)
-    dir2.position.set(...LIGHTING.fillLight.position)
-    this.scene.add(dir2)
+    setupLights(this.scene)
   }
 
   resize(width: number, height: number) {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height, false)
-    this._composer?.setSize(width, height)
+    this._dof?.setSize(width, height)
     this.controls.handleResize()
     this._measureVisuals.onResize(width, height)
     ticker.invalidate()
@@ -297,58 +255,15 @@ export class MolRenderer {
    * 同步 toDataURL 读出后复原——preserveDrawingBuffer 未开，必须在渲染当帧同步读取。
    */
   captureImage(scale = 2): string {
-    const size = new THREE.Vector2()
-    this.renderer.getSize(size)          // CSS 像素尺寸
-    const prevPR = this.renderer.getPixelRatio()
-    this.renderer.setPixelRatio(prevPR * scale)
-    this.renderer.setSize(size.x, size.y, false)   // 保持 CSS 尺寸，仅重分配高分缓冲
-    this.renderer.render(this.scene, this.camera)  // 直接渲染，不走 composer
-    const url = this.renderer.domElement.toDataURL('image/png')
-    this.renderer.setPixelRatio(prevPR)
-    this.renderer.setSize(size.x, size.y, false)
+    const url = captureCanvasPNG(this.renderer, this.scene, this.camera, scale)
     ticker.invalidate()                  // 触发下一帧恢复实时视图（含景深）
     return url
   }
 
   // ── 渲染 ──
 
-  // 返回 bondId → 所在环心（THREE.Vector3）
-  // DFS findRings 结果按 bonds 引用缓存，坐标部分每帧实时算（只是取均值，代价低）。
-  private _aromaticData(mol: Molecule): Map<string, THREE.Vector3> {
-    const bonds = mol.bonds
-
-    // DFS 找环：bonds 不变就不重跑
-    if (!this._aromaticRingCache.has(bonds)) {
-      this._aromaticRingCache.set(bonds, detectAromaticity(mol).aromaticRings)
-    }
-    const aromaticRings = this._aromaticRingCache.get(bonds)!
-
-    // 用当前坐标计算环心（positions 每帧都在变，所以每帧重算，但操作量极小）
-    const atomById = new Map(mol.atoms.map(a => [a.id, a]))
-    const bondCentroid = new Map<string, THREE.Vector3>()
-
-    for (const ring of aromaticRings) {
-      let cx = 0, cy = 0, cz = 0
-      for (const id of ring) {
-        const a = atomById.get(id)
-        if (a) { cx += a.x; cy += a.y; cz += a.z }
-      }
-      cx /= ring.length; cy /= ring.length; cz /= ring.length
-      const centroid = new THREE.Vector3(cx, cy, cz)
-
-      const ringSet = new Set(ring)
-      for (const b of mol.bonds) {
-        if (ringSet.has(b.atomId1) && ringSet.has(b.atomId2)) {
-          bondCentroid.set(b.id, centroid)
-        }
-      }
-    }
-
-    return bondCentroid
-  }
-
   render(molecule: Molecule, displayMode: DisplayMode, selectedAtoms: Set<string>, selectedBonds: Set<string>) {
-    this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds, this._aromaticData(molecule), this.renderStyle === 'publication')
+    this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds, this._aromatic.centroids(molecule), this.renderStyle === 'publication')
     ticker.invalidate()
   }
 
@@ -395,7 +310,7 @@ export class MolRenderer {
         displayMode,
         isActive ? selectedAtoms : new Set<string>(),
         isActive ? selectedBonds : new Set<string>(),
-        this._aromaticData(obj.molecule),
+        this._aromatic.centroids(obj.molecule),
         this.renderStyle === 'publication',
       )
 
@@ -478,7 +393,7 @@ export class MolRenderer {
     this._molRenderer.dispose()
     this._measureVisuals.dispose()
     this.controls.dispose()
-    this._composer?.dispose()
+    this._dof?.dispose()
     this.renderer.dispose()
     for (const [, r] of this._molRenderers) r.dispose()
     this._molRenderers.clear()
