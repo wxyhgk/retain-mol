@@ -6,20 +6,30 @@ import StylePanel from '@/features/style/components/StylePanel'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Link2, FlaskRound, Eraser, Sparkles } from 'lucide-react'
 import { minimizeGeometryAsync, morphObjectPositions } from '@/lib/moleculeOpt'
+import { uffOptimizeAsync } from '@/lib/uffOptimize'
 
 export default function RightPanel() {
   const { autoInferBonds, addHydrogens, clearMolecule } = useMoleculeStore()
   const flashHint = useEditorStore(s => s.flashHint)
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
 
-  // 几何清理：后台 Worker 算最终结构（不冻结 UI），再 morph 动画弛豫过去（看得见过程）
+  // 几何清理：先用 MMFF94（OCL，对有机物更准），失败（含硼/过渡金属等 MMFF 不支持
+  // 的元素）时回退到 UFF（OpenBabel WASM，覆盖全周期表）。两条路都 morph 弛豫过去。
   const handleCleanup = async () => {
     if (molecule.atoms.length < 2 || molecule.bonds.length === 0) return
     flashHint('几何清理中…')
     const r = await minimizeGeometryAsync(molecule)
-    if (!r.ok) { if (r.reason) flashHint(r.reason); return }
     const objId = useMoleculeStore.getState().activeObjectId
-    if (objId) await morphObjectPositions(objId, r.initial ?? molecule, r.molecule)
+    if (!objId) return
+    if (!r.ok) {
+      // MMFF 处理不了该元素 → UFF（全元素力场，含硼）
+      flashHint('MMFF 不支持该元素，改用 UFF 优化…')
+      const u = await uffOptimizeAsync(molecule)
+      if (!u.ok) { flashHint(u.reason ?? 'UFF 优化失败'); return }
+      await morphObjectPositions(objId, molecule, u.molecule!)
+      return
+    }
+    await morphObjectPositions(objId, r.initial ?? molecule, r.molecule)
   }
 
   return (

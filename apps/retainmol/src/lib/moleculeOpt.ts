@@ -60,15 +60,18 @@ export function flattenMolecule(mol: Molecule): Molecule {
 export function relaxAnimate(
   objectId: string,
   mol: Molecule,
-  opts: { itersPerFrame?: number; maxFrames?: number; target?: Molecule } = {},
+  opts: { itersPerFrame?: number; maxFrames?: number; target?: Molecule; jitter?: number } = {},
 ): Promise<void> {
-  const { target } = opts
+  const { target, jitter } = opts
   const { itersPerFrame = 2, maxFrames = target ? 110 : 500 } = opts
   const store = useMoleculeStore.getState()
   const targetMap = target
     ? new Map(target.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
     : undefined
-  const relaxer = new GeometryRelaxer(mol, targetMap ? { target: targetMap } : {})
+  const relaxer = new GeometryRelaxer(mol, {
+    ...(targetMap ? { target: targetMap } : {}),
+    ...(jitter !== undefined ? { jitter } : {}),
+  })
   store.beginTransaction()
   return new Promise<void>(resolve => {
     let frame = 0
