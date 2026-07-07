@@ -13,6 +13,7 @@ import { newAtom, newBond } from '../../molecule'
 import type { FragmentDef } from '../fragmentLibrary'
 import { getElementConfig } from '../../../config/elements.config'
 import { BONDING } from '../../../config/bonding.config'
+import { lookupBondLengthByOrder } from '../../../config/geometry.config'
 import { bondsOf, degree, findBond, hNeighborsOf, otherEnd } from '../graph'
 import { inferHybridization } from '../analysis/hybridization'
 import { calcBondLength, findNextBondDir, getNeighborDirs } from '../geometry/vsepr'
@@ -114,13 +115,15 @@ export function attachFragmentToAtom(
   const attachDir = new THREE.Vector3(fh.x - fa.x, fh.y - fa.y, fh.z - fa.z).normalize()
   const q = new THREE.Quaternion().setFromUnitVectors(attachDir, dir.clone().negate())
 
-  const bLen = calcBondLength(host.symbol, fa.symbol)
+  // 键长按连接键级取（双/三键更短），退回单键估算
+  const order = frag.attachOrder ?? 1
+  const bLen = lookupBondLengthByOrder(host.symbol, fa.symbol, order) ?? calcBondLength(host.symbol, fa.symbol)
   const anchor = new THREE.Vector3(host.x, host.y, host.z).addScaledVector(dir, bLen)
 
   const { atoms, bonds, idByIndex } = instantiate(
     frag, p => p.sub(attachOrigin).applyQuaternion(q).add(anchor), frag.attachHIndex,
   )
-  const linkBond = newBond(host.id, idByIndex.get(frag.attachIndex)!, 1)
+  const linkBond = newBond(host.id, idByIndex.get(frag.attachIndex)!, order)
 
   return {
     ok: true,

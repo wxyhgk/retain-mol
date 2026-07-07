@@ -34,6 +34,14 @@ export interface FragmentDef {
    * （苯环模板点 C-C 键 → 萘式稠环）。仅环系片段有；基团为 undefined。
    */
   attachBond?: [number, number]
+  /**
+   * 接到已有原子时用的键级（GaussView 式杂化片段：=CH₂ 用 2、≡CH 用 3）。
+   * 默认（undefined）= 1，现有片段行为不变。degree 模型下这只是那条连接键的 order，
+   * 不触发目标价态/H 重算——与「键级不联动 H」一致。
+   */
+  attachOrder?: 1 | 2 | 3
+  /** UI 分组：单原子后按 sp3 / sp2 / sp（杂化桩）、ring（环）、group（多原子基团）排列 */
+  group?: 'sp3' | 'sp2' | 'sp' | 'ring' | 'group'
 }
 
 // ── 内部小工具 ────────────────────────────────────────────────────────────
@@ -107,95 +115,84 @@ function makeRing(opts: {
   }
 
   return { id: opts.id, name: opts.name, short: opts.short, formula: opts.formula,
-           atoms, bonds, attachIndex: 0, attachHIndex, attachBond: [0, 1] }
+           atoms, bonds, attachIndex: 0, attachHIndex, attachBond: [0, 1], group: 'ring' }
 }
 
-// ── 官能团（小结构，手写坐标；attach 原子在原点，attach-H 沿 +x）──────────────
+// ── 杂化桩框架（GaussView Element Fragments 式）────────────────────────────────
+// 元素条只放「杂化开价桩」：中心重原子 + 用 H 补满的开价，接到已有原子时按
+// attachOrder 成单/双/三键。整张 HYBRID_TABLE 是唯一数据源 —— 补新元素 = 加一行，
+// 几何/命名/接线全自动，无需手打坐标。
+//
+//   hCount      除连接键外要补的 H 数（= 常见价 − attachOrder）
+//   attachOrder 1/2/3 → 接原子时形成单/双/三键（degree 模型下只是那条键的 order，
+//               不触发目标价态/H 重算——与「键级不联动 H」一致）
+//   几何        sp3 四面体(3D) · sp2 平面 120° · sp 线性 180°
+//
+// 放空白：sp3（attachOrder 1）放完整饱和分子（–C→CH₄、–O→H₂O）；sp2/sp 由
+// useBuilder 退回放中心元素单原子（孤立的 =CH₂/≡N 无化学意义，同 GaussView）。
 
-const METHYL: FragmentDef = (() => {
-  // 甲烷：C 原点，4 个 H 沿四面体方向
-  const t = CH / Math.sqrt(3)
+type Hyb = 'sp3' | 'sp2' | 'sp'
+interface HybridSpec { hyb: Hyb; attachOrder: 1 | 2 | 3; hCount: number; bondLen: number }
+
+// 四面体四顶点（归一化）——sp3 的 H 方向；index 0 兼作连接方向（attach-H）
+const TETRA: V3[] = ([[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]] as V3[]).map(norm)
+const BOND_GLYPH: Record<Hyb, string> = { sp3: '–', sp2: '=', sp: '≡' }
+
+function makeHybrid(sym: string, spec: HybridSpec): FragmentDef {
+  const { hyb, attachOrder, hCount, bondLen } = spec
+  const planar = (deg: number): V3 => [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180), 0]
+  // 方向序列：index 0 = attach-H（连接方向），其后依次补 H
+  const dirs: V3[] =
+    hyb === 'sp3' ? TETRA
+    : hyb === 'sp2' ? [planar(0), planar(120), planar(240)]
+    : [planar(0), planar(180)]
+
+  const atoms: FragmentAtom[] = [{ symbol: sym, x: 0, y: 0, z: 0 }]
+  const bonds: FragmentBond[] = []
+  dirs.slice(0, 1 + hCount).forEach((d, i) => {
+    atoms.push({ symbol: 'H', x: d[0] * bondLen, y: d[1] * bondLen, z: d[2] * bondLen })
+    bonds.push({ a: 0, b: i + 1, order: 1 })
+  })
+
+  const short = BOND_GLYPH[hyb] + sym   // GaussView 式桩：–C / =C / ≡C
   return {
-    id: 'methyl', name: '甲基', short: 'CH₃', formula: 'CH₄',
-    atoms: [
-      { symbol: 'C', x: 0, y: 0, z: 0 },
-      { symbol: 'H', x:  t, y:  t, z:  t },
-      { symbol: 'H', x:  t, y: -t, z: -t },
-      { symbol: 'H', x: -t, y:  t, z: -t },
-      { symbol: 'H', x: -t, y: -t, z:  t },
-    ],
-    bonds: [{ a: 0, b: 1, order: 1 }, { a: 0, b: 2, order: 1 }, { a: 0, b: 3, order: 1 }, { a: 0, b: 4, order: 1 }],
-    attachIndex: 0, attachHIndex: 1,
+    id: `${sym.toLowerCase()}-${hyb}`,
+    name: `${sym} · ${hyb}`,
+    short, formula: short,
+    atoms, bonds, attachIndex: 0, attachHIndex: 1,
+    attachOrder, group: hyb,
   }
-})()
-
-const AMINO: FragmentDef = (() => {
-  // 氨：N 原点，3 个 H 锥形（取四面体方向中的三个，N-H 1.01）
-  const t = 1.01 / Math.sqrt(3)
-  return {
-    id: 'amino', name: '氨基', short: 'NH₂', formula: 'NH₃',
-    atoms: [
-      { symbol: 'N', x: 0, y: 0, z: 0 },
-      { symbol: 'H', x:  t, y:  t, z:  t },
-      { symbol: 'H', x:  t, y: -t, z: -t },
-      { symbol: 'H', x: -t, y:  t, z: -t },
-    ],
-    bonds: [{ a: 0, b: 1, order: 1 }, { a: 0, b: 2, order: 1 }, { a: 0, b: 3, order: 1 }],
-    attachIndex: 0, attachHIndex: 1,
-  }
-})()
-
-const HYDROXYL: FragmentDef = {
-  // 水：O 原点，H-O-H 104.5°，O-H 0.96
-  id: 'hydroxyl', name: '羟基', short: 'OH', formula: 'H₂O',
-  atoms: [
-    { symbol: 'O', x: 0, y: 0, z: 0 },
-    { symbol: 'H', x: 0.96, y: 0, z: 0 },
-    { symbol: 'H', x: 0.96 * Math.cos(104.5 * Math.PI / 180), y: 0.96 * Math.sin(104.5 * Math.PI / 180), z: 0 },
-  ],
-  bonds: [{ a: 0, b: 1, order: 1 }, { a: 0, b: 2, order: 1 }],
-  attachIndex: 0, attachHIndex: 1,
 }
 
-const CARBOXYL: FragmentDef = {
-  // 甲酸：sp2 C 原点，=O / -OH 各 120°，attach-H 沿 +x
-  id: 'carboxyl', name: '羧基', short: 'COOH', formula: 'HCOOH',
-  atoms: [
-    { symbol: 'C', x: 0, y: 0, z: 0 },
-    { symbol: 'H', x: 1.09, y: 0, z: 0 },
-    { symbol: 'O', x: 1.21 * Math.cos(2 * Math.PI / 3), y: 1.21 * Math.sin(2 * Math.PI / 3), z: 0 },   // =O
-    { symbol: 'O', x: 1.36 * Math.cos(4 * Math.PI / 3), y: 1.36 * Math.sin(4 * Math.PI / 3), z: 0 },   // -O
-    { symbol: 'H', x: -0.014, y: -1.869, z: 0 },                                                        // O-H
+// 每元素的杂化桩表 —— agent 参照 GaussView Element Fragments 往这里加行即可。
+// 已做的 C/N/O/S 为参考实现（bondLen 用 X–H 平衡键长，sp2/sp 桩用重键键长做视觉近似）。
+const HYBRID_TABLE: Record<string, HybridSpec[]> = {
+  C: [
+    { hyb: 'sp3', attachOrder: 1, hCount: 3, bondLen: 1.09 },   // –C   四面体，放空白 = CH₄
+    { hyb: 'sp2', attachOrder: 2, hCount: 2, bondLen: 1.09 },   // =C   接双键（=CH₂）
+    { hyb: 'sp',  attachOrder: 3, hCount: 1, bondLen: 1.09 },   // ≡C   接三键（≡CH）
   ],
-  bonds: [
-    { a: 0, b: 1, order: 1 },
-    { a: 0, b: 2, order: 2 },
-    { a: 0, b: 3, order: 1 },
-    { a: 3, b: 4, order: 1 },
+  N: [
+    { hyb: 'sp3', attachOrder: 1, hCount: 2, bondLen: 1.01 },   // –N   氨基
+    { hyb: 'sp2', attachOrder: 2, hCount: 1, bondLen: 1.01 },   // =N   亚胺
+    { hyb: 'sp',  attachOrder: 3, hCount: 0, bondLen: 1.01 },   // ≡N   氰
   ],
-  attachIndex: 0, attachHIndex: 1,
+  O: [
+    { hyb: 'sp3', attachOrder: 1, hCount: 1, bondLen: 0.96 },   // –O   羟基
+    { hyb: 'sp2', attachOrder: 2, hCount: 0, bondLen: 1.21 },   // =O   羰基
+  ],
+  S: [
+    { hyb: 'sp3', attachOrder: 1, hCount: 1, bondLen: 1.34 },   // –S   巯基
+    { hyb: 'sp2', attachOrder: 2, hCount: 0, bondLen: 1.60 },   // =S   硫酮
+  ],
+  // TODO(agent): 参照 GaussView 补 B / Si / P / 卤素(sp3 单桩) / ... 的杂化桩
 }
 
-const NITRO: FragmentDef = {
-  // 亚硝酸式：N 原点，两个 O 各 120°（一双一单），attach-H 沿 +x（N-H 1.01）
-  id: 'nitro', name: '硝基', short: 'NO₂', formula: 'HNO₂',
-  atoms: [
-    { symbol: 'N', x: 0, y: 0, z: 0 },
-    { symbol: 'H', x: 1.01, y: 0, z: 0 },
-    { symbol: 'O', x: 1.22 * Math.cos(2 * Math.PI / 3), y: 1.22 * Math.sin(2 * Math.PI / 3), z: 0 },
-    { symbol: 'O', x: 1.22 * Math.cos(4 * Math.PI / 3), y: 1.22 * Math.sin(4 * Math.PI / 3), z: 0 },
-  ],
-  bonds: [
-    { a: 0, b: 1, order: 1 },
-    { a: 0, b: 2, order: 2 },
-    { a: 0, b: 3, order: 1 },
-  ],
-  attachIndex: 0, attachHIndex: 1,
-}
+const HYBRID_FRAGMENTS: FragmentDef[] = Object.entries(HYBRID_TABLE)
+  .flatMap(([sym, specs]) => specs.map(s => makeHybrid(sym, s)))
 
-// ── 片段库 ────────────────────────────────────────────────────────────────────
-
-export const FRAGMENTS: FragmentDef[] = [
+// 环系片段：暂不进元素条（元素条只放杂化桩），保留供 fuseFragmentOnBond 及日后「环系」tab 使用。
+const RING_FRAGMENTS: FragmentDef[] = [
   makeRing({ id: 'benzene',      name: '苯环',         short: 'Ph',  formula: 'C₆H₆',
              n: 6, cc: 1.39, orders: [2, 1, 2, 1, 2, 1], pucker: 0,     hPerC: 1 }),
   makeRing({ id: 'cyclohexane',  name: '环己烷（椅式）', short: 'Cy',  formula: 'C₆H₁₂',
@@ -204,8 +201,12 @@ export const FRAGMENTS: FragmentDef[] = [
              n: 5, cc: 1.54, orders: [1, 1, 1, 1, 1],    pucker: 0,     hPerC: 2 }),
   makeRing({ id: 'cyclopropane', name: '环丙烷',        short: 'C₃',  formula: 'C₃H₆',
              n: 3, cc: 1.51, orders: [1, 1, 1],          pucker: 0,     hPerC: 2 }),
-  METHYL, AMINO, HYDROXYL, CARBOXYL, NITRO,
 ]
+
+// ── 片段库 ────────────────────────────────────────────────────────────────────
+// group ∈ {sp3,sp2,sp} 的杂化桩进元素条；ring 的暂不展示（见 RING_FRAGMENTS 注）。
+
+export const FRAGMENTS: FragmentDef[] = [...HYBRID_FRAGMENTS, ...RING_FRAGMENTS]
 
 export function getFragment(id: string): FragmentDef | undefined {
   return FRAGMENTS.find(f => f.id === id)

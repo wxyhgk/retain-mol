@@ -1,6 +1,6 @@
-import { useEditorStore, useMoleculeStore, listThemes, centerMolecule, SAMPLE_MOLECULES, cn } from '@retainmol/mol-viewer'
+import { useEditorStore, listThemes, cn } from '@retainmol/mol-viewer'
 import type { DisplayMode } from '@retainmol/mol-viewer'
-import { Hash, FlaskConical } from 'lucide-react'
+import { Hash } from 'lucide-react'
 
 const DISPLAY_MODES: { id: DisplayMode; label: string; desc: string }[] = [
   { id: 'ball-stick', label: '球棍',  desc: 'Ball & Stick' },
@@ -13,7 +13,6 @@ const DISPLAY_MODES: { id: DisplayMode; label: string; desc: string }[] = [
 
 export default function StylePanel() {
   const { displayMode, setDisplayMode, renderStyle, setRenderStyle, showAtomLabels, toggleAtomLabels, themeId, setTheme } = useEditorStore()
-  const { setMolecule } = useMoleculeStore()
   const themes = listThemes()
 
   return (
@@ -105,24 +104,6 @@ export default function StylePanel() {
             >
               {t.name}
               {themeId === t.id && <span className="ml-auto text-gray-400 text-[10px]">✓</span>}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* 示例分子 */}
-      <section>
-        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <FlaskConical size={11} />示例分子
-        </div>
-        <div className="space-y-0.5">
-          {SAMPLE_MOLECULES.map(s => (
-            <button
-              key={s.name}
-              onClick={() => setMolecule(centerMolecule(s.mol()))}
-              className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-all"
-            >
-              {s.name}
             </button>
           ))}
         </div>

@@ -192,6 +192,16 @@ export function useBuilder(): BuilderHandlers {
     const st = store.getState()
     const fragment = activeFragmentId ? getFragment(activeFragmentId) : undefined
     if (fragment) {
+      // 杂化桩（attachOrder>1）放到空白 → 退回放中心元素单原子（自动补满 H）：
+      // 孤立的 =CH₂/=O 无化学意义，杂化只在「接到已有原子」时体现（同 GaussView）。
+      if ((fragment.attachOrder ?? 1) > 1) {
+        const sym = fragment.atoms[fragment.attachIndex].symbol
+        st.beginTransaction()
+        const newId = st.addAtom(sym, worldPos.x, worldPos.y, worldPos.z)
+        if (sym !== 'H') st.addHydrogens(newId)
+        st.endTransaction()
+        return
+      }
       // 放完整片段：草图模式与平面共面，否则环面朝向相机
       const mol = selectActiveMoleculeOrEmpty(st)
       const sketch = useEditorStore.getState().sketchPlane
