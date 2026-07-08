@@ -1,13 +1,15 @@
 {
   "name": "retainmol",
   "private": true,
-  "version": "0.0.31",
+  "version": "0.0.32",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-ocl-resources.mjs && npm run build --workspace @retainmol/mol-viewer",
     "dev": "vite --host 0.0.0.0",
     "prebuild": "node scripts/copy-ocl-resources.mjs && npm run build --workspace @retainmol/mol-viewer",
     "build": "tsc -b && vite build",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "report:coupling": "node scripts/report-coupling.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "pretest": "npm run build --workspace @retainmol/mol-viewer",

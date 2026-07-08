@@ -168,7 +168,7 @@ export default function MolViewer({
   }, [readOnly])
 
   // ── 统一指针事件路由（move-object + 框选）────────────────────────────────
-  const { boxRect } = useCanvasPointerRouter(containerRef, rendererRef)
+  const { boxRect } = useCanvasPointerRouter(containerRef, rendererRef, readOnly)
 
   // ── cursor ───────────────────────────────────────────────────────────────
   // 内联样式挂在容器上（不依赖宿主 app 的 Tailwind 扫描到本包的 class）；
@@ -190,9 +190,9 @@ export default function MolViewer({
       <canvas ref={canvasRef} className="w-full h-full block" />
       <MeasureOverlay   renderer={renderer} />
       <AtomLabelOverlay renderer={renderer} />
-      <RotateGizmo      renderer={renderer} />
-      <BoxSelectOverlay rect={boxRect} />
-      <AtomContextMenu  renderer={renderer} />
+      <RotateGizmo      renderer={renderer} readOnly={readOnly} />
+      <BoxSelectOverlay rect={readOnly ? null : boxRect} />
+      {!readOnly && <AtomContextMenu renderer={renderer} />}
       {overlays}
       {!readOnly && <BuilderHint />}
     </div>

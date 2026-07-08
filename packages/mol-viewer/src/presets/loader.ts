@@ -24,9 +24,45 @@ const BUILTINS: Record<string, unknown> = (() => {
   return out
 })()
 
+const REGISTERED: Record<string, unknown> = {}
+
+export interface ThemeMetadata {
+  id: string
+  name: string
+  description: string
+  source: string
+  author: string
+  version: string
+}
+
 /** 校验 + 返回合法 Theme；失败抛出含可读信息的错误 */
 export function parseTheme(raw: unknown): Theme {
   return ThemeSchema.parse(raw)
+}
+
+export function registerTheme(raw: unknown): Theme {
+  const theme = parseTheme(raw)
+  REGISTERED[theme.metadata.id] = raw
+  return theme
+}
+
+function getThemeRaw(id: string): unknown {
+  return REGISTERED[id] ?? BUILTINS[id]
+}
+
+function getThemeEntries(): [string, unknown][] {
+  return Object.entries({ ...BUILTINS, ...REGISTERED })
+}
+
+function toThemeMetadata(theme: Theme): ThemeMetadata {
+  return {
+    id: theme.metadata.id,
+    name: theme.metadata.name,
+    description: theme.metadata.description,
+    source: theme.metadata.source ?? '',
+    author: theme.metadata.author ?? '',
+    version: theme.metadata.version,
+  }
 }
 
 /** 递归解析 extends 链，返回"解析态"主题（所有字段已填） */
@@ -37,7 +73,7 @@ export function resolveTheme(id: string): ResolvedTheme {
   while (cur) {
     if (seen.has(cur)) throw new Error(`主题 extends 存在循环: ${[...seen, cur].join(' → ')}`)
     seen.add(cur)
-    const raw = BUILTINS[cur]
+    const raw = getThemeRaw(cur)
     if (!raw) throw new Error(`未找到主题: ${cur}`)
     const theme = parseTheme(raw)
     chain.unshift(theme) // base 在前
@@ -65,10 +101,16 @@ export function resolveTheme(id: string): ResolvedTheme {
   return merged
 }
 
-export function listThemes(): { id: string; name: string }[] {
-  return Object.entries(BUILTINS).map(([id, raw]) => {
+export function listThemes(): ThemeMetadata[] {
+  const preferred = ['default', 'gaussview', 'iboview', 'pymol', 'paper-soft', 'paper-classic', 'paper-dark', 'dark', 'mono']
+  return getThemeEntries().map(([, raw]) => {
     const t = parseTheme(raw)
-    return { id, name: t.metadata.name }
+    return toThemeMetadata(t)
+  }).sort((a, b) => {
+    const ai = preferred.indexOf(a.id)
+    const bi = preferred.indexOf(b.id)
+    if (ai !== -1 || bi !== -1) return (ai === -1 ? Number.MAX_SAFE_INTEGER : ai) - (bi === -1 ? Number.MAX_SAFE_INTEGER : bi)
+    return a.name.localeCompare(b.name)
   })
 }
 

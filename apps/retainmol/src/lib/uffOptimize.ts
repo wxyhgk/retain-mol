@@ -7,7 +7,8 @@
  * 分子经 exportSdf → OpenBabel readString → UFF 优化 → 读回坐标，按原子顺序映射回来
  *（exportSdf 的原子顺序与 mol.atoms 一致，OpenBabel readString 不重排、不加氢）。
  */
-import { exportSdf, type Molecule } from '@retainmol/mol-viewer'
+import type { Molecule } from '@retainmol/mol-viewer/core'
+import { exportSdf } from '@retainmol/mol-viewer/io'
 
 export interface UffResult {
   ok: boolean

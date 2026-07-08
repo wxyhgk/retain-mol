@@ -1,6 +1,6 @@
 import { genId } from './utils'
-import type { Molecule } from './molecule'
-import { inferBonds } from './molecule'
+import type { Atom, Bond, Molecule } from './molecule'
+import { inferBonds, newBond } from './molecule'
 
 function makeMol(name: string, atomDefs: [string, number, number, number][]): Molecule {
   const atoms = atomDefs.map(([symbol, x, y, z]) => ({
@@ -46,13 +46,21 @@ export const SAMPLE_MOLECULES: { name: string; mol: () => Molecule }[] = [
     name: '苯 (C₆H₆)',
     mol: () => {
       const r = 1.40, rh = 2.49
-      const atoms: [string, number, number, number][] = []
+      const atoms: Atom[] = []
       for (let i = 0; i < 6; i++) {
         const a = (i * Math.PI) / 3
-        atoms.push(['C', r * Math.cos(a), r * Math.sin(a), 0])
-        atoms.push(['H', rh * Math.cos(a), rh * Math.sin(a), 0])
+        atoms.push({ id: genId(), symbol: 'C', x: r * Math.cos(a), y: r * Math.sin(a), z: 0 })
+        atoms.push({ id: genId(), symbol: 'H', x: rh * Math.cos(a), y: rh * Math.sin(a), z: 0 })
       }
-      return makeMol('Benzene', atoms)
+      const bonds: Bond[] = []
+      for (let i = 0; i < 6; i++) {
+        const c = atoms[i * 2]
+        const h = atoms[i * 2 + 1]
+        const nextC = atoms[((i + 1) % 6) * 2]
+        bonds.push({ ...newBond(c.id, nextC.id, 1), aromatic: true })
+        bonds.push(newBond(c.id, h.id, 1))
+      }
+      return { name: 'Benzene', atoms, bonds }
     },
   },
   {

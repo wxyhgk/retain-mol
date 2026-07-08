@@ -1,0 +1,54 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "iboview",
+    "name": "IboView 风",
+    "description": "IboView source-style theme: white background, Rasmol CPKnew colors with medium-gray carbon, and shiny-chic ball-stick bond proportions.",
+    "source": "https://www.iboview.org/_bldUPAt.html",
+    "author": "RetainMol",
+    "version": "0.1.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#ffffff",
+    "highlightColor": "#3399ff",
+    "highlightOpacity": 0.3
+  },
+  "render": {
+    "ballScale": 0.4,
+    "bondRadiusStick": 0.077,
+    "bondGap": 0.22,
+    "spacefillScale": 0.8
+  },
+  "fallbackColor": "#ff1493",
+  "elements": {
+    "H":  { "color": "#ffffff" },
+    "He": { "color": "#ffc0cb" },
+    "Li": { "color": "#b22121" },
+    "Be": { "color": "#ff1493" },
+    "B":  { "color": "#00ff00" },
+    "C":  { "color": "#999999" },
+    "N":  { "color": "#87cee6" },
+    "O":  { "color": "#ff0000" },
+    "F":  { "color": "#daa520" },
+    "Ne": { "color": "#ff1493" },
+    "Na": { "color": "#0000ff" },
+    "Mg": { "color": "#228b22" },
+    "Al": { "color": "#696969" },
+    "Si": { "color": "#daa520" },
+    "P":  { "color": "#ffaa00" },
+    "S":  { "color": "#ffff00" },
+    "Cl": { "color": "#00ff00" },
+    "Ar": { "color": "#ff1493" },
+    "K":  { "color": "#ff1493" },
+    "Ca": { "color": "#696969" },
+    "Fe": { "color": "#ffaa00" },
+    "Co": { "color": "#ff1493" },
+    "Ni": { "color": "#802828" },
+    "Cu": { "color": "#802828" },
+    "Zn": { "color": "#802828" },
+    "Br": { "color": "#802828" },
+    "I":  { "color": "#a020f0" }
+  }
+}

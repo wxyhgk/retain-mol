@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { Search, Loader2, AlertCircle } from 'lucide-react'
-import { fetchCompoundSdf, parseSdf, is2D, useMoleculeStore, centerMolecule, cn } from '@retainmol/mol-viewer'
+import { fetchCompoundSdf } from '@retainmol/mol-viewer/pubchem'
+import { useMoleculeStore } from '@/domain/viewerAdapter'
+import { centerMolecule } from '@retainmol/mol-viewer/core'
+import { parseSdf, is2D } from '@retainmol/mol-viewer/io'
+import { cn } from '@/lib/utils'
 
 interface Props {
   open: boolean

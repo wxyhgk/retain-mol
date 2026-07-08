@@ -1,11 +1,12 @@
 import { useState } from 'react'
+import { useMoleculeStore, useEditorStore } from '@/domain/viewerAdapter'
 import {
-  useMoleculeStore, useEditorStore, cn,
   getElementConfig as getElement,
   COMMON_ELEMENT_SYMBOLS as COMMON_ELEMENTS,
   PERIODIC_TABLE_LAYOUT as PERIODIC_TABLE,
-} from '@retainmol/mol-viewer'
+} from '@retainmol/mol-viewer/core'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 
 function colorHexToCss(hex: number) {
   return `#${hex.toString(16).padStart(6, '0')}`

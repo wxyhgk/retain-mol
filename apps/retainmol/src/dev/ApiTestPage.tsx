@@ -4,8 +4,9 @@
  */
 
 import { useState, useCallback } from 'react'
-import { MolViewer, newAtom, newBond, centerMolecule } from '@retainmol/mol-viewer'
-import type { DisplayMode, Molecule } from '@retainmol/mol-viewer'
+import { MolViewer } from '@/domain/viewerAdapter'
+import { newAtom, newBond, centerMolecule } from '@retainmol/mol-viewer/core'
+import type { DisplayMode, Molecule } from '@retainmol/mol-viewer/core'
 
 // ── 工具：构造测试分子 ────────────────────────────────────────────────────────
 

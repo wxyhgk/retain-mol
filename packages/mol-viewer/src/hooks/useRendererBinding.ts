@@ -13,7 +13,8 @@ import * as THREE from 'three'
 import { MolRenderer } from '../lib/molRenderer'
 import { useMoleculeStore } from '../store/moleculeStore'
 import type { Atom } from '../lib/molecule'
-import type { ResolvedTheme } from '../presets'
+import { resolveTheme, type ResolvedTheme } from '../presets'
+import type { RenderStyle } from '../styles'
 import type { DisplayMode } from '../lib/types'
 import type { SceneObject } from '../lib/sceneObject'
 import type { Measurement, MeasureStyle } from '../lib/types'
@@ -33,7 +34,7 @@ interface RendererBindingOptions {
   selectedAtomIds: Set<string>
   selectedBondIds: Set<string>
   displayMode:    DisplayMode
-  renderStyle:    'realistic' | 'publication'
+  renderStyle:    RenderStyle
   theme:          ResolvedTheme
   measurements:   Measurement[]
   pendingAtomIds: string[]
@@ -65,6 +66,8 @@ export function useRendererBinding({
 
   const prevMolNameRef  = useRef<string | undefined>(undefined)
   const prevActiveIdRef = useRef<string>(activeObjectId ?? '')
+  const prevRenderStyleRef = useRef<RenderStyle>(renderStyle)
+  const pendingRenderStyleFitRef = useRef(false)
 
   // ── 初始化渲染器 ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -118,17 +121,32 @@ export function useRendererBinding({
   useEffect(() => {
     const r = rendererRef.current
     if (!r) return
-    r.theme = theme
+    const rendererTheme = renderStyle === 'iboview' && theme.metadata.id !== 'iboview'
+      ? resolveTheme('iboview')
+      : theme
+    r.theme = rendererTheme
     r.renderStyle = renderStyle
-    r.scene.background = new THREE.Color(parseInt(theme.scene.backgroundColor.replace('#', ''), 16))
+    r.scene.background = new THREE.Color(parseInt(rendererTheme.scene.backgroundColor.replace('#', ''), 16))
   }, [theme, renderStyle, rendererRef])
 
   // ── 场景渲染 ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    rendererRef.current?.renderScene(
+    const r = rendererRef.current
+    if (!r) return
+    const styleChanged = prevRenderStyleRef.current !== renderStyle
+    prevRenderStyleRef.current = renderStyle
+    if (styleChanged) pendingRenderStyleFitRef.current = true
+    r.renderScene(
       sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds,
     )
-  }, [sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds, theme, renderStyle, rendererRef])
+    if (pendingRenderStyleFitRef.current && !toolCan(activeTool, 'transformsObject')) {
+      const activeObj = sceneObjects.find(o => o.id === activeObjectId)
+      if (activeObj && activeObj.molecule.atoms.length > 0) {
+        r.fitToMolecule([...activeObj.molecule.atoms])
+        pendingRenderStyleFitRef.current = false
+      }
+    }
+  }, [sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds, theme, renderStyle, activeTool, rendererRef])
 
   // ── 视角跟随 ─────────────────────────────────────────────────────────────
   // move-object 激活时跳过：否则 modelGroup 偏移导致所有分子一起移动

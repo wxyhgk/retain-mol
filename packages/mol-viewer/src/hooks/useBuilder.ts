@@ -7,15 +7,17 @@ import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
 import { useEditorStore } from '../store/editorStore'
-import { calcGrowPosition, calcClickGrowPosition, getGrowGuide as calcGrowGuide, canBond,
+import { calcGrowPosition, getGrowGuide as calcGrowGuide, canBond,
          degree, resolveHSlotGrowth,
-         attachFragmentToAtom, placeFragmentStandalone, fuseFragmentOnBond, ringPlaneIntersection } from '../lib/builder/BuilderEngine'
+         attachFragmentToAtom, placeFragmentStandalone, placeHybridPrototype, fuseFragmentOnBond, ringPlaneIntersection,
+         maxValence, valenceUsedByBonds } from '../lib/builder/BuilderEngine'
 import type { GrowGuideSpec } from '../lib/types'
-import { getElementConfig, effectiveMaxBonds } from '../config/elements.config'
+import { getElementConfig } from '../config/elements.config'
 import { RENDER } from '../config/render.config'
 import { getFragment } from '../lib/builder/fragmentLibrary'
 import { isSlotH, activateAndResolve } from '../lib/builder/queries'
 import { toolCan } from '../config/toolCapabilities.config'
+export { bondSelectedAtoms } from '../lib/builder/commands'
 
 export interface BuilderHandlers {
   onAtomClick: (atomId: string, event: MouseEvent) => void
@@ -47,7 +49,7 @@ export function useBuilder(): BuilderHandlers {
   )
 
   const onAtomClick = useCallback((atomId: string, event: MouseEvent) => {
-    const { activeTool, activeElement, activeFragmentId, flashHint } = useEditorStore.getState()
+    const { activeTool, activeElement, activeFragmentId, atomClickMode, flashHint } = useEditorStore.getState()
 
     // ── 自动激活包含被点击原子的分子 ──────────────────────────────────────────
     // 多分子场景下，点击非 active 分子的原子时先切换 activeObjectId，
@@ -101,6 +103,21 @@ export function useBuilder(): BuilderHandlers {
           break
         }
 
+        // 原子替换模式：面板选元素后，点到哪个原子就替换哪个原子；点 H 不自动生长补氢。
+        if (atomClickMode === 'replace') {
+          if (centerAtom.symbol === 'H') {
+            if (activeElement === 'H') { flashHint('已是 H'); break }
+            st.replaceAtom(atomId, activeElement)
+            break
+          }
+
+          const targetAtom = molecule.atoms.find(a => a.id === atomId)
+          if (!targetAtom) break
+          if (activeElement === targetAtom.symbol) { flashHint(`已是 ${activeElement}`); break }
+          st.replaceAtom(atomId, activeElement)
+          break
+        }
+
         // 点击 H：替换为当前元素的饱和基团（价态完整模型的主生长路径）
         if (centerAtom.symbol === 'H' && activeElement !== 'H' &&
             degree(molecule.bonds, atomId) > 0) {
@@ -108,23 +125,15 @@ export function useBuilder(): BuilderHandlers {
           break
         }
 
-        // 未饱和重原子（导入的骨架）：VSEPR 生长，新原子自动补 H
-        const maxBonds = effectiveMaxBonds(centerAtom.symbol, centerAtom.charge ?? 0, centerAtom.radical ?? 0)
-        if (centerAtom.symbol !== 'H' && degree(molecule.bonds, atomId) < maxBonds) {
-          const position = calcClickGrowPosition(
-            centerAtom, molecule.bonds, molecule.atoms, activeElement,
-            useEditorStore.getState().sketchPlane,
-          )
-          st.beginTransaction()
-          const newId = st.addAtom(activeElement, ...position)
-          st.addBond(atomId, newId)
-          if (activeElement !== 'H') st.addHydrogens(newId)
-          st.endTransaction()
+        // 点重原子 = 纯元素替换（键和显式 H 都保留）。生长走「点 H」；同元素则无操作。
+        if (centerAtom.symbol !== 'H') {
+          if (activeElement === centerAtom.symbol) { flashHint(`已是 ${activeElement}`); break }
+          st.replaceAtom(atomId, activeElement)
           break
         }
 
-        // 饱和原子：构建态下不可点，提示正确路径（想选中请 Esc 或 Shift+点）
-        flashHint(`${centerAtom.symbol} 已饱和 · 点它的 H 生长 · Esc 切换到选择`)
+        // 剩下：游离 H（无键）——构建态无操作
+        flashHint('孤立 H · Esc 切换到选择')
         break
       }
     }
@@ -185,37 +194,34 @@ export function useBuilder(): BuilderHandlers {
     }
   }, [store])
 
-  // 双击空白 = 放置（仅构建态）：片段笔刷放完整片段，否则放当前元素（自动补满 H）
+  // 双击空白 = 放置（仅构建态）：片段笔刷放完整片段，否则放单个光原子（单原子就是单原子）
   const onBackgroundDoubleClick = useCallback((worldPos: THREE.Vector3, _event: MouseEvent, viewDirLocal?: THREE.Vector3) => {
     const { activeTool, activeElement, activeFragmentId, brushArmed } = useEditorStore.getState()
     if (!toolCan(activeTool, 'canEdit') || !brushArmed) return
     const st = store.getState()
     const fragment = activeFragmentId ? getFragment(activeFragmentId) : undefined
     if (fragment) {
-      // 杂化桩（attachOrder>1）放到空白 → 退回放中心元素单原子（自动补满 H）：
-      // 孤立的 =CH₂/=O 无化学意义，杂化只在「接到已有原子」时体现（同 GaussView）。
-      if ((fragment.attachOrder ?? 1) > 1) {
-        const sym = fragment.atoms[fragment.attachIndex].symbol
-        st.beginTransaction()
-        const newId = st.addAtom(sym, worldPos.x, worldPos.y, worldPos.z)
-        if (sym !== 'H') st.addHydrogens(newId)
-        st.endTransaction()
-        return
-      }
-      // 放完整片段：草图模式与平面共面，否则环面朝向相机
+      // 放完整片段：草图模式与平面共面，否则片段面朝向相机
       const mol = selectActiveMoleculeOrEmpty(st)
       const sketch = useEditorStore.getState().sketchPlane
       const orient = sketch
         ? { x: sketch.normal[0], y: sketch.normal[1], z: sketch.normal[2] }
         : viewDirLocal
+      // 杂化桩（attachOrder>1）放空白 → 放最小完整原型（=C→乙烯、≡C→乙炔、=O→甲醛…）：
+      // 孤立杂化中心无意义，补一个碳同级桩凑真实小分子（同 GaussView 的「放下即成键」）。
+      const order = fragment.attachOrder ?? 1
+      if (order > 1) {
+        const partner = getFragment(order === 3 ? 'c-sp' : 'c-sp2')
+        if (partner) {
+          st.setMolecule(placeHybridPrototype(mol, fragment, partner, worldPos, orient))
+          return
+        }
+      }
       st.setMolecule(placeFragmentStandalone(mol, fragment, worldPos, orient))
       return
     }
-    // 放下即饱和：加原子 + 补满 H 合为一步 undo（放 H 本身除外）
-    st.beginTransaction()
-    const newId = st.addAtom(activeElement, worldPos.x, worldPos.y, worldPos.z)
-    if (activeElement !== 'H') st.addHydrogens(newId)
-    st.endTransaction()
+    // 单原子就是单原子：放一个光原子，不自动补 H（要饱和氢化物请选 sp³ 桩）
+    st.addAtom(activeElement, worldPos.x, worldPos.y, worldPos.z)
   }, [store])
 
   // 拖动起点快照：拖动选中集中的任意一个原子 → 整个选中集一起平移
@@ -278,7 +284,7 @@ export function useBuilder(): BuilderHandlers {
     // 槽位 H：可拖到其他原子成键 / 拖到空白替换生长（语义在 onBondDragEnd）
     if (isSlotH(mol, sourceId)) return true
     // 饱和重原子拖拽不做成键（转相机/框选不受影响）；未饱和骨架原子保留拖出生长
-    return degree(mol.bonds, sourceId) < effectiveMaxBonds(src.symbol, src.charge ?? 0, src.radical ?? 0)
+    return valenceUsedByBonds(mol.bonds, sourceId) < maxValence(src)
   }, [store, activate, getActiveMol])
 
   const onBondDragEnd = useCallback((sourceId: string, targetId: string | null, dropLocal: THREE.Vector3 | null) => {
@@ -317,10 +323,13 @@ export function useBuilder(): BuilderHandlers {
         return
       }
       st.beginTransaction()
-      const newId = st.addAtom(activeElement, dropLocal.x, dropLocal.y, dropLocal.z)
-      st.addBond(sourceId, newId)
-      if (activeElement !== 'H') st.addHydrogens(newId)
-      st.endTransaction()
+      try {
+        const newId = st.addAtom(activeElement, dropLocal.x, dropLocal.y, dropLocal.z)
+        st.addBond(sourceId, newId)
+        if (activeElement !== 'H') st.addHydrogens(newId)
+      } finally {
+        st.endTransaction()
+      }
     }
   }, [store])
 
@@ -411,29 +420,4 @@ export function useBuilder(): BuilderHandlers {
     onAtomDragStart, onAtomDrag, onAtomDragEnd,
     onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
   }
-}
-
-/**
- * 对选中的恰好两个原子执行成键操作。
- * 供属性面板按钮 / 快捷键调用。
- */
-export function bondSelectedAtoms(): { ok: boolean; reason?: string } {
-  const { selectedAtomIds, addBond } = useMoleculeStore.getState()
-  const molecule = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
-  const ids = [...selectedAtomIds]
-  if (ids.length !== 2) return { ok: false, reason: '请先选中恰好两个原子' }
-
-  const [a1, a2] = ids.map(id => molecule.atoms.find(a => a.id === id)!)
-  if (!a1 || !a2) return { ok: false, reason: '原子不存在' }
-
-  // 任一端是槽位 H：让 H 让位成键（与拖拽手势一致）
-  const st = useMoleculeStore.getState()
-  if (isSlotH(molecule, a1.id)) return st.bondViaHydrogen(a1.id, a2.id)
-  if (isSlotH(molecule, a2.id)) return st.bondViaHydrogen(a2.id, a1.id)
-
-  const check = canBond(a1, a2, molecule.bonds)
-  if (!check.ok) return check
-
-  addBond(a1.id, a2.id)
-  return { ok: true }
 }

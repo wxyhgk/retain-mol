@@ -17,8 +17,40 @@ import { lookupBondLengthByOrder } from '../../../config/geometry.config'
 import { bondsOf, degree, findBond, hNeighborsOf, otherEnd } from '../graph'
 import { inferHybridization } from '../analysis/hybridization'
 import { calcBondLength, findNextBondDir, getNeighborDirs } from '../geometry/vsepr'
+import { bondValence, maxValence, valenceUsed } from '../valence'
 
 export type AttachResult = { ok: true; molecule: Molecule } | { ok: false; reason: string }
+
+function valenceAfterRemovingHydrogens(
+  mol: Molecule,
+  hostId: string,
+  removeHIds: ReadonlySet<string>,
+  addedOrder: number,
+): number {
+  let used = addedOrder
+  for (const b of mol.bonds) {
+    if (b.atomId1 !== hostId && b.atomId2 !== hostId) continue
+    const other = otherEnd(b, hostId)
+    if (other !== null && removeHIds.has(other)) continue
+    used += bondValence(b)
+  }
+  return used
+}
+
+function removeHydrogensUntilValenceFits(
+  mol: Molecule,
+  host: Atom,
+  removeHIds: Set<string>,
+  addedOrder: number,
+): boolean {
+  const hs = hNeighborsOf(mol, host.id).filter(h => !removeHIds.has(h.id))
+  while (valenceAfterRemovingHydrogens(mol, host.id, removeHIds, addedOrder) > maxValence(host) + 1e-6) {
+    const h = hs.shift()
+    if (!h) return false
+    removeHIds.add(h.id)
+  }
+  return true
+}
 
 /** 片段坐标 → 旋转 + 平移后实例化为新原子/键（可跳过指定索引的原子） */
 function instantiate(
@@ -68,6 +100,59 @@ export function placeFragmentStandalone(
   return { ...mol, atoms: [...mol.atoms, ...atoms], bonds: [...mol.bonds, ...bonds] }
 }
 
+/**
+ * 点空白放杂化桩（attachOrder>1）→ 放最小完整原型分子：中心桩与碳的「同级桩」
+ * （=CH₂ / ≡CH）沿双/三键相连。孤立的杂化中心无化学意义（同 GaussView），故补一个
+ * 碳伙伴凑成真实小分子：=C→乙烯 · ≡C→乙炔 · =N→甲亚胺 · ≡N→HCN · =O→甲醛。
+ *
+ * 几何不走 VSEPR 推测（会把 sp 猜弯），而是直接沿「中心桩自己设计好的 attach 轴」相接：
+ * 两桩各去掉 attach-H，把 attach 原子沿该轴按键长拉开、伙伴桩反向对齐 —— sp 必线性、
+ * sp² 必平面 120°。H 数全用片段烘死的（不走 addHydrogens），价态才对。
+ */
+export function placeHybridPrototype(
+  mol: Molecule,
+  frag: FragmentDef,
+  partner: FragmentDef,
+  center: { x: number; y: number; z: number },
+  viewDir?: { x: number; y: number; z: number },
+): Molecule {
+  const q = new THREE.Quaternion()
+  if (viewDir) {
+    const v = new THREE.Vector3(viewDir.x, viewDir.y, viewDir.z)
+    if (v.lengthSq() > 1e-9) q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v.normalize())
+  }
+
+  // 中心桩：attach 原子落到点击点，attach-H 方向（= 开价轴）经相机旋转到世界系
+  const cA = frag.atoms[frag.attachIndex], cH = frag.atoms[frag.attachHIndex]
+  const cOrigin = new THREE.Vector3(cA.x, cA.y, cA.z)
+  const axis = new THREE.Vector3(cH.x - cA.x, cH.y - cA.y, cH.z - cA.z).normalize().applyQuaternion(q)
+  const target = new THREE.Vector3(center.x, center.y, center.z)
+  const centerInst = instantiate(frag, p => p.sub(cOrigin).applyQuaternion(q).add(target), frag.attachHIndex)
+
+  // 键长按键级取（双/三键更短），退回单键估算
+  const order = partner.attachOrder ?? 1
+  const pA = partner.atoms[partner.attachIndex], pH = partner.atoms[partner.attachHIndex]
+  const bLen = lookupBondLengthByOrder(cA.symbol, pA.symbol, order) ?? calcBondLength(cA.symbol, pA.symbol)
+
+  // 伙伴桩：attach 原子落在开价轴上、按键长拉开；其 attach 轴对齐到 -axis（指回中心）
+  const pOrigin = new THREE.Vector3(pA.x, pA.y, pA.z)
+  const pAxis = new THREE.Vector3(pH.x - pA.x, pH.y - pA.y, pH.z - pA.z).normalize()
+  const qP = new THREE.Quaternion().setFromUnitVectors(pAxis, axis.clone().negate())
+  const anchor = target.clone().addScaledVector(axis, bLen)
+  const partnerInst = instantiate(partner, p => p.sub(pOrigin).applyQuaternion(qP).add(anchor), partner.attachHIndex)
+
+  const link = newBond(
+    centerInst.idByIndex.get(frag.attachIndex)!,
+    partnerInst.idByIndex.get(partner.attachIndex)!,
+    order,
+  )
+  return {
+    ...mol,
+    atoms: [...mol.atoms, ...centerInst.atoms, ...partnerInst.atoms],
+    bonds: [...mol.bonds, ...centerInst.bonds, ...partnerInst.bonds, link],
+  }
+}
+
 /** 点原子连接片段：点 H 替换之；点不饱和重原子沿 VSEPR 方向生长 */
 export function attachFragmentToAtom(
   mol: Molecule,
@@ -76,10 +161,11 @@ export function attachFragmentToAtom(
 ): AttachResult {
   const target = mol.atoms.find(a => a.id === targetAtomId)
   if (!target) return { ok: false, reason: '原子不存在' }
+  const order = frag.attachOrder ?? 1
 
   // 解析连接宿主与方向
   let host = target
-  let removedHId: string | null = null
+  const removeHIds = new Set<string>()
   let dir: THREE.Vector3
 
   const hBond = target.symbol === 'H'
@@ -92,14 +178,13 @@ export function attachFragmentToAtom(
     const h = mol.atoms.find(a => a.id === hostId)
     if (!h) return { ok: false, reason: '原子不存在' }
     host = h
-    removedHId = targetAtomId
+    removeHIds.add(targetAtomId)
     dir = new THREE.Vector3(target.x - host.x, target.y - host.y, target.z - host.z)
     if (dir.lengthSq() < 1e-9) dir.set(1, 0, 0)
     dir.normalize()
   } else {
     // 点重原子（或游离 H）：检查饱和度，VSEPR 给方向
-    const conn = degree(mol.bonds, host.id)
-    if (conn >= getElementConfig(host.symbol).maxBonds) {
+    if (valenceUsed(mol, host.id) + order > maxValence(host) + 1e-6) {
       return { ok: false, reason: `${host.symbol} 已饱和 · 点击它的 H 可直接替换` }
     }
     const atomById = new Map(mol.atoms.map(a => [a.id, a]))
@@ -116,9 +201,11 @@ export function attachFragmentToAtom(
   const q = new THREE.Quaternion().setFromUnitVectors(attachDir, dir.clone().negate())
 
   // 键长按连接键级取（双/三键更短），退回单键估算
-  const order = frag.attachOrder ?? 1
   const bLen = lookupBondLengthByOrder(host.symbol, fa.symbol, order) ?? calcBondLength(host.symbol, fa.symbol)
   const anchor = new THREE.Vector3(host.x, host.y, host.z).addScaledVector(dir, bLen)
+  if (removeHIds.size > 0 && !removeHydrogensUntilValenceFits(mol, host, removeHIds, order)) {
+    return { ok: false, reason: `${host.symbol} 没有足够 H 可让位` }
+  }
 
   const { atoms, bonds, idByIndex } = instantiate(
     frag, p => p.sub(attachOrigin).applyQuaternion(q).add(anchor), frag.attachHIndex,
@@ -129,9 +216,9 @@ export function attachFragmentToAtom(
     ok: true,
     molecule: {
       ...mol,
-      atoms: [...mol.atoms.filter(a => a.id !== removedHId), ...atoms],
+      atoms: [...mol.atoms.filter(a => !removeHIds.has(a.id)), ...atoms],
       bonds: [
-        ...mol.bonds.filter(b => removedHId === null || (b.atomId1 !== removedHId && b.atomId2 !== removedHId)),
+        ...mol.bonds.filter(b => !removeHIds.has(b.atomId1) && !removeHIds.has(b.atomId2)),
         linkBond,
         ...bonds,
       ],

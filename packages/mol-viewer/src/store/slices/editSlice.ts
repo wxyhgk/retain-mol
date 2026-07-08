@@ -15,18 +15,18 @@ import type { StoreApi } from 'zustand'
 import type { TemporalState } from 'zundo'
 import type { Atom } from '../../lib/molecule'
 import { inferBonds, newAtom, newBond, centerMolecule as centerMol } from '../../lib/molecule'
-import { autoAddHydrogens, addOneHydrogen as addOneH, replaceAtomSymbol,
+import { autoAddHydrogens, addOneHydrogen as addOneH, substituteAtomElement,
          growByReplacingH, bondByReplacingH, resaturateAtom,
          cycleBondLength as cycleBondLengthOp,
          setBondLength as setBondLengthOp,
          setBondAngle as setBondAngleOp,
          setDihedralAngle as setDihedralAngleOp } from '../../lib/builder/BuilderEngine'
 import { minimizeGeometry } from '../../lib/io/molFormat'
-import { bondsOf, findBond } from '../../lib/builder/graph'
+import { bondsOf } from '../../lib/builder/graph'
 import { createSceneObject } from '../../lib/sceneObject'
 import { lookupBondLengthByOrder } from '../../config/geometry.config'
 import type { MoleculeState, EditSlice } from './types'
-import { getActiveMol, patchActiveMol, applyGeomEdit, selectActiveMoleculeOrEmpty } from './helpers'
+import { getActiveMol, patchActiveMol, applyGeomEdit, selectActiveMoleculeOrEmpty, validateAddBond } from './helpers'
 import { UNDO_LIMIT, partializeForUndo, undoSnapshotEqual, type UndoSnapshot } from './undoConfig'
 import { PLACEMENT } from '../../config/interaction.config'
 
@@ -36,12 +36,19 @@ type GetTemporal = () => StoreApi<TemporalState<MoleculeState>>
 export function createEditSlice(
   getTemporal: GetTemporal,
 ): StateCreator<MoleculeState, [], [], EditSlice> {
+  let transactionDepth = 0
+
   return (set, get) => ({
     atomPositionVersion: 0,
 
     setMolecule: (mol) => set((s) => {
       if (s.activeObjectId && s.objectsById[s.activeObjectId]) {
-        return { ...patchActiveMol(s, mol), selectedAtomIds: new Set(), selectedBondIds: new Set() }
+        return {
+          ...patchActiveMol(s, mol),
+          selectedAtomIds: new Set(),
+          selectedBondIds: new Set(),
+          selectionVersion: s.selectionVersion + 1,
+        }
       }
       const newObj = createSceneObject(mol)
       return {
@@ -50,6 +57,7 @@ export function createEditSlice(
         activeObjectId: newObj.id,
         selectedAtomIds: new Set(),
         selectedBondIds: new Set(),
+        selectionVersion: s.selectionVersion + 1,
       }
     }),
 
@@ -76,6 +84,7 @@ export function createEditSlice(
         }),
         selectedAtomIds: new Set([...s.selectedAtomIds].filter(i => i !== id)),
         selectedBondIds: new Set([...s.selectedBondIds].filter(i => !removedBondIds.has(i))),
+        selectionVersion: s.selectionVersion + 1,
       }
     }),
 
@@ -117,14 +126,25 @@ export function createEditSlice(
     // zundo 的 pause 期间所有变更都不入栈，所以必须在 pause 前手动把
     // "事务起点"压入 pastStates，否则事务后 undo 会连带撤销上一步操作。
     beginTransaction: () => {
+      if (transactionDepth > 0) {
+        transactionDepth += 1
+        return
+      }
       const t = getTemporal()
       const past = [...(t.getState().pastStates as UndoSnapshot[]), partializeForUndo(get())]
       if (past.length > UNDO_LIMIT) past.shift()
       t.setState({ pastStates: past as TemporalState<MoleculeState>['pastStates'], futureStates: [] })
       t.getState().pause()
+      transactionDepth = 1
     },
     endTransaction: () => {
       const t = getTemporal()
+      if (transactionDepth <= 0) {
+        t.getState().resume()
+        return
+      }
+      transactionDepth -= 1
+      if (transactionDepth > 0) return
       t.getState().resume()
       // 事务内没有实际变更时弹出起点快照，避免产生一步"什么都没发生"的 undo
       const past = t.getState().pastStates as UndoSnapshot[]
@@ -135,13 +155,11 @@ export function createEditSlice(
     },
 
     addBond: (atomId1, atomId2, order: 1 | 2 | 3 = 1) => {
-      const mol = getActiveMol(get())
-      if (!mol) return
-      if (findBond(mol.bonds, atomId1, atomId2)) return
-      const bond = newBond(atomId1, atomId2, order)
       set((s) => {
         const m = getActiveMol(s)
         if (!m) return {}
+        if (!validateAddBond(m, atomId1, atomId2, order).ok) return {}
+        const bond = newBond(atomId1, atomId2, order)
         return patchActiveMol(s, { ...m, bonds: [...m.bonds, bond] })
       })
     },
@@ -152,6 +170,7 @@ export function createEditSlice(
       return {
         ...patchActiveMol(s, { ...mol, bonds: mol.bonds.filter(b => b.id !== id) }),
         selectedBondIds: new Set([...s.selectedBondIds].filter(i => i !== id)),
+        selectionVersion: s.selectionVersion + 1,
       }
     }),
 
@@ -236,7 +255,8 @@ export function createEditSlice(
     replaceAtom: (atomId, symbol) => set((s) => {
       const mol = getActiveMol(s)
       if (!mol) return {}
-      return patchActiveMol(s, replaceAtomSymbol(mol, atomId, symbol))
+      // 纯元素替换：保留 id、坐标、已有键和显式 H；异常价态交给检查器提示。
+      return patchActiveMol(s, substituteAtomElement(mol, atomId, symbol))
     }),
 
     setAtomCharge: (atomId, charge) => set((s) => {
@@ -283,6 +303,7 @@ export function createEditSlice(
           selectedBondIds: new Set(
             [...s.selectedBondIds].filter(i => aliveBondIds.has(i))
           ),
+          selectionVersion: s.selectionVersion + 1,
         }
       })
       return { ok: true }
@@ -292,6 +313,7 @@ export function createEditSlice(
       ...patchActiveMol(s, { atoms: [], bonds: [], name: 'New Molecule' }),
       selectedAtomIds: new Set(),
       selectedBondIds: new Set(),
+      selectionVersion: s.selectionVersion + 1,
     })),
 
     centerMolecule: () => set((s) => {
@@ -349,9 +371,12 @@ export function createEditSlice(
       const { selectedAtomIds, selectedBondIds, removeAtom, removeBond, beginTransaction, endTransaction } = get()
       if (selectedAtomIds.size === 0 && selectedBondIds.size === 0) return
       beginTransaction()
-      selectedBondIds.forEach(id => removeBond(id))
-      selectedAtomIds.forEach(id => removeAtom(id))
-      endTransaction()
+      try {
+        selectedBondIds.forEach(id => removeBond(id))
+        selectedAtomIds.forEach(id => removeAtom(id))
+      } finally {
+        endTransaction()
+      }
     },
   })
 }

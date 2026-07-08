@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { registerForceFieldFromUrl } from '@retainmol/mol-viewer'
+import { registerForceFieldFromUrl } from '@retainmol/mol-viewer/io'
 import './index.css'
 import App from './App.tsx'
 import ApiTestPage from './dev/ApiTestPage.tsx'

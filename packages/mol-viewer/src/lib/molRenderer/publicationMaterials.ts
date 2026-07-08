@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import type { DepthCueProfile, IboViewShaderMaterialProfile } from '../../styles'
 
 // ── 出版/论文渲染（由 MoleculeRenderer._pub 驱动）──────────────
 /** inverted-hull 黑描边相对半径的额外量（Å，POC 用固定值；正式版用屏幕空间 pos.w） */
@@ -70,5 +71,78 @@ export function makeCylinderMat(hex: number): THREE.ShaderMaterial {
       { uHi: { value: s.hi }, uBase: { value: s.base }, uLo: { value: s.lo } },
     ]),
     vertexShader: SPHERE_VERT, fragmentShader: CYL_FRAG, fog: true,
+  })
+}
+
+// ── IboView-like glossy material ─────────────────────────────────────────────
+// IboView's molecule renderer relies on smooth per-pixel lighting: saturated base
+// colors, strong white specular highlights, and a darker rim. This shader keeps
+// that look separate from RetainMol's publication SVG-style outline material.
+const IBOVIEW_FRAG = /* glsl */`
+  uniform vec3 uColor;
+  uniform float uShaderReg0;
+  uniform float uShaderReg1;
+  uniform float uShaderReg2;
+  uniform float uShaderReg3;
+  uniform bool uUseFragDepthCue;
+  uniform float uFadeWidth;
+  uniform float uFadeBias;
+  uniform vec3 uDepthCueColor;
+  varying vec3 vN;
+
+  vec3 calcLight(vec3 n, vec3 l, float intensity) {
+    float cosAngle = clamp(dot(n, normalize(l)), 0.0, 1.0);
+    vec3 diffuse = uShaderReg1 * pow(cosAngle, uShaderReg0) * uColor;
+    vec3 specular = uShaderReg2 * (uShaderReg3 * pow(cosAngle, 16.0) + 1.2 * pow(cosAngle, 64.0)) * vec3(1.0);
+    return intensity * (diffuse + specular);
+  }
+
+  void main() {
+    vec3 n = normalize(vN);
+    vec3 col =
+      calcLight(n, vec3( 0.50000000,  0.50000000, 0.70710678), 1.0) +
+      calcLight(n, vec3(-0.43301270, -0.25000000, 0.86602540), 0.6) +
+      calcLight(n, vec3( 0.43301270, -0.25000000, 0.86602540), 0.5);
+
+    if (uUseFragDepthCue) {
+      float rz = clamp(uFadeWidth * (gl_FragCoord.z - 0.5) + uFadeBias, 0.0, 1.0);
+      col = mix(col, uDepthCueColor, rz);
+    }
+
+    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+  }
+`
+
+export function iboviewShaderColor(hex: number): THREE.Color {
+  const color = new THREE.Color(hex)
+  const hsl = { h: 0, s: 0, l: 0 }
+  color.getHSL(hsl)
+  if (hsl.s <= 0.18 && hsl.l < 0.45) {
+    color.setHSL(hsl.h, hsl.s, 0.6)
+  }
+  return color
+}
+
+export function makeIboViewMat(
+  hex: number,
+  material: IboViewShaderMaterialProfile,
+  depthCue?: DepthCueProfile,
+): THREE.ShaderMaterial {
+  const useFragDepthCue = depthCue?.mode === 'iboview-fragcoord'
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: iboviewShaderColor(hex) },
+      uShaderReg0: { value: material.shaderReg0 },
+      uShaderReg1: { value: material.shaderReg1 },
+      uShaderReg2: { value: material.shaderReg2 },
+      uShaderReg3: { value: material.shaderReg3 },
+      uUseFragDepthCue: { value: useFragDepthCue },
+      uFadeWidth: { value: depthCue?.fadeWidth ?? 0 },
+      uFadeBias: { value: depthCue?.fadeBias ?? 0 },
+      uDepthCueColor: { value: new THREE.Color(depthCue?.color ?? 0xffffff) },
+    },
+    vertexShader: SPHERE_VERT,
+    fragmentShader: IBOVIEW_FRAG,
+    fog: false,
   })
 }

@@ -1,0 +1,16 @@
+{
+  "$schemaVersion": "1",
+  "kind": "molecular-style-preset",
+  "metadata": {
+    "id": "retainmol-default",
+    "name": "RetainMol",
+    "description": "RetainMol default editing style.",
+    "author": "RetainMol",
+    "version": "1.0.0"
+  },
+  "displayMode": "ball-stick",
+  "themeId": "default",
+  "renderStyle": "realistic",
+  "showAtomLabels": false
+}
+

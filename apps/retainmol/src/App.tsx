@@ -1,239 +1,25 @@
-import { useEffect, useState } from 'react'
-import Toolbar from '@/components/toolbar/Toolbar'
-import ToolStrip from '@/components/toolbar/ToolStrip'
-import {
-  MolViewer, useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty,
-  useMoleculeTemporal, bondSelectedAtoms, parseClipboard, centerMolecule, getFragment, cn,
-  is2D,
-} from '@retainmol/mol-viewer'
-import { generate3DAsync, relaxAnimate, flattenMolecule } from '@/lib/moleculeOpt'
-import { useUiStore } from '@/lib/uiStore'
-import { RightPanel } from '@/components/panels'
-import PubChemSearch from '@/components/search/PubChemSearch'
-import { useStore } from 'zustand'
+import { useCallback, useState } from 'react'
+import { AppShell } from '@/components/layout'
+import { useAppClipboardShortcuts } from '@/hooks/useAppClipboardShortcuts'
+import { useAppKeyboardShortcuts } from '@/hooks/useAppKeyboardShortcuts'
 
 export default function App() {
-  const { setActiveTool } = useEditorStore()
-  const { addToScene } = useMoleculeStore()
-  const { undo, redo } = useStore(useMoleculeTemporal)
-  const [showInspector, setShowInspector] = useState(true)
+  const [showInspector, setShowInspector] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const openSearch = useCallback(() => setSearchOpen(true), [])
+  const closeSearch = useCallback(() => setSearchOpen(false), [])
+  const toggleInspector = useCallback(() => setShowInspector(value => !value), [])
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (!(e.metaKey || e.ctrlKey) || e.key !== 'c') return
-      const cb = useMoleculeStore.getState().copySelection()
-      if (!cb) return
-      e.preventDefault()
-      useEditorStore.getState().setClipboard(cb)
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
-
-  useEffect(() => {
-    const handler = (e: ClipboardEvent) => {
-      const target = e.target as HTMLElement
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
-      const internalCb = useEditorStore.getState().clipboard
-      if (internalCb) {
-        e.preventDefault()
-        const newIds = useMoleculeStore.getState().pasteAtoms(internalCb)
-        useMoleculeStore.getState().selectAtoms(newIds, 'replace')
-        return
-      }
-      const text = e.clipboardData?.getData('text')
-      if (!text || text.length < 10) return
-      try {
-        const { format, molecule } = parseClipboard(text)
-        e.preventDefault()
-        // 粘贴的 2D 结构：CG 距离几何生成高质量 3D（环对、含 H），再逐帧松弛锚定展开
-        if (is2D(molecule)) {
-          useUiStore.getState().setBusy('正在用距离几何生成 3D 结构…')
-          generate3DAsync(molecule).then(async r => {
-            useUiStore.getState().setBusy(null)
-            const final = centerMolecule(r.ok ? r.molecule : molecule)
-            if (!r.ok) { addToScene(final); return }
-            const flatFinal = flattenMolecule(final)
-            const objId = addToScene(flatFinal)
-            await relaxAnimate(objId, flatFinal, { target: final })
-          })
-        } else {
-          addToScene(centerMolecule(molecule))
-        }
-        console.log(`[paste] ${format.toUpperCase()} → ${molecule.atoms.length} atoms`)
-      } catch { /* not a molecule */ }
-    }
-    window.addEventListener('paste', handler)
-    return () => window.removeEventListener('paste', handler)
-  }, [addToScene])
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undo(); return }
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); return }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setSearchOpen(true); return }
-      // S = 纯选择态；B = 恢复构建态（或选中两原子时成键）
-      if (e.key === 's' || e.key === 'S') {
-        setActiveTool('select')
-        useEditorStore.getState().disarmBrush()
-        return
-      }
-      if (e.key === 'v' || e.key === 'V') { setActiveTool('move-object'); return }
-      if (e.key === 'm' || e.key === 'M') { setActiveTool('measure'); return }
-      if (e.key === 'b' || e.key === 'B') {
-        const { selectedAtomIds } = useMoleculeStore.getState()
-        if (selectedAtomIds.size === 2) {
-          const r = bondSelectedAtoms()
-          if (!r.ok) useEditorStore.getState().flashHint(r.reason ?? '无法成键')
-        } else {
-          setActiveTool('select')
-          useEditorStore.getState().armBrush()   // 重新武装（保留上次的元素/片段笔刷）
-        }
-        return
-      }
-      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        const { activeTool, commitPendingMeasure } = useEditorStore.getState()
-        if (activeTool === 'measure') { commitPendingMeasure(); return }
-      }
-      if (e.key === 'Escape') {
-        const { activeTool, pendingAtomIds, cancelPendingMeasure } = useEditorStore.getState()
-        if (activeTool === 'measure' && pendingAtomIds.length > 0) { cancelPendingMeasure(); return }
-      }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        useMoleculeStore.getState().removeSelected()
-        return
-      }
-
-      // H 键：给选中原子各加一个 H
-      if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey) {
-        const { selectedAtomIds, addOneHydrogen, beginTransaction, endTransaction } = useMoleculeStore.getState()
-        if (selectedAtomIds.size > 0) {
-          e.preventDefault()
-          beginTransaction()
-          selectedAtomIds.forEach(id => addOneHydrogen(id))
-          endTransaction()
-        }
-        return
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [setActiveTool, undo, redo])
+  useAppClipboardShortcuts()
+  useAppKeyboardShortcuts(openSearch)
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#EBEBEB] overflow-hidden">
-
-      {/* ── 唯一一条顶栏 ── */}
-      <Toolbar
-        showInspector={showInspector}
-        onToggleInspector={() => setShowInspector(v => !v)}
-        onSearchOpen={() => setSearchOpen(true)}
-      />
-      <PubChemSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
-
-      {/* ── 画布层：填满剩余高度，所有浮动面板都是绝对定位的子元素 ── */}
-      <div className="flex-1 relative overflow-hidden">
-
-        {/* 画布本体 */}
-        <div className="absolute inset-0">
-          <MolViewer />
-        </div>
-
-        {/* 浮动左侧工具条 */}
-        <div className="absolute left-3 top-3 z-10">
-          <ToolStrip />
-        </div>
-
-        {/* 画布信息标签（分子名 + 分子式 + 选中计数） */}
-        <CanvasLabel />
-
-        {/* 浮动右侧 Inspector */}
-        {showInspector && (
-          <div className="absolute right-3 top-3 bottom-3 w-[300px] z-10 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden flex flex-col">
-            <RightPanel />
-          </div>
-        )}
-
-        {/* 忙碌指示（3D 生成/优化中，避免看起来像卡死） */}
-        <BusyOverlay />
-
-        {/* 底部状态栏 */}
-        <StatusBar />
-      </div>
-    </div>
-  )
-}
-
-// ─── 忙碌浮层（3D 生成等耗时操作时显示）─────────────────────────────────────
-function BusyOverlay() {
-  const busy = useUiStore(s => s.busy)
-  if (!busy) return null
-  return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5
-                    bg-gray-900/90 text-white text-xs px-4 py-2 rounded-full shadow-lg pointer-events-none">
-      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-      {busy}
-    </div>
-  )
-}
-
-// ─── 分子式（C 优先，H 其次）───────────────────────────────────────────────
-function computeFormula(atoms: readonly { symbol: string }[]): string {
-  if (atoms.length === 0) return ''
-  const counts: Record<string, number> = {}
-  for (const a of atoms) counts[a.symbol] = (counts[a.symbol] || 0) + 1
-  const priority = ['C', 'H']
-  const keys = [...priority.filter(s => counts[s]), ...Object.keys(counts).filter(s => !priority.includes(s)).sort()]
-  return keys.map(s => `${s}${counts[s] > 1 ? counts[s] : ''}`).join('')
-}
-
-// ─── 画布左上角信息标签 ─────────────────────────────────────────────────────
-function CanvasLabel() {
-  const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
-  const { selectedAtomIds, selectedBondIds } = useMoleculeStore()
-  const formula = computeFormula(molecule.atoms)
-  const selTotal = selectedAtomIds.size + selectedBondIds.size
-
-  return (
-    <div className="absolute left-[64px] top-4 z-10 flex items-center gap-1.5 select-none pointer-events-none">
-      <span className="text-xs font-medium text-gray-700 bg-white/85 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm border border-gray-200/60">
-        {molecule.name || 'New Molecule'}
-      </span>
-      {formula && (
-        <span className="text-[11px] text-gray-500 font-mono bg-white/85 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm border border-gray-200/60">
-          {formula}
-        </span>
-      )}
-      {selTotal > 0 && (
-        <span className="text-[11px] font-medium text-white bg-gray-900/80 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm">
-          {selTotal} 已选
-        </span>
-      )}
-    </div>
-  )
-}
-
-// ─── 底部状态栏（弱化） ──────────────────────────────────────────────────────
-function StatusBar() {
-  const { activeTool, activeElement, activeFragmentId, brushArmed } = useEditorStore()
-  const fragment = activeFragmentId ? getFragment(activeFragmentId) : undefined
-
-  const toolLabel: Record<string, string> = {
-    select: brushArmed
-      ? (fragment
-          ? `编辑  ·  ${fragment.name}（${fragment.short}）`
-          : `编辑  ·  ${activeElement}`)
-      : '选择',
-    'move-object': '移动  ·  Alt + 拖拽 = 旋转',
-    measure: '测量  ·  点击原子  ·  Enter 提交  ·  Esc 取消',
-  }
-
-  return (
-    <div className="absolute bottom-0 left-0 right-0 h-6 flex items-center px-3 text-[11px] text-gray-400 select-none pointer-events-none">
-      {toolLabel[activeTool] ?? activeTool}
-    </div>
+    <AppShell
+      showInspector={showInspector}
+      searchOpen={searchOpen}
+      onToggleInspector={toggleInspector}
+      onOpenSearch={openSearch}
+      onCloseSearch={closeSearch}
+    />
   )
 }

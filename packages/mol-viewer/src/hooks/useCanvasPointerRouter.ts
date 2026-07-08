@@ -189,6 +189,7 @@ function finishBoxSelect(
 export function useCanvasPointerRouter(
   containerRef: RefObject<HTMLDivElement | null>,
   rendererRef: RefObject<MolRenderer | null>,
+  readOnly = false,
 ): { boxRect: BoxRect | null } {
   const activeTool = useEditorStore(s => s.activeTool)
   const [boxRect, setBoxRect] = useState<BoxRect | null>(null)
@@ -199,8 +200,8 @@ export function useCanvasPointerRouter(
   // 同步相机控制开关；切换工具时清理可能残留的变换状态（防止 pointerup 未触发导致状态卡死）
   useEffect(() => {
     const r = rendererRef.current
-    if (r) r.controls.enabled = !toolCan(activeTool, 'transformsObject')
-    if (!toolCan(activeTool, 'transformsObject')) {
+    if (r) r.controls.enabled = readOnly || !toolCan(activeTool, 'transformsObject')
+    if (readOnly || !toolCan(activeTool, 'transformsObject')) {
       const ts = transformRef.current
       if (ts.dragging) {
         // 工具切换时强制关闭未完成的 transaction，防止 zundo 永久 paused
@@ -209,10 +210,19 @@ export function useCanvasPointerRouter(
       ts.dragging = false
       ts.fragmentIds = null
       ts.targetObjectId = null
+      const bs = boxRef.current
+      if (bs.active) {
+        bs.active = false
+        setBoxRect(null)
+      }
     }
-  }, [activeTool, rendererRef])
+  }, [activeTool, readOnly, rendererRef])
 
   useEffect(() => {
+    if (readOnly) {
+      setBoxRect(null)
+      return
+    }
     const container = containerRef.current
     if (!container) return
 
@@ -327,7 +337,7 @@ export function useCanvasPointerRouter(
       container.removeEventListener('pointerup',   onUp)
       container.removeEventListener('pointercancel', onCancel)
     }
-  }, [containerRef, rendererRef])
+  }, [containerRef, rendererRef, readOnly])
 
   return { boxRect }
 }

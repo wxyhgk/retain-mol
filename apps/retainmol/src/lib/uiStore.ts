@@ -1,4 +1,4 @@
-/** 轻量 UI 状态：全局忙碌指示（3D 生成/优化时显示，避免看起来像卡死） */
+/** 轻量 UI 状态：全局忙碌指示（3D 生成/优化时显示） */
 import { create } from 'zustand'
 
 interface UiState {

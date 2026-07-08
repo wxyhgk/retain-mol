@@ -1,12 +1,14 @@
-import { useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty, cn } from '@retainmol/mol-viewer'
+import { useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty } from '@/domain/viewerAdapter'
 import { GeometryPanel } from '@/features/geometry'
 import { MeasurePanel } from '@/features/measure'
 import ScenePanel from '@/features/scene/components/ScenePanel'
 import StylePanel from '@/features/style/components/StylePanel'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Link2, FlaskRound, Eraser, Sparkles } from 'lucide-react'
+import { moleculePositionWriter } from '@/domain/moleculePositionWriter'
 import { minimizeGeometryAsync, morphObjectPositions } from '@/lib/moleculeOpt'
 import { uffOptimizeAsync } from '@/lib/uffOptimize'
+import { cn } from '@/lib/utils'
 
 export default function RightPanel() {
   const { autoInferBonds, addHydrogens, clearMolecule } = useMoleculeStore()
@@ -26,10 +28,10 @@ export default function RightPanel() {
       flashHint('MMFF 不支持该元素，改用 UFF 优化…')
       const u = await uffOptimizeAsync(molecule)
       if (!u.ok) { flashHint(u.reason ?? 'UFF 优化失败'); return }
-      await morphObjectPositions(objId, molecule, u.molecule!)
+      await morphObjectPositions(objId, molecule, u.molecule!, { writer: moleculePositionWriter })
       return
     }
-    await morphObjectPositions(objId, r.initial ?? molecule, r.molecule)
+    await morphObjectPositions(objId, r.initial ?? molecule, r.molecule, { writer: moleculePositionWriter })
   }
 
   return (

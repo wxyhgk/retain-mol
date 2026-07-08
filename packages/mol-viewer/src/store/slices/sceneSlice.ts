@@ -9,7 +9,7 @@ import { shiftMolecule } from '../../lib/molecule'
 import { createSceneObject } from '../../lib/sceneObject'
 import { genId } from '../../lib/utils'
 import type { MoleculeState, SceneSlice } from './types'
-import { activateObjectWhere, computeAutoOffset } from './helpers'
+import { activateObjectWhere, computeAutoOffset, moleculeIdsInScene, withSceneUniqueIds } from './helpers'
 
 /** 初始默认场景对象（空分子）。 */
 export const defaultSceneObject = createSceneObject({ atoms: [], bonds: [], name: 'New Molecule' })
@@ -27,6 +27,7 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
         const off = computeAutoOffset(Object.values(s.objectsById))
         finalMol = shiftMolecule(mol, off.x, off.y, off.z)
       }
+      finalMol = withSceneUniqueIds(finalMol, moleculeIdsInScene(Object.values(s.objectsById)))
       const newObj = { ...createSceneObject(finalMol), id: newId }
       return {
         objectsById: { ...s.objectsById, [newId]: newObj },
@@ -34,6 +35,7 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
         activeObjectId: newId,
         selectedAtomIds: new Set(),
         selectedBondIds: new Set(),
+        selectionVersion: s.selectionVersion + 1,
       }
     })
     return newId
@@ -42,7 +44,7 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
   setActiveObject: (id) => set((s) => {
     if (id === null) return { activeObjectId: null }
     if (!s.objectsById[id]) return {}
-    return { activeObjectId: id, selectedAtomIds: new Set(), selectedBondIds: new Set() }
+    return { activeObjectId: id, selectedAtomIds: new Set(), selectedBondIds: new Set(), selectionVersion: s.selectionVersion + 1 }
   }),
 
   removeSceneObject: (id) => set((s) => {
@@ -53,6 +55,7 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
     return {
       objectsById: rest, objectOrder: newOrder, activeObjectId: newActiveId,
       selectedAtomIds: new Set(), selectedBondIds: new Set(),
+      selectionVersion: s.selectionVersion + 1,
     }
   }),
 

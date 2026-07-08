@@ -6,9 +6,66 @@ import { MolRenderer } from '../../lib/molRenderer'
 import { ticker, Phase } from '../../lib/animation'
 import { ATOM_LABEL as L } from '../../config/overlay.config'
 import { CAMERA } from '../../config/camera.config'
+import { resolveRenderProfile } from '../../styles'
 
 interface Props {
   renderer: MolRenderer | null
+}
+
+function modBrightness(color: THREE.Color, amount: number): THREE.Color {
+  const target = amount > 0 ? 1 : 0
+  const t = Math.min(1, Math.abs(amount))
+  return new THREE.Color(
+    color.r * (1 - t) + target * t,
+    color.g * (1 - t) + target * t,
+    color.b * (1 - t) + target * t,
+  )
+}
+
+function rgba(color: THREE.Color, alpha = 1): string {
+  const r = Math.round(color.r * 255)
+  const g = Math.round(color.g * 255)
+  const b = Math.round(color.b * 255)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function elementLabelColor(renderer: MolRenderer, symbol: string, brightness = 0): string {
+  const hex = renderer.theme.elements[symbol]?.color ?? renderer.theme.fallbackColor
+  return rgba(modBrightness(new THREE.Color(hex), brightness), 0.96)
+}
+
+function projectedWorldSize(renderer: MolRenderer, center: THREE.Vector3, worldSize: number, w: number, h: number): number {
+  renderer.camera.updateMatrixWorld()
+  const right = new THREE.Vector3().setFromMatrixColumn(renderer.camera.matrixWorld, 0).normalize()
+  const p0 = renderer.projectToScreen(center, w, h)
+  const p1 = renderer.projectToScreen(center.clone().addScaledVector(right, worldSize), w, h)
+  return Math.hypot(p1.x - p0.x, p1.y - p0.y)
+}
+
+function iboviewDrawRadius(symbol: string): number {
+  const radii: Record<string, number> = {
+    H: 0.87, He: 1.60, Li: 2.52, Be: 2.03, B: 1.58, C: 1.43, N: 1.32, O: 1.29, F: 1.26, Ne: 1.74,
+    Na: 2.91, Mg: 2.69, Al: 2.35, Si: 2.11, P: 2.08, S: 2.04, Cl: 1.97, Ar: 1.95,
+    K: 3.69, Ca: 3.33, Fe: 2.35, Co: 2.20, Ni: 2.46, Cu: 2.25, Zn: 2.38, Br: 2.17, I: 2.61,
+  }
+  return radii[symbol] ?? radii.C
+}
+
+function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  const w = canvas.offsetWidth
+  const h = canvas.offsetHeight
+  const dpr = window.devicePixelRatio || 1
+  const bw = Math.max(1, Math.round(w * dpr))
+  const bh = Math.max(1, Math.round(h * dpr))
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw
+    canvas.height = bh
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, w, h)
+  return { ctx, w, h }
 }
 
 export default function AtomLabelOverlay({ renderer }: Props) {
@@ -25,11 +82,9 @@ export default function AtomLabelOverlay({ renderer }: Props) {
       const { showAtomLabels } = useEditorStore.getState()
       const molecule = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
 
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-      const w = canvas.offsetWidth, h = canvas.offsetHeight
-      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
-      ctx.clearRect(0, 0, w, h)
+      const prepared = prepareCanvas(canvas)
+      if (!prepared) return
+      const { ctx, w, h } = prepared
       if (molecule.atoms.length === 0) return
 
       renderer.camera.updateMatrixWorld()
@@ -60,10 +115,12 @@ export default function AtomLabelOverlay({ renderer }: Props) {
         ctx.fillText(txt, bx, by)
       }
 
-      if (!showAtomLabels) return
+      const profileLabels = resolveRenderProfile(renderer.renderStyle).atomLabels
+      const showElementLabels = !showAtomLabels && profileLabels?.mode === 'element-symbol'
+      if (!showAtomLabels && !showElementLabels) return
 
       const scale = Math.max(L.scaleMin, Math.min(L.scaleMax, CAMERA.initialZ / renderer.camera.position.z))
-      const fontSize = Math.round(L.baseFontSize * scale)
+      const fallbackFontSize = Math.round(L.baseFontSize * scale * (showElementLabels ? (profileLabels?.fontScale ?? 1) : 1))
       const paddingX = L.paddingX * scale
       const paddingY = L.paddingY * scale
       const height   = L.height   * scale
@@ -71,23 +128,57 @@ export default function AtomLabelOverlay({ renderer }: Props) {
       const offsetX  = L.offsetX  * scale
       const offsetY  = L.offsetY  * scale
 
-      ctx.font = `bold ${fontSize}px monospace`
+      ctx.font = `bold ${fallbackFontSize}px monospace`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
 
       const counters = new Map<string, number>()
       const labels = molecule.atoms.map(atom => {
+        if (showElementLabels) return atom.symbol
         const n = (counters.get(atom.symbol) ?? 0) + 1
         counters.set(atom.symbol, n)
         return `${atom.symbol}${n}`
       })
 
       molecule.atoms.forEach((atom, i) => {
+        if (showElementLabels) {
+          if (atom.symbol === 'H' && !profileLabels?.includeHydrogen) return
+          if (atom.symbol === 'C' && !profileLabels?.includeCarbon) return
+        }
         const pos = new THREE.Vector3(atom.x, atom.y, atom.z)
         const { x, y } = renderer.projectLocalToScreen(pos, w, h)
         if (x < -L.viewportMargin || x > w + L.viewportMargin ||
             y < -L.viewportMargin || y > h + L.viewportMargin) return
         const text = labels[i]
+        if (showElementLabels) {
+          const worldPos = renderer.modelGroup.localToWorld(pos.clone())
+          if (renderer.renderStyle === 'iboview') {
+            const cameraDir = new THREE.Vector3()
+            renderer.camera.getWorldDirection(cameraDir)
+            const profile = resolveRenderProfile(renderer.renderStyle)
+            const radius = iboviewDrawRadius(atom.symbol) * (profile.atomRadiusScale ?? 0.4)
+            worldPos.addScaledVector(cameraDir, -radius)
+          }
+          const sourceWorldSize = (profileLabels?.sourceSize ?? 80) / 100
+          const projectedSize = projectedWorldSize(renderer, worldPos, sourceWorldSize, w, h)
+          const screenPos = renderer.projectToScreen(worldPos, w, h)
+          const fontSize = Math.round(Math.max(
+            profileLabels?.minFontSize ?? 10,
+            Math.min(profileLabels?.maxFontSize ?? 48, projectedSize * (profileLabels?.fontScale ?? 1)),
+          ))
+          ctx.font = `700 ${fontSize}px Arial, Helvetica, sans-serif`
+          ctx.shadowColor = profileLabels?.shadowColor ?? 'rgba(255, 255, 255, 0.4)'
+          ctx.shadowBlur = Math.max(1, fontSize * 0.07)
+          ctx.shadowOffsetX = 0
+          ctx.shadowOffsetY = 0
+          ctx.fillStyle = profileLabels?.colorPolicy === 'element-brightness'
+            ? elementLabelColor(renderer, atom.symbol, profileLabels?.brightness ?? 0)
+            : profileLabels?.color ?? '#111827'
+          ctx.fillText(text, screenPos.x, screenPos.y)
+          ctx.shadowBlur = 0
+          return
+        }
+        ctx.font = `bold ${fallbackFontSize}px monospace`
         const tw = ctx.measureText(text).width
         const lx = x + offsetX
         const ly = y + offsetY

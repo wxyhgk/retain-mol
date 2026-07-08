@@ -18,6 +18,7 @@ export function fitToMolecule(
   camera: THREE.PerspectiveCamera,
   rotationGroup: THREE.Group,
   modelGroup: THREE.Group,
+  distanceMultiplier = FIT.distanceMultiplier,
 ) {
   if (atoms.length === 0) { resetCamera(camera, rotationGroup, modelGroup); return }
   const box = new THREE.Box3()
@@ -27,7 +28,7 @@ export function fitToMolecule(
   const size = new THREE.Vector3()
   box.getSize(size)
   const maxDim = Math.max(size.x, size.y, size.z, FIT.minBoundingBox)
-  const dist = maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360)) * FIT.distanceMultiplier
+  const dist = maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360)) * distanceMultiplier
 
   rotationGroup.quaternion.identity()
   rotationGroup.position.set(0, 0, 0)

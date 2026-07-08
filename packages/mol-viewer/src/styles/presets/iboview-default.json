@@ -1,0 +1,16 @@
+{
+  "$schemaVersion": "1",
+  "kind": "molecular-style-preset",
+  "metadata": {
+    "id": "iboview-default",
+    "name": "IboView",
+    "description": "IboView-inspired glossy molecule style using softened CPK colors, white background, ball-stick geometry, and high-specular rendering.",
+    "source": "https://www.iboview.org/_bldUPAt.html",
+    "author": "RetainMol",
+    "version": "0.1.0"
+  },
+  "displayMode": "ball-stick",
+  "themeId": "iboview",
+  "renderStyle": "iboview",
+  "showAtomLabels": false
+}

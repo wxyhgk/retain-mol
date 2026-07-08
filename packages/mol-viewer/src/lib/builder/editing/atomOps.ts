@@ -5,13 +5,14 @@
 
 import type { Molecule, Atom } from '../../molecule'
 import { newAtom, newBond } from '../../molecule'
-import { getElementConfig, effectiveMaxBonds } from '../../../config/elements.config'
+import { getElementConfig } from '../../../config/elements.config'
 import { degree, hParentOf, hNeighborsOf } from '../graph'
 import { calcAddAtomOnExisting, calcBondLength } from '../geometry/vsepr'
+import { maxValence, targetValence, valenceUsed } from '../valence'
 
 /** 原子的有效成键数（读取自身电荷/自由基） */
 function atomMaxBonds(a: Atom): number {
-  return effectiveMaxBonds(a.symbol, a.charge ?? 0, a.radical ?? 0)
+  return maxValence(a)
 }
 
 /**
@@ -75,14 +76,24 @@ export function replaceAtomSymbol(
   atomId: string,
   newSymbol: string,
 ): Molecule {
-  if (!mol.atoms.some(a => a.id === atomId)) return mol
-  // 新元素撑不起现有连接数（如把带两键的 O 换成 He）→ 拒绝，守住价态不变式：
-  // 画布上永远是完整分子，不允许出现超价原子
-  if (getElementConfig(newSymbol).maxBonds < degree(mol.bonds, atomId)) return mol
+  const atom = mol.atoms.find(a => a.id === atomId)
+  if (!atom || atom.symbol === newSymbol) return mol
   return {
     ...mol,
     atoms: mol.atoms.map(a => a.id === atomId ? { ...a, symbol: newSymbol } : a),
   }
+}
+
+/**
+ * 替换原子元素：计算化学建模语义下只改元素符号，保留 id、坐标和已有连接。
+ * 不按单双键/价态增删 H，也不因为价态看起来异常而拒绝；这些问题交给检查器提示。
+ */
+export function substituteAtomElement(
+  mol: Molecule,
+  atomId: string,
+  newSymbol: string,
+): Molecule {
+  return replaceAtomSymbol(mol, atomId, newSymbol)
 }
 
 /**
@@ -94,7 +105,7 @@ export function addOneHydrogen(mol: Molecule, atomId: string): Molecule {
   const atom = mol.atoms.find(a => a.id === atomId)
   if (!atom) return mol
   if (atomMaxBonds(atom) === 0) return mol
-  if (degree(mol.bonds, atomId) >= atomMaxBonds(atom)) return mol
+  if (valenceUsed(mol, atomId) >= atomMaxBonds(atom)) return mol
   const result = calcAddAtomOnExisting(atom, mol.bonds, mol.atoms, 'H')
   const h = newAtom('H', ...result.position)
   return {
@@ -113,10 +124,10 @@ export function addOneHydrogen(mol: Molecule, atomId: string): Molecule {
 export function resaturateAtom(mol: Molecule, atomId: string): Molecule {
   const atom = mol.atoms.find(a => a.id === atomId)
   if (!atom) return mol
-  const diff = atomMaxBonds(atom) - degree(mol.bonds, atomId)
+  const diff = targetValence(atom) - valenceUsed(mol, atomId)
   if (diff > 0) return autoAddHydrogens(mol, atomId)
   if (diff < 0) {
-    const hs = hNeighborsOf(mol, atomId).slice(0, -diff)
+    const hs = hNeighborsOf(mol, atomId).slice(0, Math.ceil(-diff))
     if (hs.length === 0) return mol
     const remove = new Set(hs.map(h => h.id))
     return {
@@ -126,6 +137,22 @@ export function resaturateAtom(mol: Molecule, atomId: string): Molecule {
     }
   }
   return mol
+}
+
+/** 只删除超出当前目标价态的 H，不补缺失 H；用于显式提高键级后的拓扑清理。 */
+export function removeExcessHydrogens(mol: Molecule, atomId: string): Molecule {
+  const atom = mol.atoms.find(a => a.id === atomId)
+  if (!atom) return mol
+  const excess = valenceUsed(mol, atomId) - targetValence(atom)
+  if (excess <= 0) return mol
+  const hs = hNeighborsOf(mol, atomId).slice(0, Math.ceil(excess))
+  if (hs.length === 0) return mol
+  const remove = new Set(hs.map(h => h.id))
+  return {
+    ...mol,
+    atoms: mol.atoms.filter(a => !remove.has(a.id)),
+    bonds: mol.bonds.filter(b => !remove.has(b.atomId1) && !remove.has(b.atomId2)),
+  }
 }
 
 /**
@@ -141,9 +168,10 @@ export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
   let current = mol
 
   for (const target of targets) {
-    if (atomMaxBonds(target) === 0) continue
+    const targetMax = targetValence(target)
+    if (targetMax === 0) continue
 
-    const needed = Math.max(0, atomMaxBonds(target) - degree(current.bonds, target.id))
+    const needed = Math.max(0, Math.floor(targetMax - valenceUsed(current, target.id) + 1e-6))
     if (needed <= 0) continue
 
     for (let i = 0; i < needed; i++) {

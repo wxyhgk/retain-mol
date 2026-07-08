@@ -6,7 +6,7 @@
 export const RENDER = {
   /** 球 / 圆柱几何分段 —— 调低能显著提性能，但表面会出多边形感 */
   sphereSegments: 24,
-  cylinderSegments: 12,
+  cylinderSegments: 16,
 
   /** 选中原子的高亮光晕相对原子半径的额外半径 */
   selectionHaloOffset: 0.12,
@@ -27,6 +27,13 @@ export const RENDER = {
   atomShininess: 80,
   atomSpecular: 0x444444,
   bondShininess: 60,
+  /**
+   * 写实模式下低饱和深色元素（主要是 C）会在浅背景上糊成黑团。
+   * 仅在 realistic 渲染阶段提亮这类近中性色，不改主题/CPK 数据本身。
+   */
+  realisticDarkNeutralMaxSaturation: 0.18,
+  realisticHydrogenMinLightness: 0.62,
+  realisticBondNeutralMinLightness: 0.62,
 
   /** 键的选中 / 未选中色（非主题控制，一般不改） */
   bondSelectedColor: 0xffaa00,
@@ -120,11 +127,12 @@ export const GROW_GUIDE = {
 
 export const FOG = {
   /**
-   * 深度雾化（depth cueing）：从相机注视点开始往后逐渐变淡，
-   * 提供前后深度线索。near/far 为相对相机-注视点距离的偏移（Å）。
+   * 深度雾化（depth cueing）：编辑视图不用真实景深模糊，而用线性 fog
+   * 表示前实后虚。near/far 为相对相机-注视点距离的偏移（Å）。
+   * near 要落在注视点前方，否则复杂分子的中后景仍然和前景一样实。
    */
-  nearOffset: 1,
-  farOffset: 22,
+  nearOffset: -4,
+  farOffset: 14,
 }
 
 export const DOF = {
@@ -166,4 +174,5 @@ export const LIGHTING = {
   ambient: { color: 0xffffff, intensity: 0.55 },
   keyLight: { color: 0xffffff, intensity: 1.0, position: [-8, 12, 10] as const },
   fillLight: { color: 0xddeeff, intensity: 0.35, position: [10, -4, -8] as const },
+  rimLight: { color: 0xffffff, intensity: 0, position: [6, -7, 12] as const },
 }

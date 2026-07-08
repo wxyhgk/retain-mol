@@ -32,8 +32,25 @@ export type { GJFOptions } from './lib/io/pasteParser'
 export { captureViewportImage } from './capture'
 
 // ── 主题 ─────────────────────────────────────────────────────────────────────
-export { resolveTheme, listThemes, hexToInt } from './presets'
-export type { ResolvedTheme } from './presets'
+export { registerTheme, resolveTheme, listThemes, hexToInt } from './presets'
+export type { ResolvedTheme, ThemeMetadata } from './presets'
+
+// ── 分子显示风格 ─────────────────────────────────────────────────────────────
+export {
+  registerStylePreset,
+  listStylePresets,
+  resolveStylePreset,
+  registerRenderProfile,
+  listRenderProfiles,
+  resolveRenderProfile,
+} from './styles'
+export type {
+  StylePreset,
+  StylePresetMetadata,
+  ResolvedStylePreset,
+  RenderStyle,
+  ResolvedRenderProfile,
+} from './styles'
 
 // ── 元素配置 ──────────────────────────────────────────────────────────────────
 export { getElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from './config/elements.config'
@@ -42,12 +59,20 @@ export type { ElementConfig, Hybridization } from './config/elements.config'
 // ── 片段库 ────────────────────────────────────────────────────────────────────
 export { FRAGMENTS, getFragment } from './lib/builder/fragmentLibrary'
 export type { FragmentDef } from './lib/builder/fragmentLibrary'
+export {
+  listFragments,
+  listFragmentSummaries,
+  getFragment as getReadonlyFragment,
+  getFragmentSummary,
+} from './public/fragments'
+export type { PublicFragmentDef, FragmentSummary } from './public/fragments'
 
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 export { cn } from './lib/utils'
 
 // ── Builder ───────────────────────────────────────────────────────────────────
-export { useBuilder, bondSelectedAtoms } from './hooks/useBuilder'
+export { useBuilder } from './hooks/useBuilder'
+export { bondSelectedAtoms } from './lib/builder/commands'
 export {
   calcDistance, calcAngle, calcDihedral, canBond, calcAddAtomOnExisting,
 } from './lib/builder/BuilderEngine'
@@ -55,7 +80,7 @@ export {
 export { getConnectedFragment, splitConnectedComponents } from './lib/builder/analysis/fragments'
 
 // ── PubChem ───────────────────────────────────────────────────────────────────
-export { fetchCompoundSdf } from './lib/pubchem'
+export { fetchCompoundSdf } from './public/pubchem'
 
 // ── 示例分子 ──────────────────────────────────────────────────────────────────
-export { SAMPLE_MOLECULES } from './lib/samples'
+export { SAMPLE_MOLECULES } from './public/samples'

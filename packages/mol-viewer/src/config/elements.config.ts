@@ -18,6 +18,8 @@ export interface ElementConfig {
   valenceElectrons: number
   /** 最大成键数 */
   maxBonds: number
+  /** 自动补氢使用的默认价态；省略时等于有效最大成键数 */
+  defaultValence?: number
   /** 默认杂化方式 */
   defaultHybridization: Hybridization
   /** CPK 颜色 hex */
@@ -41,8 +43,8 @@ const E: Record<string, ElementConfig> = {
   Mg: { symbol:'Mg', name:'镁',  atomicNumber:12, atomicMass:24.305,  covalentRadius:1.41, cpkRadius:1.73, valenceElectrons:2,  maxBonds:2, defaultHybridization:'sp3', color:0x8aff00, category:'alkaline-earth' },
   Al: { symbol:'Al', name:'铝',  atomicNumber:13, atomicMass:26.982,  covalentRadius:1.21, cpkRadius:1.84, valenceElectrons:3,  maxBonds:3, defaultHybridization:'sp3', color:0xbfa6a6, category:'post-transition' },
   Si: { symbol:'Si', name:'硅',  atomicNumber:14, atomicMass:28.086,  covalentRadius:1.11, cpkRadius:2.10, valenceElectrons:4,  maxBonds:4, defaultHybridization:'sp3', color:0xf0c8a0, category:'metalloid' },
-  P:  { symbol:'P',  name:'磷',  atomicNumber:15, atomicMass:30.974,  covalentRadius:1.07, cpkRadius:1.80, valenceElectrons:5,  maxBonds:5, defaultHybridization:'sp3', color:0xff8000, category:'nonmetal' },
-  S:  { symbol:'S',  name:'硫',  atomicNumber:16, atomicMass:32.065,  covalentRadius:1.05, cpkRadius:1.80, valenceElectrons:6,  maxBonds:6, defaultHybridization:'sp3', color:0xd0d000, category:'nonmetal' },
+  P:  { symbol:'P',  name:'磷',  atomicNumber:15, atomicMass:30.974,  covalentRadius:1.07, cpkRadius:1.80, valenceElectrons:5,  maxBonds:5, defaultValence:3, defaultHybridization:'sp3', color:0xff8000, category:'nonmetal' },
+  S:  { symbol:'S',  name:'硫',  atomicNumber:16, atomicMass:32.065,  covalentRadius:1.05, cpkRadius:1.80, valenceElectrons:6,  maxBonds:6, defaultValence:2, defaultHybridization:'sp3', color:0xd0d000, category:'nonmetal' },
   Cl: { symbol:'Cl', name:'氯',  atomicNumber:17, atomicMass:35.453,  covalentRadius:1.02, cpkRadius:1.75, valenceElectrons:7,  maxBonds:1, defaultHybridization:'sp3', color:0x1ff01f, category:'halogen' },
   Ar: { symbol:'Ar', name:'氩',  atomicNumber:18, atomicMass:39.948,  covalentRadius:0.97, cpkRadius:1.88, valenceElectrons:8,  maxBonds:0, defaultHybridization:'none', color:0x80d1e3, category:'noble-gas' },
   K:  { symbol:'K',  name:'钾',  atomicNumber:19, atomicMass:39.098,  covalentRadius:2.03, cpkRadius:2.75, valenceElectrons:1,  maxBonds:1, defaultHybridization:'sp3', color:0x8f40d4, category:'alkali' },

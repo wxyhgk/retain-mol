@@ -4,11 +4,14 @@
  * 全部接收 state（或 get/set），不持有 store 引用，供各 slice 复用。
  */
 
-import type { Molecule } from '../../lib/molecule'
+import type { Atom, Bond, Molecule } from '../../lib/molecule'
 import type { SceneObject } from '../../lib/sceneObject'
 import type { GeomEditResult } from '../../lib/builder/BuilderEngine'
 import type { MoleculeState } from './types'
 import { PLACEMENT } from '../../config/interaction.config'
+import { findBond } from '../../lib/builder/graph'
+import { maxValence, valenceUsed } from '../../lib/builder/valence'
+import { genId } from '../../lib/utils'
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
 
@@ -85,4 +88,70 @@ export function computeAutoOffset(objects: SceneObject[]): { x: number; y: numbe
     for (const atom of obj.molecule.atoms)
       if (atom.x > maxX) maxX = atom.x
   return { x: isFinite(maxX) ? maxX + PLACEMENT.addObjectOffsetX : 0, y: 0, z: 0 }
+}
+
+function nextUnusedId(reserved: Set<string>): string {
+  let id = genId()
+  while (reserved.has(id)) id = genId()
+  reserved.add(id)
+  return id
+}
+
+export function moleculeIdsInScene(objects: Iterable<SceneObject>): Set<string> {
+  const ids = new Set<string>()
+  for (const obj of objects) {
+    for (const atom of obj.molecule.atoms) ids.add(atom.id)
+    for (const bond of obj.molecule.bonds) ids.add(bond.id)
+  }
+  return ids
+}
+
+export function withSceneUniqueIds(mol: Molecule, reservedIds: Set<string>): Molecule {
+  const atomIdMap = new Map<string, string>()
+  let changed = false
+  const atoms: Atom[] = mol.atoms.map(atom => {
+    if (!reservedIds.has(atom.id)) {
+      reservedIds.add(atom.id)
+      return atom
+    }
+    const id = nextUnusedId(reservedIds)
+    atomIdMap.set(atom.id, id)
+    changed = true
+    return { ...atom, id }
+  })
+
+  const bonds: Bond[] = mol.bonds.map(bond => {
+    const atomId1 = atomIdMap.get(bond.atomId1) ?? bond.atomId1
+    const atomId2 = atomIdMap.get(bond.atomId2) ?? bond.atomId2
+    if (!reservedIds.has(bond.id)) {
+      reservedIds.add(bond.id)
+      if (atomId1 === bond.atomId1 && atomId2 === bond.atomId2) return bond
+      changed = true
+      return { ...bond, atomId1, atomId2 }
+    }
+    changed = true
+    return { ...bond, id: nextUnusedId(reservedIds), atomId1, atomId2 }
+  })
+
+  return changed ? { ...mol, atoms, bonds } : mol
+}
+
+export function validateAddBond(
+  mol: Molecule,
+  atomId1: string,
+  atomId2: string,
+  order: 1 | 2 | 3 = 1,
+): { ok: boolean; reason?: string } {
+  if (atomId1 === atomId2) return { ok: false, reason: '不能与自身成键' }
+  const atom1 = mol.atoms.find(a => a.id === atomId1)
+  const atom2 = mol.atoms.find(a => a.id === atomId2)
+  if (!atom1 || !atom2) return { ok: false, reason: '原子不存在' }
+  if (findBond(mol.bonds, atomId1, atomId2)) return { ok: false, reason: '两原子之间已存在键' }
+  if (valenceUsed(mol, atomId1) + order > maxValence(atom1) + 1e-6) {
+    return { ok: false, reason: `${atom1.symbol} 已达最大键数 (${maxValence(atom1)})` }
+  }
+  if (valenceUsed(mol, atomId2) + order > maxValence(atom2) + 1e-6) {
+    return { ok: false, reason: `${atom2.symbol} 已达最大键数 (${maxValence(atom2)})` }
+  }
+  return { ok: true }
 }

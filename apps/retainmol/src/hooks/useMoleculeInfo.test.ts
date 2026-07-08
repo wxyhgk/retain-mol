@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { newAtom } from '@retainmol/mol-viewer'
+import { newAtom } from '@retainmol/mol-viewer/core'
 import { calcFormula, calcMW } from './useMoleculeInfo'
 
 describe('calcFormula', () => {

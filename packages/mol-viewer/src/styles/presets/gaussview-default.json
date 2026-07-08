@@ -1,0 +1,16 @@
+{
+  "$schemaVersion": "1",
+  "kind": "molecular-style-preset",
+  "metadata": {
+    "id": "gaussview-default",
+    "name": "GaussView",
+    "description": "GaussView-inspired editing style using compact ball-stick geometry, dark carbon, bright CPK heteroatoms, and a purple-gray workspace background.",
+    "source": "https://gaussian.com/wp-content/uploads/dl/gv6.pdf",
+    "author": "RetainMol",
+    "version": "0.1.0"
+  },
+  "displayMode": "ball-stick",
+  "themeId": "gaussview",
+  "renderStyle": "realistic",
+  "showAtomLabels": false
+}

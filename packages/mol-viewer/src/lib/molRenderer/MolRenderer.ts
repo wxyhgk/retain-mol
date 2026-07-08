@@ -5,6 +5,7 @@ import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
 import { CAMERA, CONTROLS } from '../../config/camera.config'
 import { SKETCH_GRID, RENDER } from '../../config/render.config'
 import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
+import { resolveRenderProfile, type RenderStyle } from '../../styles'
 import { ticker, Phase } from '../animation'
 import { MoleculeRenderer } from './MoleculeRenderer'
 import { InteractionHandler } from './InteractionHandler'
@@ -12,7 +13,7 @@ import { MeasureVisuals } from './MeasureVisuals'
 import * as CameraUtils from './CameraUtils'
 import { AromaticRingCache } from './aromaticData'
 import { captureCanvasPNG } from './capture'
-import { setupLights, addBackgroundGrid, makeDepthFog, syncDepthFog } from './sceneRig'
+import { setupLights, syncLightsForProfile, addBackgroundGrid, makeDepthFog, syncDepthFog, type LightRig } from './sceneRig'
 import { DepthOfField } from './postprocessing'
 
 /**
@@ -29,8 +30,11 @@ export class MolRenderer {
   readonly canvas: HTMLCanvasElement
 
   theme: ResolvedTheme = resolveTheme('default')
-  /** 渲染风格：realistic（写实光照）| publication（论文：径向渐变球 + 黑描边） */
-  renderStyle: 'realistic' | 'publication' = 'realistic'
+  /** 渲染风格：realistic（写实光照）| publication（论文描边）| iboview（高光球棍） */
+  renderStyle: RenderStyle = 'realistic'
+  private _backgroundGrid: THREE.GridHelper | null = null
+  private _lights: LightRig | null = null
+  private _lastCameraFov = CAMERA.fov
 
   private _measureGroup = new THREE.Group()
   private _unsubTicker: () => void = () => {}
@@ -178,7 +182,7 @@ export class MolRenderer {
     this.modelGroup.add(this._measureGroup)
 
     // 网格：极淡颜色，不影响分子渲染
-    addBackgroundGrid(this.scene)
+    this._backgroundGrid = addBackgroundGrid(this.scene)
 
     this.controls = new MolControls(this.camera, this.rotationGroup, this.modelGroup, canvas)
     this.controls.rotateSpeed = CONTROLS.rotateSpeed
@@ -219,7 +223,7 @@ export class MolRenderer {
     this.controls.onInteractionEnd = () => { ticker.stopContinuous('viewport'); ticker.invalidate() }
     this.controls.onWheelChange = () => ticker.invalidate()
 
-    // 深度雾化：从注视点往后逐渐变淡，提供前后深度线索
+    // 深度雾化由 render profile 决定；IboView 使用 shader 内 fragment depth cue。
     this.scene.fog = makeDepthFog(hexToInt(this.theme.scene.backgroundColor))
 
     // 景深（虚实）：MSAA 渲染目标保住抗锯齿，BokehPass 做散焦（DOF.enabled=false → null）
@@ -228,17 +232,31 @@ export class MolRenderer {
     // 注册到共享 Ticker 的 Render 阶段（最后执行）
     this._unsubTicker = ticker.subscribe('mol-render', Phase.Render, () => {
       this.controls.update()
+      const profile = resolveRenderProfile(this.renderStyle)
+      if (this._backgroundGrid) this._backgroundGrid.visible = profile.backgroundGrid
+      if (this._lights) syncLightsForProfile(this._lights, profile)
+      const targetFov = profile.cameraFov
+      if (Math.abs(this.camera.fov - targetFov) > 1e-6 || this._lastCameraFov !== targetFov) {
+        this.camera.fov = targetFov
+        this.camera.updateProjectionMatrix()
+        this._lastCameraFov = targetFov
+      }
       // 雾与景深焦点随相机-注视点距离同步；雾色跟随主题背景
       const pivot = new THREE.Vector3()
       this.rotationGroup.getWorldPosition(pivot)
       const dist = this.camera.position.distanceTo(pivot)
-      syncDepthFog(this.scene.fog as THREE.Fog, dist, this.scene.background)
+      if (profile.depthCue.mode === 'three-fog') {
+        if (!this.scene.fog) this.scene.fog = makeDepthFog(hexToInt(this.theme.scene.backgroundColor))
+        syncDepthFog(this.scene.fog as THREE.Fog, dist, this.scene.background)
+      } else {
+        this.scene.fog = null
+      }
       if (this._dof) this._dof.render(dist)
       else this.renderer.render(this.scene, this.camera)
     })
     ticker.invalidate() // 初始帧
 
-    setupLights(this.scene)
+    this._lights = setupLights(this.scene)
   }
 
   resize(width: number, height: number) {
@@ -265,7 +283,7 @@ export class MolRenderer {
   // ── 渲染 ──
 
   render(molecule: Molecule, displayMode: DisplayMode, selectedAtoms: Set<string>, selectedBonds: Set<string>) {
-    this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds, this._aromatic.centroids(molecule), this.renderStyle === 'publication')
+    this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds, this._aromatic.centroids(molecule), this.renderStyle)
     ticker.invalidate()
   }
 
@@ -313,20 +331,9 @@ export class MolRenderer {
         isActive ? selectedAtoms : new Set<string>(),
         isActive ? selectedBonds : new Set<string>(),
         this._aromatic.centroids(obj.molecule),
-        this.renderStyle === 'publication',
+        this.renderStyle,
+        { opacity: isActive ? 1.0 : RENDER.inactiveObjectOpacity },
       )
-
-      // 非活跃对象半透明
-      const targetOpacity = isActive ? 1.0 : RENDER.inactiveObjectOpacity
-      grp.traverse(child => {
-        const mesh = child as THREE.Mesh
-        if (!mesh.isMesh) return
-        const mat = mesh.material as THREE.Material
-        if (mat) {
-          mat.transparent = targetOpacity < 1.0
-          mat.opacity = targetOpacity
-        }
-      })
     }
 
     ticker.invalidate()
@@ -340,7 +347,19 @@ export class MolRenderer {
   }
 
   fitToMolecule(atoms: Atom[]) {
-    CameraUtils.fitToMolecule(atoms, this.camera, this.rotationGroup, this.modelGroup)
+    const profile = resolveRenderProfile(this.renderStyle)
+    if (Math.abs(this.camera.fov - profile.cameraFov) > 1e-6) {
+      this.camera.fov = profile.cameraFov
+      this.camera.updateProjectionMatrix()
+      this._lastCameraFov = profile.cameraFov
+    }
+    CameraUtils.fitToMolecule(
+      atoms,
+      this.camera,
+      this.rotationGroup,
+      this.modelGroup,
+      profile.cameraFitMultiplier,
+    )
     ticker.invalidate()
   }
 
@@ -394,11 +413,50 @@ export class MolRenderer {
     this._interaction.dispose()
     this._molRenderer.dispose()
     this._measureVisuals.dispose()
+    if (this._sketchGrid) {
+      this.modelGroup.remove(this._sketchGrid)
+      disposeObject3D(this._sketchGrid)
+      this._sketchGrid = null
+    }
+    if (this._backgroundGrid) {
+      this.scene.remove(this._backgroundGrid)
+      disposeObject3D(this._backgroundGrid)
+      this._backgroundGrid = null
+    }
+    if (this._lights) {
+      this._lights.key.shadow.map?.dispose()
+      this._lights.fill.shadow.map?.dispose()
+      this._lights.rim.shadow.map?.dispose()
+      this.scene.remove(this._lights.ambient, this._lights.key, this._lights.fill, this._lights.rim)
+      this._lights = null
+    }
     this.controls.dispose()
     this._dof?.dispose()
-    this.renderer.dispose()
     for (const [, r] of this._molRenderers) r.dispose()
     this._molRenderers.clear()
+    for (const [, grp] of this._objectGroups) {
+      this.modelGroup.remove(grp)
+      disposeObject3D(grp)
+    }
     this._objectGroups.clear()
+    this.modelGroup.remove(this._measureGroup)
+    this.rotationGroup.remove(this.modelGroup)
+    this.scene.remove(this.rotationGroup)
+    disposeObject3D(this.modelGroup)
+    disposeObject3D(this.rotationGroup)
+    this.renderer.dispose()
   }
+}
+
+function disposeObject3D(root: THREE.Object3D) {
+  root.traverse(obj => {
+    const renderable = obj as THREE.Object3D & {
+      geometry?: THREE.BufferGeometry
+      material?: THREE.Material | THREE.Material[]
+    }
+    renderable.geometry?.dispose()
+    if (!renderable.material) return
+    const materials = Array.isArray(renderable.material) ? renderable.material : [renderable.material]
+    materials.forEach(m => m?.dispose())
+  })
 }

@@ -9,6 +9,23 @@ interface Props {
   renderer: MolRenderer | null
 }
 
+function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  const w = canvas.offsetWidth
+  const h = canvas.offsetHeight
+  const dpr = window.devicePixelRatio || 1
+  const bw = Math.max(1, Math.round(w * dpr))
+  const bh = Math.max(1, Math.round(h * dpr))
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw
+    canvas.height = bh
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, w, h)
+  return { ctx, w, h }
+}
+
 export default function MeasureOverlay({ renderer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -18,11 +35,9 @@ export default function MeasureOverlay({ renderer }: Props) {
 
     // 同 AtomLabelOverlay：去掉 dirty flag，每帧直接读 store 当前状态
     const draw = () => {
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-      const w = canvas.offsetWidth, h = canvas.offsetHeight
-      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
-      ctx.clearRect(0, 0, w, h)
+      const prepared = prepareCanvas(canvas)
+      if (!prepared) return
+      const { ctx, w, h } = prepared
 
       const labels = renderer.measureLabelPositions
       if (labels.length === 0) return

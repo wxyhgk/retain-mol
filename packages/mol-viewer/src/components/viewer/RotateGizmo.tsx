@@ -15,14 +15,16 @@ import { toolCan } from '../../config/toolCapabilities.config'
 
 interface Props {
   renderer: MolRenderer | null
+  readOnly?: boolean
 }
 
-export default function RotateGizmo({ renderer }: Props) {
+export default function RotateGizmo({ renderer, readOnly = false }: Props) {
   const selectedAtomIds = useMoleculeStore(s => s.selectedAtomIds)
   const selectedBondIds = useMoleculeStore(s => s.selectedBondIds)
   const activeTool = useEditorStore(s => s.activeTool)
 
   useEffect(() => {
+    if (readOnly) return
     if (!renderer || !toolCan(activeTool, 'canEdit')) return
 
     const cb: GizmoCallbacks = {
@@ -42,7 +44,7 @@ export default function RotateGizmo({ renderer }: Props) {
       unsubTicker()
       ctrl.dispose()
     }
-  }, [renderer, selectedAtomIds, selectedBondIds, activeTool])
+  }, [renderer, selectedAtomIds, selectedBondIds, activeTool, readOnly])
 
   return null
 }

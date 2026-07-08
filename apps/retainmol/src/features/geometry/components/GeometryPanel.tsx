@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import {
   useMoleculeStore, selectActiveMoleculeOrEmpty, useEditorStore,
-  getElementConfig as getElement,
   bondSelectedAtoms,
   calcDistance, calcAngle, calcDihedral,
-} from '@retainmol/mol-viewer'
+} from '@/domain/viewerAdapter'
+import { getElementConfig as getElement } from '@retainmol/mol-viewer/core'
 import { useMoleculeInfo } from '@/hooks/useMoleculeInfo'
 import { Button } from '@/components/ui/button'
 import { Trash2, ArrowUpDown, Link, FlaskRound } from 'lucide-react'

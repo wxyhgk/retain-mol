@@ -32,6 +32,13 @@ export default defineConfig(({ command }) => {
         lib: {
           entry: {
             index: path.resolve(__dirname, './src/index.ts'),
+            'public/core': path.resolve(__dirname, './src/public/core.ts'),
+            'public/io': path.resolve(__dirname, './src/public/io.ts'),
+            'public/viewer': path.resolve(__dirname, './src/public/viewer.ts'),
+            'public/styles': path.resolve(__dirname, './src/public/styles.ts'),
+            'public/fragments': path.resolve(__dirname, './src/public/fragments.ts'),
+            'public/samples': path.resolve(__dirname, './src/public/samples.ts'),
+            'public/pubchem': path.resolve(__dirname, './src/public/pubchem.ts'),
             // 无 DOM 的优化入口，供 Worker 导入（@retainmol/mol-viewer/optimize）
             optimize: path.resolve(__dirname, './src/optimize.ts'),
           },

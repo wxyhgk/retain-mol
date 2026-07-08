@@ -1,6 +1,7 @@
-import { useMoleculeStore, cn, splitConnectedComponents } from '@retainmol/mol-viewer'
+import { useMoleculeStore, splitConnectedComponents } from '@/domain/viewerAdapter'
 import { Eye, EyeOff, Lock, Unlock, Trash2, Scissors } from 'lucide-react'
 import { useState } from 'react'
+import { cn } from '@/lib/utils'
 
 export default function ScenePanel() {
   const { objectsById, objectOrder, activeObjectId, setActiveObject, removeSceneObject, setObjectVisible, setObjectLocked, renameObject, addToScene } = useMoleculeStore()

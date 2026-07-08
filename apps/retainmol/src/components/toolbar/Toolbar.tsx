@@ -1,9 +1,8 @@
 import { RotateCcw, Download, Upload, Search } from 'lucide-react'
-import {
-  useMoleculeTemporal, cn,
-} from '@retainmol/mol-viewer'
+import { useMoleculeTemporal } from '@/domain/viewerAdapter'
 import { useStore } from 'zustand'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useFileIO } from '@/hooks/useFileIO'

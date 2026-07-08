@@ -1,0 +1,16 @@
+{
+  "$schemaVersion": "1",
+  "kind": "molecular-style-preset",
+  "metadata": {
+    "id": "pymol-default",
+    "name": "PyMOL",
+    "description": "PyMOL-inspired style using the existing PyMOL green-carbon theme and dark viewport background.",
+    "source": "https://pymolwiki.org/index.php/Color_Values",
+    "author": "RetainMol",
+    "version": "0.1.0"
+  },
+  "displayMode": "ball-stick",
+  "themeId": "pymol",
+  "renderStyle": "realistic",
+  "showAtomLabels": false
+}

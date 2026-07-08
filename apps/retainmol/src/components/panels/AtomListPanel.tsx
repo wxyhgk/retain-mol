@@ -1,5 +1,7 @@
-import { useMoleculeStore, selectActiveMoleculeOrEmpty, getElementConfig as getElement, cn } from '@retainmol/mol-viewer'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/domain/viewerAdapter'
+import { getElementConfig as getElement } from '@retainmol/mol-viewer/core'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { cn } from '@/lib/utils'
 
 function colorHexToCss(hex: number) {
   return `#${hex.toString(16).padStart(6, '0')}`

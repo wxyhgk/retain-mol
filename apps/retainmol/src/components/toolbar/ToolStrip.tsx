@@ -1,141 +1,433 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
-import { MousePointer2, Pencil, Ruler, Move } from 'lucide-react'
+import { useState } from 'react'
+import {
+  Atom,
+  Hexagon,
+  MousePointer2,
+  Move,
+  Pencil,
+  Ruler,
+  Shapes,
+  Slash,
+} from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useEditorStore, getElementConfig, getFragment, cn } from '@retainmol/mol-viewer'
-import type { Tool } from '@retainmol/mol-viewer'
-import BuildPanel from './BuildPanel'
+import { getElementConfig, PERIODIC_TABLE_LAYOUT } from '@retainmol/mol-viewer/core'
+import { getFragment } from '@retainmol/mol-viewer/fragments'
+import { useEditorStore, useMoleculeStore } from '@/domain/viewerAdapter'
+import {
+  COMMON_ATOMS,
+  COMMON_HYBRID_IDS,
+  RING_FRAGMENTS,
+  TEMPLATE_MOLECULES,
+  setCenteredMolecule,
+  splitTemplateName,
+  toElementHex,
+  type TemplateMolecule,
+} from '@/domain/buildTools'
+import type { Tool } from '@retainmol/mol-viewer/core'
+import { cn } from '@/lib/utils'
 
-interface ToolButton {
-  key: string
-  icon: React.ReactNode
-  label: string
-  shortcut: string
-  active: boolean
-  onClick: () => void
-  separatorBefore?: boolean
-}
+type PalettePanel = 'elements' | 'rings' | 'templates' | null
 
-/** 画布左侧竖向工具条 */
+/** RetainMol toolbar: ChemDraw-inspired permanent palette, not a ChemDraw clone. */
 export default function ToolStrip() {
-  const { activeTool, setActiveTool, activeElement,
-          activeFragmentId, brushArmed, armBrush, disarmBrush } = useEditorStore()
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
-
-  // 点击外部关闭
-  useEffect(() => {
-    if (!pickerOpen) return
-    const handler = (e: PointerEvent) => {
-      if (pickerRef.current?.contains(e.target as Node)) return
-      setPickerOpen(false)
-    }
-    document.addEventListener('pointerdown', handler)
-    return () => document.removeEventListener('pointerdown', handler)
-  }, [pickerOpen])
+  const {
+    activeTool,
+    setActiveTool,
+    activeElement,
+    activeFragmentId,
+    brushArmed,
+    armBrush,
+    disarmBrush,
+    setActiveElement,
+    setAtomClickMode,
+    setActiveFragment,
+  } = useEditorStore()
+  const { setMolecule } = useMoleculeStore()
+  const [panel, setPanel] = useState<PalettePanel>(null)
 
   const activeFragment = activeFragmentId ? getFragment(activeFragmentId) : undefined
-  const elCfg = getElementConfig(activeElement)
-  const elHex = activeFragment ? '#6366f1' : `#${elCfg.color.toString(16).padStart(6, '0')}`
+  const activeElementConfig = getElementConfig(activeElement)
+  const activeColor = activeFragment ? '#4f46e5' : toElementHex(activeElementConfig.color)
 
-  // 选择 / 编辑是同一个指针工具的两个显式态，互斥高亮
-  const TOOLS: ToolButton[] = [
+  const pickAtom = (symbol: string) => {
+    setAtomClickMode('replace')
+    setActiveElement(symbol)
+    setActiveTool('select')
+    armBrush()
+  }
+
+  const pickFragment = (id: string) => {
+    const fragment = getFragment(id)
+    const symbol = fragment?.atoms[fragment.attachIndex]?.symbol
+    if (symbol) setActiveElement(symbol)
+    setActiveFragment(id)
+    setActiveTool('select')
+    setPanel(null)
+  }
+
+  const pickTemplate = (mol: TemplateMolecule) => {
+    setCenteredMolecule(setMolecule, mol)
+    setPanel(null)
+  }
+
+  const activateBuild = () => {
+    setPanel(null)
+    setActiveTool('select')
+    armBrush()
+  }
+
+  const operationItems = [
     {
-      key: 'select', icon: <MousePointer2 size={16} />, shortcut: 'S',
-      label: '选择（点击/框选/拖动移动选中）',
+      key: 'select',
+      label: '选择',
       active: activeTool === 'select' && !brushArmed,
-      onClick: () => { setActiveTool('select'); disarmBrush() },
+      onClick: () => { setPanel(null); setActiveTool('select'); disarmBrush() },
+      content: <MousePointer2 size={15} />,
     },
     {
-      key: 'build', icon: <Pencil size={16} />, shortcut: 'B',
-      label: '编辑（点 H 生长 · 双击空白加原子 · 拖 H 成键）',
+      key: 'build',
+      label: '构建',
       active: activeTool === 'select' && brushArmed,
-      onClick: () => { setActiveTool('select'); armBrush() },
+      onClick: activateBuild,
+      content: <Pencil size={15} />,
     },
     {
-      key: 'move-object', icon: <Move size={16} />, shortcut: 'V',
-      label: '移动分子（Alt=旋转）',
+      key: 'move-object',
+      label: '移动分子',
       active: activeTool === 'move-object',
-      onClick: () => setActiveTool('move-object' as Tool),
+      onClick: () => { setPanel(null); setActiveTool('move-object' as Tool); disarmBrush() },
+      content: <Move size={15} />,
     },
     {
-      key: 'measure', icon: <Ruler size={16} />, shortcut: 'M',
+      key: 'measure',
       label: '测量',
       active: activeTool === 'measure',
-      onClick: () => setActiveTool('measure' as Tool),
-      separatorBefore: true,
+      onClick: () => { setPanel(null); setActiveTool('measure' as Tool); disarmBrush() },
+      content: <Ruler size={15} />,
+    },
+  ]
+
+  const primaryMaterialItems = [
+    {
+      key: 'current',
+      label: activeFragment ? activeFragment.name : `${activeElement} 单原子替换`,
+      active: brushArmed && activeTool === 'select' && panel !== 'rings' && panel !== 'templates',
+      onClick: () => { activateBuild(); setPanel(panel === 'elements' ? null : 'elements') },
+      content: <span className="text-[11px] font-bold" style={{ color: activeColor }}>{activeFragment?.short ?? activeElement}</span>,
+    },
+    {
+      key: 'c-sp3',
+      label: 'C sp3 桩',
+      active: activeFragmentId === 'c-sp3' && brushArmed,
+      onClick: () => pickFragment('c-sp3'),
+      content: <Slash size={15} />,
+    },
+  ]
+
+  const libraryItems = [
+    {
+      key: 'rings',
+      label: '环系',
+      active: panel === 'rings' || !!activeFragment?.group?.includes('ring'),
+      onClick: () => { activateBuild(); setPanel(panel === 'rings' ? null : 'rings') },
+      content: <Hexagon size={15} />,
+    },
+    {
+      key: 'templates',
+      label: '模板分子',
+      active: panel === 'templates',
+      onClick: () => { activateBuild(); setPanel(panel === 'templates' ? null : 'templates') },
+      content: <Shapes size={15} />,
+    },
+    {
+      key: 'elements',
+      label: '更多元素',
+      active: panel === 'elements',
+      onClick: () => { activateBuild(); setPanel(panel === 'elements' ? null : 'elements') },
+      content: <Atom size={15} />,
     },
   ]
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="w-11 flex flex-col items-center py-2 gap-0.5 bg-white rounded-xl border border-gray-200 shadow-md select-none">
-
-        {/* ── 元素选择器 (第一位) ── */}
-        <div className="relative" ref={pickerRef}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => {
-                  // 未武装时点 chip 直接恢复构建态（armBrush 不清片段笔刷，保留上次的笔刷）
-                  if (!brushArmed) { armBrush(); setActiveTool('select') }
-                  setPickerOpen(v => !v)
-                }}
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-bold transition-all hover:opacity-80"
-                style={brushArmed ? {
-                  background: `${elHex}22`,
-                  color: elHex,
-                  border: `1.5px solid ${elHex}66`,
-                  boxShadow: pickerOpen ? `0 0 0 2px ${elHex}44` : `0 0 0 2px ${elHex}33`,
-                } : {
-                  background: '#f3f4f6',
-                  color: '#9ca3af',
-                  border: '1.5px solid #e5e7eb',
-                }}
+    <TooltipProvider delayDuration={180}>
+      <div className="relative h-full w-[92px] border-r border-gray-200 bg-white/90 px-2 py-2 shadow-sm backdrop-blur">
+        <div className="flex h-full gap-1.5">
+          <div className="flex flex-col gap-1">
+            <RailLabel>工具</RailLabel>
+            {operationItems.map(item => (
+              <ToolCell
+                key={item.key}
+                label={item.label}
+                active={item.active}
+                onClick={item.onClick}
               >
-                {activeFragment ? activeFragment.short : activeElement}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="text-xs bg-gray-800 text-white border-gray-700">
-              {brushArmed
-                ? (activeFragment ? `构建中 · ${activeFragment.name} · Esc 切回选择` : `构建中 · ${activeElement} · Esc 切回选择`)
-                : '已暂停构建 · 点击恢复'}
-            </TooltipContent>
-          </Tooltip>
+                {item.content}
+              </ToolCell>
+            ))}
+          </div>
 
-          {/* 构建面板（周期表 + 片段条） */}
-          {pickerOpen && <BuildPanel onClose={() => setPickerOpen(false)} />}
+          <div className="flex h-full flex-col border-l border-gray-200 pl-1.5">
+            <div className="flex flex-col gap-1">
+              <RailLabel>构建</RailLabel>
+              {primaryMaterialItems.map(item => (
+                <ToolCell
+                  key={item.key}
+                  label={item.label}
+                  active={item.active}
+                  onClick={item.onClick}
+                >
+                  {item.content}
+                </ToolCell>
+              ))}
+            </div>
+
+            <div className="mt-auto flex flex-col gap-1 pb-1">
+              <RailLabel>常用</RailLabel>
+              {libraryItems.map(item => (
+                <ToolCell
+                  key={item.key}
+                  label={item.label}
+                  active={item.active}
+                  onClick={item.onClick}
+                >
+                  {item.content}
+                </ToolCell>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* 分隔线 */}
-        <div className="w-6 h-px bg-gray-200 my-1" />
-
-        {/* ── 工具按钮 ── */}
-        {TOOLS.map((t) => (
-          <Fragment key={t.key}>
-            {t.separatorBefore && (
-              <div className="w-6 h-px bg-gray-200 my-1" />
+        {panel && (
+          <div className="absolute left-[98px] top-2 z-30 w-[360px] max-h-[calc(100vh-16px)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+            {panel === 'elements' && (
+              <ElementPanel
+                activeElement={activeElement}
+                activeFragmentId={activeFragmentId}
+                onPickAtom={pickAtom}
+                onPickFragment={pickFragment}
+              />
             )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={t.onClick}
-                  className={cn(
-                    'w-9 h-9 rounded-lg flex items-center justify-center transition-all',
-                    t.active
-                      ? 'bg-gray-900 text-white'
-                      : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
-                  )}
-                >
-                  {t.icon}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="text-xs bg-gray-800 text-white border-gray-700">
-                {t.label} <span className="opacity-60 ml-1">{t.shortcut}</span>
-              </TooltipContent>
-            </Tooltip>
-          </Fragment>
-        ))}
+            {panel === 'rings' && <RingPanel activeFragmentId={activeFragmentId} onPickFragment={pickFragment} />}
+            {panel === 'templates' && <TemplatePanel onPickTemplate={pickTemplate} />}
+          </div>
+        )}
       </div>
     </TooltipProvider>
+  )
+}
+
+function ToolCell({
+  children,
+  label,
+  active,
+  onClick,
+}: {
+  children: React.ReactNode
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          title={label}
+          onClick={onClick}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-lg border text-gray-500 transition-all',
+            active
+              ? 'border-gray-900 bg-gray-900 text-white shadow-sm'
+              : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white hover:text-gray-900'
+          )}
+        >
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="text-xs bg-gray-800 text-white border-gray-700">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function RailLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="h-4 text-center text-[9px] font-semibold leading-4 text-gray-400">
+      {children}
+    </div>
+  )
+}
+
+function ElementPanel({
+  activeElement,
+  activeFragmentId,
+  onPickAtom,
+  onPickFragment,
+}: {
+  activeElement: string
+  activeFragmentId: string | null
+  onPickAtom: (symbol: string) => void
+  onPickFragment: (id: string) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <PanelHeader title="元素与杂化" subtitle="默认 C 为 sp3 桩；单原子需要显式选择" />
+      <div className="grid grid-cols-5 gap-1.5">
+        {COMMON_HYBRID_IDS.map(id => {
+          const fragment = getFragment(id)
+          if (!fragment) return null
+          return (
+            <button
+              key={id}
+              type="button"
+              title={fragment.name}
+              onClick={() => onPickFragment(id)}
+              className={cn(
+                'h-11 rounded-lg border text-sm font-semibold transition-all',
+                activeFragmentId === id
+                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-[0_0_0_2px_rgba(99,102,241,0.18)]'
+                  : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300 hover:bg-white'
+              )}
+            >
+              {fragment.short}
+            </button>
+          )
+        })}
+      </div>
+
+      <div>
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">单原子替换</div>
+        <div className="grid grid-cols-10 gap-1">
+          {COMMON_ATOMS.map(symbol => {
+            const config = getElementConfig(symbol)
+            const color = toElementHex(config.color)
+            const active = activeElement === symbol && !activeFragmentId
+            return (
+              <button
+                key={symbol}
+                type="button"
+                title={`${symbol} · ${config.name}`}
+                onClick={() => onPickAtom(symbol)}
+                className={cn(
+                  'h-7 rounded-md border text-[11px] font-bold transition-all',
+                  active ? 'shadow-[0_0_0_2px_rgba(17,24,39,0.14)]' : 'hover:scale-105'
+                )}
+                style={{
+                  color,
+                  background: `${color}${active ? '26' : '12'}`,
+                  borderColor: `${color}${active ? '99' : '44'}`,
+                }}
+              >
+                {symbol}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">周期表</div>
+        <div className="flex flex-col gap-px">
+          {PERIODIC_TABLE_LAYOUT.map((row, rowIndex) => (
+            <div key={rowIndex} className="flex gap-px">
+              {row.map((symbol, colIndex) => {
+                if (!symbol || symbol === '*') return <div key={colIndex} className="h-[18px] w-[18px] shrink-0" />
+                const config = getElementConfig(symbol)
+                const configured = config.atomicNumber !== 0
+                const color = toElementHex(config.color)
+                return (
+                  <button
+                    key={`${symbol}-${colIndex}`}
+                    type="button"
+                    title={configured ? `${symbol} · ${config.name}` : symbol}
+                    onClick={() => onPickAtom(symbol)}
+                    className="h-[18px] w-[18px] shrink-0 rounded text-[9px] font-medium leading-none transition-all hover:scale-105"
+                    style={{
+                      color: configured ? color : '#b8bcc2',
+                      background: configured ? `${color}10` : '#fafafa',
+                      border: `1px solid ${configured ? `${color}30` : '#eef0f2'}`,
+                    }}
+                  >
+                    {symbol}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RingPanel({
+  activeFragmentId,
+  onPickFragment,
+}: {
+  activeFragmentId: string | null
+  onPickFragment: (id: string) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <PanelHeader title="环系" subtitle="点空白放环 · 点键并环 · 点原子接上" />
+      <div className="grid grid-cols-2 gap-1.5">
+        {RING_FRAGMENTS.map(fragment => (
+          <button
+            key={fragment.id}
+            type="button"
+            title={fragment.name}
+            onClick={() => onPickFragment(fragment.id)}
+            className={cn(
+              'flex h-14 flex-col items-center justify-center rounded-lg border transition-all',
+              activeFragmentId === fragment.id
+                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-[0_0_0_2px_rgba(99,102,241,0.18)]'
+                : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300 hover:bg-white'
+            )}
+          >
+            <span className="text-xs font-semibold">{fragment.name}</span>
+            <span className="text-[10px] text-gray-400">{fragment.formula}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TemplatePanel({
+  onPickTemplate,
+}: {
+  onPickTemplate: (mol: TemplateMolecule) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <PanelHeader title="模板分子" subtitle="点击模板会替换当前画布" />
+      <div className="grid grid-cols-2 gap-1.5">
+        {TEMPLATE_MOLECULES.map(sample => {
+          const { main, sub } = splitTemplateName(sample.name)
+          return (
+            <button
+              key={sample.name}
+              type="button"
+              onClick={() => onPickTemplate(sample.mol())}
+              className="flex h-[52px] flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-2 transition-all hover:border-gray-300 hover:bg-white"
+            >
+              <span className="text-xs font-semibold text-gray-700">{main}</span>
+              {sub && <span className="text-[10px] text-gray-400">{sub}</span>}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function PanelHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div>
+      <div className="text-sm font-semibold text-gray-900">{title}</div>
+      <div className="mt-0.5 text-[11px] text-gray-400">{subtitle}</div>
+    </div>
   )
 }

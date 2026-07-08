@@ -1,0 +1,37 @@
+{
+  "$schemaVersion": "1",
+  "kind": "theme",
+  "metadata": {
+    "id": "gaussview",
+    "name": "GaussView 风",
+    "description": "GaussView-inspired builder theme: light purple-gray background, dark carbon, bright CPK heteroatoms, and compact ball-stick proportions.",
+    "source": "https://gaussian.com/wp-content/uploads/dl/gv6.pdf",
+    "author": "RetainMol",
+    "version": "0.1.0"
+  },
+  "extends": "default",
+  "scene": {
+    "backgroundColor": "#d8d3e8",
+    "highlightColor": "#ffd34d",
+    "highlightOpacity": 0.38
+  },
+  "render": {
+    "ballScale": 0.38,
+    "bondRadiusStick": 0.075,
+    "bondGap": 0.17,
+    "spacefillScale": 0.78
+  },
+  "fallbackColor": "#c4b5fd",
+  "elements": {
+    "H":  { "color": "#f2f2f2" },
+    "C":  { "color": "#2f2f2f" },
+    "N":  { "color": "#304ff0" },
+    "O":  { "color": "#e62626" },
+    "F":  { "color": "#55c451" },
+    "P":  { "color": "#ee8a20" },
+    "S":  { "color": "#d6c92e" },
+    "Cl": { "color": "#2abf45" },
+    "Br": { "color": "#8f2c20" },
+    "I":  { "color": "#74318a" }
+  }
+}

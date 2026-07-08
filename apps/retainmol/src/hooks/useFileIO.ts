@@ -4,12 +4,10 @@
  */
 
 import { useCallback } from 'react'
-import {
-  useMoleculeStore, selectActiveMoleculeOrEmpty,
-  parseXYZ, exportXYZ, exportGJF, centerMolecule,
-  parseMol, parseSdf, exportMol, exportSdf, is2D,
-  captureViewportImage,
-} from '@retainmol/mol-viewer'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty, captureViewportImage } from '@/domain/viewerAdapter'
+import { parseXYZ, exportXYZ, centerMolecule, type Molecule } from '@retainmol/mol-viewer/core'
+import { exportGJF, parseMol, parseSdf, exportMol, exportSdf, is2D } from '@retainmol/mol-viewer/io'
+import { moleculePositionWriter } from '@/domain/moleculePositionWriter'
 import { generate3DAsync, relaxAnimate, flattenMolecule } from '@/lib/moleculeOpt'
 import { useUiStore } from '@/lib/uiStore'
 
@@ -18,7 +16,7 @@ import { useUiStore } from '@/lib/uiStore'
  * 生成高质量最终结构，再用几何松弛器从平面逐帧展开、锚定到该结构——既能看到展开过程，
  * 终点又精确等于 CG 结果。非 2D 直接放入。place(mol) 返回落地对象的 id。
  */
-async function importWith3D(mol: import('@retainmol/mol-viewer').Molecule, place: (m: import('@retainmol/mol-viewer').Molecule) => string) {
+async function importWith3D(mol: Molecule, place: (m: Molecule) => string) {
   if (!is2D(mol)) { place(centerMolecule(mol)); return }
   useUiStore.getState().setBusy('正在用距离几何生成 3D 结构…')
   const r = await generate3DAsync(mol)
@@ -28,7 +26,7 @@ async function importWith3D(mol: import('@retainmol/mol-viewer').Molecule, place
   // 以「压平的 CG 结果」落地（含 H、环已正确排布的平面态），逐帧松弛 + 锚定展开成 3D
   const flatFinal = flattenMolecule(final)
   const objId = place(flatFinal)
-  await relaxAnimate(objId, flatFinal, { target: final })
+  await relaxAnimate(objId, flatFinal, { target: final, writer: moleculePositionWriter })
 }
 
 function download(text: string, filename: string, mime = 'text/plain') {

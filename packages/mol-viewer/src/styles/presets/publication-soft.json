@@ -1,0 +1,16 @@
+{
+  "$schemaVersion": "1",
+  "kind": "molecular-style-preset",
+  "metadata": {
+    "id": "publication-soft",
+    "name": "Publication Soft",
+    "description": "Soft publication-oriented style using publication shaders and paper-soft theme.",
+    "author": "RetainMol",
+    "version": "0.1.0"
+  },
+  "displayMode": "ball-stick",
+  "themeId": "paper-soft",
+  "renderStyle": "publication",
+  "showAtomLabels": false
+}
+

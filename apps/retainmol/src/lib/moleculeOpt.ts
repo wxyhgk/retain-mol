@@ -2,8 +2,9 @@
  * moleculeOpt —— 主线程侧的分子优化入口，把请求转发给后台 Worker。
  * 单例 Worker，按自增 id 匹配请求/响应。
  */
-import type { Molecule, OptimizeResult } from '@retainmol/mol-viewer'
-import { useMoleculeStore, GeometryRelaxer } from '@retainmol/mol-viewer'
+import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { OptimizeResult } from '@retainmol/mol-viewer/io'
+import { GeometryRelaxer } from '@retainmol/mol-viewer/io'
 import { OPTIMIZE_ANIM } from '../config/optimize.config'
 
 export const OCL_RESOURCE_URL = `${import.meta.env.BASE_URL}ocl/resources.json`
@@ -44,6 +45,12 @@ export function minimizeGeometryAsync(mol: Molecule): Promise<OptimizeResult> {
 
 type XYZ = { x: number; y: number; z: number }
 
+export type MoleculePositionWriter = {
+  setObjectAtomPositions: (objectId: string, positions: ReadonlyMap<string, XYZ>) => void
+  beginTransaction?: () => void
+  endTransaction?: () => void
+}
+
 /** 压平分子（z→0）——作为「平面→3D 折叠」morph 动画的起点 */
 export function flattenMolecule(mol: Molecule): Molecule {
   return { ...mol, atoms: mol.atoms.map(a => ({ ...a, z: 0 })) }
@@ -61,11 +68,16 @@ export function flattenMolecule(mol: Molecule): Molecule {
 export function relaxAnimate(
   objectId: string,
   mol: Molecule,
-  opts: { itersPerFrame?: number; maxFrames?: number; target?: Molecule; jitter?: number } = {},
+  opts: {
+    writer: MoleculePositionWriter
+    itersPerFrame?: number
+    maxFrames?: number
+    target?: Molecule
+    jitter?: number
+  },
 ): Promise<void> {
-  const { target, jitter } = opts
+  const { target, jitter, writer } = opts
   const { itersPerFrame = OPTIMIZE_ANIM.itersPerFrame, maxFrames = target ? OPTIMIZE_ANIM.maxFramesTargeted : OPTIMIZE_ANIM.maxFramesFree } = opts
-  const store = useMoleculeStore.getState()
   const targetMap = target
     ? new Map(target.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
     : undefined
@@ -73,16 +85,16 @@ export function relaxAnimate(
     ...(targetMap ? { target: targetMap } : {}),
     ...(jitter !== undefined ? { jitter } : {}),
   })
-  store.beginTransaction()
+  writer.beginTransaction?.()
   return new Promise<void>(resolve => {
     let frame = 0
     const tick = () => {
       relaxer.step(itersPerFrame)
-      store.setObjectAtomPositions(objectId, relaxer.positions())
+      writer.setObjectAtomPositions(objectId, relaxer.positions())
       frame++
       if ((!targetMap && relaxer.converged) || frame >= maxFrames) {
-        if (targetMap) store.setObjectAtomPositions(objectId, targetMap)  // 精确落到 CG 终点
-        store.endTransaction()
+        if (targetMap) writer.setObjectAtomPositions(objectId, targetMap)  // 精确落到 CG 终点
+        writer.endTransaction?.()
         resolve()
       } else {
         requestAnimationFrame(tick)
@@ -98,9 +110,12 @@ export function relaxAnimate(
  * 整段包在一个 undo 事务里 → 只产生一步 undo。from/to 需同一原子集（按 id）。
  */
 export function morphObjectPositions(
-  objectId: string, from: Molecule, to: Molecule, durationMs = OPTIMIZE_ANIM.morphDurationMs,
+  objectId: string,
+  from: Molecule,
+  to: Molecule,
+  opts: { writer: MoleculePositionWriter; durationMs?: number },
 ): Promise<void> {
-  const store = useMoleculeStore.getState()
+  const { writer, durationMs = OPTIMIZE_ANIM.morphDurationMs } = opts
   const fromMap = new Map<string, XYZ>(from.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
   const toMap = new Map<string, XYZ>(to.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
   const frame = (t: number) => {
@@ -111,9 +126,9 @@ export function morphObjectPositions(
         ? { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t }
         : b)   // 新原子（如导入补的 H）直接落终点
     }
-    store.setObjectAtomPositions(objectId, positions)
+    writer.setObjectAtomPositions(objectId, positions)
   }
-  store.beginTransaction()
+  writer.beginTransaction?.()
   frame(0)                       // 同步落到起点，避免先闪一下终点
   const t0 = performance.now()
   return new Promise<void>(resolve => {
@@ -121,7 +136,7 @@ export function morphObjectPositions(
       const raw = Math.min(1, (now - t0) / durationMs)
       frame(1 - (1 - raw) ** 3)   // ease-out cubic
       if (raw < 1) requestAnimationFrame(step)
-      else { store.endTransaction(); resolve() }
+      else { writer.endTransaction?.(); resolve() }
     }
     requestAnimationFrame(step)
   })

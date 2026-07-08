@@ -12,6 +12,7 @@ import { subscribeWithSelector } from 'zustand/middleware'
 import type { Tool, DisplayMode, MeasureType, MeasureStyle, Measurement, MolClipboard } from '../lib/types'
 import { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '../lib/types'
 import { resolveTheme, type ResolvedTheme } from '../presets'
+import { resolveStylePreset, type RenderStyle } from '../styles'
 import { registerEditorIntegrity } from './integrity'
 
 export type { Tool, DisplayMode, MeasureType, MeasureStyle, Measurement, MolClipboard }
@@ -21,6 +22,8 @@ interface EditorState {
   // ── 工具 ──────────────────────────────────────────────────────────────────
   activeTool:    Tool
   activeElement: string
+  /** 原子元素点击语义：grow = 点 H 生长；replace = 点到哪个原子就替换哪个原子 */
+  atomClickMode: 'grow' | 'replace'
   /** 片段笔刷（苯环等）；非空时优先于 activeElement */
   activeFragmentId: string | null
   /**
@@ -33,8 +36,9 @@ interface EditorState {
   bondingAtomId: string | null
 
   // ── 显示选项 ──────────────────────────────────────────────────────────────
+  stylePresetId:  string
   displayMode:    DisplayMode
-  renderStyle:    'realistic' | 'publication'
+  renderStyle:    RenderStyle
   showAtomLabels: boolean
   themeId:        string
   theme:          ResolvedTheme
@@ -58,6 +62,7 @@ interface EditorState {
   // ── actions ───────────────────────────────────────────────────────────────
   setActiveTool:     (tool: Tool) => void
   setActiveElement:  (symbol: string) => void
+  setAtomClickMode:  (mode: 'grow' | 'replace') => void
   setActiveFragment: (id: string | null) => void
   /** 武装笔刷 → 构建态（与 disarmBrush 对称；避免用 setActiveElement(当前值) 的副作用 hack） */
   armBrush:          () => void
@@ -66,10 +71,11 @@ interface EditorState {
   setBondingAtom:    (id: string | null) => void
 
   setDisplayMode:    (mode: DisplayMode) => void
-  setRenderStyle:    (s: 'realistic' | 'publication') => void
+  setRenderStyle:    (s: RenderStyle) => void
   setShowAtomLabels: (v: boolean) => void
   toggleAtomLabels:  () => void
   setTheme:          (id: string) => void
+  setStylePreset:    (id: string) => void
 
   addMeasureAtom:        (id: string) => void
   commitPendingMeasure:  () => void
@@ -90,10 +96,12 @@ interface EditorState {
 export const useEditorStore = create<EditorState>()(subscribeWithSelector(set => ({
   activeTool:    'select',
   activeElement: 'C',
-  activeFragmentId: null,
+  atomClickMode: 'grow',
+  activeFragmentId: 'c-sp3',
   brushArmed: true,     // 建模优先的应用：启动即武装 C 笔刷，可直接开始搭建
   bondingAtomId: null,
 
+  stylePresetId:  'retainmol-default',
   displayMode:    'ball-stick',
   renderStyle:    'realistic',
   showAtomLabels: false,
@@ -113,17 +121,40 @@ export const useEditorStore = create<EditorState>()(subscribeWithSelector(set =>
   setActiveTool:     (tool) => set({ activeTool: tool, bondingAtomId: null }),
   // 选元素清掉片段笔刷：两者互斥，同一时间只有一种"笔刷"；选择即武装
   setActiveElement:  (symbol) => set({ activeElement: symbol, activeFragmentId: null, brushArmed: true }),
+  setAtomClickMode:  (atomClickMode) => set({ atomClickMode }),
   setActiveFragment: (id) => set({ activeFragmentId: id, brushArmed: id !== null }),
   // 只切换武装态，不动 activeElement / activeFragmentId：恢复上次的笔刷
   armBrush:          () => set({ brushArmed: true }),
   disarmBrush:       () => set({ brushArmed: false, activeFragmentId: null }),
   setBondingAtom:    (id) => set({ bondingAtomId: id }),
 
-  setDisplayMode:    (mode) => set({ displayMode: mode }),
-  setRenderStyle:    (s) => set({ renderStyle: s }),
-  setShowAtomLabels: (v) => set({ showAtomLabels: v }),
-  toggleAtomLabels:  () => set(s => ({ showAtomLabels: !s.showAtomLabels })),
-  setTheme:          (id) => set({ themeId: id, theme: resolveTheme(id) }),
+  setDisplayMode:    (mode) => set({ stylePresetId: 'custom', displayMode: mode }),
+  setRenderStyle:    (renderStyle) => set((s) => ({
+    stylePresetId: 'custom',
+    renderStyle,
+    ...(renderStyle === 'iboview' && s.themeId !== 'iboview'
+      ? { themeId: 'iboview', theme: resolveTheme('iboview') }
+      : {}),
+  })),
+  setShowAtomLabels: (v) => set({ stylePresetId: 'custom', showAtomLabels: v }),
+  toggleAtomLabels:  () => set(s => ({ stylePresetId: 'custom', showAtomLabels: !s.showAtomLabels })),
+  setTheme:          (id) => set((s) => ({
+    stylePresetId: 'custom',
+    themeId: id,
+    theme: resolveTheme(id),
+    ...(s.renderStyle === 'iboview' && id !== 'iboview' ? { renderStyle: 'realistic' } : {}),
+  })),
+  setStylePreset:    (id) => {
+    const preset = resolveStylePreset(id)
+    set((s) => ({
+      stylePresetId: id,
+      displayMode: preset.displayMode,
+      renderStyle: preset.renderStyle,
+      themeId: preset.themeId,
+      theme: resolveTheme(preset.themeId),
+      showAtomLabels: preset.showAtomLabels ?? s.showAtomLabels,
+    }))
+  },
 
   addMeasureAtom: (id) => set(s => {
     if (s.pendingAtomIds.includes(id)) {

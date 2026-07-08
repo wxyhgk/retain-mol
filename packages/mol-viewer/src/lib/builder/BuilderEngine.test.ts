@@ -296,22 +296,17 @@ describe('autoAddHydrogens', () => {
     expect(hCount).toBe(6)  // 每个 C 加 3 个 H
   })
 
-  // ── 键级不参与价态判断（设计决策，见 mol-view.md「键级哲学」）────────────
-  // 补氢按连接数（邻居条数）而非键级之和计算剩余价态：SDF 键级不可靠，
-  // 且本项目里键级只是几何的显示读数。因此 C=C 骨架的每个 C 仍视为
-  // 只占用了 1 个连接位、补 3 个 H。
-
-  it('C=C 骨架按连接数补 6 个 H（键级不作为价态约束）', () => {
+  it('C=C 骨架按键级价态补 4 个 H → C2H4', () => {
     const c1 = newAtom('C', 0,    0, 0)
     const c2 = newAtom('C', 1.34, 0, 0)
     const bond = newBond(c1.id, c2.id, 2)
     const mol = { atoms: [c1, c2], bonds: [bond] }
     const result = autoAddHydrogens(mol)
     const hCount = result.atoms.filter(a => a.symbol === 'H').length
-    expect(hCount).toBe(6)  // 每个 C 连接数 1 → 各补 3 个
+    expect(hCount).toBe(4)  // 每个 C 已被双键占 2 价 → 各补 2 个
   })
 
-  it('C=C-C=C 骨架按连接数补 10 个 H（端碳 3 个、中碳 2 个）', () => {
+  it('C=C-C=C 骨架按键级价态补 6 个 H → C4H6', () => {
     const c1 = newAtom('C', 0,    0, 0)
     const c2 = newAtom('C', 1.34, 0, 0)
     const c3 = newAtom('C', 2.80, 0, 0)
@@ -326,10 +321,10 @@ describe('autoAddHydrogens', () => {
     }
     const result = autoAddHydrogens(mol)
     const hCount = result.atoms.filter(a => a.symbol === 'H').length
-    expect(hCount).toBe(10)  // 3 + 2 + 2 + 3
+    expect(hCount).toBe(6)  // 2 + 1 + 1 + 2
   })
 
-  it('凯库勒六元环每个 C 连接数 2 → 各补 2 个 H（共 12 个）', () => {
+  it('凯库勒六元环按键级价态各补 1 个 H（共 6 个）', () => {
     const atoms = Array.from({ length: 6 }, (_, i) => {
       const angle = i * Math.PI / 3
       return newAtom('C', Math.cos(angle), Math.sin(angle), 0)
@@ -337,7 +332,25 @@ describe('autoAddHydrogens', () => {
     const bonds = atoms.map((a, i) => newBond(a.id, atoms[(i + 1) % 6].id, i % 2 === 0 ? 2 : 1))
     const result = autoAddHydrogens({ atoms, bonds })
     const hCount = result.atoms.filter(a => a.symbol === 'H').length
-    expect(hCount).toBe(12)  // 想要 C6H6 请用苯环片段（fragmentLibrary），坐标即真相
+    expect(hCount).toBe(6)
+  })
+
+  it('导入 aromatic flag 的六元环按芳香价态各补 1 个 H（共 6 个）', () => {
+    const atoms = Array.from({ length: 6 }, (_, i) => {
+      const angle = i * Math.PI / 3
+      return newAtom('C', Math.cos(angle), Math.sin(angle), 0)
+    })
+    const bonds = atoms.map((a, i) => ({ ...newBond(a.id, atoms[(i + 1) % 6].id, 1), aromatic: true }))
+    const result = autoAddHydrogens({ atoms, bonds })
+    const hCount = result.atoms.filter(a => a.symbol === 'H').length
+    expect(hCount).toBe(6)
+  })
+
+  it('P/S 自动补氢使用默认价态，而不是最大扩展价态', () => {
+    const p = autoAddHydrogens({ atoms: [newAtom('P', 0, 0, 0)], bonds: [] })
+    const s = autoAddHydrogens({ atoms: [newAtom('S', 0, 0, 0)], bonds: [] })
+    expect(p.atoms.filter(a => a.symbol === 'H')).toHaveLength(3)
+    expect(s.atoms.filter(a => a.symbol === 'H')).toHaveLength(2)
   })
 
   it('已满价的 CH4 不添加额外 H', () => {
@@ -453,7 +466,7 @@ describe('replaceAtomSymbol', () => {
     expect(result.atoms[0].symbol).toBe('C')
   })
 
-  it('新元素 maxBonds 小于现有连接数（He maxBonds=0）→ 原样返回，守住价态不变式', () => {
+  it('纯元素替换不按常规价态拒绝，已有连接保持不变', () => {
     const c = newAtom('C')
     const h1 = newAtom('H')
     const h2 = newAtom('H')
@@ -461,13 +474,13 @@ describe('replaceAtomSymbol', () => {
       atoms: [c, h1, h2],
       bonds: [newBond(c.id, h1.id), newBond(c.id, h2.id)],
     }
-    // He maxBonds=0 < 2 个连接 → 拒绝（否则出现带键的稀有气体）
-    const rejected = replaceAtomSymbol(mol, c.id, 'He')
-    expect(rejected).toBe(mol)
-    expect(rejected.atoms.find(a => a.id === c.id)!.symbol).toBe('C')
-    // 对照：O maxBonds=2 刚好撑得起 2 个连接 → 允许
+    const he = replaceAtomSymbol(mol, c.id, 'He')
+    expect(he.atoms.find(a => a.id === c.id)!.symbol).toBe('He')
+    expect(he.bonds).toEqual(mol.bonds)
+
     const accepted = replaceAtomSymbol(mol, c.id, 'O')
     expect(accepted.atoms.find(a => a.id === c.id)!.symbol).toBe('O')
+    expect(accepted.bonds).toEqual(mol.bonds)
   })
 })
 
@@ -584,6 +597,19 @@ describe('cycleBondLength', () => {
     const h2 = m.atoms.find(a => a.id === ids.h2)!
     expect(Math.abs(Math.hypot(c2.x - h2.x, c2.y - h2.y, c2.z - h2.z) - 1.09)).toBeLessThan(DIST_TOL)
     expect(m.bonds[0].order).toBe(2)
+  })
+
+  it('饱和乙烷 C-C 循环到双键时按价态删 H → C2H4', () => {
+    const c1 = newAtom('C', 0, 0, 0)
+    const c2 = newAtom('C', 1.54, 0, 0)
+    const ethane = autoAddHydrogens({ atoms: [c1, c2], bonds: [newBond(c1.id, c2.id, 1)] })
+    expect(ethane.atoms.filter(a => a.symbol === 'H')).toHaveLength(6)
+    const cc = ethane.bonds.find(b => b.atomId1 === c1.id || b.atomId2 === c1.id)!
+    const result = cycleBondLength(ethane, cc.id)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.order).toBe(2)
+    expect(result.molecule.atoms.filter(a => a.symbol === 'H')).toHaveLength(4)
   })
 
   it('连续循环：1 → 2 → 3 → 1', () => {

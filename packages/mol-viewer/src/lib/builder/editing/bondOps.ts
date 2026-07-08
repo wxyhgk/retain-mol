@@ -2,15 +2,16 @@
  * bondOps.ts — 键操作业务规则
  */
 
-import { effectiveMaxBonds } from '../../../config/elements.config'
 import { lookupBondLengthByOrder } from '../../../config/geometry.config'
 import type { Atom, Bond, Molecule } from '../../molecule'
 import { newBond } from '../../molecule'
-import { bondsOf, degree, findBond, otherEnd } from '../graph'
+import { removeExcessHydrogens } from './atomOps'
+import { bondsOf, findBond, otherEnd } from '../graph'
+import { availableMaxValenceByBonds, maxValence } from '../valence'
 
 /** 原子的有效成键数（读取自身电荷/自由基） */
 function atomMaxBonds(a: Atom): number {
-  return effectiveMaxBonds(a.symbol, a.charge ?? 0, a.radical ?? 0)
+  return maxValence(a)
 }
 
 /** 判断两个原子之间是否允许成键 */
@@ -24,8 +25,8 @@ export function canBond(
 
   if (findBond(bonds, atom1.id, atom2.id)) return { ok: false, reason: '两原子之间已存在键' }
 
-  if (degree(bonds, atom1.id) >= max1) return { ok: false, reason: `${atom1.symbol} 已达最大键数 (${max1})` }
-  if (degree(bonds, atom2.id) >= max2) return { ok: false, reason: `${atom2.symbol} 已达最大键数 (${max2})` }
+  if (availableMaxValenceByBonds(atom1, bonds) < 1) return { ok: false, reason: `${atom1.symbol} 已达最大键数 (${max1})` }
+  if (availableMaxValenceByBonds(atom2, bonds) < 1) return { ok: false, reason: `${atom2.symbol} 已达最大键数 (${max2})` }
 
   return { ok: true }
 }
@@ -82,7 +83,7 @@ export function bondByReplacingH(
 
   // 目标是重原子（或孤立 H）：源 H 让位，父原子与目标成键
   if (findBond(mol.bonds, parentId, targetId)) return { ok: false, reason: '两原子之间已存在键' }
-  if (degree(mol.bonds, targetId) >= atomMaxBonds(target)) {
+  if (availableMaxValenceByBonds(target, mol.bonds) < 1) {
     return { ok: false, reason: `${target.symbol} 已饱和 · 拖到它的 H 上成键` }
   }
   return {
@@ -164,7 +165,8 @@ export function cycleBondLength(mol: Molecule, bondId: string): CycleBondLengthR
   // 环判定：去掉这条键后 a2 仍能到达 a1 → 环内，只改键级
   const side2 = reachableWithout(mol.bonds, bondId, a2.id)
   if (side2.has(a1.id)) {
-    return { ok: true, molecule: withOrder, order: next, moved: false }
+    const trimmed = removeExcessHydrogens(removeExcessHydrogens(withOrder, a1.id), a2.id)
+    return { ok: true, molecule: trimmed, order: next, moved: false }
   }
 
   const target = lookupBondLengthByOrder(a1.symbol, a2.symbol, next)!
@@ -178,15 +180,16 @@ export function cycleBondLength(mol: Molecule, bondId: string): CycleBondLengthR
   const moving = moveSide2 ? side2 : side1
   const k = ((target - cur) / cur) * (moveSide2 ? 1 : -1)
 
+  const movedMol: Molecule = {
+    ...withOrder,
+    atoms: withOrder.atoms.map(a => moving.has(a.id)
+        ? { ...a, x: a.x + dx * k, y: a.y + dy * k, z: a.z + dz * k }
+        : a),
+  }
   return {
     ok: true,
     order: next,
     moved: true,
-    molecule: {
-      ...withOrder,
-      atoms: withOrder.atoms.map(a => moving.has(a.id)
-        ? { ...a, x: a.x + dx * k, y: a.y + dy * k, z: a.z + dz * k }
-        : a),
-    },
+    molecule: removeExcessHydrogens(removeExcessHydrogens(movedMol, a1.id), a2.id),
   }
 }

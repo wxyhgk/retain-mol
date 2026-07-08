@@ -4,8 +4,8 @@
  */
 
 import { useMemo } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty, getElementConfig } from '@retainmol/mol-viewer'
-import type { Atom } from '@retainmol/mol-viewer'
+import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/domain/viewerAdapter'
+import { getElementConfig, type Atom } from '@retainmol/mol-viewer/core'
 
 export interface MoleculeInfo {
   formula: string
