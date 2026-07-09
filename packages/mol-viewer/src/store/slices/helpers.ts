@@ -4,14 +4,19 @@
  * 全部接收 state（或 get/set），不持有 store 引用，供各 slice 复用。
  */
 
-import type { Atom, Bond, Molecule } from '../../lib/molecule'
+import type { Molecule } from '../../lib/molecule'
 import type { SceneObject } from '../../lib/sceneObject'
-import type { GeomEditResult } from '../../lib/builder/BuilderEngine'
+import type { EditCommandResult, EditCommandResultWithMeta } from '../../lib/builder/commands/commandResult'
+import type { EditCommandWithSelectionResult, GeomCommandResult } from '../../lib/builder/commands/storeCommandTypes'
+import type {
+  AddSceneObjectCommandResult,
+  RemoveSceneObjectCommandResult,
+  SceneObjectUpdatedCommandResult,
+  SetMoleculeInSceneCommandResult,
+  SplitSceneObjectCommandResult,
+} from '../../lib/builder/commands/sceneStoreCommands'
+import type { SelectionCommandResult } from '../../lib/builder/commands/selectionCommands'
 import type { MoleculeState } from './types'
-import { PLACEMENT } from '../../config/interaction.config'
-import { findBond } from '../../lib/builder/graph'
-import { maxValence, valenceUsed } from '../../lib/builder/valence'
-import { genId } from '../../lib/utils'
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
 
@@ -41,16 +46,196 @@ export function patchActiveMol(s: MoleculeState, newMol: Molecule): Partial<Mole
   }
 }
 
+export function applySelectionResult(
+  s: MoleculeState,
+  result: SelectionCommandResult,
+): Partial<MoleculeState> {
+  if (!result.changed) return {}
+  return {
+    selectedAtomIds: result.selectedAtomIds,
+    selectedBondIds: result.selectedBondIds,
+    selectionVersion: s.selectionVersion + 1,
+  }
+}
+
+function clearSelectionPatch(s: MoleculeState): Pick<MoleculeState, 'selectedAtomIds' | 'selectedBondIds' | 'selectionVersion'> {
+  return {
+    selectedAtomIds: new Set(),
+    selectedBondIds: new Set(),
+    selectionVersion: s.selectionVersion + 1,
+  }
+}
+
+export function applyAddSceneObjectResult(
+  s: MoleculeState,
+  result: AddSceneObjectCommandResult,
+): Partial<MoleculeState> {
+  return {
+    objectsById: { ...s.objectsById, [result.object.id]: result.object },
+    objectOrder: [...s.objectOrder, result.object.id],
+    activeObjectId: result.object.id,
+    ...clearSelectionPatch(s),
+  }
+}
+
+export type SceneGraphCommandResult = RemoveSceneObjectCommandResult | SplitSceneObjectCommandResult
+
+export function applySceneGraphResult(
+  s: MoleculeState,
+  result: SceneGraphCommandResult,
+): Partial<MoleculeState> {
+  if (!result.changed) return {}
+  return {
+    objectsById: result.objectsById,
+    objectOrder: result.objectOrder,
+    activeObjectId: result.activeObjectId,
+    ...(result.clearSelection ? clearSelectionPatch(s) : {}),
+  }
+}
+
+export type ActiveSceneObjectCommandResult =
+  | { readonly ok: true; readonly changed: true; readonly activeObjectId: string | null; readonly clearSelection: boolean }
+  | { readonly ok: true; readonly changed: false }
+
+export function applyActiveSceneObjectResult(
+  s: MoleculeState,
+  result: ActiveSceneObjectCommandResult,
+): Partial<MoleculeState> {
+  if (!result.changed) return {}
+  return {
+    activeObjectId: result.activeObjectId,
+    ...(result.clearSelection ? clearSelectionPatch(s) : {}),
+  }
+}
+
+export function applySetMoleculeInSceneResult(
+  s: MoleculeState,
+  result: SetMoleculeInSceneCommandResult,
+): Partial<MoleculeState> {
+  return {
+    objectsById: result.objectsById,
+    objectOrder: result.objectOrder,
+    activeObjectId: result.activeObjectId,
+    ...(result.clearSelection ? clearSelectionPatch(s) : {}),
+  }
+}
+
+export interface ApplySceneObjectUpdatedResultOptions {
+  readonly bumpAtomPositionVersion?: boolean
+}
+
+export function applySceneObjectUpdatedResult(
+  s: MoleculeState,
+  result: SceneObjectUpdatedCommandResult,
+  options: ApplySceneObjectUpdatedResultOptions = {},
+): Partial<MoleculeState> {
+  if (!result.changed) return {}
+  return {
+    objectsById: result.objectsById,
+    ...(options.bumpAtomPositionVersion ? { atomPositionVersion: s.atomPositionVersion + 1 } : {}),
+  }
+}
+
+export interface ApplyActiveMoleculeEditOptions {
+  readonly bumpAtomPositionVersion?: boolean
+}
+
+export function applyActiveMoleculeEdit(
+  s: MoleculeState,
+  edit: (mol: Molecule) => EditCommandResult,
+  options: ApplyActiveMoleculeEditOptions = {},
+): Partial<MoleculeState> {
+  const mol = getActiveMol(s)
+  if (!mol) return {}
+  const result = edit(mol)
+  if (!result.ok || !result.changed) return {}
+  return {
+    ...patchActiveMol(s, result.molecule),
+    ...(options.bumpAtomPositionVersion ? { atomPositionVersion: s.atomPositionVersion + 1 } : {}),
+  }
+}
+
+export interface ApplyActiveMoleculeEditWithSelectionOptions {
+  readonly bumpSelectionVersion?: boolean | ((result: EditCommandWithSelectionResult) => boolean)
+}
+
+export function applyActiveMoleculeEditWithMeta<TMeta extends object>(
+  get: () => MoleculeState,
+  set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
+  edit: (mol: Molecule) => EditCommandResultWithMeta<TMeta>,
+  readMeta: (result: Extract<EditCommandResultWithMeta<TMeta>, { ok: true }>) => TMeta,
+): ({ ok: true } & TMeta) | { ok: false; reason?: string } {
+  const mol = getActiveMol(get())
+  if (!mol) return { ok: false, reason: '没有活跃分子' }
+  const result = edit(mol)
+  if (!result.ok) return result
+  const meta = readMeta(result)
+  if (!result.changed) return { ok: true, ...meta }
+  set((s) => {
+    const m = getActiveMol(s)
+    if (!m) return {}
+    return patchActiveMol(s, result.molecule)
+  })
+  return { ok: true, ...meta }
+}
+
+export function applyActiveMoleculeEditWithSelection(
+  s: MoleculeState,
+  edit: (mol: Molecule, selection: MoleculeState) => EditCommandWithSelectionResult | { ok: false; reason: string },
+  options: ApplyActiveMoleculeEditWithSelectionOptions = {},
+): Partial<MoleculeState> {
+  const mol = getActiveMol(s)
+  if (!mol) return {}
+  const result = edit(mol, s)
+  if (!result.ok) return {}
+  return applyActiveMoleculeSelectionResult(s, result, options)
+}
+
+export function applyActiveMoleculeSelectionCommand(
+  get: () => MoleculeState,
+  set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
+  edit: (mol: Molecule, selection: MoleculeState) => EditCommandWithSelectionResult | { ok: false; reason: string },
+  options: ApplyActiveMoleculeEditWithSelectionOptions = {},
+): { ok: boolean; reason?: string } {
+  const state = get()
+  const mol = getActiveMol(state)
+  if (!mol) return { ok: false, reason: '没有活跃分子' }
+  const result = edit(mol, state)
+  if (result.ok === false) return { ok: false, reason: result.reason }
+  if (!result.changed) return { ok: true }
+  set((s) => applyActiveMoleculeSelectionResult(s, result, options))
+  return { ok: true }
+}
+
+export function applyActiveMoleculeSelectionResult(
+  s: MoleculeState,
+  result: EditCommandWithSelectionResult,
+  options: ApplyActiveMoleculeEditWithSelectionOptions = {},
+): Partial<MoleculeState> {
+  if (!result.changed) return {}
+  const shouldBumpSelectionVersion =
+    typeof options.bumpSelectionVersion === 'function'
+      ? options.bumpSelectionVersion(result)
+      : options.bumpSelectionVersion ?? true
+  return {
+    ...patchActiveMol(s, result.molecule),
+    selectedAtomIds: result.selectedAtomIds,
+    selectedBondIds: result.selectedBondIds,
+    ...(shouldBumpSelectionVersion ? { selectionVersion: s.selectionVersion + 1 } : {}),
+  }
+}
+
 /** 几何参数编辑（键长/键角/二面角）的统一落盘：单次 set = 单步 undo，附带位置版本号自增 */
 export function applyGeomEdit(
   get: () => MoleculeState,
   set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
-  edit: (mol: Molecule) => GeomEditResult,
+  edit: (mol: Molecule) => GeomCommandResult,
 ): { ok: boolean; reason?: string } {
   const mol = getActiveMol(get())
   if (!mol) return { ok: false, reason: '没有活跃分子' }
   const result = edit(mol)
   if (!result.ok) return result
+  if (!result.changed) return { ok: true }
   set((s) => {
     const m = getActiveMol(s)
     if (!m) return {}
@@ -60,6 +245,34 @@ export function applyGeomEdit(
     }
   })
   return { ok: true }
+}
+
+export type GeomCommandResultWithMeta<TMeta extends object> =
+  | ({ ok: true; changed: true; molecule: Molecule } & TMeta)
+  | ({ ok: true; changed: false } & Partial<TMeta>)
+  | { ok: false; reason: string }
+
+export function applyGeomEditWithMeta<TMeta extends object>(
+  get: () => MoleculeState,
+  set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
+  edit: (mol: Molecule) => GeomCommandResultWithMeta<TMeta>,
+  readMeta: (result: Extract<GeomCommandResultWithMeta<TMeta>, { ok: true }>) => TMeta,
+): ({ ok: true } & TMeta) | { ok: false; reason?: string } {
+  const mol = getActiveMol(get())
+  if (!mol) return { ok: false, reason: '没有活跃分子' }
+  const result = edit(mol)
+  if (!result.ok) return result
+  const meta = readMeta(result)
+  if (!result.changed) return { ok: true, ...meta }
+  set((s) => {
+    const m = getActiveMol(s)
+    if (!m) return {}
+    return {
+      ...patchActiveMol(s, result.molecule),
+      atomPositionVersion: s.atomPositionVersion + 1,
+    }
+  })
+  return { ok: true, ...meta }
 }
 
 /**
@@ -80,78 +293,4 @@ export function activateObjectWhere(
     return true
   }
   return false
-}
-
-export function computeAutoOffset(objects: SceneObject[]): { x: number; y: number; z: number } {
-  let maxX = -Infinity
-  for (const obj of objects)
-    for (const atom of obj.molecule.atoms)
-      if (atom.x > maxX) maxX = atom.x
-  return { x: isFinite(maxX) ? maxX + PLACEMENT.addObjectOffsetX : 0, y: 0, z: 0 }
-}
-
-function nextUnusedId(reserved: Set<string>): string {
-  let id = genId()
-  while (reserved.has(id)) id = genId()
-  reserved.add(id)
-  return id
-}
-
-export function moleculeIdsInScene(objects: Iterable<SceneObject>): Set<string> {
-  const ids = new Set<string>()
-  for (const obj of objects) {
-    for (const atom of obj.molecule.atoms) ids.add(atom.id)
-    for (const bond of obj.molecule.bonds) ids.add(bond.id)
-  }
-  return ids
-}
-
-export function withSceneUniqueIds(mol: Molecule, reservedIds: Set<string>): Molecule {
-  const atomIdMap = new Map<string, string>()
-  let changed = false
-  const atoms: Atom[] = mol.atoms.map(atom => {
-    if (!reservedIds.has(atom.id)) {
-      reservedIds.add(atom.id)
-      return atom
-    }
-    const id = nextUnusedId(reservedIds)
-    atomIdMap.set(atom.id, id)
-    changed = true
-    return { ...atom, id }
-  })
-
-  const bonds: Bond[] = mol.bonds.map(bond => {
-    const atomId1 = atomIdMap.get(bond.atomId1) ?? bond.atomId1
-    const atomId2 = atomIdMap.get(bond.atomId2) ?? bond.atomId2
-    if (!reservedIds.has(bond.id)) {
-      reservedIds.add(bond.id)
-      if (atomId1 === bond.atomId1 && atomId2 === bond.atomId2) return bond
-      changed = true
-      return { ...bond, atomId1, atomId2 }
-    }
-    changed = true
-    return { ...bond, id: nextUnusedId(reservedIds), atomId1, atomId2 }
-  })
-
-  return changed ? { ...mol, atoms, bonds } : mol
-}
-
-export function validateAddBond(
-  mol: Molecule,
-  atomId1: string,
-  atomId2: string,
-  order: 1 | 2 | 3 = 1,
-): { ok: boolean; reason?: string } {
-  if (atomId1 === atomId2) return { ok: false, reason: '不能与自身成键' }
-  const atom1 = mol.atoms.find(a => a.id === atomId1)
-  const atom2 = mol.atoms.find(a => a.id === atomId2)
-  if (!atom1 || !atom2) return { ok: false, reason: '原子不存在' }
-  if (findBond(mol.bonds, atomId1, atomId2)) return { ok: false, reason: '两原子之间已存在键' }
-  if (valenceUsed(mol, atomId1) + order > maxValence(atom1) + 1e-6) {
-    return { ok: false, reason: `${atom1.symbol} 已达最大键数 (${maxValence(atom1)})` }
-  }
-  if (valenceUsed(mol, atomId2) + order > maxValence(atom2) + 1e-6) {
-    return { ok: false, reason: `${atom2.symbol} 已达最大键数 (${maxValence(atom2)})` }
-  }
-  return { ok: true }
 }

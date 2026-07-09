@@ -5,13 +5,14 @@
  * store 依赖全部在此文件，RotateGizmoController 本身无 store 依赖。
  */
 import { useEffect } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
+import { useMoleculeStore } from '../../store/moleculeStore'
 import { useEditorStore } from '../../store/editorStore'
 import { MolRenderer } from '../../lib/molRenderer'
 import { ticker, Phase } from '../../lib/animation'
 import { RotateGizmoController } from '../../lib/molRenderer/RotateGizmoController'
-import type { GizmoCallbacks } from '../../lib/molRenderer/RotateGizmoController'
 import { toolCan } from '../../config/toolCapabilities.config'
+import { createObjectTransformEditSession } from '../../hooks/editSessionFactory'
+import { createRotateGizmoCallbacks } from './rotateGizmoEffects'
 
 interface Props {
   renderer: MolRenderer | null
@@ -27,12 +28,8 @@ export default function RotateGizmo({ renderer, readOnly = false }: Props) {
     if (readOnly) return
     if (!renderer || !toolCan(activeTool, 'canEdit')) return
 
-    const cb: GizmoCallbacks = {
-      getMolecule: () => selectActiveMoleculeOrEmpty(useMoleculeStore.getState()),
-      setAtomPositions: (positions) => useMoleculeStore.getState().setAtomPositions(positions),
-      beginTransaction: () => useMoleculeStore.getState().beginTransaction(),
-      endTransaction:   () => useMoleculeStore.getState().endTransaction(),
-    }
+    const transaction = createObjectTransformEditSession()
+    const cb = createRotateGizmoCallbacks(useMoleculeStore.getState, transaction)
 
     const ctrl = new RotateGizmoController(renderer, selectedAtomIds, selectedBondIds, cb)
     if (!ctrl.isValid) return

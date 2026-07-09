@@ -1,8 +1,12 @@
 import * as THREE from 'three'
 import type { GrowGuideSpec } from '../types'
+import type { Molecule } from '../molecule'
+import type { ResolvedTheme } from '../../presets'
+import type { RenderStyle } from '../../styles'
 import { GHOST_LINE, GROW_GUIDE, RENDER } from '../../config/render.config'
 import { ticker } from '../animation'
 import { buildDepthCuedRing } from './ghostGeometry'
+import { resolvePlacementGhostVisualSpec } from './placementGhostStyle'
 
 /**
  * 拖出生长手势的全部预览视觉（与 MeasureVisuals 对称）：
@@ -17,6 +21,7 @@ export class GhostVisuals {
   private line: THREE.Line | null = null
   private atom: THREE.Mesh | null = null
   private guideGroup: THREE.Group | null = null
+  private placementGroup: THREE.Group | null = null
 
   private _lineStart: THREE.Vector3 | null = null
   private _guideSpec: GrowGuideSpec = null
@@ -29,6 +34,8 @@ export class GhostVisuals {
     private canvas: HTMLCanvasElement,
     private camera: THREE.PerspectiveCamera,
     private modelGroup: THREE.Group,
+    private getTheme: () => ResolvedTheme,
+    private getRenderStyle: () => RenderStyle,
   ) {}
 
   get hasLine(): boolean { return this.line !== null && this._lineStart !== null }
@@ -162,6 +169,60 @@ export class GhostVisuals {
     }
   }
 
+  // ── 空白放置分子预览 ─────────────────────────────────────────────────────
+
+  showPlacement(molecule: Molecule | null) {
+    this.removePlacement()
+    if (!molecule || molecule.atoms.length === 0) return
+    const visual = resolvePlacementGhostVisualSpec(this.getTheme(), this.getRenderStyle())
+
+    const group = new THREE.Group()
+    group.userData.kind = 'placement-preview'
+    this.placementGroup = group
+    this.modelGroup.add(group)
+
+    for (const bond of molecule.bonds) {
+      const a = molecule.atoms.find(atom => atom.id === bond.atomId1)
+      const b = molecule.atoms.find(atom => atom.id === bond.atomId2)
+      if (!a || !b) continue
+      const start = new THREE.Vector3(a.x, a.y, a.z)
+      const end = new THREE.Vector3(b.x, b.y, b.z)
+      const dir = end.clone().sub(start)
+      const len = dir.length()
+      if (len < 1e-6) continue
+      const radius = visual.bondRadius()
+      const geo = new THREE.CylinderGeometry(radius, radius, len, 12)
+      const mat = visual.bondMaterial(a.symbol, b.symbol)
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.copy(start).add(end).multiplyScalar(0.5)
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
+      group.add(mesh)
+    }
+
+    for (const atom of molecule.atoms) {
+      const radius = visual.atomRadius(atom.symbol)
+      const geo = new THREE.SphereGeometry(radius, RENDER.sphereSegments, RENDER.sphereSegments)
+      const mat = visual.atomMaterial(atom.symbol)
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.set(atom.x, atom.y, atom.z)
+      group.add(mesh)
+    }
+
+    ticker.invalidate()
+  }
+
+  removePlacement() {
+    if (!this.placementGroup) return
+    this.modelGroup.remove(this.placementGroup)
+    this.placementGroup.traverse(o => {
+      const mesh = o as THREE.Mesh
+      if (mesh.geometry) mesh.geometry.dispose()
+      if (mesh.material) (mesh.material as THREE.Material).dispose()
+    })
+    this.placementGroup = null
+    ticker.invalidate()
+  }
+
   /**
    * 屏幕空间拾取：返回 guide 上"投影后离光标最近"的候选位置（模型局部坐标）。
    * 配滞回：环侧视时前/后半环投影重叠，无滞回会来回跳。
@@ -220,6 +281,7 @@ export class GhostVisuals {
     this.removeLine()
     this.removeAtom()
     this.removeGuide()
+    this.removePlacement()
   }
 
   dispose() { this.clear() }

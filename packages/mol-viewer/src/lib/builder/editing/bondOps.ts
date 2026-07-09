@@ -7,12 +7,8 @@ import type { Atom, Bond, Molecule } from '../../molecule'
 import { newBond } from '../../molecule'
 import { removeExcessHydrogens } from './atomOps'
 import { bondsOf, findBond, otherEnd } from '../graph'
-import { availableMaxValenceByBonds, maxValence } from '../valence'
-
-/** 原子的有效成键数（读取自身电荷/自由基） */
-function atomMaxBonds(a: Atom): number {
-  return maxValence(a)
-}
+import { availableMaxValenceByBonds } from '../valence'
+import { GraphIndex, ValencePolicy } from '../kernel'
 
 /** 判断两个原子之间是否允许成键 */
 export function canBond(
@@ -20,15 +16,8 @@ export function canBond(
   atom2: Atom,
   bonds: readonly Bond[],
 ): { ok: boolean; reason?: string } {
-  const max1 = atomMaxBonds(atom1)
-  const max2 = atomMaxBonds(atom2)
-
-  if (findBond(bonds, atom1.id, atom2.id)) return { ok: false, reason: '两原子之间已存在键' }
-
-  if (availableMaxValenceByBonds(atom1, bonds) < 1) return { ok: false, reason: `${atom1.symbol} 已达最大键数 (${max1})` }
-  if (availableMaxValenceByBonds(atom2, bonds) < 1) return { ok: false, reason: `${atom2.symbol} 已达最大键数 (${max2})` }
-
-  return { ok: true }
+  const graph = new GraphIndex({ atoms: [atom1, atom2], bonds })
+  return new ValencePolicy(graph).canAddBond(atom1, atom2)
 }
 
 export type BondEditResult =

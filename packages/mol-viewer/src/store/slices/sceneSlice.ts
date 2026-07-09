@@ -5,11 +5,25 @@
  */
 
 import type { StateCreator } from 'zustand'
-import { shiftMolecule } from '../../lib/molecule'
 import { createSceneObject } from '../../lib/sceneObject'
 import { genId } from '../../lib/utils'
 import type { MoleculeState, SceneSlice } from './types'
-import { activateObjectWhere, computeAutoOffset, moleculeIdsInScene, withSceneUniqueIds } from './helpers'
+import {
+  runAddSceneObjectCommand,
+  runRemoveSceneObjectCommand,
+  runRenameSceneObjectCommand,
+  runSetActiveSceneObjectCommand,
+  runSetSceneObjectLockedCommand,
+  runSetSceneObjectVisibleCommand,
+  runSplitSceneObjectCommand,
+} from '../../lib/builder/commands/sceneStoreCommands'
+import {
+  activateObjectWhere,
+  applyActiveSceneObjectResult,
+  applyAddSceneObjectResult,
+  applySceneGraphResult,
+  applySceneObjectUpdatedResult,
+} from './helpers'
 
 /** 初始默认场景对象（空分子）。 */
 export const defaultSceneObject = createSceneObject({ atoms: [], bonds: [], name: 'New Molecule' })
@@ -22,56 +36,47 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
   addToScene: (mol, autoOffset = true) => {
     const newId = genId().slice(0, 8)
     set((s) => {
-      let finalMol = mol
-      if (autoOffset && s.objectOrder.length > 0) {
-        const off = computeAutoOffset(Object.values(s.objectsById))
-        finalMol = shiftMolecule(mol, off.x, off.y, off.z)
-      }
-      finalMol = withSceneUniqueIds(finalMol, moleculeIdsInScene(Object.values(s.objectsById)))
-      const newObj = { ...createSceneObject(finalMol), id: newId }
-      return {
-        objectsById: { ...s.objectsById, [newId]: newObj },
-        objectOrder: [...s.objectOrder, newId],
-        activeObjectId: newId,
-        selectedAtomIds: new Set(),
-        selectedBondIds: new Set(),
-        selectionVersion: s.selectionVersion + 1,
-      }
+      const result = runAddSceneObjectCommand(mol, Object.values(s.objectsById), {
+        objectId: newId,
+        autoOffset,
+      })
+      return applyAddSceneObjectResult(s, result)
     })
     return newId
   },
 
   setActiveObject: (id) => set((s) => {
-    if (id === null) return { activeObjectId: null }
-    if (!s.objectsById[id]) return {}
-    return { activeObjectId: id, selectedAtomIds: new Set(), selectedBondIds: new Set(), selectionVersion: s.selectionVersion + 1 }
+    const result = runSetActiveSceneObjectCommand(s.objectsById, s.activeObjectId, id)
+    return applyActiveSceneObjectResult(s, result)
   }),
 
   removeSceneObject: (id) => set((s) => {
-    const { [id]: _removed, ...rest } = s.objectsById
-    const newOrder = s.objectOrder.filter(oid => oid !== id)
-    if (id !== s.activeObjectId) return { objectsById: rest, objectOrder: newOrder }
-    const newActiveId = newOrder.length > 0 ? newOrder[newOrder.length - 1] : null
-    return {
-      objectsById: rest, objectOrder: newOrder, activeObjectId: newActiveId,
-      selectedAtomIds: new Set(), selectedBondIds: new Set(),
-      selectionVersion: s.selectionVersion + 1,
-    }
+    const result = runRemoveSceneObjectCommand(s.objectsById, s.objectOrder, s.activeObjectId, id)
+    return applySceneGraphResult(s, result)
+  }),
+
+  splitSceneObject: (id) => set((s) => {
+    const object = s.objectsById[id]
+    if (!object) return {}
+    const maxNewObjectIds = Math.max(1, object.molecule.atoms.length)
+    const newObjectIds = Array.from({ length: maxNewObjectIds }, () => genId().slice(0, 8))
+    const result = runSplitSceneObjectCommand(s.objectsById, s.objectOrder, id, newObjectIds)
+    return applySceneGraphResult(s, result)
   }),
 
   setObjectVisible: (id, visible) => set((s) => {
-    if (!s.objectsById[id]) return {}
-    return { objectsById: { ...s.objectsById, [id]: { ...s.objectsById[id], visible } } }
+    const result = runSetSceneObjectVisibleCommand(s.objectsById, id, visible)
+    return applySceneObjectUpdatedResult(s, result)
   }),
 
   setObjectLocked: (id, locked) => set((s) => {
-    if (!s.objectsById[id]) return {}
-    return { objectsById: { ...s.objectsById, [id]: { ...s.objectsById[id], locked } } }
+    const result = runSetSceneObjectLockedCommand(s.objectsById, id, locked)
+    return applySceneObjectUpdatedResult(s, result)
   }),
 
   renameObject: (id, name) => set((s) => {
-    if (!s.objectsById[id]) return {}
-    return { objectsById: { ...s.objectsById, [id]: { ...s.objectsById[id], name } } }
+    const result = runRenameSceneObjectCommand(s.objectsById, id, name)
+    return applySceneObjectUpdatedResult(s, result)
   }),
 
   activateObjectContainingAtom: (atomId) =>

@@ -61,7 +61,7 @@ export function useRendererBinding({
   const {
     onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick, onBackgroundDoubleClick,
     onAtomDragStart, onAtomDrag, onAtomDragEnd,
-    onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
+    onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide, getPlacementPreview,
   } = handlers
 
   const prevMolNameRef  = useRef<string | undefined>(undefined)
@@ -93,6 +93,7 @@ export function useRendererBinding({
       r.onAtomDrag = r.onAtomDragStart = r.onAtomDragEnd = r.canDragAtom = undefined
       r.onBondDragStart = r.onBondDragEnd = r.onBondDragHover = undefined
       r.getGrowPreview = r.getGrowGuide = undefined
+      r.getPlacementPreview = undefined
       return
     }
     const canEdit = toolCan(activeTool, 'canEdit')
@@ -113,9 +114,10 @@ export function useRendererBinding({
     r.onBondDragHover   = (id) => r.setDragHoverAtom(id)
     r.getGrowPreview    = getGrowPreview
     r.getGrowGuide      = getGrowGuide
+    r.getPlacementPreview = canEdit ? getPlacementPreview : undefined
   }, [readOnly, onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick, onBackgroundDoubleClick,
       onAtomDrag, onAtomDragStart, onAtomDragEnd,
-      onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide, activeTool, rendererRef])
+      onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide, getPlacementPreview, activeTool, rendererRef])
 
   // ── 主题同步 ─────────────────────────────────────────────────────────────
   useEffect(() => {

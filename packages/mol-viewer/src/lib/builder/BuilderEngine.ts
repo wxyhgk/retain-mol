@@ -1,2 +1,6 @@
-// 向后兼容：统一从子模块导出，现有 import 无需修改
+/**
+ * Legacy compatibility barrel.
+ *
+ * New package code and tests should import focused builder modules directly.
+ */
 export * from './index'

@@ -5,29 +5,9 @@
 
 import { useCallback } from 'react'
 import { useMoleculeStore, selectActiveMoleculeOrEmpty, captureViewportImage } from '@/domain/viewerAdapter'
-import { parseXYZ, exportXYZ, centerMolecule, type Molecule } from '@retainmol/mol-viewer/core'
-import { exportGJF, parseMol, parseSdf, exportMol, exportSdf, is2D } from '@retainmol/mol-viewer/io'
-import { moleculePositionWriter } from '@/domain/moleculePositionWriter'
-import { generate3DAsync, relaxAnimate, flattenMolecule } from '@/lib/moleculeOpt'
-import { useUiStore } from '@/lib/uiStore'
-
-/**
- * 导入并（若是 2D）立体化：用 ConformerGenerator（成熟的距离几何，环正确、自动含 H）
- * 生成高质量最终结构，再用几何松弛器从平面逐帧展开、锚定到该结构——既能看到展开过程，
- * 终点又精确等于 CG 结果。非 2D 直接放入。place(mol) 返回落地对象的 id。
- */
-async function importWith3D(mol: Molecule, place: (m: Molecule) => string) {
-  if (!is2D(mol)) { place(centerMolecule(mol)); return }
-  useUiStore.getState().setBusy('正在用距离几何生成 3D 结构…')
-  const r = await generate3DAsync(mol)
-  useUiStore.getState().setBusy(null)
-  const final = centerMolecule(r.ok ? r.molecule : mol)
-  if (!r.ok) { place(final); return }
-  // 以「压平的 CG 结果」落地（含 H、环已正确排布的平面态），逐帧松弛 + 锚定展开成 3D
-  const flatFinal = flattenMolecule(final)
-  const objId = place(flatFinal)
-  await relaxAnimate(objId, flatFinal, { target: final, writer: moleculePositionWriter })
-}
+import { parseXYZ, exportXYZ } from '@retainmol/mol-viewer/core'
+import { exportGJF, parseMol, parseSdf, exportMol, exportSdf } from '@retainmol/mol-viewer/io'
+import { placeMoleculeInViewer } from '@/domain/moleculePlacementService'
 
 function download(text: string, filename: string, mime = 'text/plain') {
   const blob = new Blob([text], { type: mime })
@@ -47,7 +27,6 @@ function downloadDataUrl(dataUrl: string, filename: string) {
 }
 
 export function useFileIO() {
-  const { setMolecule, addToScene } = useMoleculeStore()
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
   const molName = molecule.name ?? 'molecule'
 
@@ -56,12 +35,12 @@ export function useFileIO() {
   const importXYZ = useCallback(() => {
     pickFile('.xyz', (text) => {
       try {
-        setMolecule(centerMolecule(parseXYZ(text)))
+        void placeMoleculeInViewer(parseXYZ(text), { mode: 'replace', animate2DTo3D: false })
       } catch {
         alert('XYZ 文件解析失败，请检查格式')
       }
     })
-  }, [setMolecule])
+  }, [])
 
   const importMolSdf = useCallback(() => {
     pickFile('.mol,.sdf', async (text, filename) => {
@@ -76,28 +55,24 @@ export function useFileIO() {
         } else {
           mol = parseMol(text)
         }
-        // 2D 结构自动立体化 + 平面折叠动画（替换当前分子）
-        await importWith3D(mol, (m) => {
-          setMolecule(m)
-          return useMoleculeStore.getState().activeObjectId!
-        })
+        await placeMoleculeInViewer(mol, { mode: 'replace' })
       } catch (e) {
         alert(`文件解析失败：${(e as Error).message}`)
       }
     })
-  }, [setMolecule])
+  }, [])
 
   // ── 导入（添加到场景） ──────────────────────────────────────
 
   const importXYZToScene = useCallback(() => {
     pickFile('.xyz', (text) => {
       try {
-        addToScene(centerMolecule(parseXYZ(text)))
+        void placeMoleculeInViewer(parseXYZ(text), { mode: 'add-to-scene', animate2DTo3D: false })
       } catch {
         alert('XYZ 文件解析失败，请检查格式')
       }
     })
-  }, [addToScene])
+  }, [])
 
   const importMolSdfToScene = useCallback(() => {
     pickFile('.mol,.sdf', async (text, filename) => {
@@ -112,13 +87,12 @@ export function useFileIO() {
         } else {
           mol = parseMol(text)
         }
-        // 2D 结构自动立体化 + 平面折叠动画（添加到场景）
-        await importWith3D(mol, (m) => addToScene(m))
+        await placeMoleculeInViewer(mol, { mode: 'add-to-scene' })
       } catch (e) {
         alert(`文件解析失败：${(e as Error).message}`)
       }
     })
-  }, [addToScene])
+  }, [])
 
   // ── 导出 ──────────────────────────────────────
 

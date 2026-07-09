@@ -5,12 +5,12 @@
  * "拾取 atom → activateObjectContainingAtom → 重读 state → getConnectedFragment"
  * 序列，以及零散的无状态分子谓词（isSlotH / canGrowFrom）抽成脱离组件的纯函数。
  *
- * 风格参考同目录 BuilderEngine / analysis。这些函数不订阅 React、不持有闭包状态；
+ * 风格参考同目录 focused builder modules / analysis。这些函数不订阅 React、不持有闭包状态；
  * 需要 store 的部分以显式参数（getState 快照 / activate 回调）传入，保持可测试。
  */
 
 import type { Molecule } from '../molecule'
-import { degree } from './BuilderEngine'
+import { degree } from './graph'
 import { getConnectedFragment } from './analysis/fragments'
 import { effectiveMaxBonds } from '../../config/elements.config'
 

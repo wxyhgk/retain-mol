@@ -1,3 +1,5 @@
 export * from './vsepr'
 export * from './measure'
 export * from './plane'
+export * from './clash'
+export * from './placementPlanner'

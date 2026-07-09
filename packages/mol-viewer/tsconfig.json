@@ -4,7 +4,7 @@
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "strict": false,
     "noImplicitAny": false,
     "allowImportingTsExtensions": true,

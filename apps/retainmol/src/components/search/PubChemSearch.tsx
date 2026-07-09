@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Search, Loader2, AlertCircle } from 'lucide-react'
 import { fetchCompoundSdf } from '@retainmol/mol-viewer/pubchem'
-import { useMoleculeStore } from '@/domain/viewerAdapter'
-import { centerMolecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/mol-viewer/core'
 import { parseSdf, is2D } from '@retainmol/mol-viewer/io'
+import { placeMoleculeInViewer } from '@/domain/moleculePlacementService'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -18,9 +18,8 @@ export default function PubChemSearch({ open, onClose }: Props) {
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [is2DWarning, setIs2DWarning] = useState(false)
-  const [fetchedMol, setFetchedMol] = useState<ReturnType<typeof centerMolecule> | null>(null)
+  const [fetchedMol, setFetchedMol] = useState<Molecule | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { setMolecule, addToScene } = useMoleculeStore()
 
   useEffect(() => {
     if (open) {
@@ -39,7 +38,7 @@ export default function PubChemSearch({ open, onClose }: Props) {
       if (!mols.length) throw new Error('SDF 解析失败，未找到有效分子')
       const mol = mols[0]
       if (is2D(mol)) setIs2DWarning(true)
-      setFetchedMol(centerMolecule(mol))
+      setFetchedMol(mol)
       setStatus('ready')
     } catch (e) {
       setStatus('error')
@@ -47,15 +46,15 @@ export default function PubChemSearch({ open, onClose }: Props) {
     }
   }
 
-  const handleReplace = () => {
+  const handleReplace = async () => {
     if (!fetchedMol) return
-    setMolecule(fetchedMol)
+    await placeMoleculeInViewer(fetchedMol, { mode: 'replace', animate2DTo3D: false })
     onClose()
   }
 
-  const handleAddToScene = () => {
+  const handleAddToScene = async () => {
     if (!fetchedMol) return
-    addToScene(fetchedMol)
+    await placeMoleculeInViewer(fetchedMol, { mode: 'add-to-scene', animate2DTo3D: false })
     onClose()
   }
 

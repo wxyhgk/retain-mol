@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import {
   useMoleculeStore, selectActiveMoleculeOrEmpty, useEditorStore,
-  bondSelectedAtoms,
   calcDistance, calcAngle, calcDihedral,
 } from '@/domain/viewerAdapter'
 import { getElementConfig as getElement } from '@retainmol/mol-viewer/core'
 import { useMoleculeInfo } from '@/hooks/useMoleculeInfo'
 import { Button } from '@/components/ui/button'
 import { Trash2, ArrowUpDown, Link, FlaskRound } from 'lucide-react'
+import { connectSelectedAtoms } from '@/domain/editorCommands'
 
 function colorHexToCss(hex: number) {
   return `#${hex.toString(16).padStart(6, '0')}`
@@ -65,7 +65,7 @@ function CoordInput({ label, value, onCommit }: { label: string; value: number; 
 
 export default function GeometryPanel() {
   const {
-    selectedAtomIds, selectedBondIds, removeAtom, removeBond,
+    selectedAtomIds, selectedBondIds, removeAtoms, removeBond,
     cycleBondOrder, addHydrogens, moveAtom,
     setBondLength, setBondAngle, setDihedralAngle,
   } = useMoleculeStore()
@@ -173,10 +173,7 @@ export default function GeometryPanel() {
         <section>
           <button
             className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-900 text-xs font-semibold hover:bg-gray-100 hover:border-gray-300 transition-colors"
-            onClick={() => {
-              const result = bondSelectedAtoms()
-              if (!result.ok) alert(result.reason)
-            }}
+            onClick={connectSelectedAtoms}
           >
             <Link size={13} />
             连接两原子
@@ -212,7 +209,7 @@ export default function GeometryPanel() {
                         <FlaskRound size={12} />
                       </Button>
                       <Button variant="ghost" size="icon" className="w-6 h-6 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
-                        onClick={() => removeAtom(a.id)}>
+                        onClick={() => removeAtoms([a.id])}>
                         <Trash2 size={12} />
                       </Button>
                     </div>

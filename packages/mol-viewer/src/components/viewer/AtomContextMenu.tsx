@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import { MolRenderer } from '../../lib/molRenderer'
-import { getElementConfig } from '../../config/elements.config'
 import { cn } from '../../lib/utils'
+import {
+  commitContextAtomCharge,
+  commitContextAtomHydrogen,
+  commitContextAtomRadical,
+  commitContextAtomRemoval,
+  commitContextAtomReplacement,
+  selectContextAtomIfNeeded,
+} from './atomContextMenuEffects'
 
 interface Props {
   renderer: MolRenderer | null
@@ -29,8 +36,7 @@ export default function AtomContextMenu({ renderer }: Props) {
       if (!id) return
       e.stopImmediatePropagation()
       // 右键点中的原子没选中时，先选中它
-      const { selectedAtomIds, selectAtom } = useMoleculeStore.getState()
-      if (!selectedAtomIds.has(id)) selectAtom(id)
+      selectContextAtomIfNeeded(id, useMoleculeStore.getState)
       downAtomId = id
       downPos = { x: e.clientX, y: e.clientY }
     }
@@ -75,37 +81,21 @@ export default function AtomContextMenu({ renderer }: Props) {
 
   const close = () => { setMenu(null); setShowPicker(false) }
 
-  // 用连接数判断，不依赖键级（SDF 键级仅供参考）
-  const el = getElementConfig(atom.symbol)
-  const connCount = mol.bonds.filter(b => b.atomId1 === atom.id || b.atomId2 === atom.id).length
   const isHAtom = atom.symbol === 'H'
-  const canAddH = !isHAtom && el.maxBonds > 0 && connCount < el.maxBonds
+  const addHAvailability = useMoleculeStore.getState().canAddOneHydrogen(menu.atomId)
 
   const handleAddH = () => {
-    useMoleculeStore.getState().addOneHydrogen(menu.atomId)
+    commitContextAtomHydrogen(menu.atomId, useMoleculeStore.getState)
     close()
   }
 
   const handleReplace = (sym: string) => {
-    const { selectedAtomIds, replaceAtom, beginTransaction, endTransaction } = useMoleculeStore.getState()
-    // 如果多选了，批量替换；否则只替换右键原子
-    const ids = selectedAtomIds.size > 1 && selectedAtomIds.has(menu.atomId)
-      ? [...selectedAtomIds]
-      : [menu.atomId]
-    beginTransaction()
-    ids.forEach(id => replaceAtom(id, sym))
-    endTransaction()
+    commitContextAtomReplacement(menu.atomId, sym, useMoleculeStore.getState)
     close()
   }
 
   const handleDelete = () => {
-    const { selectedAtomIds, removeAtom, beginTransaction, endTransaction } = useMoleculeStore.getState()
-    const ids = selectedAtomIds.size > 1 && selectedAtomIds.has(menu.atomId)
-      ? [...selectedAtomIds]
-      : [menu.atomId]
-    beginTransaction()
-    ids.forEach(id => removeAtom(id))
-    endTransaction()
+    commitContextAtomRemoval(menu.atomId, useMoleculeStore.getState)
     close()
   }
 
@@ -113,10 +103,10 @@ export default function AtomContextMenu({ renderer }: Props) {
   const radical = atom.radical ?? 0
   const chargeLabel = charge === 0 ? '0' : charge > 0 ? `+${charge}` : `${charge}`
   const bumpCharge = (d: number) => {
-    useMoleculeStore.getState().setAtomCharge(menu.atomId, charge + d)
+    commitContextAtomCharge(menu.atomId, charge + d, useMoleculeStore.getState)
   }
   const toggleRadical = () => {
-    useMoleculeStore.getState().setAtomRadical(menu.atomId, radical > 0 ? 0 : 1)
+    commitContextAtomRadical(menu.atomId, radical > 0 ? 0 : 1, useMoleculeStore.getState)
     close()
   }
 
@@ -142,8 +132,8 @@ export default function AtomContextMenu({ renderer }: Props) {
 
       {/* 操作列表 */}
       <div className="py-1">
-        <MenuItem onClick={canAddH ? handleAddH : close} disabled={!canAddH}>
-          {canAddH ? '加一个 H' : '已满键，无法加 H'}
+        <MenuItem onClick={addHAvailability.ok ? handleAddH : close} disabled={!addHAvailability.ok}>
+          {addHAvailability.ok ? '加一个 H' : (addHAvailability.reason ?? '无法加 H')}
         </MenuItem>
 
         <MenuItem onClick={() => setShowPicker(v => !v)}>

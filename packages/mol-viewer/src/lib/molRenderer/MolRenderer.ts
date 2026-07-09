@@ -85,6 +85,8 @@ export class MolRenderer {
   set getGrowPreview(v) { this._interaction.getGrowPreview = v }
   get getGrowGuide() { return this._interaction.getGrowGuide }
   set getGrowGuide(v) { this._interaction.getGrowGuide = v }
+  get getPlacementPreview() { return this._interaction.getPlacementPreview }
+  set getPlacementPreview(v) { this._interaction.getPlacementPreview = v }
 
   // ── 平面草图模式 ──────────────────────────────────────────────────────────
 
@@ -215,6 +217,8 @@ export class MolRenderer {
         }
         return merged
       },
+      () => this.theme,
+      () => this.renderStyle,
     )
     this._measureVisuals = new MeasureVisuals(this._measureGroup, canvas, () => this.theme)
 

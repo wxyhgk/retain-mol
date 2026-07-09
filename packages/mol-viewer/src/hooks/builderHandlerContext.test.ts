@@ -1,0 +1,89 @@
+import { describe, expect, it } from 'vitest'
+import {
+  readBuilderEditSnapshot,
+  readBuilderObjectActivationEffects,
+  readBuilderSelectionEffects,
+} from './builderHandlerContext'
+import type { MoleculeStoreApi } from './builderPointerTypes'
+import { useEditorStore } from '../store/editorStore'
+
+function makeStore(state: Record<string, unknown>): MoleculeStoreApi {
+  return {
+    getState: () => state,
+  } as unknown as MoleculeStoreApi
+}
+
+describe('builder handler context', () => {
+  it('reads edit snapshot from the current molecule store state', () => {
+    const molecule = {
+      atoms: [{ id: 'a1', symbol: 'C', x: 0, y: 0, z: 0 }],
+      bonds: [],
+      name: 'snapshot',
+    }
+    const selectedAtomIds = new Set(['a1'])
+    const calls: string[] = []
+    const snapshot = readBuilderEditSnapshot(makeStore({
+      activeObjectId: 'obj-1',
+      objectsById: {
+        'obj-1': {
+          id: 'obj-1',
+          name: 'snapshot',
+          molecule,
+          visible: true,
+          locked: false,
+        },
+      },
+      selectedAtomIds,
+      setMolecule: () => calls.push('setMolecule'),
+    }))
+
+    expect(snapshot.molecule).toBe(molecule)
+    expect(snapshot.selectedAtomIds).toBe(selectedAtomIds)
+
+    snapshot.editEffects.setMolecule(molecule)
+    snapshot.editEffects.flashHint('from-test')
+
+    expect(calls).toEqual(['setMolecule'])
+    expect(useEditorStore.getState().hint?.text).toBe('from-test')
+  })
+
+  it('maps selection effects to the molecule store actions', () => {
+    const calls: string[] = []
+    const effects = readBuilderSelectionEffects(makeStore({
+      selectAtom: (atomId: string, append: boolean) => calls.push(`atom:${atomId}:${append}`),
+      selectAtoms: (atomIds: Iterable<string>, mode: string) => calls.push(`atoms:${[...atomIds].join(',')}:${mode}`),
+      selectBond: (bondId: string, includeAtoms: boolean) => calls.push(`bond:${bondId}:${includeAtoms}`),
+      clearSelection: () => calls.push('clear'),
+    }))
+
+    effects.selectAtom('a1', true)
+    effects.selectAtomsReplace(new Set(['a1', 'a2']))
+    effects.selectBond('b1', false)
+    effects.clearSelection()
+
+    expect(calls).toEqual([
+      'atom:a1:true',
+      'atoms:a1,a2:replace',
+      'bond:b1:false',
+      'clear',
+    ])
+  })
+
+  it('maps object activation effects to the molecule store actions', () => {
+    const calls: string[] = []
+    const effects = readBuilderObjectActivationEffects(makeStore({
+      activateObjectContainingAtom: (atomId: string) => {
+        calls.push(`atom:${atomId}`)
+        return true
+      },
+      activateObjectContainingBond: (bondId: string) => {
+        calls.push(`bond:${bondId}`)
+        return false
+      },
+    }))
+
+    expect(effects.activateObjectContainingAtom('a1')).toBe(true)
+    expect(effects.activateObjectContainingBond('b1')).toBe(false)
+    expect(calls).toEqual(['atom:a1', 'bond:b1'])
+  })
+})

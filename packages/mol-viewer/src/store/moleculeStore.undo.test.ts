@@ -149,4 +149,16 @@ describe('moleculeStore undo/redo（slice 拆分回归）', () => {
     store().addBond(h1, h3)
     expect(activeMol().bonds).toHaveLength(1)
   })
+
+  it('bondSelectedAtoms 作为 store action 提交纯命令结果', () => {
+    const a = store().addAtom('C', 0, 0, 0)
+    const b = store().addAtom('C', 1.5, 0, 0)
+
+    store().selectAtoms([a, b])
+    const result = store().bondSelectedAtoms()
+
+    expect(result.ok).toBe(true)
+    expect(activeMol().bonds).toHaveLength(1)
+    expect(activeMol().bonds[0]).toMatchObject({ atomId1: a, atomId2: b })
+  })
 })

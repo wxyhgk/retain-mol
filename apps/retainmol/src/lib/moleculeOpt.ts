@@ -5,6 +5,7 @@
 import type { Molecule } from '@retainmol/mol-viewer/core'
 import type { OptimizeResult } from '@retainmol/mol-viewer/io'
 import { GeometryRelaxer } from '@retainmol/mol-viewer/io'
+import { createObjectPositionWriteEditSession } from '@/domain/viewerAdapter'
 import { OPTIMIZE_ANIM } from '../config/optimize.config'
 
 export const OCL_RESOURCE_URL = `${import.meta.env.BASE_URL}ocl/resources.json`
@@ -47,8 +48,15 @@ type XYZ = { x: number; y: number; z: number }
 
 export type MoleculePositionWriter = {
   setObjectAtomPositions: (objectId: string, positions: ReadonlyMap<string, XYZ>) => void
-  beginTransaction?: () => void
-  endTransaction?: () => void
+}
+
+function createPositionWriteSession(objectId: string, writer: MoleculePositionWriter) {
+  const session = createObjectPositionWriteEditSession(objectId)
+  return {
+    start: () => session.start(),
+    write: (positions: ReadonlyMap<string, XYZ>) => writer.setObjectAtomPositions(objectId, positions),
+    end: () => session.end(),
+  }
 }
 
 /** 压平分子（z→0）——作为「平面→3D 折叠」morph 动画的起点 */
@@ -85,16 +93,17 @@ export function relaxAnimate(
     ...(targetMap ? { target: targetMap } : {}),
     ...(jitter !== undefined ? { jitter } : {}),
   })
-  writer.beginTransaction?.()
+  const session = createPositionWriteSession(objectId, writer)
+  session.start()
   return new Promise<void>(resolve => {
     let frame = 0
     const tick = () => {
       relaxer.step(itersPerFrame)
-      writer.setObjectAtomPositions(objectId, relaxer.positions())
+      session.write(relaxer.positions())
       frame++
       if ((!targetMap && relaxer.converged) || frame >= maxFrames) {
-        if (targetMap) writer.setObjectAtomPositions(objectId, targetMap)  // 精确落到 CG 终点
-        writer.endTransaction?.()
+        if (targetMap) session.write(targetMap)  // 精确落到 CG 终点
+        session.end()
         resolve()
       } else {
         requestAnimationFrame(tick)
@@ -126,9 +135,10 @@ export function morphObjectPositions(
         ? { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t }
         : b)   // 新原子（如导入补的 H）直接落终点
     }
-    writer.setObjectAtomPositions(objectId, positions)
+    session.write(positions)
   }
-  writer.beginTransaction?.()
+  const session = createPositionWriteSession(objectId, writer)
+  session.start()
   frame(0)                       // 同步落到起点，避免先闪一下终点
   const t0 = performance.now()
   return new Promise<void>(resolve => {
@@ -136,7 +146,7 @@ export function morphObjectPositions(
       const raw = Math.min(1, (now - t0) / durationMs)
       frame(1 - (1 - raw) ** 3)   // ease-out cubic
       if (raw < 1) requestAnimationFrame(step)
-      else { writer.endTransaction?.(); resolve() }
+      else { session.end(); resolve() }
     }
     requestAnimationFrame(step)
   })

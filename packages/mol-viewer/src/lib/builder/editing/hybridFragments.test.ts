@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { placeFragmentStandalone, attachFragmentToAtom, placeHybridPrototype } from './fragmentOps'
 import { getFragment } from '../fragmentLibrary'
+import { newAtom } from '../../molecule'
 import type { Molecule } from '../../molecule'
 
 const methyl    = getFragment('c-sp3')!   // –C 四面体，放空白 = CH4（attachOrder 1）
@@ -74,6 +75,30 @@ describe('杂化片段 attachOrder（GaussView 式双/三键接桩）', () => {
       byId.get(b.atomId1)!.symbol === 'C' && byId.get(b.atomId2)!.symbol === 'C')
     expect(cc.length).toBe(1)
     expect(cc.every(b => b.order === 1)).toBe(true)
+  })
+
+  it('片段接枝时默认滚转姿态被占住，会绕连接轴避碰', () => {
+    const methane = place()
+    const sourceH = firstH(methane)
+    const baseline = attachFragmentToAtom(methane, methyl, sourceH)
+    expect(baseline.ok).toBe(true)
+    if (!baseline.ok) return
+
+    const originalIds = new Set(methane.atoms.map(a => a.id))
+    const baselineNewH = baseline.molecule.atoms.find(a => !originalIds.has(a.id) && a.symbol === 'H')!
+    const blocker = newAtom('C', baselineNewH.x, baselineNewH.y, baselineNewH.z)
+    const blockedMol = { ...methane, atoms: [...methane.atoms, blocker] }
+
+    const result = attachFragmentToAtom(blockedMol, methyl, sourceH)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const blockedIds = new Set(blockedMol.atoms.map(a => a.id))
+    const added = result.molecule.atoms.filter(a => !blockedIds.has(a.id))
+    const minDistance = Math.min(...added.map(a =>
+      Math.hypot(a.x - blocker.x, a.y - blocker.y, a.z - blocker.z),
+    ))
+    expect(minDistance).toBeGreaterThan(0.5)
   })
 })
 

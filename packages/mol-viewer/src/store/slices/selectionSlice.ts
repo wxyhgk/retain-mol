@@ -7,6 +7,13 @@
 
 import type { StateCreator } from 'zustand'
 import type { MoleculeState, SelectionSlice } from './types'
+import { applySelectionResult } from './helpers'
+import {
+  runClearSelectionCommand,
+  runSelectAtomCommand,
+  runSelectAtomsCommand,
+  runSelectBondCommand,
+} from '../../lib/builder/commands/selectionCommands'
 
 export const createSelectionSlice: StateCreator<MoleculeState, [], [], SelectionSlice> = (set) => ({
   selectionVersion: 0,
@@ -14,35 +21,22 @@ export const createSelectionSlice: StateCreator<MoleculeState, [], [], Selection
   selectedBondIds:  new Set(),
 
   selectAtom: (id, multi = false) => set((s) => {
-    if (multi) {
-      const next = new Set(s.selectedAtomIds)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return { selectedAtomIds: next, selectionVersion: s.selectionVersion + 1 }
-    }
-    return { selectedAtomIds: new Set([id]), selectedBondIds: new Set(), selectionVersion: s.selectionVersion + 1 }
+    const result = runSelectAtomCommand(s.selectedAtomIds, s.selectedBondIds, id, multi)
+    return applySelectionResult(s, result)
   }),
 
   selectAtoms: (ids, mode = 'replace') => set((s) => {
-    const incoming = new Set<string>(ids)
-    if (mode === 'replace') return { selectedAtomIds: incoming, selectedBondIds: new Set(), selectionVersion: s.selectionVersion + 1 }
-    const next = new Set(s.selectedAtomIds)
-    if (mode === 'add') incoming.forEach(id => next.add(id))
-    else incoming.forEach(id => next.delete(id))
-    return { selectedAtomIds: next, selectionVersion: s.selectionVersion + 1 }
+    const result = runSelectAtomsCommand(s.selectedAtomIds, s.selectedBondIds, ids, mode)
+    return applySelectionResult(s, result)
   }),
 
   selectBond: (id, multi = false) => set((s) => {
-    if (multi) {
-      const next = new Set(s.selectedBondIds)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return { selectedBondIds: next, selectionVersion: s.selectionVersion + 1 }
-    }
-    return { selectedBondIds: new Set([id]), selectedAtomIds: new Set(), selectionVersion: s.selectionVersion + 1 }
+    const result = runSelectBondCommand(s.selectedAtomIds, s.selectedBondIds, id, multi)
+    return applySelectionResult(s, result)
   }),
 
-  clearSelection: () => set((s) => ({
-    selectedAtomIds: new Set(),
-    selectedBondIds: new Set(),
-    selectionVersion: s.selectionVersion + 1,
-  })),
+  clearSelection: () => set((s) => {
+    const result = runClearSelectionCommand()
+    return applySelectionResult(s, result)
+  }),
 })

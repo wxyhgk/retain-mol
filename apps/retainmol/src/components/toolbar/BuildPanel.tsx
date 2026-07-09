@@ -1,17 +1,16 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { useEditorStore, useMoleculeStore } from '@/domain/viewerAdapter'
+import { placeMoleculeInViewer } from '@/domain/moleculePlacementService'
+import { useEditorStore } from '@/domain/viewerAdapter'
 import { getElementConfig, PERIODIC_TABLE_LAYOUT } from '@retainmol/mol-viewer/core'
 import {
   COMMON_ELEMENTS,
   HYBRID_GROUP_LABEL,
   RING_FRAGMENTS,
   TEMPLATE_MOLECULES,
+  createCanvasMoleculeFromTemplate,
   getElementHex,
   getHybridFragmentsForElement,
-  setCenteredMolecule,
-  splitTemplateName,
-  type TemplateMolecule,
 } from '@/domain/buildTools'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -27,7 +26,6 @@ type PanelTab = 'build' | 'rings' | 'templates'
  */
 export default function BuildPanel({ onClose }: { onClose: () => void }) {
   const { activeElement, activeFragmentId, setActiveElement, setAtomClickMode, setActiveFragment, setActiveTool } = useEditorStore()
-  const { setMolecule } = useMoleculeStore()
 
   const [tab, setTab] = useState<PanelTab>('build')
 
@@ -44,8 +42,9 @@ export default function BuildPanel({ onClose }: { onClose: () => void }) {
   const pickElement = (sym: string) => applyAtom(sym)
   const pickAtom = () => applyAtom(shownEl)
   const pickFragment = (id: string) => { setActiveFragment(id); setActiveTool('select') }
-  const pickTemplate = (mol: TemplateMolecule) => {
-    setCenteredMolecule(setMolecule, mol)
+  const pickTemplate = (id: string) => {
+    const molecule = createCanvasMoleculeFromTemplate(id)
+    if (molecule) void placeMoleculeInViewer(molecule, { mode: 'replace' })
   }
 
   const shownHex = getElementHex(shownEl)
@@ -224,16 +223,16 @@ export default function BuildPanel({ onClose }: { onClose: () => void }) {
           /* 模板分子 tab */
           <div className="px-3 pt-3 pb-4">
             <div className="grid grid-cols-2 gap-1.5">
-              {TEMPLATE_MOLECULES.map(s => {
-                const { main, sub } = splitTemplateName(s.name)
+              {TEMPLATE_MOLECULES.map(template => {
                 return (
                   <button
-                    key={s.name}
-                    onClick={() => pickTemplate(s.mol())}
+                    key={template.id}
+                    title={template.description}
+                    onClick={() => pickTemplate(template.id)}
                     className="flex flex-col items-center justify-center gap-0.5 h-[54px] px-2 rounded-[10px] bg-gray-50 border-[1.5px] border-gray-200 hover:border-gray-300 hover:bg-gray-100 transition-all hover:scale-[1.03] active:scale-95"
                   >
-                    <span className="text-[12px] font-semibold text-gray-700 leading-tight">{main}</span>
-                    {sub && <span className="text-[11px] text-gray-400 leading-none">{sub}</span>}
+                    <span className="text-[12px] font-semibold text-gray-700 leading-tight">{template.name}</span>
+                    <span className="text-[11px] text-gray-400 leading-none">{template.formula}</span>
                   </button>
                 )
               })}

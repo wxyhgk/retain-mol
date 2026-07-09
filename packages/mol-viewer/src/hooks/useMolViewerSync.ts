@@ -13,6 +13,10 @@ import { useEditorStore } from '../store/editorStore'
 import { resolveTheme, type ResolvedTheme } from '../presets'
 import type { DisplayMode } from '../lib/types'
 import type { Molecule } from '../lib/molecule'
+import {
+  commitControlledMoleculePropToStore,
+  commitControlledSelectedAtomsPropToStore,
+} from './useMolViewerSyncEffects'
 
 interface SyncProps {
   molecule?:          Molecule
@@ -49,9 +53,11 @@ export function useMolViewerSync({
   const lastPropMolRef = useRef<Molecule | undefined>(undefined)
 
   useEffect(() => {
-    if (moleculeProp === undefined || moleculeProp === lastPropMolRef.current) return
-    lastPropMolRef.current = moleculeProp
-    useMoleculeStore.getState().setMolecule(moleculeProp)
+    lastPropMolRef.current = commitControlledMoleculePropToStore(
+      moleculeProp,
+      lastPropMolRef.current,
+      useMoleculeStore.getState,
+    )
   }, [moleculeProp])
 
   // ── store → onMoleculeChange ─────────────────────────────────────────────
@@ -70,9 +76,11 @@ export function useMolViewerSync({
   const lastPropSelVersionRef = useRef(-1)
 
   useEffect(() => {
-    if (selectedAtomIdsProp === undefined) return
-    useMoleculeStore.getState().selectAtoms(selectedAtomIdsProp, 'replace')
-    lastPropSelVersionRef.current = useMoleculeStore.getState().selectionVersion
+    const version = commitControlledSelectedAtomsPropToStore(
+      selectedAtomIdsProp,
+      useMoleculeStore.getState,
+    )
+    if (version !== null) lastPropSelVersionRef.current = version
   }, [selectedAtomIdsProp])
 
   // ── store → onSelectionChange ────────────────────────────────────────────

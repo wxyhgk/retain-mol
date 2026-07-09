@@ -47,7 +47,7 @@ function ElementButton({ sym, size = 'md', onSelect, activeElement }: {
 
 export default function ElementPicker() {
   const { activeElement, setActiveElement } = useEditorStore()
-  const { selectedAtomIds, replaceAtom } = useMoleculeStore()
+  const { selectedAtomIds, replaceAtoms } = useMoleculeStore()
   const [open, setOpen] = useState(false)
   const el = getElement(activeElement)
   const hasSelection = selectedAtomIds.size > 0
@@ -55,7 +55,7 @@ export default function ElementPicker() {
   // 点击元素：有选中原子则替换，否则只切换当前元素
   const handleSelectElement = (sym: string) => {
     if (hasSelection) {
-      selectedAtomIds.forEach(id => replaceAtom(id, sym))
+      replaceAtoms([...selectedAtomIds], sym)
     }
     setActiveElement(sym)
     setOpen(false)

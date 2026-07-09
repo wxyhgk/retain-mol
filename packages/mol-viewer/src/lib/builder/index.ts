@@ -1,6 +1,6 @@
 export * from './graph'
 export * from './valence'
+export * from './kernel'
 export * from './geometry'
 export * from './editing'
 export * from './analysis'
-export * from './commands'

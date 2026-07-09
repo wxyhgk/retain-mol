@@ -3,7 +3,10 @@ import type { MolControls } from '../controls/MolControls'
 import { INTERACTION } from '../../config/interaction.config'
 import { GhostVisuals } from './GhostVisuals'
 
+import type { Molecule } from '../molecule'
 import type { GrowGuideSpec } from '../types'
+import type { ResolvedTheme } from '../../presets'
+import type { RenderStyle } from '../../styles'
 export type { GrowGuideSpec }
 
 /**
@@ -39,6 +42,8 @@ export class InteractionHandler {
     => { pos: THREE.Vector3; radius: number; color: number } | null
   /** 拖出生长开始时调用一次，返回候选槽位参考几何（环/点），用于空间感提示 */
   getGrowGuide?: (sourceId: string) => GrowGuideSpec
+  /** 空白放置预览：返回将要放置的临时分子；renderer 只负责显示，不提交。 */
+  getPlacementPreview?: (worldPos: THREE.Vector3, viewDirLocal?: THREE.Vector3) => Molecule | null
 
   /** 平面草图模式：非空时绘制/拖动都约束在该平面（模型局部坐标） */
   sketchPlane: { origin: THREE.Vector3; normal: THREE.Vector3 } | null = null
@@ -66,14 +71,17 @@ export class InteractionHandler {
     private controls: MolControls,
     private getAtomMeshes: () => Map<string, THREE.Mesh>,
     private getBondMeshes: () => Map<string, THREE.Group>,
+    private getTheme: () => ResolvedTheme,
+    private getRenderStyle: () => RenderStyle,
   ) {
-    this._ghost = new GhostVisuals(canvas, camera, modelGroup)
+    this._ghost = new GhostVisuals(canvas, camera, modelGroup, getTheme, getRenderStyle)
     canvas.addEventListener('click', this.handleClick)
     canvas.addEventListener('dblclick', this.handleDblClick)
     canvas.addEventListener('pointerdown', this.handlePointerDown, { capture: true })
     canvas.addEventListener('pointermove', this.handlePointerMove)
     canvas.addEventListener('pointerup', this.handlePointerUp)
     canvas.addEventListener('pointercancel', this.handlePointerCancel)
+    canvas.addEventListener('pointerleave', this.handlePointerLeave)
   }
 
   /**
@@ -311,6 +319,7 @@ export class InteractionHandler {
     }
 
     if (this._bondDragSourceId) return
+    if (!this._dragAtomId) this.updatePlacementPreview(e, mx, my)
     if (!this._dragAtomId || !this._dragPlane) return
     const dx = e.clientX - this._mouseDownPos.x
     const dy = e.clientY - this._mouseDownPos.y
@@ -327,6 +336,31 @@ export class InteractionHandler {
     ray.ray.intersectPlane(this._dragPlane, worldPos)
     const localPos = this.modelGroup.worldToLocal(worldPos.clone())
     this.onAtomDrag?.(this._dragAtomId, localPos.x, localPos.y, localPos.z)
+  }
+
+  private updatePlacementPreview(e: PointerEvent, mx: number, my: number) {
+    if (!this.getPlacementPreview) {
+      this._ghost.removePlacement()
+      return
+    }
+    const raycaster = new THREE.Raycaster()
+    raycaster.setFromCamera(new THREE.Vector2(mx, my), this.camera)
+    const hasAtomHit = raycaster.intersectObjects(this.pickableAtomObjs()).length > 0
+    if (hasAtomHit) {
+      this._ghost.removePlacement()
+      return
+    }
+    const hasBondHit = raycaster.intersectObjects(this.pickableBondObjs()).length > 0
+    if (hasBondHit) {
+      this._ghost.removePlacement()
+      return
+    }
+    const bg = this.backgroundPosAt(raycaster)
+    if (!bg) {
+      this._ghost.removePlacement()
+      return
+    }
+    this._ghost.showPlacement(this.getPlacementPreview(bg.localPos, bg.viewDirLocal))
   }
 
   private handlePointerUp = (e: PointerEvent) => {
@@ -373,6 +407,10 @@ export class InteractionHandler {
       this._dragging = false
       this.controls.enabled = true
     }
+  }
+
+  private handlePointerLeave = () => {
+    this._ghost.removePlacement()
   }
 
   /** bond-drag 状态与预览视觉的统一复位 */
@@ -443,6 +481,7 @@ export class InteractionHandler {
     this.canvas.removeEventListener('pointermove', this.handlePointerMove)
     this.canvas.removeEventListener('pointerup', this.handlePointerUp)
     this.canvas.removeEventListener('pointercancel', this.handlePointerCancel)
+    this.canvas.removeEventListener('pointerleave', this.handlePointerLeave)
     this._ghost.dispose()
   }
 }

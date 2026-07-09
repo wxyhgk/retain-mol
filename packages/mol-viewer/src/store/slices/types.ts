@@ -19,6 +19,7 @@ export interface SceneSlice {
   addToScene:        (mol: Molecule, autoOffset?: boolean) => string
   setActiveObject:   (id: string | null) => void
   removeSceneObject: (id: string) => void
+  splitSceneObject:  (id: string) => void
   setObjectVisible:  (id: string, visible: boolean) => void
   setObjectLocked:   (id: string, locked: boolean) => void
   renameObject:      (id: string, name: string) => void
@@ -67,14 +68,20 @@ export interface EditSlice {
   addHydrogens:           (atomId?: string) => void
   /** 力场几何清理（MMFF94）：弛豫坐标到物理合理（一步 undo，不动拓扑）。返回是否成功 */
   cleanupGeometry:        () => { ok: boolean; reason?: string }
+  canAddOneHydrogen:      (atomId: string) => { ok: boolean; reason?: string }
+  canAddOneHydrogens:     (atomIds: readonly string[]) => { ok: boolean; allowedAtomIds: readonly string[]; reason?: string }
   addOneHydrogen:         (atomId: string) => void
+  addOneHydrogens:        (atomIds: readonly string[]) => void
   replaceAtom:            (atomId: string, symbol: string) => void
+  replaceAtoms:           (atomIds: readonly string[], symbol: string) => void
+  removeAtoms:            (atomIds: readonly string[]) => void
   /** 设形式电荷并按新有效价态增删 H（N⁺→长第4个H、O⁻→掉一个H） */
   setAtomCharge:          (atomId: string, charge: number) => void
   /** 设未配对电子数（自由基）并按新有效价态增删 H */
   setAtomRadical:         (atomId: string, radical: number) => void
   growFromHydrogen:       (atomId: string, symbol: string) => void
   bondViaHydrogen:        (sourceHId: string, targetId: string) => { ok: boolean; reason?: string }
+  bondSelectedAtoms:      () => { ok: boolean; reason?: string }
   clearMolecule:          () => void
   centerMolecule:         () => void
   pasteAtoms:             (clipboard: MolClipboard) => string[]

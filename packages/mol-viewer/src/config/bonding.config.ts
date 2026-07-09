@@ -17,4 +17,6 @@ export const BONDING = {
   fuseMergeEps: 0.45,
   /** 并环（fuseFragmentOnBond）：距离小于此（且不可合并）→ 此侧空间被占，翻面重试 */
   fuseClashEps: 0.7,
+  /** 构建时避碰的软阈值：距离小于 (r1+r2)×该系数 会被视为重叠候选 */
+  buildClashRadiusFactor: 0.72,
 }

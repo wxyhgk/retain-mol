@@ -1,6 +1,6 @@
 {
   "name": "@retainmol/mol-viewer",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
@@ -35,6 +35,10 @@
       "types": "./dist/public/samples.d.ts",
       "import": "./dist/public/samples.js"
     },
+    "./templates": {
+      "types": "./dist/public/templates.d.ts",
+      "import": "./dist/public/templates.js"
+    },
     "./pubchem": {
       "types": "./dist/public/pubchem.d.ts",
       "import": "./dist/public/pubchem.js"
@@ -67,9 +71,12 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.0",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vite": "^8.0.10",
+    "vitest": "^4.1.5"
   }
 }

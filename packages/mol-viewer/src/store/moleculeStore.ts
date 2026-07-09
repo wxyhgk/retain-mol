@@ -17,6 +17,7 @@ import { UNDO_LIMIT, partializeForUndo, undoSnapshotEqual, type UndoSnapshot } f
 import { createSceneSlice } from './slices/sceneSlice'
 import { createSelectionSlice } from './slices/selectionSlice'
 import { createEditSlice } from './slices/editSlice'
+import { runPruneSelectionCommand } from '../lib/builder/commands/selectionCommands'
 
 // ── 对外 Selectors（保持导出面不变）─────────────────────────────────────────────
 export { selectActiveMolecule, selectActiveMoleculeOrEmpty } from './slices/helpers'
@@ -51,11 +52,12 @@ function afterTimeTravel() {
       for (const a of obj.molecule.atoms) validAtoms.add(a.id)
       for (const b of obj.molecule.bonds) validBonds.add(b.id)
     }
+    const selection = runPruneSelectionCommand(s.selectedAtomIds, s.selectedBondIds, validAtoms, validBonds)
     return {
       atomPositionVersion: s.atomPositionVersion + 1,
       selectionVersion:    s.selectionVersion + 1,
-      selectedAtomIds:     new Set([...s.selectedAtomIds].filter(id => validAtoms.has(id))),
-      selectedBondIds:     new Set([...s.selectedBondIds].filter(id => validBonds.has(id))),
+      selectedAtomIds:     selection.selectedAtomIds,
+      selectedBondIds:     selection.selectedBondIds,
     }
   })
 }

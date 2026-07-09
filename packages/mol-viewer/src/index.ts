@@ -72,10 +72,12 @@ export { cn } from './lib/utils'
 
 // ── Builder ───────────────────────────────────────────────────────────────────
 export { useBuilder } from './hooks/useBuilder'
-export { bondSelectedAtoms } from './lib/builder/commands'
+export { bondSelectedAtoms } from './public/editActions'
 export {
-  calcDistance, calcAngle, calcDihedral, canBond, calcAddAtomOnExisting,
-} from './lib/builder/BuilderEngine'
+  calcDistance, calcAngle, calcDihedral,
+} from './lib/builder/geometry/measure'
+export { calcAddAtomOnExisting } from './lib/builder/geometry/vsepr'
+export { canBond } from './lib/builder/commands/bondTopologyCommands'
 
 export { getConnectedFragment, splitConnectedComponents } from './lib/builder/analysis/fragments'
 
@@ -84,3 +86,19 @@ export { fetchCompoundSdf } from './public/pubchem'
 
 // ── 示例分子 ──────────────────────────────────────────────────────────────────
 export { SAMPLE_MOLECULES } from './public/samples'
+
+// ── 模板分子 ──────────────────────────────────────────────────────────────────
+export {
+  MOLECULE_TEMPLATES,
+  createCenteredMoleculeFromTemplate,
+  createMoleculeFromTemplate,
+  getMoleculeTemplate,
+  listMoleculeTemplateSummaries,
+  listMoleculeTemplates,
+  validateMoleculeTemplate,
+} from './public/templates'
+export type {
+  MoleculeTemplateCategory,
+  MoleculeTemplateDef,
+  MoleculeTemplateSummary,
+} from './public/templates'

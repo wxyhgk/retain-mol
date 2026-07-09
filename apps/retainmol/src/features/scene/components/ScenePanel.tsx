@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
 export default function ScenePanel() {
-  const { objectsById, objectOrder, activeObjectId, setActiveObject, removeSceneObject, setObjectVisible, setObjectLocked, renameObject, addToScene } = useMoleculeStore()
+  const { objectsById, objectOrder, activeObjectId, setActiveObject, removeSceneObject, splitSceneObject, setObjectVisible, setObjectLocked, renameObject } = useMoleculeStore()
   const sceneObjects = objectOrder.map(id => objectsById[id]).filter(Boolean)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
@@ -13,10 +13,7 @@ export default function ScenePanel() {
     e.stopPropagation()
     const obj = objectsById[objId]
     if (!obj) return
-    const parts = splitConnectedComponents(obj.molecule)
-    if (parts.length <= 1) return
-    removeSceneObject(objId)
-    for (const mol of parts) addToScene(mol, false)
+    splitSceneObject(objId)
   }
 
   return (

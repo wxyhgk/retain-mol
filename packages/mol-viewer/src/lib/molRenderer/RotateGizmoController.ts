@@ -11,8 +11,8 @@ import type { Molecule } from '../molecule'
 export interface GizmoCallbacks {
   getMolecule: () => Molecule
   setAtomPositions: (positions: ReadonlyMap<string, { x: number; y: number; z: number }>) => void
-  beginTransaction: () => void
-  endTransaction: () => void
+  startEditSession: () => void
+  endEditSession: () => void
 }
 import type { MolRenderer } from './MolRenderer'
 import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../config/rotateGizmo.config'
@@ -229,7 +229,7 @@ export class RotateGizmoController {
 
     if (this.drag) {
       this.flushDragPositions()
-      this.cb.endTransaction()
+      this.cb.endEditSession()
       renderer.controls.enabled = true
     }
     if (this._dragRaf !== null) cancelAnimationFrame(this._dragRaf)
@@ -319,7 +319,7 @@ export class RotateGizmoController {
       startAngle: Math.atan2(e.clientY - pivotScreen.y, e.clientX - pivotScreen.x),
       lastContinuous: 0,
     }
-    this.cb.beginTransaction()
+    this.cb.startEditSession()
     this.renderer.controls.enabled = false
     this.renderer.canvas.style.cursor = 'grabbing'
     this.renderer.canvas.setPointerCapture?.(e.pointerId)
@@ -374,7 +374,7 @@ export class RotateGizmoController {
     this.drag.ring.dragAngle = 0
     this.drag = null
     this.suppressNextClick = true
-    this.cb.endTransaction()
+    this.cb.endEditSession()
     this.renderer.controls.enabled = true
     this.renderer.canvas.style.cursor = ''
     this.renderer.canvas.releasePointerCapture?.(e.pointerId)

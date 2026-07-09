@@ -13,6 +13,7 @@ import type { Atom, Bond } from '../../molecule'
 import { add, sub, scale, dot, cross, length, normalize } from '../math/vec3'
 import type { Vec3 } from '../math/vec3'
 import type { SketchPlane } from './plane'
+import { isBetterClashScore, scoreClashes } from './clash'
 
 // ── 键长 ──────────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,99 @@ export function findSnapBondDir(
   return findNextBondDir(centerSymbol, neighborDirs, hybridization)
 }
 
+function coneCandidateDirs(axis: Vec3, theta: number, preferred: Vec3, samples = 24): Vec3[] {
+  const p = dot(preferred, axis)
+  const preferredPerpRaw: Vec3 = [
+    preferred[0] - p*axis[0],
+    preferred[1] - p*axis[1],
+    preferred[2] - p*axis[2],
+  ]
+  const u = length(preferredPerpRaw) > 0.05 ? normalize(preferredPerpRaw) : upwardPerp(axis)
+  const v = normalize(cross(axis, u))
+  const cosθ = Math.cos(theta)
+  const sinθ = Math.sin(theta)
+  const out: Vec3[] = []
+  for (let i = 0; i < samples; i++) {
+    const phi = (i * Math.PI * 2) / samples
+    const ringDir = add(scale(u, Math.cos(phi)), scale(v, Math.sin(phi)))
+    out.push(normalize(add(scale(axis, cosθ), scale(ringDir, sinθ))))
+  }
+  return out
+}
+
+function candidateDirsForGrow(
+  centerSymbol: string,
+  neighborDirs: Vec3[],
+  hybridization: AtomHybridization,
+  preferredDir: Vec3,
+): Vec3[] {
+  const primary = findSnapBondDir(centerSymbol, neighborDirs, hybridization, preferredDir)
+  const n = neighborDirs.length
+  const geometry = inferGeometry(centerSymbol, n, hybridization)
+  const rule = GEOMETRY_RULES[geometry] ?? GEOMETRY_RULES['tetrahedral']
+  const theta = rule.bondAngle * (Math.PI / 180)
+
+  if (n === 0) {
+    const axes: Vec3[] = [
+      primary,
+      [1, 0, 0], [-1, 0, 0],
+      [0, 1, 0], [0, -1, 0],
+      [0, 0, 1], [0, 0, -1],
+    ]
+    return uniqueDirections(axes)
+  }
+
+  if (n === 1) {
+    return uniqueDirections([primary, ...coneCandidateDirs(neighborDirs[0], theta, preferredDir)])
+  }
+
+  if (n === 2 && geometry !== 'trigonal-planar' && geometry !== 'linear') {
+    const cands = tetrahedralCandidates(neighborDirs[0], neighborDirs[1])
+    if (cands) return uniqueDirections([primary, cands[0], cands[1]])
+  }
+
+  return [primary]
+}
+
+function uniqueDirections(dirs: readonly Vec3[]): Vec3[] {
+  const out: Vec3[] = []
+  for (const dir of dirs) {
+    const d = normalize(dir)
+    if (!out.some(existing => dot(existing, d) > 0.999)) out.push(d)
+  }
+  return out
+}
+
+function chooseLeastClashingDirection(
+  centerAtom: Atom,
+  atoms: readonly Atom[],
+  newSymbol: string,
+  bondLength: number,
+  dirs: readonly Vec3[],
+): Vec3 {
+  let best = dirs[0]
+  let bestScore = scoreClashes([{
+    symbol: newSymbol,
+    x: centerAtom.x + best[0] * bondLength,
+    y: centerAtom.y + best[1] * bondLength,
+    z: centerAtom.z + best[2] * bondLength,
+  }], atoms, new Set([centerAtom.id]))
+
+  for (const dir of dirs.slice(1)) {
+    const score = scoreClashes([{
+      symbol: newSymbol,
+      x: centerAtom.x + dir[0] * bondLength,
+      y: centerAtom.y + dir[1] * bondLength,
+      z: centerAtom.z + dir[2] * bondLength,
+    }], atoms, new Set([centerAtom.id]))
+    if (isBetterClashScore(score, bestScore)) {
+      best = dir
+      bestScore = score
+    }
+  }
+  return best
+}
+
 /**
  * 拖拽生长：根据光标位置计算新原子的落点。
  * 方向吸附到 VSEPR 候选位（snap=false 时沿光标方向自由放置），键长始终用标准键长。
@@ -224,7 +318,14 @@ export function calcGrowPosition(
     const atomById = new Map(atoms.map(a => [a.id, a]))
     const neighborDirs = getNeighborDirs(centerAtom, bonds, atomById)
     const hybridization = inferHybridization(bonds, centerAtom.id)
-    dir = findSnapBondDir(centerAtom.symbol, neighborDirs, hybridization, preferred)
+    const bLen = calcBondLength(centerAtom.symbol, newSymbol)
+    dir = chooseLeastClashingDirection(
+      centerAtom,
+      atoms,
+      newSymbol,
+      bLen,
+      candidateDirsForGrow(centerAtom.symbol, neighborDirs, hybridization, preferred),
+    )
   } else {
     dir = preferred
   }
@@ -335,8 +436,14 @@ export function calcAddAtomOnExisting(
   const atomById = new Map(atoms.map(a => [a.id, a]))
   const neighborDirs = getNeighborDirs(centerAtom, bonds, atomById)
   const hybridization = inferHybridization(bonds, centerAtom.id)
-  const dir = findNextBondDir(centerAtom.symbol, neighborDirs, hybridization)
   const bLen = calcBondLength(centerAtom.symbol, newSymbol)
+  const dir = chooseLeastClashingDirection(
+    centerAtom,
+    atoms,
+    newSymbol,
+    bLen,
+    candidateDirsForGrow(centerAtom.symbol, neighborDirs, hybridization, findNextBondDir(centerAtom.symbol, neighborDirs, hybridization)),
+  )
   const maxBonds = getElementConfig(centerAtom.symbol).maxBonds
   const geometry = inferGeometry(centerAtom.symbol, neighborDirs.length, hybridization)
 

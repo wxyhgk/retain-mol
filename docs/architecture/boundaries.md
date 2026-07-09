@@ -76,6 +76,7 @@ Rules:
 - Prefer pure functions.
 - Keep browser/app concerns out.
 - Chemistry editing policy changes need focused tests in this layer.
+- New user-facing edit behavior should enter through `lib/builder/commands`, not through direct calls to `BuilderEngine` or `lib/builder/editing` from hooks/store/app code.
 
 Current policy:
 - Atom replacement is pure element replacement: keep id, coordinates, bonds, and explicit hydrogens.
@@ -98,7 +99,9 @@ Must not own:
 - App layout state.
 
 Rules:
-- Store actions should be thin wrappers over builder functions where possible.
+- Store actions should be thin wrappers over builder commands where possible.
+- Store slices should apply command results through shared helpers in `store/slices/helpers.ts` instead of hand-writing `objectsById`, selection, or undo-related patches at each call site.
+- `store/slices/editSlice.ts` should stay as an edit action assembly layer; concrete edit action mappings live in focused `*EditActions.ts` files.
 - Undo scope must be deliberate. Use transactions for multi-step user actions.
 - Selection and UI-only state should not pollute undo history.
 
@@ -117,7 +120,11 @@ Must not own:
 - App-specific panel layout.
 
 Risk area:
-- `useBuilder.ts` is currently a high-churn boundary because it mixes interaction policy with chemistry editing intent. New work should prefer moving reusable mutation rules down into `lib/builder` and keeping this hook as a dispatcher.
+- `useBuilder.ts` is now a thin hook shell. Builder pointer adapters are split across `builderAtomHandlers.ts`, `builderBondHandlers.ts`, `builderBackgroundHandlers.ts`, and `builderPreviewHandlers.ts`. New work should prefer moving reusable mutation rules down into `lib/builder` and keeping these adapters as dispatchers.
+- Hook effects may apply command results to store actions, but they should not encode chemistry mutation rules directly.
+- `builder*Handlers.ts` files are routing adapters only. They should call `builder*Effects.ts` helpers instead of importing builder commands directly.
+- Hook-side edit command execution should go through `runEditCommand` in `builderEditCommandEffects.ts`; other hook files should not call `applyEditCommandResult` directly.
+- `useCanvasPointerRouter.ts` owns DOM pointer routing and transient gesture state only. Object transform and box selection result commits should go through `commitObjectPointerTransform` and `commitBoxSelect` in `useCanvasPointerRouterEffects.ts`.
 
 ### `packages/mol-viewer/src/lib/molRenderer`
 
@@ -147,8 +154,8 @@ Use this table when deciding where work belongs.
 | --- | --- |
 | Add a toolbar button or panel control | `apps/retainmol` |
 | Add a stable viewer capability for app use | `packages/mol-viewer/src/public/viewer.ts` plus internal implementation, then optional root compatibility |
-| Change atom replacement behavior | `lib/builder/editing/atomOps.ts`, store wrapper, tests |
-| Change point/click gesture semantics | `hooks/useBuilder.ts` |
+| Change atom replacement behavior | `lib/builder/commands/*` for the interaction contract, `lib/builder/editing/atomOps.ts` for the low-level algorithm, tests |
+| Change point/click gesture semantics | `hooks/builderAtomHandlers.ts`, `hooks/builderBondHandlers.ts`, `hooks/builderBackgroundHandlers.ts` |
 | Change undo behavior | `store/slices/*`, `store/moleculeStore.ts` |
 | Change fog, lighting, atom/bond materials | `config/render.config.ts`, `lib/molRenderer/*` |
 | Add molecule file format support | `lib/io/*` |
@@ -202,6 +209,32 @@ lib/builder -> React
 lib/builder -> molRenderer
 lib/molRenderer -> store
 ```
+
+## Automated Boundary Check
+
+Run this before merging boundary-sensitive changes:
+
+```bash
+npm run check:boundaries --workspace retainmol
+```
+
+The script currently enforces these rules:
+
+- App code must import mol-viewer through explicit public subpaths, not the root barrel.
+- App code must import viewer runtime state through `apps/retainmol/src/domain/viewerAdapter.ts`.
+- Shared app UI primitives must not depend on mol-viewer.
+- `packages/mol-viewer/src/lib/builder/commands` must not import React, app aliases, store, hooks, components, or renderer internals.
+- Package code and tests must import focused command files such as `lib/builder/commands/atomClickCommands` instead of the `lib/builder/commands` directory barrel.
+- Package code and tests must import focused command modules instead of the `storeCommands` compatibility barrel. `storeCommands.ts` is kept only for legacy barrel compatibility.
+- App code and mol-viewer hooks/store/components/public entries must not import `lib/builder/editing`; user-facing edits go through builder commands.
+- The root `packages/mol-viewer/src/index.ts` barrel must not import `lib/builder/editing` directly; legacy root APIs should be bridged through command, public, or focused non-editing helper modules.
+- `store/slices` must not import low-level builder rules such as `lib/builder/graph`, `lib/builder/valence`, `lib/builder/kernel`, or `lib/builder/editing`; store slices consume command results and shared store helpers only.
+- `hooks/builder*Handlers.ts` files must route through `builder*Effects.ts` rather than importing builder commands directly.
+- Hook files other than `builderEditCommandEffects.ts` must use `runEditCommand` instead of calling `applyEditCommandResult` directly.
+- `hooks/useCanvasPointerRouter.ts` must commit object transforms through `commitObjectPointerTransform` and box selection through `commitBoxSelect`; it should not call `runObjectPointerTransformCommand`, `applyObjectTransformResult`, or `resolveBoxSelectResult` directly.
+- Package code and tests must not import `BuilderEngine`; use builder commands or focused builder modules. Only the `BuilderEngine.test.ts` compatibility check may import it.
+- `packages/mol-viewer/src/public/viewer.ts` must not export `BuilderEngine` editing algorithms.
+- Direct `beginTransaction/endTransaction` calls are limited to `store/slices/editSlice.ts` and `hooks/editSessionFactory.ts`; other code must use edit sessions.
 
 ## Review Checklist
 

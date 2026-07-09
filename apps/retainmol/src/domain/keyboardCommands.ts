@@ -1,4 +1,5 @@
-import { bondSelectedAtoms, useEditorStore, useMoleculeStore } from '@/domain/viewerAdapter'
+import { useEditorStore, useMoleculeStore } from '@/domain/viewerAdapter'
+import { connectSelectedAtoms } from './moleculeEditCommands'
 
 export function isTextEditingTarget(target: EventTarget | null) {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
@@ -53,8 +54,7 @@ export function handleEditorShortcut(
 
   if (e.key === 'b' || e.key === 'B') {
     if (molecule.selectedAtomIds.size === 2) {
-      const result = bondSelectedAtoms()
-      if (!result.ok) editor.flashHint(result.reason ?? '无法成键')
+      connectSelectedAtoms()
     } else {
       editor.setActiveTool('select')
       editor.armBrush()
@@ -84,9 +84,12 @@ export function handleEditorShortcut(
   if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey) {
     if (molecule.selectedAtomIds.size === 0) return false
     e.preventDefault()
-    molecule.beginTransaction()
-    molecule.selectedAtomIds.forEach(id => molecule.addOneHydrogen(id))
-    molecule.endTransaction()
+    const availability = molecule.canAddOneHydrogens([...molecule.selectedAtomIds])
+    if (!availability.ok) {
+      editor.flashHint(availability.reason ?? '无法加 H')
+      return true
+    }
+    molecule.addOneHydrogens(availability.allowedAtomIds)
     return true
   }
 
