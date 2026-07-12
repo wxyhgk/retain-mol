@@ -24,6 +24,10 @@ export function runCopySelectionCommand(
         radical: atom.radical,
         coordinationGeometry: atom.coordinationGeometry,
         coordinationDirections: atom.coordinationDirections?.map(direction => [...direction] as const),
+        coordinationSites: atom.coordinationSites?.map(site => ({
+          ...site,
+          direction: [...site.direction] as const,
+        })),
         coordinationNumber: atom.coordinationNumber,
       })),
       bonds: selectedBonds.map(bond => ({
@@ -31,6 +35,10 @@ export function runCopySelectionCommand(
         b: indexByAtomId.get(bond.atomId2)!,
         order: bond.order,
         aromatic: bond.aromatic,
+        coordinationSites: bond.coordinationSites?.flatMap(assignment => {
+          const atom = indexByAtomId.get(assignment.atomId)
+          return atom === undefined ? [] : [{ atom, siteId: assignment.siteId }]
+        }),
       })),
     },
   }
@@ -54,11 +62,24 @@ export function runPasteAtomsCommand(
     radical: clipAtom.radical,
     coordinationGeometry: clipAtom.coordinationGeometry,
     coordinationDirections: clipAtom.coordinationDirections?.map(direction => [...direction] as const),
+    coordinationSites: clipAtom.coordinationSites?.map(site => ({
+      ...site,
+      direction: [...site.direction] as const,
+    })),
     coordinationNumber: clipAtom.coordinationNumber,
   }))
-  const newBonds = clipboard.bonds.map(clipBond =>
-    newBond(newAtoms[clipBond.a].id, newAtoms[clipBond.b].id, clipBond.order)
-  )
+  const newBonds = clipboard.bonds.map(clipBond => {
+    const atomId1 = newAtoms[clipBond.a].id
+    const atomId2 = newAtoms[clipBond.b].id
+    const baseBond = newBond(atomId1, atomId2, clipBond.order)
+    const coordinationSites = clipBond.coordinationSites?.flatMap(assignment => {
+      const atom = newAtoms[assignment.atom]
+      return atom ? [{ atomId: atom.id, siteId: assignment.siteId }] : []
+    })
+    return coordinationSites?.length
+      ? { ...baseBond, aromatic: clipBond.aromatic, coordinationSites }
+      : { ...baseBond, aromatic: clipBond.aromatic }
+  })
 
   return {
     ok: true,

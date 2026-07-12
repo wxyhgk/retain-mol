@@ -29,12 +29,38 @@ export function instantiate(
         const worldDirection = endpoint.sub(p).normalize()
         return [worldDirection.x, worldDirection.y, worldDirection.z] as const
       }),
+      coordinationSites: coordination.sites.map(site => {
+        const endpoint = transform(new THREE.Vector3(
+          fa.x + site.direction[0],
+          fa.y + site.direction[1],
+          fa.z + site.direction[2],
+        ))
+        const worldDirection = endpoint.sub(p).normalize()
+        return {
+          ...site,
+          direction: [worldDirection.x, worldDirection.y, worldDirection.z] as const,
+        }
+      }),
     } : baseAtom
     idByIndex.set(i, atom.id)
     atoms.push(atom)
   }
   const bonds = frag.bonds
     .filter(b => b.a !== skipIndex && b.b !== skipIndex)
-    .map(b => newBond(idByIndex.get(b.a)!, idByIndex.get(b.b)!, b.order))
+    .map(b => {
+      const atomId1 = idByIndex.get(b.a)!
+      const atomId2 = idByIndex.get(b.b)!
+      const bond = newBond(atomId1, atomId2, b.order)
+      if (!b.coordinationSiteId) return bond
+      const coordinationAtomId = b.a === frag.attachIndex
+        ? atomId1
+        : b.b === frag.attachIndex
+          ? atomId2
+          : undefined
+      return coordinationAtomId ? {
+        ...bond,
+        coordinationSites: [{ atomId: coordinationAtomId, siteId: b.coordinationSiteId }],
+      } : bond
+    })
   return { atoms, bonds, idByIndex }
 }

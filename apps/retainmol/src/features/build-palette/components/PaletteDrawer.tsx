@@ -1,13 +1,11 @@
 import { X } from 'lucide-react'
 import type { WorkspacePanel } from '@/domain/workspaceToolStore'
 import type { BuildPaletteController } from '../model/useBuildPaletteController'
-import { BondWorkspacePanel } from './workspace/BondWorkspacePanel'
 import { DrawWorkspacePanel } from './workspace/DrawWorkspacePanel'
 import { TemplateWorkspacePanel } from './workspace/TemplateWorkspacePanel'
 
 const PANEL_META: Record<WorkspacePanel, { title: string; subtitle: string }> = {
-  draw: { title: '绘制', subtitle: '元素、替换与杂化构建' },
-  bond: { title: '键', subtitle: '连接、键级与删除' },
+  draw: { title: '绘制', subtitle: '元素、杂化构建与键编辑' },
   template: { title: '模板', subtitle: '环系、连接模板与起始结构' },
 }
 
@@ -21,7 +19,7 @@ export function PaletteDrawer({ controller }: { controller: BuildPaletteControll
       aria-label={`${meta.title}上下文面板`}
       data-workspace-floating="true"
       className="absolute left-[84px] top-3 z-30 flex w-[340px] max-w-[calc(100vw-96px)] flex-col overflow-hidden rounded-lg border border-border bg-card/95 text-card-foreground shadow-[0_14px_34px_rgba(0,0,0,0.14)] backdrop-blur-md transition-opacity duration-75"
-      style={{ maxHeight: 'calc(100% - 24px)' }}
+      style={{ height: 'calc(100% - 24px)' }}
     >
       <div className="flex items-start justify-between border-b border-border px-3 py-2.5">
         <div className="min-w-0">
@@ -38,7 +36,7 @@ export function PaletteDrawer({ controller }: { controller: BuildPaletteControll
           <X size={14} />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
+      <div className="min-h-0 flex-1 overflow-hidden p-3">
         {panel === 'draw' && (
           <DrawWorkspacePanel
             activeElement={controller.activeElement}
@@ -49,10 +47,8 @@ export function PaletteDrawer({ controller }: { controller: BuildPaletteControll
             onPickAtom={controller.pickAtom}
             onPickHydrogenGrow={controller.pickHydrogenGrow}
             onPickFragment={controller.pickDrawFragment}
-          />
-        )}
-        {panel === 'bond' && (
-          <BondWorkspacePanel
+            onBeginAttachmentSitePick={controller.beginAttachmentSitePick}
+            onPickAttachmentSite={controller.pickAttachmentSite}
             selectedAtomCount={controller.selectedAtomCount}
             selectedBond={controller.selectedBond}
             onConnectSelectedAtoms={controller.connectSelectedAtoms}
@@ -61,12 +57,14 @@ export function PaletteDrawer({ controller }: { controller: BuildPaletteControll
           />
         )}
         {panel === 'template' && (
-          <TemplateWorkspacePanel
-            activeFragmentId={controller.activeFragmentId}
-            onPickTemplate={controller.pickTemplate}
-            onPickFragment={controller.pickTemplateFragment}
-            onPickRuntimeSite={controller.pickRuntimeTemplateSite}
-          />
+          <div className="h-full overflow-y-auto [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
+            <TemplateWorkspacePanel
+              activeFragmentId={controller.activeFragmentId}
+              onPickTemplate={controller.pickTemplate}
+              onPickFragment={controller.pickTemplateFragment}
+              onPickRuntimeSite={controller.pickRuntimeTemplateSite}
+            />
+          </div>
         )}
       </div>
     </aside>

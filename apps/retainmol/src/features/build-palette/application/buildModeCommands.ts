@@ -27,6 +27,10 @@ export function selectFragmentBuildMode(
   activateDrawOperation({ kind: 'fragment', fragmentId, element }, effects)
 }
 
+export function beginCoordinationSitePick(effects: BuildModeEffects) {
+  effects.disarmBrush()
+}
+
 export function selectTemplateFragmentBuildMode(
   fragmentId: string,
   element: string | undefined,

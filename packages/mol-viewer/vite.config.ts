@@ -38,6 +38,7 @@ export default defineConfig(({ command }) => {
             'public/viewer': path.resolve(__dirname, './src/public/viewer.ts'),
             'public/styles': path.resolve(__dirname, './src/public/styles.ts'),
             'public/fragments': path.resolve(__dirname, './src/public/fragments.ts'),
+            'public/coordination': path.resolve(__dirname, './src/public/coordination.ts'),
             'public/samples': path.resolve(__dirname, './src/public/samples.ts'),
             'public/templates': path.resolve(__dirname, './src/public/templates.ts'),
             'public/pubchem': path.resolve(__dirname, './src/public/pubchem.ts'),

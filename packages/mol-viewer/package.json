@@ -1,6 +1,6 @@
 {
   "name": "@retainmol/mol-viewer",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
@@ -30,6 +30,10 @@
     "./fragments": {
       "types": "./dist/public/fragments.d.ts",
       "import": "./dist/public/fragments.js"
+    },
+    "./coordination": {
+      "types": "./dist/public/coordination.d.ts",
+      "import": "./dist/public/coordination.js"
     },
     "./samples": {
       "types": "./dist/public/samples.d.ts",

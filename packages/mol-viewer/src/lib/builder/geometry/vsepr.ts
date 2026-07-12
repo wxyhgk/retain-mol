@@ -267,7 +267,23 @@ function uniqueDirections(dirs: readonly Vec3[]): Vec3[] {
   return out
 }
 
-function availableCoordinationDirections(centerAtom: Atom, neighborDirs: readonly Vec3[]): Vec3[] {
+function availableCoordinationDirections(
+  centerAtom: Atom,
+  bonds: readonly Bond[],
+  neighborDirs: readonly Vec3[],
+): Vec3[] {
+  const authoredSites = centerAtom.coordinationSites
+  if (authoredSites?.length) {
+    const occupiedSiteIds = new Set(
+      bonds.flatMap(bond => bond.coordinationSites
+        ?.filter(assignment => assignment.atomId === centerAtom.id)
+        .map(assignment => assignment.siteId) ?? []),
+    )
+    return authoredSites
+      .filter(site => !occupiedSiteIds.has(site.id))
+      .map(site => normalize([...site.direction] as Vec3))
+      .filter(direction => neighborDirs.every(neighbor => dot(direction, neighbor) < 0.94))
+  }
   const authored = centerAtom.coordinationDirections
   if (!authored || authored.length === 0) return []
   return authored
@@ -327,7 +343,7 @@ export function calcGrowPosition(
     const neighborDirs = getNeighborDirs(centerAtom, bonds, atomById)
     const hybridization = inferHybridization(bonds, centerAtom.id)
     const bLen = calcBondLength(centerAtom.symbol, newSymbol)
-    const coordinationCandidates = availableCoordinationDirections(centerAtom, neighborDirs)
+    const coordinationCandidates = availableCoordinationDirections(centerAtom, bonds, neighborDirs)
       .sort((a, b) => dot(b, preferred) - dot(a, preferred))
     dir = chooseLeastClashingDirection(
       centerAtom,
@@ -392,8 +408,10 @@ export function getGrowGuide(
   const atomById = new Map(atoms.map(a => [a.id, a]))
   const neighborDirs = getNeighborDirs(centerAtom, bonds, atomById)
   const n = neighborDirs.length
-  const coordinationCandidates = availableCoordinationDirections(centerAtom, neighborDirs)
-  if (centerAtom.coordinationDirections && coordinationCandidates.length === 0) return { kind: 'points', positions: [] }
+  const coordinationCandidates = availableCoordinationDirections(centerAtom, bonds, neighborDirs)
+  if ((centerAtom.coordinationSites || centerAtom.coordinationDirections) && coordinationCandidates.length === 0) {
+    return { kind: 'points', positions: [] }
+  }
   if (n === 0) return { kind: 'free' }
 
   const hybridization = inferHybridization(bonds, centerAtom.id)
@@ -455,7 +473,7 @@ export function calcAddAtomOnExisting(
   const neighborDirs = getNeighborDirs(centerAtom, bonds, atomById)
   const hybridization = inferHybridization(bonds, centerAtom.id)
   const bLen = calcBondLength(centerAtom.symbol, newSymbol)
-  const coordinationCandidates = availableCoordinationDirections(centerAtom, neighborDirs)
+  const coordinationCandidates = availableCoordinationDirections(centerAtom, bonds, neighborDirs)
   const defaultDirection = findNextBondDir(centerAtom.symbol, neighborDirs, hybridization)
   const dir = chooseLeastClashingDirection(
     centerAtom,
@@ -477,6 +495,8 @@ export function calcAddAtomOnExisting(
     ],
     bondLength: bLen,
     geometry,
-    availableSlots: Math.max(0, maxBonds - neighborDirs.length),
+    availableSlots: centerAtom.coordinationSites
+      ? coordinationCandidates.length
+      : Math.max(0, maxBonds - neighborDirs.length),
   }
 }

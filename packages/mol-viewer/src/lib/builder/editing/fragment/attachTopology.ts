@@ -13,10 +13,11 @@ export interface ApplyAttachFragmentTopologyInput {
   readonly rotation: THREE.Quaternion
   readonly anchor: THREE.Vector3
   readonly removeAtomIds: ReadonlySet<string>
+  readonly hostCoordinationSiteId?: string
 }
 
 export function applyAttachFragmentTopology(input: ApplyAttachFragmentTopologyInput): Molecule {
-  const { molecule, fragment, host, order, attachOrigin, rotation, anchor, removeAtomIds } = input
+  const { molecule, fragment, host, order, attachOrigin, rotation, anchor, removeAtomIds, hostCoordinationSiteId } = input
   const { atoms, bonds, idByIndex } = instantiate(
     fragment,
     p => p.sub(attachOrigin).applyQuaternion(rotation).add(anchor),
@@ -26,7 +27,19 @@ export function applyAttachFragmentTopology(input: ApplyAttachFragmentTopologyIn
   if (attachAtomId === undefined) {
     throw new Error(`fragment attach atom ${fragment.attachIndex} was not instantiated`)
   }
-  const linkBond = newBond(host.id, attachAtomId, order)
+  const fragmentSiteId = fragment.bonds.find(bond =>
+    bond.coordinationSiteId &&
+    ((bond.a === fragment.attachIndex && bond.b === fragment.attachHIndex) ||
+      (bond.b === fragment.attachIndex && bond.a === fragment.attachHIndex)),
+  )?.coordinationSiteId
+  const assignments = [
+    hostCoordinationSiteId ? { atomId: host.id, siteId: hostCoordinationSiteId } : null,
+    fragmentSiteId ? { atomId: attachAtomId, siteId: fragmentSiteId } : null,
+  ].filter((assignment): assignment is { atomId: string; siteId: string } => assignment !== null)
+  const baseLinkBond = newBond(host.id, attachAtomId, order)
+  const linkBond = assignments.length > 0
+    ? { ...baseLinkBond, coordinationSites: assignments }
+    : baseLinkBond
 
   return {
     ...molecule,

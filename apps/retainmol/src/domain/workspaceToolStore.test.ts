@@ -39,11 +39,10 @@ function createHarness() {
 describe('workspaceToolStore', () => {
   beforeEach(resetWorkspaceToolState)
 
-  it('maps all six workspace tools to the three core tools and brush state', () => {
+  it('maps all five workspace tools to the three core tools and brush state', () => {
     const expected = {
       select: { coreTool: 'select', brushArmed: false, panel: null },
       draw: { coreTool: 'select', brushArmed: true, panel: 'draw' },
-      bond: { coreTool: 'select', brushArmed: false, panel: 'bond' },
       template: { coreTool: 'select', brushArmed: false, panel: 'template' },
       move: { coreTool: 'move-object', brushArmed: false, panel: null },
       measure: { coreTool: 'measure', brushArmed: false, panel: null },
@@ -63,7 +62,7 @@ describe('workspaceToolStore', () => {
 
   it('closes a context panel by returning to unarmed select', () => {
     const { state, effects } = createHarness()
-    activateWorkspaceTool('bond', effects)
+    activateWorkspaceTool('template', effects)
     closeWorkspacePanel(effects)
 
     expect(useWorkspaceToolStore.getState().activePanel).toBeNull()

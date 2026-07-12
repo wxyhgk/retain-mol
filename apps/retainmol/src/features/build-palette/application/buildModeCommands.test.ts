@@ -5,6 +5,7 @@ import {
   activateBuildMode,
   activateNonBuildTool,
   activateSelectMode,
+  beginCoordinationSitePick,
   selectAtomBuildMode,
   selectFragmentBuildMode,
   selectHydrogenGrowMode,
@@ -57,6 +58,16 @@ describe('build mode commands', () => {
     state.mode = 'replace'
     selectHydrogenGrowMode(effects)
     expect(state).toEqual({ tool: 'select', element: 'H', mode: 'grow', fragment: null, armed: true })
+  })
+
+  it('pauses the current brush while a coordination site is being chosen', () => {
+    const { state, effects } = createHarness()
+    state.armed = true
+    state.fragment = null
+
+    beginCoordinationSitePick(effects)
+
+    expect(state).toMatchObject({ fragment: null, armed: false })
   })
 
   it('keeps build/select/non-build tool states mutually exclusive', () => {

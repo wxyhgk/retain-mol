@@ -6,6 +6,7 @@ const MOL_VIEWER_SRC_DIR = new URL('../../../packages/mol-viewer/src', import.me
 const MOL_VIEWER_COMMANDS_DIR = join(MOL_VIEWER_SRC_DIR, 'lib/builder/commands')
 const allowedMolViewerImports = new Set([
   '@retainmol/mol-viewer/core',
+  '@retainmol/mol-viewer/coordination',
   '@retainmol/mol-viewer/fragments',
   '@retainmol/mol-viewer/io',
   '@retainmol/mol-viewer/optimize',

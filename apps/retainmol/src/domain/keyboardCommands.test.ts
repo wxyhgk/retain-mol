@@ -8,12 +8,7 @@ import {
   selectWorkspacePanel,
   useWorkspaceToolStore,
 } from './workspaceToolStore'
-import { connectSelectedAtoms } from './moleculeEditCommands'
 import { handleEditorShortcut } from './keyboardCommands'
-
-vi.mock('./moleculeEditCommands', () => ({
-  connectSelectedAtoms: vi.fn(),
-}))
 
 const handlers = {
   undo: vi.fn(),
@@ -66,9 +61,9 @@ describe('handleEditorShortcut workspace tools', () => {
 
   it.each([
     ['s', 'select', 'select', false, null],
+    ['d', 'draw', 'select', true, 'draw'],
     ['v', 'move', 'move-object', false, null],
     ['m', 'measure', 'measure', false, null],
-    ['b', 'bond', 'select', false, 'bond'],
   ] as const)('keeps %s synchronized with workspace and core state', (
     key,
     workspaceTool,
@@ -85,13 +80,12 @@ describe('handleEditorShortcut workspace tools', () => {
     expect(useEditorStore.getState()).toMatchObject({ activeTool: coreTool, brushArmed })
   })
 
-  it('connects two selected atoms on B without changing the current tool', () => {
+  it('does not assign an editor action to B', () => {
     activateWorkspaceTool('move', editorEffects())
     useMoleculeStore.setState({ selectedAtomIds: new Set(['a1', 'a2']) })
 
-    expect(handleEditorShortcut(keyboardEvent('B'), handlers)).toBe(true)
+    expect(handleEditorShortcut(keyboardEvent('B'), handlers)).toBe(false)
 
-    expect(connectSelectedAtoms).toHaveBeenCalledOnce()
     expect(useWorkspaceToolStore.getState().activePanel).toBeNull()
     expect(useEditorStore.getState().activeTool).toBe('move-object')
   })

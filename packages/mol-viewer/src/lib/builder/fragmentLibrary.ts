@@ -15,9 +15,10 @@ import { tetrahedralCandidates } from './geometry/vsepr'
 import { type Vec3, add, scale } from './math/vec3'
 import { validateFragmentDef } from './kernel/FragmentValidator'
 import { TRANSITION_METAL_COORDINATION_SETS } from './coordination/elements'
+import type { CoordinationSite } from '../types'
 
 export interface FragmentAtom { symbol: string; x: number; y: number; z: number }
-export interface FragmentBond { a: number; b: number; order: 1 | 2 | 3 }
+export interface FragmentBond { a: number; b: number; order: 1 | 2 | 3; coordinationSiteId?: string }
 
 export interface FragmentDef {
   id: string
@@ -53,6 +54,7 @@ export interface FragmentDef {
     coordinationNumber: number
     pointGroup?: string
     directions: [number, number, number][]
+    sites: CoordinationSite[]
   }
 }
 
@@ -239,6 +241,7 @@ export function registerFragment(fragment: FragmentDef): FragmentDef {
     coordination: fragment.coordination ? {
       ...fragment.coordination,
       directions: fragment.coordination.directions.map(direction => [...direction]),
+      sites: fragment.coordination.sites.map(site => ({ ...site, direction: [...site.direction] })),
     } : undefined,
   }
   REGISTERED_FRAGMENTS.set(stored.id, stored)

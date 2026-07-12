@@ -1,8 +1,9 @@
 import * as THREE from 'three'
-import type { GrowGuideSpec } from '../types'
+import type { FragmentTorsionPreview, GrowGuideSpec } from '../types'
 import { GHOST_LINE, GROW_GUIDE, RENDER } from '../../config/render.config'
 import { ticker as defaultTicker } from '../animation'
 import { buildDepthCuedRing } from './ghostGeometry'
+import { getElementConfig } from '../../config/elements.config'
 
 /**
  * 拖出生长手势的全部预览视觉（与 MeasureVisuals 对称）：
@@ -17,6 +18,7 @@ export class GhostVisuals {
   private line: THREE.Line | null = null
   private atom: THREE.Mesh | null = null
   private guideGroup: THREE.Group | null = null
+  private fragmentGroup: THREE.Group | null = null
 
   private _lineStart: THREE.Vector3 | null = null
   private _guideSpec: GrowGuideSpec = null
@@ -105,6 +107,58 @@ export class GhostVisuals {
       this.atom = null
       this.invalidate()
     }
+  }
+
+  showFragment(preview: FragmentTorsionPreview) {
+    this.removeFragment()
+    const group = new THREE.Group()
+    for (const atom of preview.atoms) {
+      const radius = atom.symbol === 'H' ? 0.12 : 0.22
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 16, 12),
+        new THREE.MeshBasicMaterial({
+          color: getElementConfig(atom.symbol).color,
+          transparent: true,
+          opacity: 0.58,
+          depthWrite: false,
+        }),
+      )
+      mesh.position.set(...atom.position)
+      group.add(mesh)
+    }
+    const positions = new Float32Array(preview.bonds.length * 6)
+    preview.bonds.forEach((bond, index) => {
+      positions.set(bond.start, index * 6)
+      positions.set(bond.end, index * 6 + 3)
+    })
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    group.add(new THREE.LineSegments(
+      geometry,
+      new THREE.LineBasicMaterial({
+        color: GHOST_LINE.color,
+        transparent: true,
+        opacity: 0.62,
+        depthWrite: false,
+      }),
+    ))
+    this.fragmentGroup = group
+    this.modelGroup.add(group)
+    this.invalidate()
+  }
+
+  removeFragment() {
+    if (!this.fragmentGroup) return
+    this.modelGroup.remove(this.fragmentGroup)
+    this.fragmentGroup.traverse(object => {
+      if (!(object as THREE.Mesh | THREE.LineSegments).geometry) return
+      const visual = object as THREE.Mesh | THREE.LineSegments
+      visual.geometry.dispose()
+      const materials = Array.isArray(visual.material) ? visual.material : [visual.material]
+      materials.forEach(material => material.dispose())
+    })
+    this.fragmentGroup = null
+    this.invalidate()
   }
 
   // ── 候选槽位参考几何 ────────────────────────────────────────────────────────
@@ -227,6 +281,7 @@ export class GhostVisuals {
     this.removeLine()
     this.removeAtom()
     this.removeGuide()
+    this.removeFragment()
   }
 
   dispose() { this.clear() }

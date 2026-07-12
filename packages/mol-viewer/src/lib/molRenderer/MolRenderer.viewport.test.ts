@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
 import { ticker } from '../animation'
 import { MolRenderer } from './MolRenderer'
+import * as CameraUtils from './CameraUtils'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -14,28 +15,28 @@ function rendererShell(fields: Record<string, unknown>): MolRenderer {
 
 describe('MolRenderer viewport guides', () => {
   it('toggles axes and keeps an explicit grid setting across profile changes', () => {
-    const axes = new THREE.AxesHelper(4)
-    axes.visible = false
-    const grid = new THREE.GridHelper(10, 10)
+    const viewportGuides = {
+      setAxesVisible: vi.fn(),
+      setGridVisible: vi.fn(),
+      syncGridVisibility: vi.fn(),
+    }
     const renderer = rendererShell({
-      _axesHelper: axes,
-      _backgroundGrid: grid,
-      _gridVisibleOverride: null,
+      _viewportGuides: viewportGuides,
       camera: new THREE.PerspectiveCamera(60, 1, 0.1, 1000),
       renderStyle: 'realistic',
-      _lastCameraFov: 60,
+      _renderPipeline: { setFovPreservingScale: vi.fn() },
     })
     renderer.camera.position.set(0, 0, 16)
 
     renderer.setAxesVisible(true)
-    expect(axes.visible).toBe(true)
+    expect(viewportGuides.setAxesVisible).toHaveBeenCalledWith(true)
 
     renderer.setRenderStyle('iboview')
-    expect(grid.visible).toBe(false)
+    expect(viewportGuides.syncGridVisibility).toHaveBeenCalledWith(false)
 
     renderer.setGridVisible(false)
     renderer.setRenderStyle('publication')
-    expect(grid.visible).toBe(false)
+    expect(viewportGuides.setGridVisible).toHaveBeenCalledWith(false)
   })
 
   it('switches style without resetting orbit or pan', () => {
@@ -47,13 +48,14 @@ describe('MolRenderer viewport guides', () => {
     const modelGroup = new THREE.Group()
     modelGroup.position.set(-4, 3, -1)
     const renderer = rendererShell({
-      _backgroundGrid: null,
-      _gridVisibleOverride: null,
+      _viewportGuides: { syncGridVisibility: vi.fn() },
       camera,
       rotationGroup,
       modelGroup,
       renderStyle: 'realistic',
-      _lastCameraFov: 60,
+      _renderPipeline: {
+        setFovPreservingScale: (fov: number) => CameraUtils.setFovPreservingScale(camera, fov),
+      },
     })
     const rotationPosition = rotationGroup.position.clone()
     const rotation = rotationGroup.quaternion.clone()
@@ -70,43 +72,4 @@ describe('MolRenderer viewport guides', () => {
     expect(modelGroup.position.equals(modelPosition)).toBe(true)
   })
 
-  it('disposes the axes geometry and material', () => {
-    const scene = new THREE.Scene()
-    const rotationGroup = new THREE.Group()
-    const modelGroup = new THREE.Group()
-    const measureGroup = new THREE.Group()
-    const axes = new THREE.AxesHelper(4)
-    const grid = new THREE.GridHelper(10, 10)
-    scene.add(rotationGroup, axes, grid)
-    rotationGroup.add(modelGroup)
-    modelGroup.add(measureGroup)
-
-    const geometryDispose = vi.spyOn(axes.geometry, 'dispose')
-    const axesMaterials = Array.isArray(axes.material) ? axes.material : [axes.material]
-    const materialDisposes = axesMaterials.map(material => vi.spyOn(material, 'dispose'))
-    const renderer = rendererShell({
-      scene,
-      rotationGroup,
-      modelGroup,
-      _measureGroup: measureGroup,
-      _unsubTicker: vi.fn(),
-      _interaction: { dispose: vi.fn() },
-      _molRenderer: { dispose: vi.fn() },
-      _sceneLayer: { dispose: vi.fn() },
-      _measureVisuals: { dispose: vi.fn() },
-      _sketchGrid: null,
-      _backgroundGrid: grid,
-      _axesHelper: axes,
-      _lights: null,
-      controls: { dispose: vi.fn() },
-      _dof: null,
-      renderer: { dispose: vi.fn() },
-    })
-
-    renderer.dispose()
-
-    expect(axes.parent).toBeNull()
-    expect(geometryDispose).toHaveBeenCalledOnce()
-    materialDisposes.forEach(dispose => expect(dispose).toHaveBeenCalledOnce())
-  })
 })

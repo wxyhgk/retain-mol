@@ -5,6 +5,7 @@ import type { MoleculeState } from '../store/slices/types'
 import type { MoleculeStoreApi } from './builderPointerTypes'
 import {
   createAtomDragEditSession,
+  createBondLengthEditSession,
   createObjectPositionWriteEditSession,
   createObjectTransformEditSession,
 } from './editSessionFactory'
@@ -60,5 +61,29 @@ describe('edit session factories', () => {
     writer.end()
 
     expect(calls).toEqual(['begin', 'end', 'begin', 'write:obj-1:1', 'end'])
+  })
+
+  it('wraps a bond-length drag in one cancellable edit session', () => {
+    const calls: string[] = []
+    const store = makeStore({
+      beginTransaction: () => ({
+        owner: 'bond-length-gizmo',
+        active: true,
+        commit: () => calls.push('commit'),
+        cancel: () => calls.push('cancel'),
+      }),
+      endTransaction: () => calls.push('legacy-end'),
+    } as unknown as MoleculeState)
+
+    const committed = createBondLengthEditSession(store)
+    committed.start()
+    committed.start()
+    committed.end()
+
+    const cancelled = createBondLengthEditSession(store)
+    cancelled.start()
+    cancelled.cancel()
+
+    expect(calls).toEqual(['commit', 'cancel'])
   })
 })

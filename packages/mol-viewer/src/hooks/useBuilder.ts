@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import type { GrowGuideSpec } from '../lib/types'
+import type { FragmentTorsionPreview, GrowGuideSpec } from '../lib/types'
 import { useViewerRuntime, type ViewerRuntime } from '../runtime/ViewerRuntime'
 import { createAtomDragEditSession } from './editSessionFactory'
 import {
@@ -17,6 +17,9 @@ import {
   handleBuilderBondClick,
   handleBuilderBondDragEnd,
   handleBuilderBondDragStart,
+  handleBuilderFragmentTorsionEnd,
+  handleBuilderFragmentTorsionStart,
+  getBuilderFragmentTorsionPreview,
 } from './builderPointerHandlers'
 
 export interface BuilderHandlers {
@@ -32,6 +35,9 @@ export interface BuilderHandlers {
   getGrowPreview: (sourceId: string, cursorLocal: THREE.Vector3, freeDirection: boolean)
     => { pos: THREE.Vector3; radius: number; color: number } | null
   getGrowGuide: (sourceId: string) => GrowGuideSpec
+  onFragmentTorsionStart: (targetId: string) => boolean
+  getFragmentTorsionPreview: (targetId: string, angleDegrees: number) => FragmentTorsionPreview | null
+  onFragmentTorsionEnd: (targetId: string, angleDegrees: number) => void
 }
 
 export function useBuilder(runtimeOverride?: ViewerRuntime): BuilderHandlers {
@@ -98,9 +104,22 @@ export function useBuilder(runtimeOverride?: ViewerRuntime): BuilderHandlers {
     return getBuilderGrowGuide(store, sourceId, editorStore)
   }, [store, editorStore])
 
+  const onFragmentTorsionStart = useCallback((targetId: string) => (
+    handleBuilderFragmentTorsionStart(store, targetId, editorStore)
+  ), [store, editorStore])
+
+  const getFragmentTorsionPreview = useCallback((targetId: string, angleDegrees: number) => (
+    getBuilderFragmentTorsionPreview(store, targetId, angleDegrees, editorStore)
+  ), [store, editorStore])
+
+  const onFragmentTorsionEnd = useCallback((targetId: string, angleDegrees: number) => {
+    handleBuilderFragmentTorsionEnd(store, targetId, angleDegrees, editorStore)
+  }, [store, editorStore])
+
   return {
     onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
     onAtomDragStart, onAtomDrag, onAtomDragEnd,
     onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
+    onFragmentTorsionStart, getFragmentTorsionPreview, onFragmentTorsionEnd,
   }
 }

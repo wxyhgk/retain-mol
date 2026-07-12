@@ -33,6 +33,17 @@ export type InteractionGestureState =
       readonly targetId: string | null
       readonly dropPosition: GesturePoint3 | null
     }
+  | {
+      readonly kind: 'fragment-press'
+      readonly targetId: string
+      readonly down: GesturePoint2
+    }
+  | {
+      readonly kind: 'fragment-torsion'
+      readonly targetId: string
+      readonly down: GesturePoint2
+      readonly angleDegrees: number
+    }
 
 export const idleInteractionGesture = (): InteractionGestureState => ({ kind: 'idle' })
 
@@ -44,13 +55,20 @@ export function beginBondPress(sourceId: string, down: GesturePoint2): Interacti
   return { kind: 'bond-press', sourceId, down: { ...down } }
 }
 
+export function beginFragmentPress(targetId: string, down: GesturePoint2): InteractionGestureState {
+  return { kind: 'fragment-press', targetId, down: { ...down } }
+}
+
 export function advanceInteractionGesture(
   state: InteractionGestureState,
   point: GesturePoint2,
   dragStartThreshold: number,
 ): InteractionGestureState {
-  if (state.kind !== 'atom-press' && state.kind !== 'bond-press') return state
+  if (state.kind !== 'atom-press' && state.kind !== 'bond-press' && state.kind !== 'fragment-press') return state
   if (distance2(state.down, point) < dragStartThreshold) return state
+  if (state.kind === 'fragment-press') {
+    return { kind: 'fragment-torsion', targetId: state.targetId, down: state.down, angleDegrees: 0 }
+  }
   return state.kind === 'atom-press'
     ? { kind: 'atom-drag', atomId: state.atomId, down: state.down }
     : {
@@ -60,6 +78,13 @@ export function advanceInteractionGesture(
         targetId: null,
         dropPosition: null,
       }
+}
+
+export function updateFragmentTorsionAngle(
+  state: InteractionGestureState,
+  angleDegrees: number,
+): InteractionGestureState {
+  return state.kind === 'fragment-torsion' ? { ...state, angleDegrees } : state
 }
 
 export function updateBondDragTarget(
@@ -85,6 +110,12 @@ export function isBondGesture(
   state: InteractionGestureState,
 ): state is Extract<InteractionGestureState, { kind: 'bond-press' | 'bond-drag' }> {
   return state.kind === 'bond-press' || state.kind === 'bond-drag'
+}
+
+export function isFragmentGesture(
+  state: InteractionGestureState,
+): state is Extract<InteractionGestureState, { kind: 'fragment-press' | 'fragment-torsion' }> {
+  return state.kind === 'fragment-press' || state.kind === 'fragment-torsion'
 }
 
 export function activeAtomDragId(state: InteractionGestureState): string | null {

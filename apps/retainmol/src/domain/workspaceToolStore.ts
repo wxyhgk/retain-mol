@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import type { Tool } from '@retainmol/mol-viewer/core'
 
-export const WORKSPACE_TOOLS = ['select', 'draw', 'bond', 'template', 'move', 'measure'] as const
+export const WORKSPACE_TOOLS = ['select', 'draw', 'template', 'move', 'measure'] as const
 
 export type WorkspaceTool = (typeof WORKSPACE_TOOLS)[number]
-export type WorkspacePanel = Extract<WorkspaceTool, 'draw' | 'bond' | 'template'>
+export type WorkspacePanel = Extract<WorkspaceTool, 'draw' | 'template'>
 
 export type DrawOperation =
   | { readonly kind: 'replace'; readonly element: string }
@@ -39,7 +39,7 @@ export const useWorkspaceToolStore = create<WorkspaceToolState>(() => ({
 }))
 
 export function workspacePanelFor(tool: WorkspaceTool): WorkspacePanel | null {
-  return tool === 'draw' || tool === 'bond' || tool === 'template' ? tool : null
+  return tool === 'draw' || tool === 'template' ? tool : null
 }
 
 export const selectWorkspacePanel = (state: WorkspaceToolState) =>

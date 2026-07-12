@@ -4,9 +4,12 @@ import {
   advanceInteractionGesture,
   beginAtomPress,
   beginBondPress,
+  beginFragmentPress,
   idleInteractionGesture,
   isAtomGesture,
   isBondGesture,
+  isFragmentGesture,
+  updateFragmentTorsionAngle,
   updateBondDragTarget,
 } from './interactionGestureState'
 
@@ -63,5 +66,18 @@ describe('interaction gesture state', () => {
     expect(activeAtomDragId(pressed)).toBeNull()
     expect(activeAtomDragId(dragging)).toBe('a1')
     expect(activeAtomDragId(beginBondPress('a2', { x: 0, y: 0 }))).toBeNull()
+  })
+
+  it('promotes fragment press into a continuous torsion gesture', () => {
+    const pressed = beginFragmentPress('host', { x: 10, y: 20 })
+    expect(advanceInteractionGesture(pressed, { x: 12, y: 20 }, 4)).toBe(pressed)
+    const dragging = advanceInteractionGesture(pressed, { x: 14, y: 20 }, 4)
+    expect(isFragmentGesture(dragging)).toBe(true)
+    expect(updateFragmentTorsionAngle(dragging, 181)).toEqual({
+      kind: 'fragment-torsion',
+      targetId: 'host',
+      down: { x: 10, y: 20 },
+      angleDegrees: 181,
+    })
   })
 })

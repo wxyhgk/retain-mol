@@ -12,10 +12,12 @@ export function attachFragmentToAtom(
   mol: Molecule,
   frag: FragmentDef,
   targetAtomId: string,
+  options: { torsionAngleDegrees?: number } = {},
 ): AttachResult {
-  const order = frag.attachOrder ?? 1
-  const target = resolveAttachFragmentTarget(mol, targetAtomId, order)
+  const requestedOrder = frag.attachOrder ?? 1
+  const target = resolveAttachFragmentTarget(mol, targetAtomId, requestedOrder)
   if (target.ok === false) return { ok: false, reason: target.reason }
+  const order = target.order
 
   const geometry = buildAttachFragmentGeometry({
     fragment: frag,
@@ -35,6 +37,7 @@ export function attachFragmentToAtom(
     axis: target.direction,
     skipIndex: frag.attachHIndex,
     excludeAtomIds: new Set([target.host.id, ...target.removeHIds]),
+    torsionAngleDegrees: order === 1 ? options.torsionAngleDegrees : undefined,
   })
 
   return {
@@ -48,6 +51,7 @@ export function attachFragmentToAtom(
       rotation: plan.rotation,
       anchor: geometry.anchor,
       removeAtomIds: target.removeHIds,
+      hostCoordinationSiteId: target.hostCoordinationSiteId,
     }),
   }
 }

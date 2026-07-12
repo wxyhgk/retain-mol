@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as root from '../index'
 import * as core from './core'
+import * as coordination from './coordination'
 import * as fragments from './fragments'
 
 describe('mol-viewer public manifest', () => {
@@ -27,5 +28,10 @@ describe('mol-viewer public manifest', () => {
     expect(core.getMolecularFormula([{ symbol: 'H' }, { symbol: 'O' }, { symbol: 'H' }])).toBe('H2O')
     expect(core.calculateMolecularWeight([{ symbol: 'H' }])).toBeCloseTo(1.008, 3)
     expect(core.calculateMolecularWeight([{ symbol: 'Xx' }])).toBeNull()
+  })
+
+  it('exposes coordination site selection through its narrow subpath', () => {
+    expect(coordination.listCoordinationFragmentsForElement('Fe')).toHaveLength(17)
+    expect(coordination.getCoordinationSiteModel('fe-coord-square-planar')?.sites).toHaveLength(4)
   })
 })

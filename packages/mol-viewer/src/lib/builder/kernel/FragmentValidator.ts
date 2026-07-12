@@ -97,6 +97,22 @@ export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIs
     if (fragment.coordination.coordinationNumber !== fragment.coordination.directions.length) {
       issues.push(issue(fragment, 'coordination.count.mismatch', '配位数与方向数量不一致'))
     }
+    if (fragment.coordination.coordinationNumber !== fragment.coordination.sites.length) {
+      issues.push(issue(fragment, 'coordination.sites.count.mismatch', '配位数与位点数量不一致'))
+    }
+    const siteIds = new Set<string>()
+    fragment.coordination.sites.forEach((site, index) => {
+      if (!site.id.trim() || siteIds.has(site.id)) {
+        issues.push(issue(fragment, 'coordination.site.id.invalid', `coordination site[${index}] ID 为空或重复`))
+      }
+      siteIds.add(site.id)
+      if (!site.equivalenceGroup.trim()) {
+        issues.push(issue(fragment, 'coordination.site.group.invalid', `coordination site[${index}] 缺少等价组`))
+      }
+      if (site.bondOrder !== 1 && site.bondOrder !== 2 && site.bondOrder !== 3) {
+        issues.push(issue(fragment, 'coordination.site.order.invalid', `coordination site[${index}] 键级无效`))
+      }
+    })
     fragment.coordination.directions.forEach((direction, index) => {
       if (direction.length !== 3 || direction.some(value => !Number.isFinite(value))) {
         issues.push(issue(fragment, 'coordination.direction.invalid', `coordination direction[${index}] 不是有效三维向量`))

@@ -10,6 +10,7 @@
     "src/index.ts",
     "src/optimize.ts",
     "src/public/core.ts",
+    "src/public/coordination.ts",
     "src/public/fragments.ts",
     "src/public/io.ts",
     "src/public/pubchem.ts",

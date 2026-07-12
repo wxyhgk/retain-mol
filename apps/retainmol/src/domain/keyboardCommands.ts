@@ -1,7 +1,6 @@
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { activateWorkspaceTool, type WorkspaceToolEffects } from './workspaceToolStore'
-import { connectSelectedAtoms } from './moleculeEditCommands'
 
 export function isTextEditingTarget(target: EventTarget | null) {
   const isInput = typeof HTMLInputElement !== 'undefined' && target instanceof HTMLInputElement
@@ -63,6 +62,11 @@ export function handleEditorShortcut(
     return true
   }
 
+  if (plainShortcut && e.key.toLowerCase() === 'd') {
+    activateWorkspaceTool('draw', effects)
+    return true
+  }
+
   if (plainShortcut && e.key.toLowerCase() === 'v') {
     activateWorkspaceTool('move', effects)
     return true
@@ -70,15 +74,6 @@ export function handleEditorShortcut(
 
   if (plainShortcut && e.key.toLowerCase() === 'm') {
     activateWorkspaceTool('measure', effects)
-    return true
-  }
-
-  if (plainShortcut && e.key.toLowerCase() === 'b') {
-    if (molecule.selectedAtomIds.size === 2) {
-      connectSelectedAtoms()
-    } else {
-      activateWorkspaceTool('bond', effects)
-    }
     return true
   }
 

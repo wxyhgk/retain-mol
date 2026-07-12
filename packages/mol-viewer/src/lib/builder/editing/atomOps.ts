@@ -85,6 +85,7 @@ export function replaceAtomSymbol(
       symbol: newSymbol,
       coordinationGeometry: undefined,
       coordinationDirections: undefined,
+      coordinationSites: undefined,
       coordinationNumber: undefined,
     } : a),
   }

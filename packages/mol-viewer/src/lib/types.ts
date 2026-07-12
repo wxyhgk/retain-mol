@@ -7,6 +7,21 @@ import type { Vector3 } from 'three'
 
 // ── 分子核心类型（叶子层）─────────────────────────────────────────────────────
 
+export type CoordinationBondOrder = 1 | 2 | 3
+
+export interface CoordinationSite {
+  readonly id: string
+  readonly label: string
+  readonly direction: readonly [number, number, number]
+  readonly bondOrder: CoordinationBondOrder
+  readonly equivalenceGroup: string
+}
+
+export interface CoordinationSiteAssignment {
+  readonly atomId: string
+  readonly siteId: string
+}
+
 export interface Atom {
   readonly id: string
   readonly symbol: string
@@ -22,6 +37,8 @@ export interface Atom {
   readonly coordinationGeometry?: string
   /** World-space unit vectors for the authored coordination sites. */
   readonly coordinationDirections?: readonly (readonly [number, number, number])[]
+  /** Stable authored sites. Directions are transformed into molecule coordinates. */
+  readonly coordinationSites?: readonly CoordinationSite[]
   /** Hard bonding capacity supplied by the selected coordination preset. */
   readonly coordinationNumber?: number
 }
@@ -32,6 +49,8 @@ export interface Bond {
   readonly atomId2: string
   readonly order: 1 | 2 | 3
   readonly aromatic?: boolean
+  /** Coordination sites consumed at either endpoint of this bond. */
+  readonly coordinationSites?: readonly CoordinationSiteAssignment[]
 }
 
 export interface Molecule {
@@ -45,6 +64,18 @@ export type GrowGuideSpec =
   | { kind: 'ring'; center: Vector3; axis: Vector3; radius: number; ghostRadius: number; ghostColor: number }
   | { kind: 'points'; positions: Vector3[]; ghostRadius: number; ghostColor: number }
   | null
+
+export interface FragmentTorsionPreview {
+  readonly atoms: readonly {
+    readonly symbol: string
+    readonly position: readonly [number, number, number]
+  }[]
+  readonly bonds: readonly {
+    readonly start: readonly [number, number, number]
+    readonly end: readonly [number, number, number]
+    readonly order: 1 | 2 | 3
+  }[]
+}
 
 export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe' | 'tube' | 'mtube'
 /**
@@ -85,6 +116,7 @@ export interface ClipboardAtom {
   radical?: number
   coordinationGeometry?: string
   coordinationDirections?: readonly (readonly [number, number, number])[]
+  coordinationSites?: readonly CoordinationSite[]
   coordinationNumber?: number
 }
 
@@ -93,6 +125,7 @@ export interface ClipboardBond {
   b: number
   order: 1 | 2 | 3
   aromatic?: boolean
+  coordinationSites?: readonly { atom: number; siteId: string }[]
 }
 
 export interface MolClipboard {

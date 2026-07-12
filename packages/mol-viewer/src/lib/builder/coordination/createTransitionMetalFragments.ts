@@ -9,7 +9,18 @@ export function defineTransitionMetalCoordinationSet(
 ): TransitionMetalCoordinationSet {
   const fragments: FragmentDef[] = specs.map(spec => {
     const base = COORDINATION_GEOMETRY_CATALOG[spec.geometryId]
-    const directions = (spec.directions ?? base.directions).map(direction => [...direction] as [number, number, number])
+    const authoredDirections = spec.directions ?? base.directions
+    const sites = base.sites.map((baseSite, index) => {
+      const override = spec.siteOverrides?.[baseSite.id]
+      const direction = override?.direction ?? authoredDirections[index] ?? baseSite.direction
+      const length = Math.hypot(direction[0], direction[1], direction[2]) || 1
+      return {
+        ...baseSite,
+        ...override,
+        direction: [direction[0] / length, direction[1] / length, direction[2] / length] as [number, number, number],
+      }
+    })
+    const directions = sites.map(site => [...site.direction] as [number, number, number])
     const pointGroup = spec.pointGroup ?? base.pointGroup
     const short = spec.short ?? `${base.short}${pointGroup ? ` (${pointGroup})` : ''}`
     const slotBondLength = spec.slotBondLength
@@ -23,10 +34,11 @@ export function defineTransitionMetalCoordinationSet(
         z: direction[2] * slotBondLength,
       })),
     ]
-    const bonds = directions.map((_, index) => ({
+    const bonds = sites.map((site, index) => ({
       a: 0,
       b: index + 1,
-      order: 1 as const,
+      order: site.bondOrder,
+      coordinationSiteId: site.id,
     }))
     return {
       id: `${symbol.toLowerCase()}-coord-${spec.geometryId}`,
@@ -38,13 +50,14 @@ export function defineTransitionMetalCoordinationSet(
       attachIndex: 0,
       attachHIndex: 1,
       attachDirection: [...directions[0]],
-      attachOrder: 1,
+      attachOrder: sites[0]?.bondOrder ?? 1,
       group: 'coordination',
       coordination: {
         geometryId: spec.geometryId,
         coordinationNumber: base.coordinationNumber,
         pointGroup,
         directions,
+        sites,
       },
     }
   })

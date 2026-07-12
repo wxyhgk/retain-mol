@@ -1,4 +1,5 @@
 import type { FragmentDef } from '../fragmentLibrary'
+import type { CoordinationSite } from '../../types'
 
 export type CoordinationGeometryId =
   | 'linear'
@@ -26,7 +27,12 @@ export interface CoordinationGeometryTemplate {
   readonly coordinationNumber: number
   readonly pointGroup?: string
   readonly directions: readonly (readonly [number, number, number])[]
+  readonly sites: readonly CoordinationSite[]
 }
+
+export type CoordinationSiteOverride = Partial<Pick<CoordinationSite,
+  'label' | 'bondOrder' | 'equivalenceGroup' | 'direction'
+>>
 
 export interface TransitionMetalCoordinationSpec {
   readonly geometryId: CoordinationGeometryId
@@ -34,6 +40,7 @@ export interface TransitionMetalCoordinationSpec {
   readonly short?: string
   readonly pointGroup?: string
   readonly directions?: readonly (readonly [number, number, number])[]
+  readonly siteOverrides?: Readonly<Record<string, CoordinationSiteOverride>>
   /** Element-specific M-H slot distance. Defaults to the covalent-radius sum. */
   readonly slotBondLength?: number
 }

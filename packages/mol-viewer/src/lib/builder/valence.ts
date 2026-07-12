@@ -15,6 +15,10 @@ export function valenceUsedByBonds(bonds: readonly Bond[], atomId: string): numb
 }
 
 export function valenceUsed(mol: Molecule, atomId: string): number {
+  const atom = mol.atoms.find(candidate => candidate.id === atomId)
+  if (atom?.coordinationSites || atom?.coordinationNumber !== undefined) {
+    return mol.bonds.filter(bond => bond.atomId1 === atomId || bond.atomId2 === atomId).length
+  }
   return valenceUsedByBonds(mol.bonds, atomId)
 }
 
@@ -25,12 +29,13 @@ export function heavyValenceUsed(mol: Molecule, atomId: string): number {
     const otherId = otherEnd(b, atomId)
     if (otherId === null) continue
     if (atomById.get(otherId)?.symbol === 'H') continue
-    used += bondValence(b)
+    used += mol.atoms.find(atom => atom.id === atomId)?.coordinationSites ? 1 : bondValence(b)
   }
   return used
 }
 
 export function maxValence(atom: Atom): number {
+  if (atom.coordinationSites) return atom.coordinationSites.length
   if (atom.coordinationNumber !== undefined) return atom.coordinationNumber
   return effectiveMaxBonds(atom.symbol, atom.charge ?? 0, atom.radical ?? 0)
 }
@@ -53,5 +58,8 @@ export function availableValence(mol: Molecule, atom: Atom): number {
 }
 
 export function availableMaxValenceByBonds(atom: Atom, bonds: readonly Bond[]): number {
-  return maxValence(atom) - valenceUsedByBonds(bonds, atom.id)
+  const used = atom.coordinationSites || atom.coordinationNumber !== undefined
+    ? bonds.filter(bond => bond.atomId1 === atom.id || bond.atomId2 === atom.id).length
+    : valenceUsedByBonds(bonds, atom.id)
+  return maxValence(atom) - used
 }

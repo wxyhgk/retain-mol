@@ -11,6 +11,8 @@ export type AttachTargetResult =
       readonly host: Atom
       readonly direction: THREE.Vector3
       readonly removeHIds: Set<string>
+      readonly order: 1 | 2 | 3
+      readonly hostCoordinationSiteId?: string
     }
   | {
       readonly ok: false
@@ -42,7 +44,19 @@ export function resolveAttachFragmentTarget(
     )
     if (direction.lengthSq() < 1e-9) direction.set(1, 0, 0)
     direction.normalize()
-    return { ok: true, host, direction, removeHIds }
+    const hostCoordinationSiteId = hBond.coordinationSites
+      ?.find(assignment => assignment.atomId === host.id)?.siteId
+    const siteOrder = hostCoordinationSiteId
+      ? host.coordinationSites?.find(site => site.id === hostCoordinationSiteId)?.bondOrder
+      : undefined
+    return {
+      ok: true,
+      host,
+      direction,
+      removeHIds,
+      order: siteOrder ?? attachOrder,
+      hostCoordinationSiteId,
+    }
   }
 
   if (valenceUsed(molecule, target.id) + attachOrder > maxValence(target) + 1e-6) {
@@ -60,5 +74,6 @@ export function resolveAttachFragmentTarget(
     host: target,
     direction: new THREE.Vector3(directionTuple[0], directionTuple[1], directionTuple[2]),
     removeHIds,
+    order: attachOrder,
   }
 }

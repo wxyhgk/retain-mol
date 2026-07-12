@@ -35,6 +35,32 @@ export function createObjectTransformEditSession(store: MoleculeStoreApi = useMo
   })
 }
 
+export function createBondLengthEditSession(store: MoleculeStoreApi = useMoleculeStore) {
+  let transaction: UndoTransactionHandle | null = null
+  let started = false
+  return {
+    get active() { return started && (transaction?.active ?? true) },
+    start() {
+      if (started) return
+      started = true
+      transaction = store.getState().beginTransaction('bond-length-gizmo')
+    },
+    end() {
+      if (!started) return
+      finishEditTransaction(store, transaction)
+      transaction = null
+      started = false
+    },
+    cancel() {
+      if (!started) return
+      if (transaction?.cancel) transaction.cancel()
+      else store.getState().endTransaction()
+      transaction = null
+      started = false
+    },
+  }
+}
+
 export function createObjectPositionWriteEditSession(
   objectId: string,
   store: MoleculeStoreApi = useMoleculeStore,

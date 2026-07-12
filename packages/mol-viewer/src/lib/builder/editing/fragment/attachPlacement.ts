@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { Molecule } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { isBetterPlacementScore, scoreMoleculePlacement } from '../../geometry/placementPlanner'
+import { SINGLE_BOND_TORSION_ANGLES } from '../../geometry/singleBondTorsion'
 
 export interface AttachPlacementInput {
   readonly molecule: Molecule
@@ -12,6 +13,8 @@ export interface AttachPlacementInput {
   readonly axis: THREE.Vector3
   readonly skipIndex: number
   readonly excludeAtomIds: ReadonlySet<string>
+  /** Explicit single-bond roll. Undefined selects the least-clashing angle automatically. */
+  readonly torsionAngleDegrees?: number
 }
 
 export interface AttachPlacementPlan {
@@ -19,13 +22,17 @@ export interface AttachPlacementPlan {
 }
 
 export function planAttachFragmentPlacement(input: AttachPlacementInput): AttachPlacementPlan {
-  const angles = [0, 60, -60, 120, -120, 180].map(deg => (deg * Math.PI) / 180)
+  if (input.torsionAngleDegrees !== undefined) {
+    return {
+      rotation: rotationAtAngle(input, input.torsionAngleDegrees * Math.PI / 180),
+    }
+  }
+  const angles = SINGLE_BOND_TORSION_ANGLES.map(deg => (deg * Math.PI) / 180)
   let best = input.alignedRotation
   let bestScore = scoreAttachRotation(input, best)
 
   for (const angle of angles.slice(1)) {
-    const roll = new THREE.Quaternion().setFromAxisAngle(input.axis, angle)
-    const rotation = roll.multiply(input.alignedRotation.clone())
+    const rotation = rotationAtAngle(input, angle)
     const score = scoreAttachRotation(input, rotation)
     if (isBetterPlacementScore(score, bestScore)) {
       best = rotation
@@ -34,6 +41,11 @@ export function planAttachFragmentPlacement(input: AttachPlacementInput): Attach
   }
 
   return { rotation: best }
+}
+
+function rotationAtAngle(input: AttachPlacementInput, angleRadians: number) {
+  const roll = new THREE.Quaternion().setFromAxisAngle(input.axis, angleRadians)
+  return roll.multiply(input.alignedRotation.clone())
 }
 
 function scoreAttachRotation(input: AttachPlacementInput, rotation: THREE.Quaternion) {

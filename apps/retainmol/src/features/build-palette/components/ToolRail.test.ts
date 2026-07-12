@@ -11,7 +11,7 @@ describe('ToolRail', () => {
       null,
       createElement(ToolRail, {
         controller: {
-          workspaceTool: 'bond',
+          workspaceTool: 'template',
           activeElement: 'C',
           activateTool: vi.fn(),
           inspectElement: vi.fn(),
@@ -20,10 +20,9 @@ describe('ToolRail', () => {
       }),
     ))
 
-    expect(html.match(/data-rail-tool=/g)).toHaveLength(8)
+    expect(html.match(/data-rail-tool=/g)).toHaveLength(7)
     const expected = [
       { tool: 'erase', label: 'Erase' },
-      { tool: 'bond', label: 'Bond' },
       { tool: 'atom', label: 'Atom' },
       { tool: 'charge', label: 'Charge' },
       { tool: 'ring', label: 'Ring' },
@@ -37,6 +36,7 @@ describe('ToolRail', () => {
     }
     expect(html).not.toContain('data-rail-tool="select"')
     expect(html).not.toContain('data-rail-tool="draw"')
-    expect(html).toMatch(/data-rail-tool="bond"[^>]*aria-pressed="true"/)
+    expect(html).not.toContain('data-rail-tool="bond"')
+    expect(html).toMatch(/data-rail-tool="ring"[^>]*aria-pressed="true"/)
   })
 })

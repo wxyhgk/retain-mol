@@ -20,7 +20,7 @@ export function BondWorkspacePanel(props: BondWorkspacePanelProps) {
         <div className="flex items-center gap-2 text-[11px] font-semibold text-foreground">
           <MousePointer2 size={13} />先选择两个原子
         </div>
-        <p className="mt-1 text-[10px] leading-4 text-muted-foreground">选择模式支持 Shift 多选。回到此面板即可建立一根新键。</p>
+        <p className="mt-1 text-[10px] leading-4 text-muted-foreground">选择模式支持 Shift 多选。按 D 返回 Draw 后即可建立一根新键。</p>
       </div>
 
       <WorkspaceSection title="连接原子" meta={`${props.selectedAtomCount} / 2`}>

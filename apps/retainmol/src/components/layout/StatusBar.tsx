@@ -15,7 +15,6 @@ export function StatusBar() {
           ? `绘制  ·  ${fragment.name}（${fragment.short}）`
           : `绘制  ·  ${activeElement}${atomClickMode === 'replace' ? '（原子替换）' : activeElement === 'H' ? '（加 H）' : ''}`)
       : '绘制',
-    bond: '键  ·  选择两个原子连接，或选择一根键编辑',
     template: fragment && brushArmed
       ? `模板  ·  ${fragment.name}（${fragment.short}）`
       : '模板  ·  选择模板与连接位点',

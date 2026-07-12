@@ -8,14 +8,17 @@ import {
   activeAtomDragId,
   beginAtomPress,
   beginBondPress,
+  beginFragmentPress,
   idleInteractionGesture,
   isAtomGesture,
   isBondGesture,
+  isFragmentGesture,
+  updateFragmentTorsionAngle,
   updateBondDragTarget,
   type InteractionGestureState,
 } from './interactionGestureState'
 
-import type { GrowGuideSpec } from '../types'
+import type { FragmentTorsionPreview, GrowGuideSpec } from '../types'
 export type { GrowGuideSpec }
 
 interface PendingAtomClick {
@@ -51,6 +54,9 @@ export class InteractionHandler {
    */
   onBondDragEnd?: (sourceId: string, targetId: string | null, dropLocal: THREE.Vector3 | null) => void
   onBondDragHover?: (targetId: string | null) => void
+  onFragmentTorsionStart?: (targetId: string) => boolean
+  getFragmentTorsionPreview?: (targetId: string, angleDegrees: number) => FragmentTorsionPreview | null
+  onFragmentTorsionEnd?: (targetId: string, angleDegrees: number) => void
   /**
    * 拖出生长预览：返回新原子的落点（已做 VSEPR 吸附）与外观。
    * 返回 null 表示当前不允许生长（不画幽灵原子）。
@@ -71,6 +77,7 @@ export class InteractionHandler {
   private _activePointerId: number | null = null
   private _pendingAtomClick: PendingAtomClick | null = null
   private _ignoreNextNativeDoubleClick = false
+  private _fragmentPreviewFrame: number | null = null
   // 任意左键按下的位置：浏览器在拖拽（如转相机）松手后仍会派发 click，
   // 用按下→抬起的位移判断"这不是一次点击"，避免旋转视角误触发点击语义
   private _downClient = new THREE.Vector2()
@@ -228,6 +235,15 @@ export class InteractionHandler {
     if (!hit) return
     const atomId = hit.object.userData.id as string
 
+    if (this.onFragmentTorsionStart?.(atomId)) {
+      this._gesture = beginFragmentPress(atomId, { x: e.clientX, y: e.clientY })
+      this.controls.enabled = false
+      e.stopImmediatePropagation()
+      this.canvas.setPointerCapture(e.pointerId)
+      this._activePointerId = e.pointerId
+      return
+    }
+
     // ── Bond-drag 模式（优先于原子位置拖拽）────────────────────────────────
     // 此时还不知道是点击还是拖拽：先进入候选状态，位移超过阈值才算拖拽，
     // 否则在 pointerup 放行 click（点击生长由 click 处理器负责）
@@ -272,6 +288,25 @@ export class InteractionHandler {
       { x: e.clientX, y: e.clientY },
       INTERACTION.dragStartThreshold,
     )
+
+    if (isFragmentGesture(this._gesture)) {
+      if (this._gesture.kind === 'fragment-press') return
+      const angleDegrees = (e.clientX - this._gesture.down.x) * 1.5
+      this._gesture = updateFragmentTorsionAngle(this._gesture, angleDegrees)
+      if (this._fragmentPreviewFrame === null) {
+        this._fragmentPreviewFrame = requestAnimationFrame(() => {
+          this._fragmentPreviewFrame = null
+          if (this._gesture.kind !== 'fragment-torsion') return
+          const preview = this.getFragmentTorsionPreview?.(
+            this._gesture.targetId,
+            this._gesture.angleDegrees,
+          )
+          if (preview) this._ghost.showFragment(preview)
+        })
+      }
+      this.canvas.style.cursor = 'ew-resize'
+      return
+    }
 
     if (isBondGesture(this._gesture)) {
       if (this._gesture.kind === 'bond-press') return
@@ -348,6 +383,15 @@ export class InteractionHandler {
     if (e.button !== 0) return
     const gesture = this._gesture
 
+    if (isFragmentGesture(gesture)) {
+      if (gesture.kind === 'fragment-torsion') {
+        this.onFragmentTorsionEnd?.(gesture.targetId, gesture.angleDegrees)
+        this._suppressNextClick = true
+      }
+      this.resetInteractionGesture()
+      return
+    }
+
     // ── Bond-drag 结束 ──────────────────────────────────────────────────────
     if (isBondGesture(gesture)) {
       if (gesture.kind === 'bond-drag') {
@@ -397,10 +441,15 @@ export class InteractionHandler {
 
   /** 所有 pointer 手势共享同一复位出口，避免残留 drag/transaction 状态。 */
   private resetInteractionGesture() {
+    if (this._fragmentPreviewFrame !== null) {
+      cancelAnimationFrame(this._fragmentPreviewFrame)
+      this._fragmentPreviewFrame = null
+    }
     if (isBondGesture(this._gesture)) {
       this.onBondDragHover?.(null)
       this._ghost.clear()
     }
+    if (isFragmentGesture(this._gesture)) this._ghost.clear()
     this._gesture = idleInteractionGesture()
     this._atomDragPlane = null
     if (
