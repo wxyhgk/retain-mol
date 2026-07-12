@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react'
-import { MolViewer } from '@/domain/viewerAdapter'
+import { MolViewer } from '@/domain/viewer/viewport'
 import { newAtom, newBond, centerMolecule } from '@retainmol/mol-viewer/core'
 import type { DisplayMode, Molecule } from '@retainmol/mol-viewer/core'
 
@@ -121,12 +121,13 @@ function SelectionTest() {
 
 function ReadOnlyTest() {
   const [count, setCount] = useState(0)
+  const [molecule] = useState(makeEthanol)
   return (
     <Card title="③ readOnly"
       desc="验证：点击画布不触发 onMoleculeChange，计数应保持 0">
       <div className="flex h-56">
         <div className="flex-1">
-          <MolViewer molecule={makeEthanol()} readOnly
+          <MolViewer molecule={molecule} readOnly
             onMoleculeChange={() => setCount(c => c + 1)} />
         </div>
         <Side>
@@ -135,7 +136,7 @@ function ReadOnlyTest() {
             <div className="text-xs text-gray-500 mt-1">触发次数</div>
           </div>
           <div className={`text-xs font-medium text-center px-3 py-1 rounded-full ${
-            count === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            count === 0 ? 'bg-primary text-primary-foreground' : 'border border-foreground bg-background text-foreground'
           }`}>
             {count === 0 ? '✓ 只读正常' : '✗ 出现意外编辑'}
           </div>
@@ -153,13 +154,14 @@ function DisplayOptionsTest() {
   const [mode,   setMode]   = useState<DisplayMode>('ball-stick')
   const [theme,  setTheme]  = useState('default')
   const [labels, setLabels] = useState(false)
+  const [molecule] = useState(makeEthanol)
 
   return (
     <Card title="④ displayMode / theme / showAtomLabels"
       desc="验证：切换选项，3D 视图实时响应">
       <div className="flex h-64">
         <div className="flex-1">
-          <MolViewer molecule={makeEthanol()} readOnly
+          <MolViewer molecule={molecule} readOnly
             displayMode={mode} theme={theme} showAtomLabels={labels} />
         </div>
         <Side>
@@ -217,7 +219,7 @@ function Btn({ children, onClick, color = 'gray', active = false }: {
   const base = 'w-full px-2 py-1 rounded-lg text-xs border transition-colors text-left'
   const cls =
     active          ? 'bg-gray-900 text-white border-gray-900' :
-    color === 'green' ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' :
+    color === 'green' ? 'border-foreground bg-foreground text-background hover:opacity-80' :
     'border-gray-200 text-gray-600 hover:bg-gray-50'
   return <button className={`${base} ${cls}`} onClick={onClick}>{children}</button>
 }
@@ -228,7 +230,7 @@ function Log({ entries }: { entries: string[] }) {
       <div className="text-[10px] font-medium text-gray-400 mb-1">事件日志</div>
       <div className="space-y-0.5 max-h-24 overflow-y-auto">
         {entries.map((e, i) => (
-          <div key={i} className={`text-[10px] font-mono ${i === 0 ? 'text-blue-600' : 'text-gray-400'}`}>{e}</div>
+          <div key={i} className={`text-[10px] font-mono ${i === 0 ? 'text-foreground' : 'text-muted-foreground'}`}>{e}</div>
         ))}
       </div>
     </div>
@@ -247,6 +249,19 @@ function OptionGroup({ label, children }: { label: string; children: React.React
 // ── 主页面 ────────────────────────────────────────────────────────────────────
 
 export default function ApiTestPage() {
+  type TestCase = 'molecule' | 'selection' | 'readonly' | 'display'
+  const requested = new URLSearchParams(location.search).get('test')
+  const initialCase: TestCase = requested === 'selection' || requested === 'readonly' || requested === 'display'
+    ? requested
+    : 'molecule'
+  const [activeCase, setActiveCase] = useState<TestCase>(initialCase)
+  const tests: Array<{ id: TestCase; label: string; content: React.ReactNode }> = [
+    { id: 'molecule', label: '受控分子', content: <ControlledMoleculeTest /> },
+    { id: 'selection', label: '受控选择', content: <SelectionTest /> },
+    { id: 'readonly', label: '只读', content: <ReadOnlyTest /> },
+    { id: 'display', label: '显示选项', content: <DisplayOptionsTest /> },
+  ]
+
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-3xl mx-auto space-y-5">
@@ -254,10 +269,25 @@ export default function ApiTestPage() {
           <h1 className="text-xl font-bold text-gray-900">MolViewer API 测试</h1>
           <p className="text-sm text-gray-500 mt-0.5">验证所有受控 props 的数据流和防循环机制</p>
         </div>
-        <ControlledMoleculeTest />
-        <SelectionTest />
-        <ReadOnlyTest />
-        <DisplayOptionsTest />
+        <div className="flex gap-2" role="tablist" aria-label="API 测试用例">
+          {tests.map(test => (
+            <button
+              key={test.id}
+              type="button"
+              role="tab"
+              aria-selected={activeCase === test.id}
+              className={`px-3 py-1.5 rounded-md border text-xs font-medium ${
+                activeCase === test.id
+                  ? 'bg-gray-900 border-gray-900 text-white'
+                  : 'bg-white border-gray-200 text-gray-600'
+              }`}
+              onClick={() => setActiveCase(test.id)}
+            >
+              {test.label}
+            </button>
+          ))}
+        </div>
+        {tests.find(test => test.id === activeCase)?.content}
       </div>
     </div>
   )

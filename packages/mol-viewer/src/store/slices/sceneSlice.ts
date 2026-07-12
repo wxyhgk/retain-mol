@@ -16,22 +16,26 @@ import {
   runSetSceneObjectLockedCommand,
   runSetSceneObjectVisibleCommand,
   runSplitSceneObjectCommand,
-} from '../../lib/builder/commands/sceneStoreCommands'
+} from '../../lib/builder/commands/scene'
 import {
   activateObjectWhere,
   applyActiveSceneObjectResult,
   applyAddSceneObjectResult,
   applySceneGraphResult,
   applySceneObjectUpdatedResult,
+  getEditableObject,
 } from './helpers'
 
 /** 初始默认场景对象（空分子）。 */
 export const defaultSceneObject = createSceneObject({ atoms: [], bonds: [], name: 'New Molecule' })
 
-export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> = (set, get) => ({
-  objectsById:    { [defaultSceneObject.id]: defaultSceneObject },
-  objectOrder:    [defaultSceneObject.id],
-  activeObjectId: defaultSceneObject.id,
+export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> = (set, get) => {
+  // Store factories must not share the default scene object or its nested molecule.
+  const initialObject = createSceneObject({ atoms: [], bonds: [], name: 'New Molecule' })
+  return {
+  objectsById:    { [initialObject.id]: initialObject },
+  objectOrder:    [initialObject.id],
+  activeObjectId: initialObject.id,
 
   addToScene: (mol, autoOffset = true) => {
     const newId = genId().slice(0, 8)
@@ -56,7 +60,7 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
   }),
 
   splitSceneObject: (id) => set((s) => {
-    const object = s.objectsById[id]
+    const object = getEditableObject(s, id)
     if (!object) return {}
     const maxNewObjectIds = Math.max(1, object.molecule.atoms.length)
     const newObjectIds = Array.from({ length: maxNewObjectIds }, () => genId().slice(0, 8))
@@ -84,4 +88,5 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
 
   activateObjectContainingBond: (bondId) =>
     activateObjectWhere(get(), obj => obj.molecule.bonds.some(b => b.id === bondId)),
-})
+  }
+}

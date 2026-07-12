@@ -32,10 +32,18 @@ export interface RingFusePlacementCandidate {
 }
 
 export function planRingFusePlacement(input: RingFusePlacementInput): RingFusePlacementCandidate | null {
-  const candidates = [
-    buildRingFuseCandidate(input, input.preferredTargetAxis2),
-    buildRingFuseCandidate(input, input.preferredTargetAxis2.clone().negate()),
-  ].filter((candidate): candidate is RingFusePlacementCandidate => candidate !== null)
+  const reversedInput: RingFusePlacementInput = {
+    ...input,
+    targetAtom1: input.targetAtom2,
+    targetAtom2: input.targetAtom1,
+    targetAxis1: input.targetAxis1.clone().negate(),
+  }
+  const candidates = [input, reversedInput]
+    .flatMap(orientedInput => [
+      buildRingFuseCandidate(orientedInput, orientedInput.preferredTargetAxis2),
+      buildRingFuseCandidate(orientedInput, orientedInput.preferredTargetAxis2.clone().negate()),
+    ])
+    .filter((candidate): candidate is RingFusePlacementCandidate => candidate !== null)
 
   candidates.sort(compareRingFuseCandidates)
   return candidates[0] ?? null
@@ -94,7 +102,6 @@ function buildRingFuseCandidate(
     merge,
     removeIds,
     orderOverride: input.orderOverride,
-    atomById: input.atomById,
   })
   if (!result) return null
 

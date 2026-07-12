@@ -218,9 +218,8 @@ function minimizeConnected(frag: Molecule): { coords: Map<string, XYZ>; eBefore:
 
 /**
  * 2D → 3D：从平面结构（2D SDF/SMILES）生成合理的三维构象。
- * 这是 Chem3D「打开 2D 结构 → 立体化」的核心两步：
- *   ① ConformerGenerator 按连接关系用距离几何嵌入 3D 坐标
- *   ② MMFF94 力场清理到能量极小
+ * 只负责 ConformerGenerator 按连接关系用距离几何嵌入 3D 坐标。
+ * 力场优化属于显式用户操作，不能在导入时隐式改变构象。
  * 返回全新分子（新 id、含氢）——调用方整体替换原 2D 结构。
  */
 export function generate3D(mol: Molecule): OptimizeResult {
@@ -236,30 +235,9 @@ export function generate3D(mol: Molecule): OptimizeResult {
     const mol3d = new CG(RELAX.seed).getOneConformerAsMolecule(oclMol)
     if (!mol3d) return { molecule: mol, ok: false, reason: '无法生成 3D 构象（结构可能过于复杂或含不支持的原子）' }
 
-    // 嵌入结果（未清理）——作为 morph 动画的起点
+    // 距离几何结果就是最终结果；MMFF/UFF 由调用方通过独立命令触发。
     const initial = oclToMolecule(mol3d, mol.name ?? '3D structure')
-
-    // MMFF 清理（资源就绪时）——嵌入结果再抛光一遍
-    if (ffReady) {
-      try {
-        const FF = (OCL as unknown as {
-          ForceFieldMMFF94: new (m: OCLMol, table: string, opts: object) => { minimise: () => void }
-        }).ForceFieldMMFF94
-        new FF(mol3d, 'MMFF94s', {}).minimise()
-      } catch { /* MMFF 处理不了就用纯嵌入结果 */ }
-    }
-
-    // 最终结构：复用 initial 的原子 id（顺序一致），只换坐标——morph 才能按 id 对应
-    const molecule: Molecule = {
-      ...initial,
-      atoms: initial.atoms.map((a, i) => ({
-        ...a, x: mol3d.getAtomX(i), y: -mol3d.getAtomY(i), z: -mol3d.getAtomZ(i),
-      })),
-    }
-    if (molecule.atoms.some(a => !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z))) {
-      return { molecule: initial, ok: true, initial }   // 清理坏了就用纯嵌入
-    }
-    return { molecule, ok: true, initial }
+    return { molecule: initial, ok: true }
   } catch (e) {
     return { molecule: mol, ok: false, reason: `3D 生成失败：${(e as Error).message}` }
   }

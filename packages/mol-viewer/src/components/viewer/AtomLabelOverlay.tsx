@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import * as THREE from 'three'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
-import { useEditorStore } from '../../store/editorStore'
+import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import { MolRenderer } from '../../lib/molRenderer'
-import { ticker, Phase } from '../../lib/animation'
+import { Phase } from '../../lib/animation'
+import { useViewerRuntime } from '../../runtime/ViewerRuntime'
 import { ATOM_LABEL as L } from '../../config/overlay.config'
 import { CAMERA } from '../../config/camera.config'
 import { resolveRenderProfile } from '../../styles'
@@ -70,6 +70,8 @@ function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext
 
 export default function AtomLabelOverlay({ renderer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const { moleculeStore, editorStore, ticker } = useViewerRuntime()
+  const subscriptionId = useId()
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -79,8 +81,8 @@ export default function AtomLabelOverlay({ renderer }: Props) {
     // 原因：dirty flag 在 zundo beginTransaction 期间容易丢失状态，
     //       而 draw 本身很轻（canvas 2D 文字），无需额外节流。
     const draw = () => {
-      const { showAtomLabels } = useEditorStore.getState()
-      const molecule = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
+      const { showAtomLabels } = editorStore.getState()
+      const molecule = selectActiveMoleculeOrEmpty(moleculeStore.getState())
 
       const prepared = prepareCanvas(canvas)
       if (!prepared) return
@@ -193,15 +195,15 @@ export default function AtomLabelOverlay({ renderer }: Props) {
 
     const invalidate = () => ticker.invalidate()
 
-    const unsubTicker = ticker.subscribe('atom-label-overlay', Phase.Overlay, draw)
+    const unsubTicker = ticker.subscribe(`atom-label-overlay:${subscriptionId}`, Phase.Overlay, draw)
 
     // 任何会改变画面的事件 → 让 Ticker 跑一帧
-    const unsubMolecule  = useMoleculeStore.subscribe(
+    const unsubMolecule  = moleculeStore.subscribe(
       s => s.activeObjectId ? s.objectsById[s.activeObjectId]?.molecule.atoms : null,
       invalidate
     )
-    const unsubPositions = useMoleculeStore.subscribe(s => s.atomPositionVersion,   invalidate)
-    const unsubLabels    = useEditorStore.subscribe(s => s.showAtomLabels, () => {
+    const unsubPositions = moleculeStore.subscribe(s => s.atomPositionVersion,   invalidate)
+    const unsubLabels    = editorStore.subscribe(s => s.showAtomLabels, () => {
       ticker.invalidate()
       draw() // 切换时同步画一次，即时响应
     })
@@ -218,7 +220,7 @@ export default function AtomLabelOverlay({ renderer }: Props) {
 
     // 原子位置变化期间进入连续模式（拖动 / 旋转 gizmo）
     let posTimer: ReturnType<typeof setTimeout> | null = null
-    const unsubPos2 = useMoleculeStore.subscribe(s => s.atomPositionVersion, () => {
+    const unsubPos2 = moleculeStore.subscribe(s => s.atomPositionVersion, () => {
       ticker.startContinuous('label-pos')
       if (posTimer) clearTimeout(posTimer)
       posTimer = setTimeout(() => {
@@ -243,7 +245,7 @@ export default function AtomLabelOverlay({ renderer }: Props) {
       ticker.stopContinuous('label-cam')
       ticker.stopContinuous('label-pos')
     }
-  }, [renderer])
+  }, [renderer, moleculeStore, editorStore, ticker, subscriptionId])
 
   return (
     <canvas

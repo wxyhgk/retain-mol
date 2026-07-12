@@ -8,7 +8,7 @@
  * OpenBabel 本体是 GPL —— 只在 app 层（private）使用，不进 mol-viewer 公开包。
  *
  * 消息协议：
- *   in : { id, sdf, forcefield?='UFF', steps?=500 }
+ *   in : { id, sdf, forcefield?='UFF', steps?=300, tolerance?=1e-4 }
  *   out: { id, ok, coords?:[[x,y,z]...], energyBefore?, energyAfter?, reason? }
  */
 
@@ -32,7 +32,7 @@ const ready = new Promise((resolve, reject) => {
 })
 
 self.onmessage = async (e) => {
-  const { id, sdf, forcefield = 'UFF', steps = 500 } = e.data
+  const { id, sdf, forcefield = 'UFF', steps = 300, tolerance = 1e-4 } = e.data
   let conv, mol, out
   try {
     await ready
@@ -47,7 +47,7 @@ self.onmessage = async (e) => {
     if (!FF.Setup(mol)) { self.postMessage({ id, ok: false, reason: `${forcefield} 无法为该结构分配原子类型` }); return }
 
     const energyBefore = FF.Energy(false)
-    FF.ConjugateGradients(steps, 1e-6, 1)
+    FF.ConjugateGradients(steps, tolerance, 1)
     FF.GetCoordinates(mol)
     const energyAfter = FF.Energy(false)
 

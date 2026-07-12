@@ -1,6 +1,7 @@
 import type { Atom, Molecule } from '../../molecule'
 import { shiftMolecule } from '../../molecule'
 import { isBetterClashScore, scoreClashes, type ClashScore } from './clash'
+import { ClashSpatialIndex } from './clashSpatialIndex'
 
 export interface PlacementVector {
   readonly x: number
@@ -45,16 +46,23 @@ export function planMoleculePlacement(
     return best
   }
 
+  const clashIndex = new ClashSpatialIndex(baseAtoms, options.excludeAtomIds)
+
   for (const offset of placementOffsetCandidates(options.orientation)) {
     const candidate = shiftMolecule(placement, offset.x, offset.y, offset.z)
-    const score = scoreMoleculePlacement(baseAtoms, candidate, options)
+    const score = clashIndex.score(candidate.atoms)
     if (isBetterClashScore(score, best.score)) {
       best = { molecule: candidate, score, offset }
       if (score.overlapPenalty <= 1e-9) break
     }
   }
 
-  return best
+  return best.molecule === placement
+    ? best
+    : {
+        ...best,
+        score: scoreMoleculePlacement(baseAtoms, best.molecule, options),
+      }
 }
 
 export function scoreMoleculePlacement(

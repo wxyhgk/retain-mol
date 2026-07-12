@@ -3,8 +3,8 @@ import {
   copySelectionToEditorClipboard,
   isTextEditingTarget,
   pasteEditorClipboard,
-  pasteMoleculeText,
 } from '@/domain/editorCommands'
+import { pasteMoleculeText } from '@/features/molecule-placement'
 
 export function useAppClipboardShortcuts() {
   useEffect(() => {

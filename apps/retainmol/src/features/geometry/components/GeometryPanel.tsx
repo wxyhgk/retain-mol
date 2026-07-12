@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import {
-  useMoleculeStore, selectActiveMoleculeOrEmpty, useEditorStore,
-  calcDistance, calcAngle, calcDihedral,
-} from '@/domain/viewerAdapter'
+import { useShallow } from 'zustand/react/shallow'
+import { useEditorStore } from '@/domain/viewer/editorState'
+import { calcAngle, calcDihedral, calcDistance } from '@/domain/viewer/geometry'
+import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { getElementConfig as getElement } from '@retainmol/mol-viewer/core'
 import { useMoleculeInfo } from '@/hooks/useMoleculeInfo'
 import { Button } from '@/components/ui/button'
 import { Trash2, ArrowUpDown, Link, FlaskRound } from 'lucide-react'
 import { connectSelectedAtoms } from '@/domain/editorCommands'
+import { OptimizationControls } from '@/features/geometry-optimization'
 
 function colorHexToCss(hex: number) {
   return `#${hex.toString(16).padStart(6, '0')}`
@@ -68,7 +69,18 @@ export default function GeometryPanel() {
     selectedAtomIds, selectedBondIds, removeAtoms, removeBond,
     cycleBondOrder, addHydrogens, moveAtom,
     setBondLength, setBondAngle, setDihedralAngle,
-  } = useMoleculeStore()
+  } = useMoleculeStore(useShallow(state => ({
+    selectedAtomIds: state.selectedAtomIds,
+    selectedBondIds: state.selectedBondIds,
+    removeAtoms: state.removeAtoms,
+    removeBond: state.removeBond,
+    cycleBondOrder: state.cycleBondOrder,
+    addHydrogens: state.addHydrogens,
+    moveAtom: state.moveAtom,
+    setBondLength: state.setBondLength,
+    setBondAngle: state.setBondAngle,
+    setDihedralAngle: state.setDihedralAngle,
+  })))
   const flashHint = useEditorStore(s => s.flashHint)
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
   const { formula, molecularWeight: MW } = useMoleculeInfo()
@@ -159,11 +171,16 @@ export default function GeometryPanel() {
         <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
           <Row label="名称" value={molecule.name ?? '—'} />
           <Row label="分子式" value={formula || '—'} />
-          <Row label="分子量" value={MW > 0 ? `${MW.toFixed(3)} g/mol` : '—'} />
+          <Row
+            label="分子量"
+            value={MW === null ? '质量未知' : MW > 0 ? `${MW.toFixed(3)} g/mol` : '—'}
+          />
           <Row label="原子数" value={String(molecule.atoms.length)} />
           <Row label="键数" value={String(molecule.bonds.length)} />
         </div>
       </section>
+
+      <OptimizationControls atomCount={molecule.atoms.length} bondCount={molecule.bonds.length} />
 
       {/* Section B: 实时几何关系 */}
       {renderLiveGeometry()}
@@ -219,7 +236,9 @@ export default function GeometryPanel() {
                     <CoordInput label="y" value={a.y} onCommit={v => moveAtom(a.id, a.x, v, a.z)} />
                     <CoordInput label="z" value={a.z} onCommit={v => moveAtom(a.id, a.x, a.y, v)} />
                   </div>
-                  <div className="text-xs text-gray-400 mt-1.5">Z={el.atomicNumber}  M={el.atomicMass}</div>
+                  <div className="text-xs text-gray-400 mt-1.5">
+                    Z={el.atomicNumber || '—'}  M={el.atomicMass !== null && el.atomicMass > 0 ? el.atomicMass : '未知'}
+                  </div>
                 </div>
               )
             })}

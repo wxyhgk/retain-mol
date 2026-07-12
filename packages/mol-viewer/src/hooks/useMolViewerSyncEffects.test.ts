@@ -5,7 +5,10 @@ import {
   commitControlledMoleculePropToStore,
   commitControlledSelectedAtomsProp,
   commitControlledSelectedAtomsPropToStore,
+  runControlledStoreCommit,
+  shouldNotifyControlledStoreChange,
 } from './useMolViewerSyncEffects'
+import { selectActiveMolecule, useMoleculeStore } from '../store/moleculeStore'
 
 describe('useMolViewerSync effects', () => {
   it('commits a new controlled molecule prop once', () => {
@@ -100,5 +103,78 @@ describe('useMolViewerSync effects', () => {
     )
 
     expect(version).toBeNull()
+  })
+
+  it('suppresses controlled commits but not later user edits on real subscriptions', () => {
+    const state = useMoleculeStore.getState()
+    const objectId = state.activeObjectId!
+    state.setObjectVisible(objectId, true)
+    state.setObjectLocked(objectId, false)
+    state.setMolecule({
+      atoms: [{ id: 'sync-a1', symbol: 'C', x: 0, y: 0, z: 0 }],
+      bonds: [],
+      name: 'Baseline',
+    })
+    state.clearSelection()
+
+    const moleculeGuard = { current: false }
+    const selectionGuard = { current: false }
+    const moleculeCalls: string[] = []
+    const selectionCalls: number[] = []
+    const unsubscribeMolecule = useMoleculeStore.subscribe(
+      current => selectActiveMolecule(current),
+      molecule => {
+        if (shouldNotifyControlledStoreChange(moleculeGuard) && molecule) {
+          moleculeCalls.push(molecule.name ?? '')
+        }
+      },
+    )
+    const unsubscribeSelection = useMoleculeStore.subscribe(
+      current => current.selectionVersion,
+      version => {
+        if (shouldNotifyControlledStoreChange(selectionGuard)) selectionCalls.push(version)
+      },
+    )
+
+    try {
+      const controlledMolecule: Molecule = {
+        atoms: [{ id: 'sync-a1', symbol: 'C', x: 0, y: 0, z: 0 }],
+        bonds: [],
+        name: 'Controlled',
+      }
+      runControlledStoreCommit(moleculeGuard, () =>
+        commitControlledMoleculePropToStore(
+          controlledMolecule,
+          undefined,
+          useMoleculeStore.getState,
+        ),
+      )
+      runControlledStoreCommit(selectionGuard, () =>
+        commitControlledSelectedAtomsPropToStore(
+          new Set(['sync-a1']),
+          useMoleculeStore.getState,
+        ),
+      )
+
+      expect(moleculeCalls).toEqual([])
+      expect(selectionCalls).toEqual([])
+
+      const newAtomId = useMoleculeStore.getState().addAtom('N', 2, 0, 0)
+      useMoleculeStore.getState().selectAtom(newAtomId)
+
+      expect(moleculeCalls).toEqual(['Controlled'])
+      expect(selectionCalls).toHaveLength(1)
+    } finally {
+      unsubscribeMolecule()
+      unsubscribeSelection()
+    }
+  })
+
+  it('clears a controlled commit guard when the commit throws', () => {
+    const guard = { current: false }
+    expect(() => runControlledStoreCommit(guard, () => {
+      throw new Error('commit failed')
+    })).toThrow('commit failed')
+    expect(guard.current).toBe(false)
   })
 })

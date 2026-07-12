@@ -14,18 +14,20 @@
 
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import * as THREE from 'three'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
-import { useEditorStore } from '../store/editorStore'
+import { selectActiveMoleculeOrEmpty, type MoleculeStoreApi } from '../store/moleculeStore'
 import type { MolRenderer } from '../lib/molRenderer'
 import { toolCan } from '../config/toolCapabilities.config'
 import { INTERACTION } from '../config/interaction.config'
 import { createObjectTransformEditSession } from './editSessionFactory'
 import {
+  cancelObjectTransform,
   commitBoxSelect,
   commitObjectPointerTransform,
   resolveBoxSelectBounds,
   resolveObjectTransformTarget,
+  shouldStartBoxSelect,
 } from './useCanvasPointerRouterEffects'
+import { useViewerRuntime } from '../runtime/ViewerRuntime'
 
 export interface BoxRect { x: number; y: number; w: number; h: number }
 
@@ -49,16 +51,17 @@ function handleTransformDown(
   renderer: MolRenderer,
   state: TransformState,
   session: ReturnType<typeof createObjectTransformEditSession>,
+  moleculeStore: MoleculeStoreApi,
 ) {
   state.fragmentIds = null
   state.targetObjectId = null
 
   const pickedAtomId = renderer.pickAtomIdAt(e.clientX, e.clientY)
   const target = resolveObjectTransformTarget(pickedAtomId, e.altKey, {
-    activateObjectContainingAtom: id => useMoleculeStore.getState().activateObjectContainingAtom(id),
-    getActiveObjectId: () => useMoleculeStore.getState().activeObjectId,
+    activateObjectContainingAtom: id => moleculeStore.getState().activateObjectContainingAtom(id),
+    getActiveObjectId: () => moleculeStore.getState().activeObjectId,
     getActiveMolecule: () => {
-      const { objectsById, activeObjectId } = useMoleculeStore.getState()
+      const { objectsById, activeObjectId } = moleculeStore.getState()
       return activeObjectId ? objectsById[activeObjectId]?.molecule : undefined
     },
   })
@@ -73,7 +76,12 @@ function handleTransformDown(
   session.start()
 }
 
-function handleTransformMove(e: PointerEvent, renderer: MolRenderer, state: TransformState) {
+function handleTransformMove(
+  e: PointerEvent,
+  renderer: MolRenderer,
+  state: TransformState,
+  moleculeStore: MoleculeStoreApi,
+) {
   if (!state.dragging || !state.fragmentIds || !state.targetObjectId) return
 
   const dx = e.clientX - state.lastX
@@ -82,7 +90,7 @@ function handleTransformMove(e: PointerEvent, renderer: MolRenderer, state: Tran
   state.lastY = e.clientY
   if (Math.abs(dx) < INTERACTION.transformMinDisplacement && Math.abs(dy) < INTERACTION.transformMinDisplacement) return
 
-  const { objectsById, setObjectAtomPositions } = useMoleculeStore.getState()
+  const { objectsById, setObjectAtomPositions } = moleculeStore.getState()
   const mol = objectsById[state.targetObjectId]?.molecule
   if (!mol) return
 
@@ -118,33 +126,17 @@ function makeBoxState(): BoxSelectState {
   return { active: false, startX: 0, startY: 0, currentX: 0, currentY: 0, shift: false, alt: false }
 }
 
-function shouldStartBoxSelect(
-  e: PointerEvent,
-  pickedAtomId: string | null,
-  pickedBondId: string | null,
-  selectedAtomIds: Set<string>,
-): boolean {
-  const isRight      = e.button === 2
-  const isShiftLeft  = e.button === 0 && e.shiftKey
-  if (!isRight && !isShiftLeft) return false
-  // Shift+左键点中原子/键 → 留给 InteractionHandler（原子多选 / 键长循环）
-  if (isShiftLeft) return !pickedAtomId && !pickedBondId
-  if (!pickedAtomId) return true
-  // 右键点中已选原子 → 留给 AtomContextMenu
-  if (selectedAtomIds.has(pickedAtomId)) return false
-  return true
-}
-
 function finishBoxSelect(
   state: BoxSelectState,
   canvas: HTMLCanvasElement,
   renderer: MolRenderer,
+  moleculeStore: MoleculeStoreApi,
 ) {
   const rect = canvas.getBoundingClientRect()
   const bounds = resolveBoxSelectBounds(state.startX, state.startY, state.currentX, state.currentY)
 
-  const { selectAtoms } = useMoleculeStore.getState()
-  const molecule = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
+  const { selectAtoms } = moleculeStore.getState()
+  const molecule = selectActiveMoleculeOrEmpty(moleculeStore.getState())
   const w = rect.width, h = rect.height
   const v = new THREE.Vector3()
   commitBoxSelect({
@@ -167,7 +159,8 @@ export function useCanvasPointerRouter(
   rendererRef: RefObject<MolRenderer | null>,
   readOnly = false,
 ): { boxRect: BoxRect | null } {
-  const activeTool = useEditorStore(s => s.activeTool)
+  const { moleculeStore, editorStore } = useViewerRuntime()
+  const activeTool = editorStore(s => s.activeTool)
   const [boxRect, setBoxRect] = useState<BoxRect | null>(null)
 
   const transformRef = useRef<TransformState>(makeTransformState())
@@ -175,7 +168,7 @@ export function useCanvasPointerRouter(
   const boxRef       = useRef<BoxSelectState>(makeBoxState())
 
   if (!transformSessionRef.current) {
-    transformSessionRef.current = createObjectTransformEditSession(useMoleculeStore)
+    transformSessionRef.current = createObjectTransformEditSession(moleculeStore)
   }
 
   // 同步相机控制开关；切换工具时清理可能残留的变换状态（防止 pointerup 未触发导致状态卡死）
@@ -184,13 +177,7 @@ export function useCanvasPointerRouter(
     if (r) r.controls.enabled = readOnly || !toolCan(activeTool, 'transformsObject')
     if (readOnly || !toolCan(activeTool, 'transformsObject')) {
       const ts = transformRef.current
-      if (ts.dragging) {
-        // 工具切换时强制关闭未完成的 transaction，防止 zundo 永久 paused
-        transformSessionRef.current?.end()
-      }
-      ts.dragging = false
-      ts.fragmentIds = null
-      ts.targetObjectId = null
+      cancelObjectTransform(ts, transformSessionRef.current!)
       const bs = boxRef.current
       if (bs.active) {
         bs.active = false
@@ -216,20 +203,23 @@ export function useCanvasPointerRouter(
       const canvas   = getCanvas()
       if (!renderer || !canvas) return
 
-      const { activeTool: tool } = useEditorStore.getState()
-      const { selectedAtomIds } = useMoleculeStore.getState()
-
+      const { activeTool: tool } = editorStore.getState()
       // 1. move-object 工具 → 对象变换
       if (toolCan(tool, 'transformsObject')) {
         e.stopImmediatePropagation()
-        handleTransformDown(e, canvas, renderer, transformRef.current, transformSessionRef.current!)
+        handleTransformDown(e, canvas, renderer, transformRef.current, transformSessionRef.current!, moleculeStore)
         return
       }
 
       // 2. 框选条件
       const pickedAtomId = renderer.pickAtomIdAt(e.clientX, e.clientY)
       const pickedBondId = pickedAtomId ? null : renderer.pickBondIdAt(e.clientX, e.clientY)
-      if (shouldStartBoxSelect(e, pickedAtomId, pickedBondId, selectedAtomIds)) {
+      if (shouldStartBoxSelect({
+        button: e.button,
+        shiftKey: e.shiftKey,
+        pickedAtomId,
+        pickedBondId,
+      })) {
         e.stopImmediatePropagation()
         const rect = canvas.getBoundingClientRect()
         const bx = e.clientX - rect.left
@@ -253,7 +243,7 @@ export function useCanvasPointerRouter(
 
       // 对象变换
       if (transformRef.current.dragging && renderer) {
-        handleTransformMove(e, renderer, transformRef.current)
+        handleTransformMove(e, renderer, transformRef.current, moleculeStore)
         return
       }
 
@@ -277,8 +267,7 @@ export function useCanvasPointerRouter(
       // 对象变换结束
       const ts = transformRef.current
       if (ts.dragging) {
-        ts.dragging = false; ts.fragmentIds = null; ts.targetObjectId = null
-        transformSessionRef.current?.end()
+        cancelObjectTransform(ts, transformSessionRef.current!)
         return
       }
 
@@ -287,7 +276,7 @@ export function useCanvasPointerRouter(
       if (bs.active) {
         bs.active = false
         setBoxRect(null)
-        if (canvas && renderer) finishBoxSelect(bs, canvas, renderer)
+        if (canvas && renderer) finishBoxSelect(bs, canvas, renderer, moleculeStore)
       }
     }
 
@@ -295,10 +284,7 @@ export function useCanvasPointerRouter(
     // 拖拽中被 cancel 时若不清理，beginTransaction 会悬挂（zundo 永久 paused）
     const onCancel = () => {
       const ts = transformRef.current
-      if (ts.dragging) {
-        ts.dragging = false; ts.fragmentIds = null; ts.targetObjectId = null
-        transformSessionRef.current?.end()
-      }
+      cancelObjectTransform(ts, transformSessionRef.current!)
       const bs = boxRef.current
       if (bs.active) {
         bs.active = false
@@ -313,12 +299,13 @@ export function useCanvasPointerRouter(
     container.addEventListener('pointercancel', onCancel)
 
     return () => {
+      cancelObjectTransform(transformRef.current, transformSessionRef.current!)
       container.removeEventListener('pointerdown', onDown, { capture: true } as AddEventListenerOptions)
       container.removeEventListener('pointermove', onMove)
       container.removeEventListener('pointerup',   onUp)
       container.removeEventListener('pointercancel', onCancel)
     }
-  }, [containerRef, rendererRef, readOnly])
+  }, [containerRef, rendererRef, readOnly, moleculeStore, editorStore])
 
   return { boxRect }
 }

@@ -52,7 +52,7 @@ describe('builder handler context', () => {
     const effects = readBuilderSelectionEffects(makeStore({
       selectAtom: (atomId: string, append: boolean) => calls.push(`atom:${atomId}:${append}`),
       selectAtoms: (atomIds: Iterable<string>, mode: string) => calls.push(`atoms:${[...atomIds].join(',')}:${mode}`),
-      selectBond: (bondId: string, includeAtoms: boolean) => calls.push(`bond:${bondId}:${includeAtoms}`),
+      selectBond: (bondId: string, multi: boolean) => calls.push(`bond:${bondId}:${multi}`),
       clearSelection: () => calls.push('clear'),
     }))
 

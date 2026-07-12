@@ -9,6 +9,8 @@
 import type { Molecule } from '../../lib/molecule'
 import type { MolClipboard } from '../../lib/types'
 import type { SceneObject } from '../../lib/sceneObject'
+import type { UndoTransactionHandle } from './transactionController'
+import type { EditCommandResult } from '../../lib/builder/commands/shared'
 
 // ── 场景 slice ──────────────────────────────────────────────────────────────
 export interface SceneSlice {
@@ -49,15 +51,21 @@ export interface EditSlice {
   atomPositionVersion: number
 
   setMolecule:            (mol: Molecule) => void
+  commitEditResult:       (
+    result: EditCommandResult,
+    options?: { selectionPolicy?: 'clear' | 'preserve'; bumpAtomPositionVersion?: boolean },
+  ) => void
   addAtom:                (symbol: string, x: number, y: number, z: number) => string
   removeAtom:             (id: string) => void
   moveAtom:               (id: string, x: number, y: number, z: number) => void
   setAtomPositions:       (positions: ReadonlyMap<string, { x: number; y: number; z: number }>) => void
   setObjectAtomPositions: (objectId: string, positions: ReadonlyMap<string, { x: number; y: number; z: number }>) => void
-  beginTransaction:       () => void
-  endTransaction:         () => void
+  beginTransaction:       (owner?: string) => UndoTransactionHandle
+  endTransaction:         (owner?: string) => void
+  runTransaction:         <T>(owner: string, operation: () => T) => T
   addBond:                (atomId1: string, atomId2: string, order?: 1 | 2 | 3) => void
   removeBond:             (id: string) => void
+  setBondOrder:           (id: string, order: 1 | 2 | 3) => void
   cycleBondOrder:         (id: string) => void
   cycleBondLength:        (id: string) => { ok: boolean; reason?: string; moved?: boolean }
   // GaussView 式几何参数编辑（按选择顺序传入原子 id）

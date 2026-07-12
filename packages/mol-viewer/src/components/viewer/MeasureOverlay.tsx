@@ -1,8 +1,7 @@
-import { useEffect, useRef } from 'react'
-import { useMoleculeStore } from '../../store/moleculeStore'
-import { useEditorStore } from '../../store/editorStore'
+import { useEffect, useId, useRef } from 'react'
 import { MolRenderer } from '../../lib/molRenderer'
-import { ticker, Phase } from '../../lib/animation'
+import { Phase } from '../../lib/animation'
+import { useViewerRuntime } from '../../runtime/ViewerRuntime'
 import { MEASURE_LABEL as L } from '../../config/overlay.config'
 
 interface Props {
@@ -28,6 +27,9 @@ function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext
 
 export default function MeasureOverlay({ renderer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const runtime = useViewerRuntime()
+  const { moleculeStore, editorStore, ticker } = runtime
+  const subscriptionId = useId()
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -44,7 +46,7 @@ export default function MeasureOverlay({ renderer }: Props) {
 
       renderer.camera.updateMatrixWorld()
 
-      const { fontSize } = useEditorStore.getState().measureStyle
+      const { fontSize } = editorStore.getState().measureStyle
       ctx.font = `${L.fontWeight} ${fontSize}px ${L.fontFamily}`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -71,10 +73,10 @@ export default function MeasureOverlay({ renderer }: Props) {
 
     const invalidate = () => ticker.invalidate()
 
-    const unsubTicker  = ticker.subscribe('measure-overlay', Phase.Overlay, draw)
-    const unsubMeasure = useEditorStore.subscribe(s => s.measurements,      invalidate)
-    const unsubPending = useEditorStore.subscribe(s => s.pendingAtomIds,     invalidate)
-    const unsubStyle   = useEditorStore.subscribe(s => s.measureStyle,       invalidate)
+    const unsubTicker  = ticker.subscribe(`measure-overlay:${subscriptionId}`, Phase.Overlay, draw)
+    const unsubMeasure = editorStore.subscribe(s => s.measurements,      invalidate)
+    const unsubPending = editorStore.subscribe(s => s.pendingAtomIds,     invalidate)
+    const unsubStyle   = editorStore.subscribe(s => s.measureStyle,       invalidate)
 
     // 相机交互 → 连续模式
     const unsubCamStart = renderer.controls.on('interactionstart', () => {
@@ -88,7 +90,7 @@ export default function MeasureOverlay({ renderer }: Props) {
 
     // 原子位置变化（拖动 / 旋转 gizmo）→ 连续模式
     let posTimer: ReturnType<typeof setTimeout> | null = null
-    const unsubPos = useMoleculeStore.subscribe(s => s.atomPositionVersion, () => {
+    const unsubPos = moleculeStore.subscribe(s => s.atomPositionVersion, () => {
       ticker.startContinuous('measure-pos')
       if (posTimer) clearTimeout(posTimer)
       posTimer = setTimeout(() => {
@@ -113,7 +115,7 @@ export default function MeasureOverlay({ renderer }: Props) {
       ticker.stopContinuous('measure-cam')
       ticker.stopContinuous('measure-pos')
     }
-  }, [renderer])
+  }, [renderer, moleculeStore, editorStore, ticker, subscriptionId])
 
   return (
     <canvas

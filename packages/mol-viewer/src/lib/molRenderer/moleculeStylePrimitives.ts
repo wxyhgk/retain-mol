@@ -5,13 +5,7 @@ import { hexToInt } from '../../presets'
 import { getElementConfig as getElement } from '../../config/elements.config'
 import { RENDER } from '../../config/render.config'
 import type { ResolvedRenderProfile } from '../../styles'
-import {
-  sphereShades,
-  makeSphereMat,
-  makeCylinderMat,
-  makeIboViewMat,
-  iboviewShaderColor,
-} from './publicationMaterials'
+import { resolveMaterialFactory } from './materialFactories'
 
 const IBOVIEW_DRAW_RADII: Record<string, number> = {
   H: 0.87, He: 1.60, Li: 2.52, Be: 2.03, B: 1.58, C: 1.43, N: 1.32, O: 1.29, F: 1.26, Ne: 1.74,
@@ -83,28 +77,11 @@ export function makeAtomMaterial(
   color: number,
   displayMode: DisplayMode,
 ): THREE.Material {
-  const mat: THREE.Material = profile.materialModel === 'publication-shader' && displayMode !== 'wireframe'
-    ? makeSphereMat(color)
-    : profile.materialModel === 'iboview-shader' && displayMode !== 'wireframe'
-      ? makeIboViewMat(color, profile.iboviewMaterial!.atom, profile.depthCue)
-      : new THREE.MeshPhongMaterial({
-        color,
-        shininess: RENDER.atomShininess,
-        specular: RENDER.atomSpecular,
-      })
-  if (displayMode === 'wireframe') (mat as THREE.MeshPhongMaterial).wireframe = true
-  return mat
+  return resolveMaterialFactory(profile.materialModel).createAtomMaterial({ profile, color, displayMode })
 }
 
 export function makeBondMaterial(profile: ResolvedRenderProfile, color: number): THREE.Material {
-  return profile.materialModel === 'publication-shader'
-    ? makeCylinderMat(color)
-    : profile.materialModel === 'iboview-shader'
-      ? makeIboViewMat(color, profile.iboviewMaterial!.bond, profile.depthCue)
-      : new THREE.MeshPhongMaterial({
-        color,
-        shininess: RENDER.bondShininess,
-      })
+  return resolveMaterialFactory(profile.materialModel).createBondMaterial({ profile, color })
 }
 
 export function syncMaterialColor(
@@ -113,21 +90,7 @@ export function syncMaterialColor(
   color: number,
 ) {
   for (const mat of Array.isArray(material) ? material : [material]) {
-    const m = mat as THREE.ShaderMaterial & { color?: THREE.Color }
-    if (m.isShaderMaterial && m.uniforms?.uHi) {
-      const s = sphereShades(color)
-      m.uniforms.uHi.value = s.hi
-      m.uniforms.uBase.value = s.base
-      m.uniforms.uLo.value = s.lo
-    } else if (m.isShaderMaterial && m.uniforms?.uColor) {
-      if (profile.materialModel === 'iboview-shader') {
-        m.uniforms.uColor.value.copy(iboviewShaderColor(color))
-      } else {
-        m.uniforms.uColor.value.setHex(color)
-      }
-    } else if (m.color) {
-      m.color.setHex(color)
-    }
+    resolveMaterialFactory(profile.materialModel).syncColor(mat, color, profile)
   }
 }
 

@@ -32,8 +32,3 @@ export function calcDihedral(a1: XYZ, a2: XYZ, a3: XYZ, a4: XYZ): number {
   const m1 = cross(n1, normalize(b2))
   return Math.atan2(dot(m1 as Vec3, n2), dot(n1, n2)) * (180 / Math.PI)
 }
-
-// 别名（向后兼容）
-export const measureDistance = calcDistance
-export const measureAngle    = (a: XYZ, center: XYZ, b: XYZ) => calcAngle(a, center, b)
-export const measureDihedral = calcDihedral

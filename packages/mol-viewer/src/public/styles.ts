@@ -15,3 +15,9 @@ export {
   resolveRenderProfile,
   listRenderProfiles,
 } from '../styles/renderProfiles'
+export {
+  listMaterialFactories,
+  registerMaterialFactory,
+  resolveMaterialFactory,
+} from '../lib/molRenderer/materialFactories'
+export type { MaterialFactory, MaterialFactoryContext } from '../lib/molRenderer/materialFactories'

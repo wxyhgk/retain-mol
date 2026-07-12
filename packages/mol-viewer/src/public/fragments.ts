@@ -1,10 +1,21 @@
-import { FRAGMENTS, type FragmentAtom, type FragmentBond, type FragmentDef } from '../lib/builder/fragmentLibrary'
+import {
+  getFragment as getInternalFragment,
+  listFragments as listInternalFragments,
+  registerFragment as registerInternalFragment,
+  unregisterFragment as unregisterInternalFragment,
+  type FragmentAtom,
+  type FragmentBond,
+  type FragmentDef,
+} from '../lib/builder/fragmentLibrary'
 
 export type PublicFragmentDef =
-  Readonly<Omit<FragmentDef, 'atoms' | 'bonds' | 'attachBond'>> & {
+  Readonly<Omit<FragmentDef, 'atoms' | 'bonds' | 'attachBond' | 'coordination'>> & {
     readonly atoms: readonly Readonly<FragmentAtom>[]
     readonly bonds: readonly Readonly<FragmentBond>[]
     readonly attachBond?: readonly [number, number]
+    readonly coordination?: Readonly<Omit<NonNullable<FragmentDef['coordination']>, 'directions'>> & {
+      readonly directions: readonly (readonly [number, number, number])[]
+    }
   }
 
 export interface FragmentSummary {
@@ -24,6 +35,10 @@ function toPublicFragment(fragment: FragmentDef): PublicFragmentDef {
     atoms: fragment.atoms.map(atom => ({ ...atom })),
     bonds: fragment.bonds.map(bond => ({ ...bond })),
     attachBond: fragment.attachBond ? [...fragment.attachBond] : undefined,
+    coordination: fragment.coordination ? {
+      ...fragment.coordination,
+      directions: fragment.coordination.directions.map(direction => [...direction]),
+    } : undefined,
   }
 }
 
@@ -41,19 +56,36 @@ function toFragmentSummary(fragment: FragmentDef): FragmentSummary {
 }
 
 export function listFragments(): readonly PublicFragmentDef[] {
-  return FRAGMENTS.map(toPublicFragment)
+  return listInternalFragments().map(toPublicFragment)
 }
 
 export function listFragmentSummaries(): readonly FragmentSummary[] {
-  return FRAGMENTS.map(toFragmentSummary)
+  return listInternalFragments().map(toFragmentSummary)
 }
 
 export function getFragment(id: string): PublicFragmentDef | undefined {
-  const fragment = FRAGMENTS.find(item => item.id === id)
+  const fragment = getInternalFragment(id)
   return fragment ? toPublicFragment(fragment) : undefined
 }
 
 export function getFragmentSummary(id: string): FragmentSummary | undefined {
-  const fragment = FRAGMENTS.find(item => item.id === id)
+  const fragment = getInternalFragment(id)
   return fragment ? toFragmentSummary(fragment) : undefined
+}
+
+export function registerFragment(fragment: PublicFragmentDef): PublicFragmentDef {
+  return toPublicFragment(registerInternalFragment({
+    ...fragment,
+    atoms: fragment.atoms.map(atom => ({ ...atom })),
+    bonds: fragment.bonds.map(bond => ({ ...bond })),
+    attachBond: fragment.attachBond ? [...fragment.attachBond] : undefined,
+    coordination: fragment.coordination ? {
+      ...fragment.coordination,
+      directions: fragment.coordination.directions.map(direction => [...direction]) as [number, number, number][],
+    } : undefined,
+  }))
+}
+
+export function unregisterFragment(id: string): boolean {
+  return unregisterInternalFragment(id)
 }

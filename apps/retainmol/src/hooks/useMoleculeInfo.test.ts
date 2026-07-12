@@ -3,8 +3,8 @@ import { newAtom } from '@retainmol/mol-viewer/core'
 import { calcFormula, calcMW } from './useMoleculeInfo'
 
 describe('calcFormula', () => {
-  it('空分子返回 —', () => {
-    expect(calcFormula([])).toBe('—')
+  it('空分子返回空字符串，由 UI 决定占位符', () => {
+    expect(calcFormula([])).toBe('')
   })
 
   it('Hill 顺序：C 最先，H 其次，其余字母序', () => {
@@ -31,6 +31,11 @@ describe('calcFormula', () => {
       .concat(Array.from({ length: 6 }, () => newAtom('H')))
     expect(calcFormula(atoms)).toBe('C6H6')
   })
+
+  it('无碳体系全部元素严格按字母序', () => {
+    expect(calcFormula([newAtom('Na'), newAtom('Cl')])).toBe('ClNa')
+    expect(calcFormula([newAtom('N'), newAtom('H'), newAtom('H'), newAtom('H')])).toBe('H3N')
+  })
 })
 
 describe('calcMW', () => {
@@ -53,5 +58,10 @@ describe('calcMW', () => {
       newAtom('H'), newAtom('H'), newAtom('H'), newAtom('H'),
     ]
     expect(calcMW(atoms)).toBeCloseTo(16.043, 2)
+  })
+
+  it('未知元素质量不按 0 静默漏算', () => {
+    expect(calcMW([newAtom('Xx')])).toBeNull()
+    expect(calcMW([newAtom('C'), newAtom('Xx')])).toBeNull()
   })
 })

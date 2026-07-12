@@ -1,7 +1,7 @@
 import type { EditSlice } from './types'
 import type { EditActionContext } from './editActionTypes'
 import { applyActiveMoleculeSelectionCommand } from './helpers'
-import { runRemoveSelectedCommand } from '../../lib/builder/commands/removalStoreCommands'
+import { runRemoveSelectedCommand } from '../../lib/builder/commands/interaction'
 
 type SelectionEditActions = Pick<EditSlice, 'removeSelected'>
 

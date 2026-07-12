@@ -89,7 +89,7 @@ lib/builder/
 ├── editing/        原子替换、成键、片段接枝、并环、几何编辑
 ├── geometry/       VSEPR 放置、草图平面、测量几何
 ├── analysis/       芳香性、共轭、杂化、连通片段分析
-├── commands/       编辑命令入口：点击、拖拽、场景、选择、store action 都先产出 command result
+├── commands/       按 atom/bond/fragment/scene 等领域聚合的编辑命令入口
 ├── graph.ts        键和邻接图工具
 ├── queries.ts      builder 专用分子查询
 ├── valence.ts      价态计算 helper
@@ -98,15 +98,17 @@ lib/builder/
 
 详细导航见：
 
+- `docs/mol-viewer/tracking/package-issues.csv`：当前问题、优先级、验收标准和顺序处理记录。
 - `docs/mol-viewer/builder-guide.md`
 - `docs/mol-viewer/edit-command-matrix.md`
 
 命令化规则：
 
 - 新的编辑行为必须先落到 `lib/builder/commands`，再由 store action 或 hook effect 应用结果。
+- 包内消费者只从 `commands/atom`、`commands/bond` 等领域 `index.ts` 导入；不要深挖 `*Decision.ts` 或具体实现文件。
 - `lib/builder/editing` 只放底层算法，不直接被 App、hook 或 store action 当成交互入口调用。
 - command 返回 `EditCommandResult`、`EditCommandWithSelectionResult`、scene result 或 selection result，状态落地由 `store/slices/helpers.ts` 统一处理。
-- `BuilderEngine.ts` 只作为旧导入兼容 barrel；新代码不要从这里接编辑能力。
+- builder 不提供 `BuilderEngine` 聚合入口；编辑能力必须从所属 command 领域或专用纯算法模块取得。
 
 `hooks/useBuilder.ts` 是 React hook 外壳；具体 pointer/click/drag 分发已经下沉到 builder adapter 文件。后续如果要改构建交互，优先看：
 
@@ -131,9 +133,10 @@ lib/molRenderer/
 ├── MoleculeRenderer.ts             单个 molecule 的 mesh 生命周期
 ├── moleculeStylePrimitives.ts      材质、颜色、半径、透明度 helper
 ├── moleculeSelectionVisuals.ts     选中 halo、outline、drag hover 视觉
-├── InteractionHandler.ts           拾取、pointer 手势、ghost line 接线
+├── InteractionHandler.ts           raycast、坐标转换和 pointer effect 接线
+├── interactionGestureState.ts      idle/atom/bond 手势状态迁移（纯函数）
 ├── MeasureVisuals.ts               测量几何和标签
-├── GhostVisuals.ts                 构建预览视觉
+├── GhostVisuals.ts                 拖拽成键引导视觉
 ├── sceneRig.ts                     灯光、fog、背景网格
 ├── postprocessing.ts               景深
 └── publicationMaterials.ts         Publication/IboView 类 shader 材质
@@ -251,3 +254,9 @@ npm test --workspace retainmol -- --run
 ```
 
 如果改动会影响 App 行为，还需要在本地 Vite 端口做浏览器 smoke。当前本地开发默认应是 `5173`，除非端口被其他进程占用。
+
+具体步骤见 [浏览器 Smoke](./testing/browser-smoke.md)。
+
+涉及建模交互、模板连接、并环方向或视觉体验时，还应执行
+[编辑器人工冒烟检查表](../qa/editor-smoke-checklist.md)，并将发现登记到
+[`docs/qa/known-issues.csv`](../qa/known-issues.csv)。

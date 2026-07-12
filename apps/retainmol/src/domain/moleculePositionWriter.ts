@@ -1,4 +1,4 @@
-import type { MoleculePositionWriter } from '@/lib/moleculeOpt'
+import type { MoleculePositionWriter } from '@/features/molecule-animation'
 import { writeObjectAtomPositionsFromStore } from './appEditEffects'
 
 export const moleculePositionWriter: MoleculePositionWriter = {

@@ -9,6 +9,10 @@ export const INTERACTION = {
   rotateSpeedFactor: 0.008,
   /** 原子拖拽：鼠标按下后移动超过此距离（px）才触发拖拽，防止误触 */
   dragStartThreshold: 4,
+  /** 原子双击：两次点击在此时间窗（ms）内才合并为双击 */
+  doubleClickDelay: 280,
+  /** 原子双击：两次点击的屏幕距离不得超过此值（px） */
+  doubleClickDistance: 5,
   /** 框选：宽或高低于此值（px）时视为误触，不执行选择 */
   boxSelectMinSize: 3,
 }

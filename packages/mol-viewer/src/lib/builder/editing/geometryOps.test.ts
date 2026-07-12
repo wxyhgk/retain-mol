@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { newAtom, newBond } from '../../molecule'
 import type { Atom } from '../../molecule'
-import { measureAngle, measureDihedral, measureDistance } from '../geometry/measure'
+import { calcAngle, calcDihedral, calcDistance } from '../geometry/measure'
 import { setBondAngle, setBondLength, setDihedralAngle } from './geometryOps'
 
 describe('geometryOps（键长/键角/二面角编辑）', () => {
@@ -26,10 +26,10 @@ describe('geometryOps（键长/键角/二面角编辑）', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     const m = result.molecule
-    expect(Math.abs(measureDistance(get(m, mol.ids.a), get(m, mol.ids.b)) - 2.0)).toBeLessThan(1e-6)
+    expect(Math.abs(calcDistance(get(m, mol.ids.a), get(m, mol.ids.b)) - 2.0)).toBeLessThan(1e-6)
     // b–c 距离（同侧内部）不变
-    const before = measureDistance(get(mol as never, mol.ids.b), get(mol as never, mol.ids.c))
-    const after  = measureDistance(get(m, mol.ids.b), get(m, mol.ids.c))
+    const before = calcDistance(get(mol as never, mol.ids.b), get(mol as never, mol.ids.c))
+    const after  = calcDistance(get(m, mol.ids.b), get(m, mol.ids.c))
     expect(Math.abs(after - before)).toBeLessThan(1e-9)
   })
 
@@ -39,11 +39,11 @@ describe('geometryOps（键长/键角/二面角编辑）', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     const m = result.molecule
-    expect(Math.abs(measureAngle(get(m, mol.ids.a), get(m, mol.ids.b), get(m, mol.ids.c)) - 90)).toBeLessThan(0.01)
+    expect(Math.abs(calcAngle(get(m, mol.ids.a), get(m, mol.ids.b), get(m, mol.ids.c)) - 90)).toBeLessThan(0.01)
     // c–d、c–e 内部距离不变（刚体）
     expect(Math.abs(
-      measureDistance(get(m, mol.ids.c), get(m, mol.ids.d)) -
-      measureDistance(get(mol as never, mol.ids.c), get(mol as never, mol.ids.d))
+      calcDistance(get(m, mol.ids.c), get(m, mol.ids.d)) -
+      calcDistance(get(mol as never, mol.ids.c), get(mol as never, mol.ids.d))
     )).toBeLessThan(1e-9)
   })
 
@@ -54,7 +54,7 @@ describe('geometryOps（键长/键角/二面角编辑）', () => {
       expect(result.ok).toBe(true)
       if (!result.ok) return
       const m = result.molecule
-      const got = measureDihedral(get(m, mol.ids.a), get(m, mol.ids.b), get(m, mol.ids.c), get(m, mol.ids.d))
+      const got = calcDihedral(get(m, mol.ids.a), get(m, mol.ids.b), get(m, mol.ids.c), get(m, mol.ids.d))
       expect(Math.abs(got - target)).toBeLessThan(0.01)
       // A、B 不动
       expect(get(m, mol.ids.a).x).toBe(get(mol as never, mol.ids.a).x)

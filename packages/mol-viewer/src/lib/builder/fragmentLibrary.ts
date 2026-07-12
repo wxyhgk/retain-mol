@@ -13,6 +13,8 @@
 
 import { tetrahedralCandidates } from './geometry/vsepr'
 import { type Vec3, add, scale } from './math/vec3'
+import { validateFragmentDef } from './kernel/FragmentValidator'
+import { TRANSITION_METAL_COORDINATION_SETS } from './coordination/elements'
 
 export interface FragmentAtom { symbol: string; x: number; y: number; z: number }
 export interface FragmentBond { a: number; b: number; order: 1 | 2 | 3 }
@@ -28,7 +30,10 @@ export interface FragmentDef {
   atoms: FragmentAtom[]
   bonds: FragmentBond[]
   attachIndex: number
+  /** Optional removable H used as the attachment axis. -1 is allowed when attachDirection is provided. */
   attachHIndex: number
+  /** Explicit outward attachment axis for authored open-valence sites without an H. */
+  attachDirection?: [number, number, number]
   /**
    * 以键为连接处（Ketcher 式并环）：点击已有的键时，模板的这条边与之融合
    * （苯环模板点 C-C 键 → 萘式稠环）。仅环系片段有；基团为 undefined。
@@ -41,7 +46,14 @@ export interface FragmentDef {
    */
   attachOrder?: 1 | 2 | 3
   /** UI 分组：单原子后按 sp3 / sp2 / sp（杂化桩）、ring（环）、group（多原子基团）排列 */
-  group?: 'sp3' | 'sp2' | 'sp' | 'ring' | 'group'
+  group?: 'sp3' | 'sp2' | 'sp' | 'coordination' | 'ring' | 'group'
+  /** Transition-metal coordination metadata. Directions are local-space unit vectors. */
+  coordination?: {
+    geometryId: string
+    coordinationNumber: number
+    pointGroup?: string
+    directions: [number, number, number][]
+  }
 }
 
 // ── 内部小工具 ────────────────────────────────────────────────────────────
@@ -206,8 +218,43 @@ const RING_FRAGMENTS: FragmentDef[] = [
 // ── 片段库 ────────────────────────────────────────────────────────────────────
 // group ∈ {sp3,sp2,sp} 的杂化桩进元素条；ring 的暂不展示（见 RING_FRAGMENTS 注）。
 
-export const FRAGMENTS: FragmentDef[] = [...HYBRID_FRAGMENTS, ...RING_FRAGMENTS]
+export const FRAGMENTS: FragmentDef[] = [
+  ...HYBRID_FRAGMENTS,
+  ...TRANSITION_METAL_COORDINATION_SETS.flatMap(set => set.fragments),
+  ...RING_FRAGMENTS,
+]
+
+const REGISTERED_FRAGMENTS = new Map<string, FragmentDef>()
+
+export function registerFragment(fragment: FragmentDef): FragmentDef {
+  // Dynamic templates must satisfy the same topology contract as builtins
+  // before they enter any placement or ring-fusion algorithm.
+  const issues = validateFragmentDef(fragment)
+  if (issues.length > 0) throw new Error(issues.map(issue => issue.message).join('；'))
+  const stored: FragmentDef = {
+    ...fragment,
+    atoms: fragment.atoms.map(atom => ({ ...atom })),
+    bonds: fragment.bonds.map(bond => ({ ...bond })),
+    attachBond: fragment.attachBond ? [...fragment.attachBond] : undefined,
+    coordination: fragment.coordination ? {
+      ...fragment.coordination,
+      directions: fragment.coordination.directions.map(direction => [...direction]),
+    } : undefined,
+  }
+  REGISTERED_FRAGMENTS.set(stored.id, stored)
+  return stored
+}
+
+export function unregisterFragment(id: string): boolean {
+  return REGISTERED_FRAGMENTS.delete(id)
+}
+
+export function listFragments(): FragmentDef[] {
+  const merged = new Map(FRAGMENTS.map(fragment => [fragment.id, fragment]))
+  for (const fragment of REGISTERED_FRAGMENTS.values()) merged.set(fragment.id, fragment)
+  return [...merged.values()]
+}
 
 export function getFragment(id: string): FragmentDef | undefined {
-  return FRAGMENTS.find(f => f.id === id)
+  return REGISTERED_FRAGMENTS.get(id) ?? FRAGMENTS.find(f => f.id === id)
 }

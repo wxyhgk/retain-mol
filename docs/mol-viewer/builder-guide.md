@@ -8,7 +8,7 @@ builder/
 ├── geometry/    几何计算：新原子长在哪、距离角度怎么算
 ├── analysis/    化学分析：芳香性、共轭、杂化、连通片段
 ├── editing/     真正修改 Molecule 的纯函数
-├── commands/    用户意图层，后续逐步承接 useBuilder 里的点击/拖拽逻辑
+├── commands/    按 atom/bond/fragment/scene 等领域聚合的用户意图层
 ├── graph.ts     旧的轻量图查询 helper
 ├── valence.ts   旧的价态 helper，逐步被 kernel/ValencePolicy 聚合
 └── fragmentLibrary.ts  内置片段和环系模板数据
@@ -176,14 +176,16 @@ hooks/builderPreviewHandlers.ts
           -> store action 提交结果
 ```
 
-当前 `useBuilder.ts` 已经变成外壳，pointer adapter 也已经拆为 atom/bond/background/preview。未来目标是让放置流程 session 化：
+当前 `useBuilder.ts` 已经变成外壳，pointer adapter 也已经拆为 atom/bond/background/preview；放置已经通过 `PlacementCommandSession` 提交。renderer 内的 atom/bond 手势使用显式状态迁移：
 
 ```text
 用户点击/拖拽
   -> useBuilder.ts 只暴露 handler
     -> atom/bond/background/preview adapter 只组装上下文
-      -> commands/* 解释用户意图
-        -> editing/* 修改 molecule
+      -> InteractionHandler 做 raycast 与坐标转换
+        -> interactionGestureState 在 idle / atom-press / atom-drag / bond-press / bond-drag 间迁移
+          -> commands/* 解释用户意图
+            -> editing/* 修改 molecule
 ```
 
 ## 改代码时的建议顺序

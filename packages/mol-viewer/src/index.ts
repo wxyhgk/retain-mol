@@ -55,31 +55,17 @@ export type {
 // ── 元素配置 ──────────────────────────────────────────────────────────────────
 export { getElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from './config/elements.config'
 export type { ElementConfig, Hybridization } from './config/elements.config'
+export { calculateMolecularWeight, getMolecularFormula } from './lib/chemistry'
 
-// ── 片段库 ────────────────────────────────────────────────────────────────────
-export { FRAGMENTS, getFragment } from './lib/builder/fragmentLibrary'
-export type { FragmentDef } from './lib/builder/fragmentLibrary'
+// ── 只读片段库 ────────────────────────────────────────────────────────────────
 export {
   listFragments,
   listFragmentSummaries,
+  getFragment,
   getFragment as getReadonlyFragment,
   getFragmentSummary,
 } from './public/fragments'
 export type { PublicFragmentDef, FragmentSummary } from './public/fragments'
-
-// ── 工具 ─────────────────────────────────────────────────────────────────────
-export { cn } from './lib/utils'
-
-// ── Builder ───────────────────────────────────────────────────────────────────
-export { useBuilder } from './hooks/useBuilder'
-export { bondSelectedAtoms } from './public/editActions'
-export {
-  calcDistance, calcAngle, calcDihedral,
-} from './lib/builder/geometry/measure'
-export { calcAddAtomOnExisting } from './lib/builder/geometry/vsepr'
-export { canBond } from './lib/builder/commands/bondTopologyCommands'
-
-export { getConnectedFragment, splitConnectedComponents } from './lib/builder/analysis/fragments'
 
 // ── PubChem ───────────────────────────────────────────────────────────────────
 export { fetchCompoundSdf } from './public/pubchem'

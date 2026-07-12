@@ -18,6 +18,12 @@ export interface Atom {
   /** 未配对电子数（自由基）；每个占一个价位，并计入分子多重度 */
   readonly radical?: number
   readonly label?: string
+  /** Builder-authored transition-metal coordination preset. */
+  readonly coordinationGeometry?: string
+  /** World-space unit vectors for the authored coordination sites. */
+  readonly coordinationDirections?: readonly (readonly [number, number, number])[]
+  /** Hard bonding capacity supplied by the selected coordination preset. */
+  readonly coordinationNumber?: number
 }
 
 export interface Bond {
@@ -43,7 +49,7 @@ export type GrowGuideSpec =
 export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe' | 'tube' | 'mtube'
 /**
  * select 是合并了选择与构建的智能指针（默认工具）：
- * 单击选择 / 点 H 生长 / 拖 H 成键 / 双击空白加原子。
+ * 单击选择 / 点 H 生长 / 拖 H 成键 / 构建态单击空白加原子。
  */
 export type Tool = 'select' | 'measure' | 'move-object'
 export type MeasureType = 'auto' | 'distance' | 'angle' | 'dihedral'
@@ -76,6 +82,10 @@ export interface ClipboardAtom {
   symbol: string
   x: number; y: number; z: number
   charge?: number
+  radical?: number
+  coordinationGeometry?: string
+  coordinationDirections?: readonly (readonly [number, number, number])[]
+  coordinationNumber?: number
 }
 
 export interface ClipboardBond {

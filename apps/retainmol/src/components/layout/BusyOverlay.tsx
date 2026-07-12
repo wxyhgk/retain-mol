@@ -1,7 +1,7 @@
-import { useUiStore } from '@/lib/uiStore'
+import { selectAppBusyMessage, useAppTaskStore } from '@/store/appTaskStore'
 
 export function BusyOverlay() {
-  const busy = useUiStore(s => s.busy)
+  const busy = useAppTaskStore(selectAppBusyMessage)
   if (!busy) return null
   return (
     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5

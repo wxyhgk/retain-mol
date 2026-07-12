@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { newAtom, newBond } from '../../molecule'
 import type { Atom, Bond } from '../../molecule'
-import { measureDistance } from '../geometry/measure'
+import { calcDistance } from '../geometry/measure'
 import { autoAddHydrogens } from './atomOps'
 import { bondByReplacingH, canBond, cycleBondLength } from './bondOps'
 

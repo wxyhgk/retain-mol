@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { newAtom } from '../lib/molecule'
 import {
   applyObjectTransformResult,
+  cancelObjectTransform,
   collectBoxSelectedAtomIds,
   commitBoxSelect,
   commitObjectPointerTransform,
@@ -10,9 +11,36 @@ import {
   resolveBoxSelectResult,
   resolveObjectTransformTarget,
   runObjectPointerTransformCommand,
+  shouldStartBoxSelect,
 } from './useCanvasPointerRouterEffects'
 
 describe('canvas pointer router effects', () => {
+  it('starts box selection only from right-click or shift-left on empty canvas', () => {
+    const empty = { pickedAtomId: null, pickedBondId: null }
+
+    expect(shouldStartBoxSelect({ button: 2, shiftKey: false, ...empty })).toBe(true)
+    expect(shouldStartBoxSelect({ button: 0, shiftKey: true, ...empty })).toBe(true)
+    expect(shouldStartBoxSelect({ button: 0, shiftKey: false, ...empty })).toBe(false)
+    expect(shouldStartBoxSelect({
+      button: 2,
+      shiftKey: false,
+      pickedAtomId: 'a1',
+      pickedBondId: null,
+    })).toBe(false)
+    expect(shouldStartBoxSelect({
+      button: 2,
+      shiftKey: false,
+      pickedAtomId: null,
+      pickedBondId: 'b1',
+    })).toBe(false)
+    expect(shouldStartBoxSelect({
+      button: 0,
+      shiftKey: true,
+      pickedAtomId: 'a1',
+      pickedBondId: null,
+    })).toBe(false)
+  })
+
   it('resolves box select bounds and mode', () => {
     expect(resolveBoxSelectBounds(10, 20, 2, 30)).toEqual({
       minX: 2,
@@ -233,5 +261,25 @@ describe('canvas pointer router effects', () => {
     })
 
     expect(calls).toEqual(['obj-1:1'])
+  })
+
+  it('cancels an active object transform exactly once and clears its target', () => {
+    const calls: string[] = []
+    const state = {
+      dragging: true,
+      fragmentIds: new Set(['a1']),
+      targetObjectId: 'obj-1',
+    }
+    const session = { end: () => calls.push('end') }
+
+    cancelObjectTransform(state, session)
+    cancelObjectTransform(state, session)
+
+    expect(calls).toEqual(['end'])
+    expect(state).toEqual({
+      dragging: false,
+      fragmentIds: null,
+      targetObjectId: null,
+    })
   })
 })

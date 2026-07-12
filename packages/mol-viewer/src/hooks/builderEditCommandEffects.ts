@@ -1,4 +1,4 @@
-import type { EditCommandResult } from '../lib/builder/commands/commandResult'
+import type { EditCommandResult } from '../lib/builder/commands/shared'
 import type { Molecule } from '../lib/molecule'
 
 export interface EditCommandEffects {
@@ -9,6 +9,7 @@ export interface EditCommandEffects {
     >['molecule'],
   ) => void
   readonly flashHint: (message: string) => void
+  readonly executeResult?: (result: EditCommandResult) => EditCommandResult
 }
 
 export interface BuilderVector3 {
@@ -21,6 +22,10 @@ export function applyEditCommandResult(
   result: EditCommandResult,
   effects: EditCommandEffects,
 ): void {
+  if (effects.executeResult) {
+    effects.executeResult(result)
+    return
+  }
   if (result.ok === false) {
     effects.flashHint(result.reason)
     return

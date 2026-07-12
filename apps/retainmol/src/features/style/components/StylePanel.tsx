@@ -4,7 +4,7 @@ import {
   listThemes,
   resolveTheme,
 } from '@retainmol/mol-viewer/styles'
-import { useEditorStore } from '@/domain/viewerAdapter'
+import { useEditorStore } from '@/domain/viewer/editorState'
 import type { DisplayMode } from '@retainmol/mol-viewer/core'
 import type { RenderStyle } from '@retainmol/mol-viewer/styles'
 import { cn } from '@/lib/utils'
@@ -66,7 +66,7 @@ export default function StylePanel() {
             className={cn(
               'flex min-h-8 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px]',
               isCustomStyle
-                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                ? 'border-foreground bg-foreground text-background'
                 : 'border-gray-200 bg-gray-50 text-gray-500'
             )}
           >

@@ -125,17 +125,6 @@ export const GROW_GUIDE = {
   hysteresisPx: 12,
 }
 
-export const PLACEMENT_GHOST = {
-  /** 空白放置预览原子半径 = 当前显示半径 × 该比例 */
-  atomRadiusScale: 0.62,
-  atomRadiusMin: 0.11,
-  atomOpacity: 0.42,
-  /** 空白放置预览键半径 = 当前主题 stick bond 半径 × 该比例 */
-  bondRadiusScale: 0.82,
-  bondRadiusMin: 0.028,
-  bondOpacity: 0.36,
-}
-
 export const FOG = {
   /**
    * 深度雾化（depth cueing）：编辑视图不用真实景深模糊，而用线性 fog

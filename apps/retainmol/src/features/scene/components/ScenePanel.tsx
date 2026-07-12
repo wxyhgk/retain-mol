@@ -1,18 +1,23 @@
-import { useMoleculeStore, splitConnectedComponents } from '@/domain/viewerAdapter'
+import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { Eye, EyeOff, Lock, Unlock, Trash2, Scissors } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { selectScenePanelRows } from '@/domain/moleculePanelSelectors'
 
 export default function ScenePanel() {
-  const { objectsById, objectOrder, activeObjectId, setActiveObject, removeSceneObject, splitSceneObject, setObjectVisible, setObjectLocked, renameObject } = useMoleculeStore()
-  const sceneObjects = objectOrder.map(id => objectsById[id]).filter(Boolean)
+  const sceneObjects = useMoleculeStore(selectScenePanelRows)
+  const activeObjectId = useMoleculeStore(state => state.activeObjectId)
+  const setActiveObject = useMoleculeStore(state => state.setActiveObject)
+  const removeSceneObject = useMoleculeStore(state => state.removeSceneObject)
+  const splitSceneObject = useMoleculeStore(state => state.splitSceneObject)
+  const setObjectVisible = useMoleculeStore(state => state.setObjectVisible)
+  const setObjectLocked = useMoleculeStore(state => state.setObjectLocked)
+  const renameObject = useMoleculeStore(state => state.renameObject)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
 
   const handleSplit = (e: React.MouseEvent, objId: string) => {
     e.stopPropagation()
-    const obj = objectsById[objId]
-    if (!obj) return
     splitSceneObject(objId)
   }
 
@@ -65,7 +70,7 @@ export default function ScenePanel() {
 
             {/* 控制按钮 */}
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              {splitConnectedComponents(obj.molecule).length > 1 && (
+              {obj.componentCount > 1 && (
                 <button
                   onClick={e => handleSplit(e, obj.id)}
                   title="分离为独立对象"
@@ -88,7 +93,7 @@ export default function ScenePanel() {
               </button>
               <button
                 onClick={e => { e.stopPropagation(); if (confirm(`删除 ${obj.name}？`)) removeSceneObject(obj.id) }}
-                className="w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:text-red-500"
+                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-foreground hover:text-background"
               >
                 <Trash2 size={11} />
               </button>

@@ -1,7 +1,7 @@
 import type { Atom, Bond, Molecule } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
-import { getElementConfig } from '../../../../config/elements.config'
-import { degree, hNeighborsOf } from '../../graph'
+import { hNeighborsOf } from '../../graph'
+import { maxValence, valenceUsed } from '../../valence'
 
 export type RingFuseTargetResult =
   | {
@@ -49,9 +49,9 @@ export function validateRingFuseSharedValence(
   targetAtoms: readonly Atom[],
 ): string | null {
   for (const atom of targetAtoms) {
-    if (hNeighborsOf(molecule, atom.id).length > 0) continue
-    const conn = degree(molecule.bonds, atom.id)
-    if (conn + 1 > getElementConfig(atom.symbol).maxBonds) {
+    const removableHydrogen = hNeighborsOf(molecule, atom.id).length > 0 ? 1 : 0
+    const finalValence = valenceUsed(molecule, atom.id) - removableHydrogen + 1
+    if (finalValence > maxValence(atom) + 1e-8) {
       return `${atom.symbol} 已饱和，无法并环`
     }
   }

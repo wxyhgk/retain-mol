@@ -28,6 +28,7 @@ export function detectMergeAtoms(
   t2Id: string,
 ): MergeResult | null {
   const mergeByIndex = new Map<number, string>()
+  const claimedExistingAtomIds = new Set<string>()
   const posByIndex = new Map<number, THREE.Vector3>()
   for (let i = 0; i < frag.atoms.length; i++) {
     if (skip.has(i) || isH(i)) continue
@@ -36,8 +37,11 @@ export function detectMergeAtoms(
     for (const ea of mol.atoms) {
       if (ea.id === t1Id || ea.id === t2Id || ea.symbol === 'H') continue
       const dd = (p.x - ea.x) ** 2 + (p.y - ea.y) ** 2 + (p.z - ea.z) ** 2
-      if (dd < BONDING.fuseMergeEps * BONDING.fuseMergeEps && ea.symbol === frag.atoms[i].symbol) {
+      if (dd < BONDING.fuseMergeEps * BONDING.fuseMergeEps &&
+          ea.symbol === frag.atoms[i].symbol &&
+          !claimedExistingAtomIds.has(ea.id)) {
         mergeByIndex.set(i, ea.id)   // 凹区并环：与已有原子重合 → 合并共用
+        claimedExistingAtomIds.add(ea.id)
         break
       }
       if (dd < BONDING.fuseClashEps * BONDING.fuseClashEps) return null   // 真碰撞 → 此侧失败
@@ -83,10 +87,9 @@ export function remapAndMergeBonds(
     skip: Set<number>; isH: (i: number) => boolean
     merge: MergeResult; removeIds: Set<string>
     orderOverride: Map<string, 1 | 2 | 3>
-    atomById: Map<string, Atom>
   },
 ): { molecule: Molecule; mergeCount: number } | null {
-  const { f1i, f2i, T1id, T2id, skip, isH, merge, removeIds, orderOverride, atomById } = ctx
+  const { f1i, f2i, T1id, T2id, skip, isH, merge, removeIds, orderOverride } = ctx
   const { mergeByIndex, posByIndex } = merge
 
   const idByIndex = new Map<number, string>([[f1i, T1id], [f2i, T2id]])
@@ -139,7 +142,8 @@ export function remapAndMergeBonds(
   // 退化保护：模板原子全部与已有原子重合（点了稠环共享键）→ 什么都没加，拒绝
   if (newBonds.length === 0) return null
 
-  // 合并原子的价态检查：删 1 个 H 后加上新键不能超价
+  // 自动重合宿主至少不能超过元素允许的连接数。完整键级合法化属于
+  // Kekule 重排阶段；这里不能用局部键级求和破坏现有 peri 连续并环。
   const finalBonds = [
     ...mol.bonds
       .filter(b => !removeIds.has(b.atomId1) && !removeIds.has(b.atomId2))
@@ -149,17 +153,18 @@ export function remapAndMergeBonds(
       }),
     ...newBonds,
   ]
+  const finalAtoms = [...mol.atoms.filter(a => !removeIds.has(a.id)), ...newAtoms]
+  const atomById = new Map(finalAtoms.map(atom => [atom.id, atom]))
   for (const mergedId of mergeByIndex.values()) {
-    const conn = degree(finalBonds, mergedId)
-    const sym = atomById.get(mergedId)!.symbol
-    if (conn > getElementConfig(sym).maxBonds) return null
+    const atom = atomById.get(mergedId)
+    if (!atom || degree(finalBonds, mergedId) > getElementConfig(atom.symbol).maxBonds) return null
   }
 
   return {
     mergeCount: mergeByIndex.size,
     molecule: {
       ...mol,
-      atoms: [...mol.atoms.filter(a => !removeIds.has(a.id)), ...newAtoms],
+      atoms: finalAtoms,
       bonds: finalBonds,
     },
   }

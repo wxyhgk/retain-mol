@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, normalize, relative, resolve } from 'node:path'
 
 const SRC_DIR = new URL('../src', import.meta.url).pathname
@@ -59,6 +59,157 @@ function resolveRelativeSpecifier(file, specifier) {
 
 const violations = []
 
+for (const rel of [
+  'components/toolbar/BuildPanel.tsx',
+  'components/panels/ElementPicker.tsx',
+]) {
+  if (existsSync(join(SRC_DIR, rel))) {
+    violations.push(`${rel}: removed duplicate build-mode implementation must not be restored`)
+  }
+}
+
+for (const rel of [
+  'components/toolbar/ToolStrip.tsx',
+  'domain/buildModeCommands.ts',
+  'domain/buildTools.ts',
+]) {
+  if (existsSync(join(SRC_DIR, rel))) {
+    violations.push(`${rel}: build palette code belongs in features/build-palette`)
+  }
+}
+
+for (const rel of [
+  'domain/geometryOptimizationService.ts',
+  'lib/xtbOptimize.ts',
+  'lib/uffOptimize.ts',
+]) {
+  if (existsSync(join(SRC_DIR, rel))) {
+    violations.push(`${rel}: geometry optimization code belongs in features/geometry-optimization`)
+  }
+}
+
+for (const rel of [
+  'domain/importPlacementService.ts',
+  'domain/moleculePlacementRequestGate.ts',
+  'domain/moleculePlacementService.ts',
+  'lib/uiStore.ts',
+]) {
+  if (existsSync(join(SRC_DIR, rel))) {
+    violations.push(`${rel}: use the focused molecule-placement feature or app task store`)
+  }
+}
+
+for (const rel of [
+  'domain/templateDraftStorage.ts',
+  'domain/templateStructureImport.ts',
+  'domain/workspaceTemplateFragments.ts',
+  'features/template-studio/catalog.ts',
+  'features/template-studio/infrastructure/templateDraftRepository.ts',
+]) {
+  if (existsSync(join(SRC_DIR, rel))) {
+    violations.push(`${rel}: template persistence belongs in the independent features/template-library capability`)
+  }
+}
+
+if (existsSync(join(SRC_DIR, 'lib/moleculeOpt.ts'))) {
+  violations.push('lib/moleculeOpt.ts: split Worker computation from molecule animation features')
+}
+
+for (const file of walk(join(SRC_DIR, 'features/molecular-computation/infrastructure'))) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  for (const specifier of collectModuleSpecifiers(readFileSync(file, 'utf8'))) {
+    if (specifier.startsWith('@/domain/') || specifier.startsWith('@/store/')) {
+      violations.push(`${rel}: computation transport must not depend on viewer or app state`)
+    }
+  }
+}
+
+const templateStudioPageSource = readFileSync(
+  join(SRC_DIR, 'features/template-studio/TemplateStudioPage.tsx'),
+  'utf8',
+)
+for (const forbidden of [
+  'localStorage',
+  'createAtomAttachmentSite',
+  'createEdgeAttachmentSite',
+  'parseTemplateStructureFile',
+  'saveTemplateDraft',
+]) {
+  if (templateStudioPageSource.includes(forbidden)) {
+    violations.push(`features/template-studio/TemplateStudioPage.tsx: layout must not own "${forbidden}"`)
+  }
+}
+const templateStudioControllerSource = readFileSync(
+  join(SRC_DIR, 'features/template-studio/model/useTemplateStudioController.ts'),
+  'utf8',
+)
+for (const forbidden of ['TemplateAttachmentSite', 'addAtomSite', 'addEdgeSite', 'focusSite']) {
+  if (templateStudioControllerSource.includes(forbidden)) {
+    violations.push(`features/template-studio: attachment sites are selected at runtime; remove "${forbidden}" from the studio`)
+  }
+}
+
+const toolStripSource = readFileSync(join(SRC_DIR, 'features/build-palette/ToolStrip.tsx'), 'utf8')
+if (/\b(setActiveElement|setAtomClickMode|setActiveFragment)\s*\(/.test(toolStripSource)) {
+  violations.push('features/build-palette/ToolStrip.tsx: route transitions through the build palette controller')
+}
+
+const buildPaletteControllerSource = readFileSync(
+  join(SRC_DIR, 'features/build-palette/model/useBuildPaletteController.ts'),
+  'utf8',
+)
+if (/['"]rings['"]/.test(buildPaletteControllerSource)) {
+  violations.push('features/build-palette: rings belong to the unified template panel')
+}
+if (existsSync(join(SRC_DIR, 'features/build-palette/components/RingPalette.tsx'))) {
+  violations.push('features/build-palette/components/RingPalette.tsx: render rings inside TemplatePalette')
+}
+
+const removedBuilderCompatibilityFiles = [
+  'lib/builder/BuilderEngine.ts',
+  'lib/builder/editing/fragmentOps.ts',
+  'lib/builder/commands/index.ts',
+  'lib/builder/commands/editCommands.ts',
+  'lib/builder/commands/storeCommands.ts',
+  'lib/builder/commands/topologyStoreCommands.ts',
+  'lib/builder/commands/geometry/geometryStoreCommands.ts',
+  'lib/builder/commands/scene/moleculeStoreCommands.ts',
+  'lib/builder/commands/selection/removalStoreCommands.ts',
+  'public/editActions.ts',
+]
+const removedBuilderCompatibilityModules = new Set(
+  removedBuilderCompatibilityFiles.map(file => file.replace(/\.ts$/, '')),
+)
+
+for (const rel of removedBuilderCompatibilityFiles) {
+  if (existsSync(join(MOL_VIEWER_SRC_DIR, rel))) {
+    violations.push(`${rel}: removed builder compatibility entry must not be restored`)
+  }
+}
+
+const rootEntrySource = readFileSync(join(MOL_VIEWER_SRC_DIR, 'index.ts'), 'utf8')
+for (const symbol of ['FRAGMENTS', 'bondSelectedAtoms', 'canBond', 'calcAddAtomOnExisting', 'useBuilder', 'cn']) {
+  if (new RegExp(`\\b${symbol}\\b`).test(rootEntrySource)) {
+    violations.push(`index.ts: root entry must not expose internal or mutable symbol "${symbol}"`)
+  }
+}
+
+const molRendererSource = readFileSync(
+  join(MOL_VIEWER_SRC_DIR, 'lib/molRenderer/MolRenderer.ts'),
+  'utf8',
+)
+if (/\b(_molRenderers|_objectGroups)\b/.test(molRendererSource)) {
+  violations.push('lib/molRenderer/MolRenderer.ts: delegate scene-object renderer maps to MoleculeSceneLayer')
+}
+
+const moleculeRendererSource = readFileSync(
+  join(MOL_VIEWER_SRC_DIR, 'lib/molRenderer/MoleculeRenderer.ts'),
+  'utf8',
+)
+if (/MoleculeSelectionVisuals|new\s+THREE\.SphereGeometry/.test(moleculeRendererSource)) {
+  violations.push('lib/molRenderer/MoleculeRenderer.ts: delegate atom and selection rendering to MoleculeAtomRenderer')
+}
+
 for (const file of walk(SRC_DIR)) {
   const rel = relative(SRC_DIR, file)
   const source = readFileSync(file, 'utf8')
@@ -78,8 +229,8 @@ for (const file of walk(SRC_DIR)) {
       violations.push(`${rel}: unsupported mol-viewer subpath "${specifier}"`)
     }
 
-    if (specifier === '@retainmol/mol-viewer/viewer' && rel !== 'domain/viewerAdapter.ts') {
-      violations.push(`${rel}: import viewer runtime through "@/domain/viewerAdapter"`)
+    if (specifier === '@retainmol/mol-viewer/viewer' && !rel.replaceAll('\\', '/').startsWith('domain/viewer/')) {
+      violations.push(`${rel}: import viewer runtime through a focused "@/domain/viewer/*" adapter`)
     }
 
     if (rel.startsWith('components/ui/') && specifier.startsWith('@retainmol/mol-viewer')) {
@@ -93,6 +244,72 @@ for (const file of walk(SRC_DIR)) {
     if (specifier.includes('/lib/builder/editing') || specifier.includes('/src/lib/builder/editing')) {
       violations.push(`${rel}: app code must use mol-viewer public APIs, not builder editing internals`)
     }
+
+    if (
+      !rel.replaceAll('\\', '/').startsWith('features/molecule-placement/')
+      && specifier.startsWith('@/features/molecule-placement/')
+    ) {
+      violations.push(`${rel}: import molecule placement through its feature facade`)
+    }
+
+    const resolved = resolveRelativeSpecifier(file, specifier)
+    const normalizedResolved = resolved ? relative(SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    if (
+      !rel.replaceAll('\\', '/').startsWith('features/geometry-optimization/')
+      && normalizedResolved.startsWith('features/geometry-optimization/')
+      && normalizedResolved !== 'features/geometry-optimization/index'
+    ) {
+      violations.push(`${rel}: import geometry optimization through its feature facade`)
+    }
+  }
+}
+
+for (const file of walk(join(SRC_DIR, 'features/geometry-optimization/infrastructure'))) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  for (const specifier of collectModuleSpecifiers(readFileSync(file, 'utf8'))) {
+    if (
+      specifier.startsWith('@/domain/')
+      || specifier.startsWith('@/features/')
+      || specifier === '@/store/appTaskStore'
+    ) {
+      violations.push(`${rel}: infrastructure clients must not depend on app state or feature orchestration`)
+    }
+  }
+}
+
+if (existsSync(join(SRC_DIR, 'domain/viewerAdapter.ts'))) {
+  violations.push('domain/viewerAdapter.ts: use focused domain/viewer capability adapters')
+}
+
+for (const rel of [
+  'components/panels/RightPanel.tsx',
+  'features/geometry/components/GeometryPanel.tsx',
+  'features/scene/components/ScenePanel.tsx',
+]) {
+  const source = readFileSync(join(SRC_DIR, rel), 'utf8')
+  if (/\buseMoleculeStore\s*\(\s*\)/.test(source)) {
+    violations.push(`${rel}: subscribe through a focused molecule-store selector`)
+  }
+}
+
+for (const rel of [
+  'components/layout/CanvasLabel.tsx',
+  'hooks/useMoleculeInfo.ts',
+]) {
+  const source = readFileSync(join(SRC_DIR, rel), 'utf8')
+  if (!source.includes("from '@retainmol/mol-viewer/core'")) {
+    violations.push(`${rel}: derive molecular formula and weight through @retainmol/mol-viewer/core`)
+  }
+  if (/new\s+Map\s*<\s*string\s*,\s*number\s*>|\.atomicMass\b/.test(source)) {
+    violations.push(`${rel}: do not duplicate molecular formula or weight calculations in the app`)
+  }
+}
+
+for (const file of walkIncludingTests(SRC_DIR)) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  if (rel === 'domain/viewer/history.ts') continue
+  if (/\buseMoleculeTemporal\b/.test(readFileSync(file, 'utf8'))) {
+    violations.push(`${rel}: use the narrow molecule history adapter instead of temporal store internals`)
   }
 }
 
@@ -138,53 +355,235 @@ for (const file of walk(MOL_VIEWER_COMMANDS_DIR)) {
   }
 }
 
-const builderEngineImportAllowed = new Set([
-  'lib/builder/BuilderEngine.ts',
-  'lib/builder/BuilderEngine.test.ts',
-])
-
 for (const file of walkIncludingTests(MOL_VIEWER_SRC_DIR)) {
   const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
-  if (builderEngineImportAllowed.has(rel)) continue
-  const source = readFileSync(file, 'utf8')
-  for (const specifier of collectModuleSpecifiers(source)) {
-    if (specifier.includes('BuilderEngine')) {
-      violations.push(`${rel}: import builder commands or focused builder modules instead of BuilderEngine`)
-    }
-  }
-}
-
-const storeCommandsImportAllowed = new Set([
-  'lib/builder/commands/index.ts',
-  'lib/builder/commands/storeCommands.ts',
-])
-
-const commandsBarrelImportAllowed = new Set([
-  'lib/builder/commands/index.ts',
-])
-
-for (const file of walkIncludingTests(MOL_VIEWER_SRC_DIR)) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
-  if (storeCommandsImportAllowed.has(rel)) continue
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
     const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
-    if (normalizedResolved === 'lib/builder/commands/storeCommands') {
-      violations.push(`${rel}: import the focused command module instead of the storeCommands compatibility barrel`)
+    if (removedBuilderCompatibilityModules.has(normalizedResolved)) {
+      violations.push(`${rel}: import the focused builder module instead of removed compatibility entry "${specifier}"`)
     }
+  }
+}
+
+// ── App feature graph: facade-only cross-feature imports + cycle detection ──
+const featureGraph = new Map()
+
+function featureNameForPath(path) {
+  return path.replaceAll('\\', '/').match(/^features\/([^/]+)\//)?.[1] ?? null
+}
+
+function featureTarget(file, specifier) {
+  const aliasMatch = specifier.match(/^@\/features\/([^/]+)(?:\/(.*))?$/)
+  if (aliasMatch) return { name: aliasMatch[1], deep: Boolean(aliasMatch[2]) }
+  const resolved = resolveRelativeSpecifier(file, specifier)
+  if (!resolved) return null
+  const rel = relative(SRC_DIR, resolved).replaceAll('\\', '/')
+  const name = featureNameForPath(rel)
+  return name ? { name, deep: true } : null
+}
+
+for (const file of walk(join(SRC_DIR, 'features'))) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  const sourceFeature = featureNameForPath(rel)
+  if (!sourceFeature) continue
+  if (!featureGraph.has(sourceFeature)) featureGraph.set(sourceFeature, new Set())
+  for (const specifier of collectModuleSpecifiers(readFileSync(file, 'utf8'))) {
+    const target = featureTarget(file, specifier)
+    if (!target || target.name === sourceFeature) continue
+    featureGraph.get(sourceFeature).add(target.name)
+    if (target.deep) {
+      violations.push(`${rel}: import feature ${target.name} through "@/features/${target.name}" facade`)
+    }
+  }
+}
+
+for (const component of stronglyConnectedComponents(featureGraph)) {
+  if (component.length > 1) {
+    violations.push(`app feature dependency cycle: ${component.join(' -> ')}`)
+  }
+}
+
+// Infrastructure and public package facades must not leak mutable runtime stores.
+for (const file of walk(join(SRC_DIR, 'features'))) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  if (!rel.includes('/infrastructure/')) continue
+  const imports = collectModuleSpecifiers(readFileSync(file, 'utf8'))
+  if (imports.some(specifier =>
+    specifier.startsWith('@/domain/viewer/') ||
+    specifier.startsWith('@/store/') ||
+    specifier === '@retainmol/mol-viewer/viewer'
+  )) {
+    violations.push(`${rel}: feature infrastructure must not depend on viewer or app runtime stores`)
+  }
+}
+
+for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'public'))) {
+  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+  if (rel === 'public/viewer.ts') continue // compatibility facade; no new public facade may repeat it
+  const source = readFileSync(file, 'utf8')
+  if (/from ['"]\.\.\/store\//.test(source) || /\buse(?:Molecule|Editor)Store\b/.test(source)) {
+    violations.push(`${rel}: public facade must not expose mutable runtime stores`)
+  }
+}
+
+const commandDomains = new Set([
+  'atom',
+  'bond',
+  'clipboard',
+  'fragment',
+  'geometry',
+  'interaction',
+  'scene',
+  'selection',
+  'shared',
+])
+
+const commandDomainDependencies = new Map([
+  ['atom', new Set(['shared'])],
+  ['bond', new Set(['shared'])],
+  ['clipboard', new Set(['shared'])],
+  ['fragment', new Set(['shared'])],
+  ['geometry', new Set(['shared'])],
+  ['interaction', new Set(['atom', 'bond', 'fragment', 'geometry', 'shared'])],
+  ['scene', new Set(['geometry', 'shared'])],
+  ['selection', new Set(['shared'])],
+  ['shared', new Set()],
+])
+
+function commandDomainForResolvedPath(resolved) {
+  const rel = relative(MOL_VIEWER_COMMANDS_DIR, resolved).replaceAll('\\', '/')
+  const domain = rel.split('/')[0]
+  return commandDomains.has(domain) ? domain : null
+}
+
+const commandDomainGraph = new Map(
+  [...commandDomains].map(domain => [domain, new Set()]),
+)
+
+for (const file of walk(MOL_VIEWER_COMMANDS_DIR)) {
+  const rel = relative(MOL_VIEWER_COMMANDS_DIR, file).replaceAll('\\', '/')
+  const sourceDomain = rel.split('/')[0]
+  if (!commandDomains.has(sourceDomain)) continue
+  const source = readFileSync(file, 'utf8')
+  for (const specifier of collectModuleSpecifiers(source)) {
+    const resolved = resolveRelativeSpecifier(file, specifier)
+    if (!resolved) continue
+    const targetDomain = commandDomainForResolvedPath(resolved)
+    if (!targetDomain || targetDomain === sourceDomain) continue
+    commandDomainGraph.get(sourceDomain).add(targetDomain)
+    if (!commandDomainDependencies.get(sourceDomain)?.has(targetDomain)) {
+      violations.push(`${relative(MOL_VIEWER_SRC_DIR, file)}: commands/${sourceDomain} must not depend on commands/${targetDomain}`)
+    }
+    if (specifier.replaceAll('\\', '/') !== `../${targetDomain}`) {
+      violations.push(`${relative(MOL_VIEWER_SRC_DIR, file)}: import commands/${targetDomain} through its domain facade`)
+    }
+  }
+}
+
+// Tests may exercise another domain, but still go through that domain's public facade.
+for (const file of walkIncludingTests(MOL_VIEWER_COMMANDS_DIR)) {
+  const rel = relative(MOL_VIEWER_COMMANDS_DIR, file).replaceAll('\\', '/')
+  const sourceDomain = rel.split('/')[0]
+  if (!commandDomains.has(sourceDomain)) continue
+  const source = readFileSync(file, 'utf8')
+  for (const specifier of collectModuleSpecifiers(source)) {
+    const resolved = resolveRelativeSpecifier(file, specifier)
+    if (!resolved) continue
+    const targetDomain = commandDomainForResolvedPath(resolved)
+    if (
+      targetDomain &&
+      targetDomain !== sourceDomain &&
+      specifier.replaceAll('\\', '/') !== `../${targetDomain}`
+    ) {
+      violations.push(`${relative(MOL_VIEWER_SRC_DIR, file)}: test imports commands/${targetDomain} through an internal file`)
+    }
+  }
+}
+
+for (const domain of commandDomains) {
+  const facade = join(MOL_VIEWER_COMMANDS_DIR, domain, 'index.ts')
+  if (!existsSync(facade)) continue
+  for (const specifier of collectModuleSpecifiers(readFileSync(facade, 'utf8'))) {
+    if (!specifier.startsWith('./')) {
+      violations.push(`${relative(MOL_VIEWER_SRC_DIR, facade)}: a domain facade may only export its own files`)
+    }
+    if (/Decision(?:\.ts)?$/.test(specifier)) {
+      violations.push(`${relative(MOL_VIEWER_SRC_DIR, facade)}: decision modules are domain-internal`)
+    }
+  }
+}
+
+function stronglyConnectedComponents(graph) {
+  let nextIndex = 0
+  const stack = []
+  const onStack = new Set()
+  const indexByNode = new Map()
+  const lowLink = new Map()
+  const components = []
+
+  function visit(node) {
+    indexByNode.set(node, nextIndex)
+    lowLink.set(node, nextIndex++)
+    stack.push(node)
+    onStack.add(node)
+    for (const target of graph.get(node) ?? []) {
+      if (!indexByNode.has(target)) {
+        visit(target)
+        lowLink.set(node, Math.min(lowLink.get(node), lowLink.get(target)))
+      } else if (onStack.has(target)) {
+        lowLink.set(node, Math.min(lowLink.get(node), indexByNode.get(target)))
+      }
+    }
+    if (lowLink.get(node) !== indexByNode.get(node)) return
+    const component = []
+    let current
+    do {
+      current = stack.pop()
+      onStack.delete(current)
+      component.push(current)
+    } while (current !== node)
+    components.push(component)
+  }
+
+  for (const node of graph.keys()) {
+    if (!indexByNode.has(node)) visit(node)
+  }
+  return components
+}
+
+for (const component of stronglyConnectedComponents(commandDomainGraph)) {
+  if (component.length > 1) {
+    violations.push(`builder command domain cycle: ${component.join(' -> ')}`)
   }
 }
 
 for (const file of walkIncludingTests(MOL_VIEWER_SRC_DIR)) {
   const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
-  if (commandsBarrelImportAllowed.has(rel)) continue
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
     const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
-    if (normalizedResolved === 'lib/builder/commands') {
+    if (
+      normalizedResolved === 'lib/builder/commands' ||
+      normalizedResolved === 'lib/builder/commands/index'
+    ) {
       violations.push(`${rel}: import a focused lib/builder/commands/* module instead of the commands barrel`)
+    }
+  }
+}
+
+for (const file of walkIncludingTests(MOL_VIEWER_SRC_DIR)) {
+  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+  if (rel.startsWith('lib/builder/commands/')) continue
+  const source = readFileSync(file, 'utf8')
+  for (const specifier of collectModuleSpecifiers(source)) {
+    const resolved = resolveRelativeSpecifier(file, specifier)
+    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const match = normalizedResolved.match(/^lib\/builder\/commands\/([^/]+)\/(.+)$/)
+    if (match && commandDomains.has(match[1])) {
+      violations.push(`${rel}: import the commands/${match[1]} domain facade instead of "${normalizedResolved}"`)
     }
   }
 }
@@ -275,6 +674,21 @@ if (/\bresolveBoxSelectResult\s*\(/.test(canvasPointerRouterSource)) {
   violations.push('hooks/useCanvasPointerRouter.ts: commit box selection through commitBoxSelect')
 }
 
+const interactionHandlerFile = join(MOL_VIEWER_SRC_DIR, 'lib/molRenderer/InteractionHandler.ts')
+const interactionHandlerSource = readFileSync(interactionHandlerFile, 'utf8')
+if (!interactionHandlerSource.includes("from './interactionGestureState'")) {
+  violations.push('lib/molRenderer/InteractionHandler.ts: route atom/bond pointer lifecycle through interactionGestureState')
+}
+if (/private\s+_(dragging|dragAtomId|bondDragSourceId|bondDragMoved)\b/.test(interactionHandlerSource)) {
+  violations.push('lib/molRenderer/InteractionHandler.ts: use the discriminated gesture state instead of parallel drag flags')
+}
+if (!interactionHandlerSource.includes("from './InteractionPicker'")) {
+  violations.push('lib/molRenderer/InteractionHandler.ts: delegate canvas picking to InteractionPicker')
+}
+if (/\.intersectObjects\s*\(/.test(interactionHandlerSource)) {
+  violations.push('lib/molRenderer/InteractionHandler.ts: keep raycast collection and hit resolution inside InteractionPicker')
+}
+
 const molViewerSyncFile = join(MOL_VIEWER_SRC_DIR, 'hooks/useMolViewerSync.ts')
 const molViewerSyncSource = readFileSync(molViewerSyncFile, 'utf8')
 if (/useMoleculeStore\.getState\(\)\.(setMolecule|selectAtoms)\s*\(/.test(molViewerSyncSource)) {
@@ -291,14 +705,6 @@ const rotateGizmoFile = join(MOL_VIEWER_SRC_DIR, 'components/viewer/RotateGizmo.
 const rotateGizmoSource = readFileSync(rotateGizmoFile, 'utf8')
 if (/useMoleculeStore\.getState\(\)\.setAtomPositions\s*\(/.test(rotateGizmoSource)) {
   violations.push('components/viewer/RotateGizmo.tsx: create gizmo store callbacks through rotateGizmoEffects')
-}
-
-const publicViewerFile = join(MOL_VIEWER_SRC_DIR, 'public/viewer.ts')
-const publicViewerSource = readFileSync(publicViewerFile, 'utf8')
-for (const specifier of collectModuleSpecifiers(publicViewerSource)) {
-  if (specifier.includes('BuilderEngine')) {
-    violations.push('public/viewer.ts: viewer public sub-entry must not export BuilderEngine editing algorithms')
-  }
 }
 
 const directTransactionAllowed = new Set([

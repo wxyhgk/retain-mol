@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { newAtom, newBond } from '../../molecule'
-import { measureAngle } from '../geometry/measure'
+import { calcAngle } from '../geometry/measure'
 import { autoAddHydrogens, growByReplacingH, replaceAtomSymbol } from './atomOps'
 
 describe('autoAddHydrogens', () => {
@@ -126,7 +126,7 @@ describe('autoAddHydrogens', () => {
 
     for (let i = 0; i < hs.length; i++) {
       for (let j = i + 1; j < hs.length; j++) {
-        const angle = measureAngle(hs[i], c, hs[j])
+        const angle = calcAngle(hs[i], c, hs[j])
         expect(angle).toBeCloseTo(109.47, 0.5)
       }
     }

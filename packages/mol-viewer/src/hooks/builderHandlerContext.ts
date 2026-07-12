@@ -1,10 +1,12 @@
 import { selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
-import { useEditorStore } from '../store/editorStore'
+import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 import type { Molecule } from '../lib/molecule'
-import type { BuilderIntent } from '../lib/builder/commands/builderIntent'
+import type { BuilderIntent } from '../lib/builder/commands/interaction'
 import type { EditCommandEffects } from './builderEditCommandEffects'
 import { readBuilderIntent } from './builderIntentState'
 import type { MoleculeStoreApi } from './builderPointerTypes'
+import { createEditUseCaseExecutor } from '../lib/builder/application/EditUseCaseExecutor'
+import { editChanged } from '../lib/builder/commands/shared'
 
 export interface BuilderHandlerSnapshot {
   readonly intent: BuilderIntent
@@ -28,7 +30,7 @@ export interface BuilderEditorEffects {
 export interface BuilderSelectionEffects {
   readonly selectAtom: (atomId: string, append: boolean) => void
   readonly selectAtomsReplace: (atomIds: ReadonlySet<string>) => void
-  readonly selectBond: (bondId: string, includeAtoms: boolean) => void
+  readonly selectBond: (bondId: string, multi: boolean) => void
   readonly clearSelection: () => void
 }
 
@@ -37,22 +39,43 @@ export interface BuilderObjectActivationEffects {
   readonly activateObjectContainingBond: (bondId: string) => boolean
 }
 
-export function readBuilderHandlerSnapshot(store: MoleculeStoreApi): BuilderHandlerSnapshot {
+export function readBuilderHandlerSnapshot(
+  store: MoleculeStoreApi,
+  editorStore: EditorStoreApi = useEditorStore,
+): BuilderHandlerSnapshot {
   return {
-    intent: readBuilderIntent(),
-    ...readBuilderEditSnapshot(store),
+    intent: readBuilderIntent(editorStore),
+    ...readBuilderEditSnapshot(store, editorStore),
   }
 }
 
-export function readBuilderEditSnapshot(store: MoleculeStoreApi): BuilderEditSnapshot {
+export function readBuilderEditSnapshot(
+  store: MoleculeStoreApi,
+  editorStore: EditorStoreApi = useEditorStore,
+): BuilderEditSnapshot {
   const state = store.getState()
-  const { flashHint } = useEditorStore.getState()
+  const { flashHint } = editorStore.getState()
+  const executor = createEditUseCaseExecutor({
+    commitMolecule: (molecule, selectionPolicy) => {
+      const current = store.getState()
+      if (current.commitEditResult) current.commitEditResult(editChanged(molecule), { selectionPolicy })
+      else current.setMolecule(molecule)
+    },
+    flashHint,
+    runTransaction: (owner, operation) => state.runTransaction
+      ? state.runTransaction(owner, operation)
+      : operation(),
+  })
   return {
     molecule: selectActiveMoleculeOrEmpty(state),
     selectedAtomIds: state.selectedAtomIds,
     editEffects: {
       setMolecule: state.setMolecule,
       flashHint,
+      executeResult: result => executor.execute(result, {
+        owner: 'builder:edit-command',
+        selectionPolicy: 'clear',
+      }),
     },
   }
 }
@@ -62,7 +85,7 @@ export function readBuilderSelectionEffects(store: MoleculeStoreApi): BuilderSel
   return {
     selectAtom: (atomId, append) => state.selectAtom(atomId, append),
     selectAtomsReplace: atomIds => state.selectAtoms(atomIds, 'replace'),
-    selectBond: (bondId, includeAtoms) => state.selectBond(bondId, includeAtoms),
+    selectBond: (bondId, multi) => state.selectBond(bondId, multi),
     clearSelection: state.clearSelection,
   }
 }
@@ -75,8 +98,10 @@ export function readBuilderObjectActivationEffects(store: MoleculeStoreApi): Bui
   }
 }
 
-export function readBuilderEditorEffects(): BuilderEditorEffects {
-  const editor = useEditorStore.getState()
+export function readBuilderEditorEffects(
+  editorStore: EditorStoreApi = useEditorStore,
+): BuilderEditorEffects {
+  const editor = editorStore.getState()
   return {
     addMeasureAtom: editor.addMeasureAtom,
     commitPendingMeasure: editor.commitPendingMeasure,

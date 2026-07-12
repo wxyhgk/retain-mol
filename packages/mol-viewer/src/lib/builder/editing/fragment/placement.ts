@@ -17,15 +17,25 @@ export function placeFragmentStandalone(
   viewDir?: { x: number; y: number; z: number },
 ): Molecule {
   const q = new THREE.Quaternion()
+  const coordinationTilt = frag.group === 'coordination'
+    ? new THREE.Quaternion().setFromEuler(new THREE.Euler(0.38, -0.46, 0.16))
+    : null
   if (viewDir) {
     const v = new THREE.Vector3(viewDir.x, viewDir.y, viewDir.z)
     if (v.lengthSq() > 1e-9) q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v.normalize())
   }
+  if (coordinationTilt) q.multiply(coordinationTilt)
 
-  // 以片段质心为锚，放到点击位置
+  // Coordination fragments are authored around the metal center. Other
+  // fragments keep their historical centroid anchor.
   const centroid = new THREE.Vector3()
-  for (const a of frag.atoms) centroid.add(new THREE.Vector3(a.x, a.y, a.z))
-  centroid.divideScalar(frag.atoms.length)
+  if (frag.group === 'coordination') {
+    const center = frag.atoms[frag.attachIndex]
+    centroid.set(center.x, center.y, center.z)
+  } else {
+    for (const a of frag.atoms) centroid.add(new THREE.Vector3(a.x, a.y, a.z))
+    centroid.divideScalar(frag.atoms.length)
+  }
   const target = new THREE.Vector3(center.x, center.y, center.z)
 
   const { atoms, bonds } = instantiate(frag, p => p.sub(centroid).applyQuaternion(q).add(target))

@@ -12,6 +12,7 @@ describe('FragmentValidator', () => {
     const broken: FragmentDef = {
       ...benzene,
       id: 'broken',
+      attachBond: undefined,
       attachHIndex: benzene.attachIndex,
     }
 
@@ -19,5 +20,16 @@ describe('FragmentValidator', () => {
 
     expect(issues.map(i => i.code)).toContain('attach.h.not_hydrogen')
     expect(issues.map(i => i.code)).toContain('attach.axis.missing_bond')
+  })
+
+  it('allows edge attachment templates without an attach hydrogen', () => {
+    const benzene = getFragment('benzene')!
+    const edgeTemplate: FragmentDef = {
+      ...benzene,
+      id: 'edge-template',
+      attachHIndex: -1,
+    }
+
+    expect(validateFragmentDef(edgeTemplate)).toEqual([])
   })
 })

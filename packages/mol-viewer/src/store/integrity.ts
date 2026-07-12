@@ -10,7 +10,7 @@
  * editorStore → integrity → moleculeStore。
  */
 
-import { useMoleculeStore } from './moleculeStore'
+import type { MoleculeStoreApi } from './moleculeStore'
 import type { Measurement } from '../lib/types'
 
 interface EditorRefState {
@@ -19,11 +19,11 @@ interface EditorRefState {
   bondingAtomId: string | null
 }
 
-export function registerEditorIntegrity(editor: {
+export function registerEditorIntegrity(moleculeStore: MoleculeStoreApi, editor: {
   getState: () => EditorRefState
   setState: (patch: Partial<EditorRefState>) => void
 }) {
-  useMoleculeStore.subscribe(
+  return moleculeStore.subscribe(
     s => s.objectsById,
     (objectsById) => {
       const valid = new Set<string>()

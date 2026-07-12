@@ -1,13 +1,13 @@
 import type { EditSlice } from './types'
 import type { EditActionContext } from './editActionTypes'
 import { applyGeomEdit, applyGeomEditWithMeta } from './helpers'
-import { runCleanupGeometryCommand } from '../../lib/builder/commands/moleculeStoreCommands'
 import {
+  runCleanupGeometryCommand,
   runCycleBondLengthCommand,
   runSetBondAngleCommand,
   runSetBondLengthCommand,
   runSetDihedralAngleCommand,
-} from '../../lib/builder/commands/geometryStoreCommands'
+} from '../../lib/builder/commands/geometry'
 
 type GeometryEditActions = Pick<
   EditSlice,

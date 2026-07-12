@@ -26,14 +26,33 @@ export class MeasureVisuals {
     private getTheme: () => ResolvedTheme,
   ) {}
 
+  private clearVisuals() {
+    const geometries = new Set<THREE.BufferGeometry>()
+    const materials = new Set<THREE.Material>()
+    this.measureGroup.traverse(object => {
+      const renderable = object as THREE.Object3D & {
+        geometry?: THREE.BufferGeometry
+        material?: THREE.Material | THREE.Material[]
+      }
+      if (renderable.geometry) geometries.add(renderable.geometry)
+      if (Array.isArray(renderable.material)) {
+        for (const material of renderable.material) materials.add(material)
+      } else if (renderable.material) {
+        materials.add(renderable.material)
+      }
+    })
+    for (const geometry of geometries) geometry.dispose()
+    for (const material of materials) material.dispose()
+    this.lineMaterials = []
+    this.measureGroup.clear()
+    this.measureLabelPositions = []
+  }
+
   update(
     committed: Array<{ type: MeasureType; atoms: Atom[] }>,
     pending: Atom[],
   ) {
-    for (const m of this.lineMaterials) m.dispose()
-    this.lineMaterials = []
-    this.measureGroup.clear()
-    this.measureLabelPositions = []
+    this.clearVisuals()
 
     const s = this.measureStyle
 
@@ -170,8 +189,6 @@ export class MeasureVisuals {
   }
 
   dispose() {
-    for (const m of this.lineMaterials) m.dispose()
-    this.lineMaterials = []
-    this.measureGroup.clear()
+    this.clearVisuals()
   }
 }

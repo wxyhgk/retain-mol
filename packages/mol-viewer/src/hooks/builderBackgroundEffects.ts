@@ -1,11 +1,10 @@
 import type { Molecule } from '../lib/molecule'
-import type { BackgroundClickRoute } from '../lib/builder/commands/backgroundRoute'
-import type { BuilderIntent } from '../lib/builder/commands/builderIntent'
 import {
   routeBackgroundClickForIntent,
-  shouldPlaceOnBackgroundDoubleClickForIntent,
-} from '../lib/builder/commands/backgroundRoute'
-import { PlacementCommandSession } from '../lib/builder/commands/fragmentCommands'
+  type BackgroundClickRoute,
+  type BuilderIntent,
+} from '../lib/builder/commands/interaction'
+import { PlacementCommandSession } from '../lib/builder/commands/interaction'
 import {
   runEditCommand,
   type BuilderVector3,
@@ -28,6 +27,8 @@ export function applyBackgroundClickRoute(
     case 'clearSelection':
       effects.clearSelection()
       break
+    case 'place':
+      break
     case 'noop':
       break
   }
@@ -42,21 +43,20 @@ export function applyBackgroundClickForIntent(
   intent: BuilderIntent,
   input: BackgroundClickIntentInput,
   effects: BackgroundClickRouteEffects,
-): void {
-  applyBackgroundClickRoute(
-    routeBackgroundClickForIntent(intent, input),
-    effects,
-  )
+): BackgroundClickRoute {
+  const route = routeBackgroundClickForIntent(intent, input)
+  applyBackgroundClickRoute(route, effects)
+  return route
 }
 
-export function applyBackgroundDoubleClickPlacement(
+export function applyBackgroundPlacement(
   intent: BuilderIntent,
   molecule: Molecule,
   position: BuilderVector3,
   viewDirection: BuilderVector3 | undefined,
   effects: EditCommandEffects,
-): void {
-  if (!shouldPlaceOnBackgroundDoubleClickForIntent(intent)) return
+): ReturnType<typeof runEditCommand> | null {
+  if (!intent.canBuild) return null
   const session = new PlacementCommandSession()
   const input = session.resolve({
     activeElement: intent.activeElement,
@@ -65,5 +65,5 @@ export function applyBackgroundDoubleClickPlacement(
     sketchPlane: intent.sketchPlane,
     viewDirection,
   })
-  runEditCommand(molecule, (mol) => session.commit(mol, input), effects)
+  return runEditCommand(molecule, (mol) => session.commit(mol, input), effects)
 }

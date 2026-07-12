@@ -17,8 +17,20 @@ export interface GizmoCallbacks {
 import type { MolRenderer } from './MolRenderer'
 import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../config/rotateGizmo.config'
 import { RENDER_ORDER } from '../../config/render.config'
-import { ticker } from '../animation'
 import { computeRingRadius, collectBondSideAtoms } from './gizmoMath'
+import { ticker as defaultTicker } from '../animation'
+
+export interface GizmoScheduler {
+  invalidate(): void
+  startContinuous(reason: string): void
+  stopContinuous(reason: string): void
+}
+
+const defaultScheduler: GizmoScheduler = {
+  invalidate: () => defaultTicker.invalidate(),
+  startContinuous: reason => defaultTicker.startContinuous(reason),
+  stopContinuous: reason => defaultTicker.stopContinuous(reason),
+}
 
 // ── 内部类型 ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +66,7 @@ type Ring = {
 }
 
 type DragState = {
+  pointerId: number
   ring: Ring
   atomsWorldStart: Map<string, THREE.Vector3>
   pivotWorld: THREE.Vector3
@@ -90,6 +103,7 @@ export class RotateGizmoController {
   private _dragRel     = new THREE.Vector3()
   private _dragNewLocal= new THREE.Vector3()
   private _dragPositions: Map<string, { x: number; y: number; z: number }> = new Map()
+  private _dragPositionsDirty = false
   private _dragRaf: number | null = null
 
   constructor(
@@ -97,6 +111,7 @@ export class RotateGizmoController {
     selectedAtomIds: Set<string>,
     selectedBondIds: Set<string>,
     private cb: GizmoCallbacks,
+    private scheduler: GizmoScheduler = defaultScheduler,
   ) {
     const mol = cb.getMolecule()
     const specs = buildSpecs(mol, selectedAtomIds, selectedBondIds)
@@ -119,9 +134,12 @@ export class RotateGizmoController {
 
     renderer.canvas.addEventListener('pointerdown', this.onPointerDown, { capture: true })
     renderer.canvas.addEventListener('pointermove', this.onPointerMoveHover)
+    renderer.canvas.addEventListener('pointercancel', this.onPointerCancel)
+    renderer.canvas.addEventListener('lostpointercapture', this.onLostPointerCapture)
     renderer.canvas.addEventListener('click', this.onCaptureClick, { capture: true })
     window.addEventListener('pointermove', this.onPointerMoveDrag)
     window.addEventListener('pointerup', this.onPointerUp)
+    window.addEventListener('blur', this.onWindowBlur)
   }
 
   // ── 每帧调用 ──────────────────────────────────────────────────────────────
@@ -223,15 +241,14 @@ export class RotateGizmoController {
     renderer.canDragAtom = this.originalCanDragAtom
     renderer.canvas.removeEventListener('pointerdown', this.onPointerDown, { capture: true } as AddEventListenerOptions)
     renderer.canvas.removeEventListener('pointermove', this.onPointerMoveHover)
+    renderer.canvas.removeEventListener('pointercancel', this.onPointerCancel)
+    renderer.canvas.removeEventListener('lostpointercapture', this.onLostPointerCapture)
     renderer.canvas.removeEventListener('click', this.onCaptureClick, { capture: true } as AddEventListenerOptions)
     window.removeEventListener('pointermove', this.onPointerMoveDrag)
     window.removeEventListener('pointerup', this.onPointerUp)
+    window.removeEventListener('blur', this.onWindowBlur)
 
-    if (this.drag) {
-      this.flushDragPositions()
-      this.cb.endEditSession()
-      renderer.controls.enabled = true
-    }
+    this.finishActiveDrag(false)
     if (this._dragRaf !== null) cancelAnimationFrame(this._dragRaf)
     this._dragRaf = null
     renderer.canvas.style.cursor = ''
@@ -270,11 +287,11 @@ export class RotateGizmoController {
     const hit = this.hitTest(e.clientX, e.clientY)
     for (const r of this.rings) r.hovered = (r === hit)
     this.renderer.canvas.style.cursor = hit ? 'grab' : ''
-    ticker.invalidate()
+    this.scheduler.invalidate()
   }
 
   private onPointerDown = (e: PointerEvent) => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || this.drag) return
     const hit = this.hitTest(e.clientX, e.clientY)
     if (!hit) return
     e.stopImmediatePropagation()
@@ -292,6 +309,7 @@ export class RotateGizmoController {
 
     // 预填充 _dragPositions，后续每帧只更新值不创建新 Map
     this._dragPositions.clear()
+    this._dragPositionsDirty = false
     for (const id of hit.spec.atomIdsToRotate) {
       this._dragPositions.set(id, { x: 0, y: 0, z: 0 })
     }
@@ -315,6 +333,7 @@ export class RotateGizmoController {
     }
 
     this.drag = {
+      pointerId: e.pointerId,
       ring: hit, atomsWorldStart, pivotWorld, pivotScreen, axisWorld,
       startAngle: Math.atan2(e.clientY - pivotScreen.y, e.clientX - pivotScreen.x),
       lastContinuous: 0,
@@ -323,7 +342,7 @@ export class RotateGizmoController {
     this.renderer.controls.enabled = false
     this.renderer.canvas.style.cursor = 'grabbing'
     this.renderer.canvas.setPointerCapture?.(e.pointerId)
-    ticker.startContinuous('gizmo-drag')
+    this.scheduler.startContinuous('gizmo-drag')
   }
 
   private flushDragPositions() {
@@ -331,13 +350,14 @@ export class RotateGizmoController {
       cancelAnimationFrame(this._dragRaf)
       this._dragRaf = null
     }
-    if (this._dragPositions.size > 0) {
+    if (this._dragPositionsDirty && this._dragPositions.size > 0) {
       this.cb.setAtomPositions(this._dragPositions)
+      this._dragPositionsDirty = false
     }
   }
 
   private onPointerMoveDrag = (e: PointerEvent) => {
-    if (!this.drag) return
+    if (!this.drag || e.pointerId !== this.drag.pointerId) return
     const ang = Math.atan2(e.clientY - this.drag.pivotScreen.y, e.clientX - this.drag.pivotScreen.x)
     let raw = ang - this.drag.startAngle
     while (raw - this.drag.lastContinuous > Math.PI)  raw -= 2 * Math.PI
@@ -356,10 +376,14 @@ export class RotateGizmoController {
       pos.y = this._dragNewLocal.y
       pos.z = this._dragNewLocal.z
     }
+    this._dragPositionsDirty = true
     if (this._dragRaf === null) {
       this._dragRaf = requestAnimationFrame(() => {
         this._dragRaf = null
-        this.cb.setAtomPositions(this._dragPositions)
+        if (this._dragPositionsDirty && this.drag) {
+          this.cb.setAtomPositions(this._dragPositions)
+          this._dragPositionsDirty = false
+        }
       })
     }
   }
@@ -369,18 +393,44 @@ export class RotateGizmoController {
   }
 
   private onPointerUp = (e: PointerEvent) => {
-    if (!this.drag) return
+    if (!this.drag || e.pointerId !== this.drag.pointerId) return
+    this.finishActiveDrag(true)
+    this.onPointerMoveHover(e)
+  }
+
+  private onPointerCancel = (e: PointerEvent) => {
+    if (!this.drag || e.pointerId !== this.drag.pointerId) return
+    this.finishActiveDrag(false)
+  }
+
+  private onLostPointerCapture = (e: PointerEvent) => {
+    if (!this.drag || e.pointerId !== this.drag.pointerId) return
+    this.finishActiveDrag(false, false)
+  }
+
+  private onWindowBlur = () => {
+    this.finishActiveDrag(false)
+  }
+
+  private finishActiveDrag(suppressClick: boolean, releaseCapture = true) {
+    const drag = this.drag
+    if (!drag) return
     this.flushDragPositions()
-    this.drag.ring.dragAngle = 0
+    drag.ring.dragAngle = 0
     this.drag = null
-    this.suppressNextClick = true
+    this._dragPositionsDirty = false
+    this.suppressNextClick = suppressClick
     this.cb.endEditSession()
     this.renderer.controls.enabled = true
     this.renderer.canvas.style.cursor = ''
-    this.renderer.canvas.releasePointerCapture?.(e.pointerId)
-    this.onPointerMoveHover(e)
-    ticker.stopContinuous('gizmo-drag')
-    ticker.invalidate()
+    if (
+      releaseCapture &&
+      (!this.renderer.canvas.hasPointerCapture || this.renderer.canvas.hasPointerCapture(drag.pointerId))
+    ) {
+      this.renderer.canvas.releasePointerCapture?.(drag.pointerId)
+    }
+    this.scheduler.stopContinuous('gizmo-drag')
+    this.scheduler.invalidate()
   }
 }
 

@@ -1,10 +1,10 @@
-import { useEditorStore } from '../store/editorStore'
+import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 import {
   resolveBuilderIntent,
   type BuilderIntent,
-} from '../lib/builder/commands/builderIntent'
+} from '../lib/builder/commands/interaction'
 
-export function readBuilderIntent(): BuilderIntent {
+export function readBuilderIntent(editorStore: EditorStoreApi = useEditorStore): BuilderIntent {
   const {
     activeTool,
     activeElement,
@@ -12,7 +12,7 @@ export function readBuilderIntent(): BuilderIntent {
     atomClickMode,
     brushArmed,
     sketchPlane,
-  } = useEditorStore.getState()
+  } = editorStore.getState()
   return resolveBuilderIntent({
     activeTool,
     activeElement,

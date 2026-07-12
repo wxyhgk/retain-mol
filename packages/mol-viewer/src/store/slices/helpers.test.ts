@@ -211,7 +211,7 @@ describe('applySelectionResult', () => {
     } as MoleculeState
 
     const result = applySelectionResult(state, {
-      changed: true,
+      selectionChanged: true,
       selectedAtomIds: new Set(['new-a']),
       selectedBondIds: new Set(['new-b']),
     })
@@ -268,7 +268,8 @@ describe('applyActiveMoleculeEditWithSelection', () => {
 
     const result = applyActiveMoleculeEditWithSelection(state, mol => ({
       ok: true,
-      changed: true,
+      moleculeChanged: true,
+      selectionChanged: true,
       molecule: { ...mol, name: 'edited' },
       selectedAtomIds: new Set(['new-a']),
       selectedBondIds: new Set(),
@@ -280,7 +281,7 @@ describe('applyActiveMoleculeEditWithSelection', () => {
     expect(result.selectionVersion).toBe(4)
   })
 
-  it('can suppress selection version bumps for commands that preserve selection', () => {
+  it('does not replace selection or bump its version when only the molecule changes', () => {
     const state = {
       ...makeState(),
       selectedAtomIds: new Set(['a1', 'a2']),
@@ -289,19 +290,17 @@ describe('applyActiveMoleculeEditWithSelection', () => {
     } as MoleculeState
     const commandResult = {
       ok: true as const,
-      changed: true,
+      moleculeChanged: true,
+      selectionChanged: false,
       molecule: {
         ...state.objectsById[state.activeObjectId!].molecule,
         name: 'bonded',
       },
       selectedAtomIds: new Set(['a1', 'a2']),
       selectedBondIds: new Set<string>(),
-      selectionChanged: false,
     }
 
-    const result = applyActiveMoleculeSelectionResult(state, commandResult, {
-      bumpSelectionVersion: command => command.selectionChanged ?? true,
-    })
+    const result = applyActiveMoleculeSelectionResult(state, commandResult)
 
     expect(result.objectsById?.[state.activeObjectId!].molecule.name).toBe('bonded')
     expect(result.selectionVersion).toBeUndefined()
@@ -323,7 +322,8 @@ describe('applyActiveMoleculeSelectionCommand', () => {
       fn => { patch = fn(state) },
       mol => ({
         ok: true,
-        changed: true,
+        moleculeChanged: true,
+        selectionChanged: true,
         molecule: { ...mol, name: 'selected edit' },
         selectedAtomIds: new Set(['new-a']),
         selectedBondIds: new Set(),
@@ -358,7 +358,8 @@ describe('applyActiveMoleculeSelectionCommand', () => {
       () => { called = true },
       mol => ({
         ok: true,
-        changed: false,
+        moleculeChanged: false,
+        selectionChanged: false,
         molecule: mol,
         selectedAtomIds: new Set<string>(),
         selectedBondIds: new Set<string>(),
@@ -367,7 +368,7 @@ describe('applyActiveMoleculeSelectionCommand', () => {
     expect(called).toBe(false)
   })
 
-  it('can preserve selectionVersion for commands that keep selection stable', () => {
+  it('preserves selectionVersion for commands that keep selection stable', () => {
     const state = {
       ...makeState(),
       selectedAtomIds: new Set(['a1', 'a2']),
@@ -381,18 +382,40 @@ describe('applyActiveMoleculeSelectionCommand', () => {
       fn => { patch = fn(state) },
       mol => ({
         ok: true,
-        changed: true,
+        moleculeChanged: true,
+        selectionChanged: false,
         molecule: { ...mol, name: 'bonded' },
         selectedAtomIds: new Set(['a1', 'a2']),
         selectedBondIds: new Set<string>(),
-        selectionChanged: false,
       }),
-      { bumpSelectionVersion: command => command.selectionChanged ?? true },
     )
 
     expect(result).toEqual({ ok: true })
     expect(patch.objectsById?.[state.activeObjectId!].molecule.name).toBe('bonded')
     expect(patch.selectionVersion).toBeUndefined()
+  })
+
+  it('applies selection-only results without patching the molecule', () => {
+    const state = {
+      ...makeState(),
+      selectedAtomIds: new Set(['missing']),
+      selectedBondIds: new Set<string>(),
+      selectionVersion: 2,
+    } as MoleculeState
+    const activeMolecule = state.objectsById[state.activeObjectId!].molecule
+
+    const result = applyActiveMoleculeSelectionResult(state, {
+      ok: true,
+      moleculeChanged: false,
+      selectionChanged: true,
+      molecule: activeMolecule,
+      selectedAtomIds: new Set(),
+      selectedBondIds: new Set(),
+    })
+
+    expect(result.objectsById).toBeUndefined()
+    expect(result.selectedAtomIds).toEqual(new Set())
+    expect(result.selectionVersion).toBe(3)
   })
 })
 

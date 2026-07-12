@@ -80,7 +80,13 @@ export function replaceAtomSymbol(
   if (!atom || atom.symbol === newSymbol) return mol
   return {
     ...mol,
-    atoms: mol.atoms.map(a => a.id === atomId ? { ...a, symbol: newSymbol } : a),
+    atoms: mol.atoms.map(a => a.id === atomId ? {
+      ...a,
+      symbol: newSymbol,
+      coordinationGeometry: undefined,
+      coordinationDirections: undefined,
+      coordinationNumber: undefined,
+    } : a),
   }
 }
 

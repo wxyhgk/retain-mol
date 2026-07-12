@@ -24,7 +24,7 @@ export const Phase = {
 
 type PhaseValue = (typeof Phase)[keyof typeof Phase]
 
-class Ticker {
+export class Ticker {
   private items: { id: string; phase: number; fn: TickFn }[] = []
   private rafId: number | null = null
   private lastTime = 0
@@ -57,6 +57,15 @@ class Ticker {
   /** 停止持续渲染（不影响其他 reason） */
   stopContinuous(reason: string) {
     this.continuousReasons.delete(reason)
+  }
+
+  dispose() {
+    if (this.rafId !== null) cancelAnimationFrame(this.rafId)
+    this.rafId = null
+    this.items = []
+    this.continuousReasons.clear()
+    this.needsFrame = false
+    this.lastTime = 0
   }
 
   private ensureRunning() {

@@ -8,7 +8,7 @@ import { PLACEMENT } from '../../config/interaction.config'
 import {
   runCopySelectionCommand,
   runPasteAtomsCommand,
-} from '../../lib/builder/commands/clipboardStoreCommands'
+} from '../../lib/builder/commands/clipboard'
 
 type ClipboardEditActions = Pick<EditSlice, 'pasteAtoms' | 'copySelection'>
 

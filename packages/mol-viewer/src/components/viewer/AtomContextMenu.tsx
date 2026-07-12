@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
+import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import { MolRenderer } from '../../lib/molRenderer'
 import { cn } from '../../lib/utils'
 import {
@@ -10,6 +10,7 @@ import {
   commitContextAtomReplacement,
   selectContextAtomIfNeeded,
 } from './atomContextMenuEffects'
+import { useViewerRuntime } from '../../runtime/ViewerRuntime'
 
 interface Props {
   renderer: MolRenderer | null
@@ -20,6 +21,7 @@ const COMMON_ELEMENTS = ['C', 'H', 'O', 'N', 'S', 'P', 'F', 'Cl', 'Br', 'I', 'Si
 interface MenuState { x: number; y: number; atomId: string }
 
 export default function AtomContextMenu({ renderer }: Props) {
+  const { moleculeStore } = useViewerRuntime()
   const [menu, setMenu]       = useState<MenuState | null>(null)
   const [showPicker, setShowPicker] = useState(false)
 
@@ -36,7 +38,7 @@ export default function AtomContextMenu({ renderer }: Props) {
       if (!id) return
       e.stopImmediatePropagation()
       // 右键点中的原子没选中时，先选中它
-      selectContextAtomIfNeeded(id, useMoleculeStore.getState)
+      selectContextAtomIfNeeded(id, moleculeStore.getState)
       downAtomId = id
       downPos = { x: e.clientX, y: e.clientY }
     }
@@ -53,7 +55,7 @@ export default function AtomContextMenu({ renderer }: Props) {
       canvas.removeEventListener('pointerdown', onDown, { capture: true })
       window.removeEventListener('pointerup', onUp)
     }
-  }, [renderer])
+  }, [renderer, moleculeStore])
 
   // 点击外部 / Esc 关闭
   useEffect(() => {
@@ -75,27 +77,27 @@ export default function AtomContextMenu({ renderer }: Props) {
 
   if (!menu) return null
 
-  const mol = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
+  const mol = selectActiveMoleculeOrEmpty(moleculeStore.getState())
   const atom = mol.atoms.find(a => a.id === menu.atomId)
   if (!atom) return null
 
   const close = () => { setMenu(null); setShowPicker(false) }
 
   const isHAtom = atom.symbol === 'H'
-  const addHAvailability = useMoleculeStore.getState().canAddOneHydrogen(menu.atomId)
+  const addHAvailability = moleculeStore.getState().canAddOneHydrogen(menu.atomId)
 
   const handleAddH = () => {
-    commitContextAtomHydrogen(menu.atomId, useMoleculeStore.getState)
+    commitContextAtomHydrogen(menu.atomId, moleculeStore.getState)
     close()
   }
 
   const handleReplace = (sym: string) => {
-    commitContextAtomReplacement(menu.atomId, sym, useMoleculeStore.getState)
+    commitContextAtomReplacement(menu.atomId, sym, moleculeStore.getState)
     close()
   }
 
   const handleDelete = () => {
-    commitContextAtomRemoval(menu.atomId, useMoleculeStore.getState)
+    commitContextAtomRemoval(menu.atomId, moleculeStore.getState)
     close()
   }
 
@@ -103,10 +105,10 @@ export default function AtomContextMenu({ renderer }: Props) {
   const radical = atom.radical ?? 0
   const chargeLabel = charge === 0 ? '0' : charge > 0 ? `+${charge}` : `${charge}`
   const bumpCharge = (d: number) => {
-    commitContextAtomCharge(menu.atomId, charge + d, useMoleculeStore.getState)
+    commitContextAtomCharge(menu.atomId, charge + d, moleculeStore.getState)
   }
   const toggleRadical = () => {
-    commitContextAtomRadical(menu.atomId, radical > 0 ? 0 : 1, useMoleculeStore.getState)
+    commitContextAtomRadical(menu.atomId, radical > 0 ? 0 : 1, moleculeStore.getState)
     close()
   }
 

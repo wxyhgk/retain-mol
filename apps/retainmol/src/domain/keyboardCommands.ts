@@ -1,8 +1,15 @@
-import { useEditorStore, useMoleculeStore } from '@/domain/viewerAdapter'
+import { useEditorStore } from '@/domain/viewer/editorState'
+import { useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { activateWorkspaceTool, type WorkspaceToolEffects } from './workspaceToolStore'
 import { connectSelectedAtoms } from './moleculeEditCommands'
 
 export function isTextEditingTarget(target: EventTarget | null) {
-  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+  const isInput = typeof HTMLInputElement !== 'undefined' && target instanceof HTMLInputElement
+  const isTextArea = typeof HTMLTextAreaElement !== 'undefined' && target instanceof HTMLTextAreaElement
+  const isEditable = typeof HTMLElement !== 'undefined'
+    && target instanceof HTMLElement
+    && target.isContentEditable
+  return isInput || isTextArea || isEditable
 }
 
 export function handleEditorShortcut(
@@ -15,19 +22,25 @@ export function handleEditorShortcut(
 ) {
   if (isTextEditingTarget(e.target)) return false
 
-  if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-    e.preventDefault()
-    handlers.undo()
-    return true
-  }
-
-  if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
     e.preventDefault()
     handlers.redo()
     return true
   }
 
-  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+    e.preventDefault()
+    handlers.redo()
+    return true
+  }
+
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault()
+    handlers.undo()
+    return true
+  }
+
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     handlers.openSearch()
     return true
@@ -35,29 +48,36 @@ export function handleEditorShortcut(
 
   const editor = useEditorStore.getState()
   const molecule = useMoleculeStore.getState()
+  const effects: WorkspaceToolEffects = {
+    setActiveTool: editor.setActiveTool,
+    setActiveElement: editor.setActiveElement,
+    setAtomClickMode: editor.setAtomClickMode,
+    setActiveFragment: editor.setActiveFragment,
+    armBrush: editor.armBrush,
+    disarmBrush: editor.disarmBrush,
+  }
+  const plainShortcut = !e.metaKey && !e.ctrlKey && !e.altKey
 
-  if (e.key === 's' || e.key === 'S') {
-    editor.setActiveTool('select')
-    editor.disarmBrush()
+  if (plainShortcut && e.key.toLowerCase() === 's') {
+    activateWorkspaceTool('select', effects)
     return true
   }
 
-  if (e.key === 'v' || e.key === 'V') {
-    editor.setActiveTool('move-object')
+  if (plainShortcut && e.key.toLowerCase() === 'v') {
+    activateWorkspaceTool('move', effects)
     return true
   }
 
-  if (e.key === 'm' || e.key === 'M') {
-    editor.setActiveTool('measure')
+  if (plainShortcut && e.key.toLowerCase() === 'm') {
+    activateWorkspaceTool('measure', effects)
     return true
   }
 
-  if (e.key === 'b' || e.key === 'B') {
+  if (plainShortcut && e.key.toLowerCase() === 'b') {
     if (molecule.selectedAtomIds.size === 2) {
       connectSelectedAtoms()
     } else {
-      editor.setActiveTool('select')
-      editor.armBrush()
+      activateWorkspaceTool('bond', effects)
     }
     return true
   }
@@ -72,8 +92,9 @@ export function handleEditorShortcut(
   if (e.key === 'Escape') {
     if (editor.activeTool === 'measure' && editor.pendingAtomIds.length > 0) {
       editor.cancelPendingMeasure()
-      return true
     }
+    activateWorkspaceTool('select', effects)
+    return true
   }
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -81,7 +102,7 @@ export function handleEditorShortcut(
     return true
   }
 
-  if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey) {
+  if (plainShortcut && e.key.toLowerCase() === 'h') {
     if (molecule.selectedAtomIds.size === 0) return false
     e.preventDefault()
     const availability = molecule.canAddOneHydrogens([...molecule.selectedAtomIds])

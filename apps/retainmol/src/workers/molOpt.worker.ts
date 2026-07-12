@@ -7,16 +7,17 @@
  */
 import {
   generate3D, minimizeGeometry, registerForceFieldFromUrl,
-  type Molecule, type OptimizeResult,
+  type OptimizeResult,
 } from '@retainmol/mol-viewer/optimize'
+import type { MoleculeComputationRequest } from '../features/molecular-computation/domain/computationTypes'
 
-interface Req { id: number; op: 'gen3d' | 'minimize'; mol: Molecule; resourceUrl: string }
-
-self.onmessage = async (e: MessageEvent<Req>) => {
+self.onmessage = async (e: MessageEvent<MoleculeComputationRequest>) => {
   const { id, op, mol, resourceUrl } = e.data
   let result: OptimizeResult
   try {
-    await registerForceFieldFromUrl(resourceUrl)   // worker 内 fetch 参数表（幂等）
+    // ConformerGenerator 的距离几何也需要 OCL 资源（扭转角/构象参数）。
+    // 注册资源不等于执行 MMFF；gen3d 分支仍然只调用 generate3D。
+    await registerForceFieldFromUrl(resourceUrl)
     result = op === 'gen3d' ? generate3D(mol) : minimizeGeometry(mol)
   } catch (err) {
     result = { molecule: mol, ok: false, reason: (err as Error).message }

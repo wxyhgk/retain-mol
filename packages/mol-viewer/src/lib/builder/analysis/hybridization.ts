@@ -8,7 +8,7 @@
  *   - 恰有 1 个双键 → sp2
  *   - 其余 → sp3
  *
- * 这是杂化推断的唯一真理来源：conjugation.ts、vsepr.ts、fragmentOps.ts
+ * 这是杂化推断的唯一真理来源：conjugation.ts、vsepr.ts、editing/fragment
  * 都应调用这里，不再各自实现。
  */
 

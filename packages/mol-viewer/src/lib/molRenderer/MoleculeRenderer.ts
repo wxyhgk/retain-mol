@@ -7,29 +7,22 @@ import { resolveRenderProfile, type RenderStyle, type ResolvedRenderProfile } fr
 import { RENDER, RENDER_ORDER } from '../../config/render.config'
 import { getSideBondPerp } from './bondGeometry'
 import {
-  applyMaterialVisualState,
   atomDisplayRadius,
-  elementColor,
-  makeAtomMaterial,
   makeBondMaterial,
   outlineColor,
   syncMaterialColor,
   visualBondElementColor,
 } from './moleculeStylePrimitives'
-import { MoleculeSelectionVisuals } from './moleculeSelectionVisuals'
-
-interface ObjectVisualState {
-  opacity?: number
-}
+import { MoleculeAtomRenderer } from './MoleculeAtomRenderer'
+import { applyObjectVisualState, type ObjectVisualState } from './moleculeObjectVisualState'
 
 /**
  * 管理原子、键、高光 mesh 的生命周期与更新。
  * 不持有 scene/camera，只操作注入的 modelGroup。
  */
 export class MoleculeRenderer {
-  readonly atomMeshes = new Map<string, THREE.Mesh>()
   readonly bondMeshes = new Map<string, THREE.Group>()
-  private selectionVisuals: MoleculeSelectionVisuals
+  private readonly atomRenderer: MoleculeAtomRenderer
   /** 当前渲染风格。publication 使用描边插画材质；iboview 使用 glossy Phong，无描边。 */
   private _renderStyle: RenderStyle = 'realistic'
   private _profile: ResolvedRenderProfile = resolveRenderProfile('realistic')
@@ -38,16 +31,13 @@ export class MoleculeRenderer {
   constructor(
     private modelGroup: THREE.Group,
     private getTheme: () => ResolvedTheme,
+    invalidate?: () => void,
   ) {
-    this.selectionVisuals = new MoleculeSelectionVisuals(modelGroup, getTheme)
+    this.atomRenderer = new MoleculeAtomRenderer(modelGroup, getTheme, () => this._profile, invalidate)
   }
 
-  private elementColor(symbol: string): number {
-    return elementColor(this.getTheme(), symbol)
-  }
-
-  private visualElementColor(symbol: string): number {
-    return this.elementColor(symbol)
+  get atomMeshes() {
+    return this.atomRenderer.meshes
   }
 
   private visualBondElementColor(symbol: string): number {
@@ -67,17 +57,8 @@ export class MoleculeRenderer {
     if (this._renderStyle !== renderStyle) this._clearAllMeshes()
     this._renderStyle = renderStyle
     this._profile = resolveRenderProfile(renderStyle)
-    const existingAtomIds = new Set(molecule.atoms.map(a => a.id))
     const existingBondIds = new Set(molecule.bonds.map(b => b.id))
 
-    for (const [id, mesh] of this.atomMeshes) {
-      if (!existingAtomIds.has(id)) {
-        this.modelGroup.remove(mesh)
-        mesh.geometry.dispose()
-        ;(mesh.material as THREE.Material).dispose()
-        this.atomMeshes.delete(id)
-      }
-    }
     for (const [id, grp] of this.bondMeshes) {
       if (!existingBondIds.has(id)) {
         this.modelGroup.remove(grp)
@@ -86,12 +67,8 @@ export class MoleculeRenderer {
         this.bondShapeKeys.delete(id)
       }
     }
-    this.selectionVisuals.removeMissing(existingAtomIds)
-
     const atomById = new Map(molecule.atoms.map(a => [a.id, a]))
-    for (const atom of molecule.atoms) {
-      this.renderAtom(atom, displayMode, selectedAtoms.has(atom.id))
-    }
+    this.atomRenderer.render(molecule.atoms, displayMode, selectedAtoms)
     if (displayMode !== 'spacefill' && displayMode !== 'mtube') {
       for (const bond of molecule.bonds) {
         const a1 = atomById.get(bond.atomId1)
@@ -100,42 +77,13 @@ export class MoleculeRenderer {
       }
     }
 
-    this.applyVisualState(visualState)
-  }
-
-  private renderAtom(atom: Atom, displayMode: DisplayMode, selected: boolean) {
-    const color = this.visualElementColor(atom.symbol)
-    const radius = this.atomDisplayRadius(atom.symbol, displayMode)
-
-    let mesh = this.atomMeshes.get(atom.id)
-    if (!mesh) {
-      const geo = new THREE.SphereGeometry(radius, RENDER.sphereSegments, RENDER.sphereSegments)
-      const mat = makeAtomMaterial(this._profile, color, displayMode)
-      mesh = new THREE.Mesh(geo, mat)
-      mesh.userData = { type: 'atom', id: atom.id }
-      mesh.castShadow = true
-      this.modelGroup.add(mesh)
-      this.atomMeshes.set(atom.id, mesh)
-    } else {
-      const prev = (mesh.geometry as THREE.SphereGeometry).parameters.radius
-      if (Math.abs(prev - radius) > 1e-4) {
-        mesh.geometry.dispose()
-        mesh.geometry = new THREE.SphereGeometry(radius, RENDER.sphereSegments, RENDER.sphereSegments)
-      }
-    }
-    mesh.position.set(atom.x, atom.y, atom.z)
-    syncMaterialColor(this._profile, mesh.material, color)
-
-    this.selectionVisuals.syncHighlight(atom.id, atom.x, atom.y, atom.z, radius, selected)
-    this.selectionVisuals.syncOutline(atom.id, atom.x, atom.y, atom.z, radius, this._profile.outline && displayMode !== 'wireframe')
+    applyObjectVisualState(this.modelGroup, visualState)
   }
 
   /** 清空所有原子/键/描边 mesh（渲染风格切换时强制用新材质重建） */
   private _clearAllMeshes() {
-    for (const m of this.atomMeshes.values()) { this.modelGroup.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose() }
+    this.atomRenderer.clearStyleDependentMeshes()
     for (const g of this.bondMeshes.values()) { this.modelGroup.remove(g); disposeGroup(g) }
-    this.selectionVisuals.clearStyleDependentMeshes()
-    this.atomMeshes.clear()
     this.bondMeshes.clear()
     this.bondShapeKeys.clear()
   }
@@ -353,6 +301,7 @@ export class MoleculeRenderer {
       // inverted-hull 描边：径向放大的黑色 BackSide 圆柱（长度不放大，避免端帽超出）
       const s = (radius + Math.max(RENDER.outlineBondMinOffset, radius * RENDER.outlineBondRadialFactor)) / radius
       const outline = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: outlineColor(this.getTheme()), side: THREE.BackSide }))
+      outline.userData = { type: 'bond', id: bondId }
       outline.scale.set(s, 1, s)
       outline.renderOrder = RENDER_ORDER.outline
       cyl.add(outline)
@@ -370,16 +319,6 @@ export class MoleculeRenderer {
       return params.length + params.radius * 2
     }
     return fallback
-  }
-
-  private applyVisualState(visualState: ObjectVisualState) {
-    const opacity = visualState.opacity ?? 1
-    this.modelGroup.traverse(obj => {
-      const mesh = obj as THREE.Mesh
-      if (!mesh.isMesh) return
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-      for (const mat of materials) applyMaterialVisualState(mat, opacity)
-    })
   }
 
   private atomDisplayRadius(symbol: string, displayMode: DisplayMode): number {
@@ -426,25 +365,19 @@ export class MoleculeRenderer {
 
   /** 在指定原子上显示 bond-drag 悬停光晕 */
   setDragHover(atomId: string) {
-    this.selectionVisuals.setDragHover(atomId, this.atomMeshes.get(atomId))
+    this.atomRenderer.setDragHover(atomId)
   }
 
   clearDragHover() {
-    this.selectionVisuals.clearDragHover()
+    this.atomRenderer.clearDragHover()
   }
 
   dispose() {
-    for (const [, mesh] of this.atomMeshes) {
-      this.modelGroup.remove(mesh)
-      mesh.geometry.dispose()
-      ;(mesh.material as THREE.Material).dispose()
-    }
+    this.atomRenderer.dispose()
     for (const [, grp] of this.bondMeshes) {
       this.modelGroup.remove(grp)
       disposeGroup(grp)
     }
-    this.selectionVisuals.dispose()
-    this.atomMeshes.clear()
     this.bondMeshes.clear()
     this.bondShapeKeys.clear()
   }

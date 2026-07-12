@@ -31,7 +31,7 @@ function collectImports(source) {
 }
 
 function classify(specifier) {
-  if (specifier === '@/domain/viewerAdapter') return 'viewer-adapter'
+  if (specifier.startsWith('@/domain/viewer/')) return 'viewer-adapter'
   if (specifier.startsWith('@retainmol/mol-viewer')) return 'mol-viewer-public'
   if (specifier.includes('moleculeStore') || specifier.includes('editorStore')) return 'viewer-store-internal'
   if (specifier.startsWith('@/')) return 'app-local'

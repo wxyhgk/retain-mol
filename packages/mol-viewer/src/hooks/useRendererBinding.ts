@@ -11,15 +11,16 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import * as THREE from 'three'
 import { MolRenderer } from '../lib/molRenderer'
-import { useMoleculeStore } from '../store/moleculeStore'
 import type { Atom } from '../lib/molecule'
 import { resolveTheme, type ResolvedTheme } from '../presets'
-import type { RenderStyle } from '../styles'
+import { resolveRenderProfile, type RenderStyle } from '../styles'
 import type { DisplayMode } from '../lib/types'
 import type { SceneObject } from '../lib/sceneObject'
 import type { Measurement, MeasureStyle } from '../lib/types'
 import type { BuilderHandlers } from './useBuilder'
 import { toolCan } from '../config/toolCapabilities.config'
+import { useViewerRuntime } from '../runtime/ViewerRuntime'
+import { resolveRendererAdapter } from '../lib/molRenderer/rendererAdapters'
 
 interface RendererBindingOptions {
   containerRef:   RefObject<HTMLDivElement | null>
@@ -29,6 +30,7 @@ interface RendererBindingOptions {
   // store 状态（由 MolViewer 传入，避免 hook 重复订阅）
   readOnly:       boolean
   activeTool:     string
+  brushArmed:     boolean
   sceneObjects:   SceneObject[]
   activeObjectId: string | null
   selectedAtomIds: Set<string>
@@ -36,6 +38,7 @@ interface RendererBindingOptions {
   displayMode:    DisplayMode
   renderStyle:    RenderStyle
   theme:          ResolvedTheme
+  appearance:     'day' | 'night'
   measurements:   Measurement[]
   pendingAtomIds: string[]
   measureStyle:   MeasureStyle
@@ -49,31 +52,32 @@ interface RendererBindingOptions {
 
 export function useRendererBinding({
   containerRef, rendererRef, canvasRef,
-  readOnly, activeTool,
+  readOnly, activeTool, brushArmed,
   sceneObjects, activeObjectId,
   selectedAtomIds, selectedBondIds,
-  displayMode, renderStyle, theme,
+  displayMode, renderStyle, theme, appearance,
   measurements, pendingAtomIds, measureStyle, sketchPlane,
   handlers,
   onRendererChange,
 }: RendererBindingOptions) {
+  const { moleculeStore, ticker } = useViewerRuntime()
+  const rendererAdapterId = resolveRenderProfile(renderStyle).rendererAdapterId ?? 'three'
 
   const {
-    onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick, onBackgroundDoubleClick,
+    onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
     onAtomDragStart, onAtomDrag, onAtomDragEnd,
-    onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide, getPlacementPreview,
+    onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
   } = handlers
 
   const prevMolNameRef  = useRef<string | undefined>(undefined)
   const prevActiveIdRef = useRef<string>(activeObjectId ?? '')
-  const prevRenderStyleRef = useRef<RenderStyle>(renderStyle)
-  const pendingRenderStyleFitRef = useRef(false)
+  const interactionModeRef = useRef(`${readOnly}:${activeTool}:${brushArmed}`)
 
   // ── 初始化渲染器 ─────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const r = new MolRenderer(canvas)
+    const r = resolveRendererAdapter(rendererAdapterId).create(canvas, ticker)
     rendererRef.current = r
     r.onAtomClick       = onAtomClick
     r.onBondClick       = onBondClick
@@ -81,32 +85,38 @@ export function useRendererBinding({
     onRendererChange?.(r)
     return () => { r.dispose(); rendererRef.current = null; onRendererChange?.(null) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [ticker, rendererAdapterId])
 
   // ── 事件处理器（工具 / readOnly 变化时更新）─────────────────────────────
   useEffect(() => {
     const r = rendererRef.current
     if (!r) return
+    const canEdit = toolCan(activeTool, 'canEdit')
+    const interactionMode = `${readOnly}:${activeTool}:${brushArmed}`
+    if (interactionModeRef.current !== interactionMode) {
+      r.cancelActiveInteraction()
+      interactionModeRef.current = interactionMode
+    }
+    if (readOnly || !canEdit) r.cancelActiveInteraction()
     if (readOnly) {
+      r.idleCursor = ''
       r.onAtomClick = r.onAtomDoubleClick = r.onBondClick = r.onBackgroundClick = undefined
-      r.onBackgroundDoubleClick = undefined
       r.onAtomDrag = r.onAtomDragStart = r.onAtomDragEnd = r.canDragAtom = undefined
       r.onBondDragStart = r.onBondDragEnd = r.onBondDragHover = undefined
       r.getGrowPreview = r.getGrowGuide = undefined
-      r.getPlacementPreview = undefined
       return
     }
-    const canEdit = toolCan(activeTool, 'canEdit')
+    r.idleCursor = canEdit && brushArmed ? 'crosshair' : ''
     r.onAtomClick       = onAtomClick
-    r.onAtomDoubleClick = canEdit ? onAtomDoubleClick : undefined
+    // 构建态的原子单击必须立即提交；只有选择态才为“双击选片段”保留仲裁窗口。
+    r.onAtomDoubleClick = canEdit && !brushArmed ? onAtomDoubleClick : undefined
     r.onBondClick       = onBondClick
     r.onBackgroundClick = onBackgroundClick
-    r.onBackgroundDoubleClick = canEdit ? onBackgroundDoubleClick : undefined
     r.onAtomDrag        = canEdit ? onAtomDrag        : undefined
     r.onAtomDragStart   = canEdit ? onAtomDragStart   : undefined
     r.onAtomDragEnd     = canEdit ? onAtomDragEnd     : undefined
     r.canDragAtom       = canEdit
-      ? (id) => useMoleculeStore.getState().selectedAtomIds.has(id)
+      ? (id) => moleculeStore.getState().selectedAtomIds.has(id)
       : undefined
     // bond-drag 回调始终挂载，回调内部通过 activeTool 判断是否拦截
     r.onBondDragStart   = onBondDragStart
@@ -114,41 +124,41 @@ export function useRendererBinding({
     r.onBondDragHover   = (id) => r.setDragHoverAtom(id)
     r.getGrowPreview    = getGrowPreview
     r.getGrowGuide      = getGrowGuide
-    r.getPlacementPreview = canEdit ? getPlacementPreview : undefined
-  }, [readOnly, onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick, onBackgroundDoubleClick,
+  }, [readOnly, onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
       onAtomDrag, onAtomDragStart, onAtomDragEnd,
-      onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide, getPlacementPreview, activeTool, rendererRef])
+      onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide, activeTool, brushArmed, rendererRef, moleculeStore])
 
   // ── 主题同步 ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const r = rendererRef.current
     if (!r) return
-    const rendererTheme = renderStyle === 'iboview' && theme.metadata.id !== 'iboview'
+    const selectedTheme = renderStyle === 'iboview' && theme.metadata.id !== 'iboview'
       ? resolveTheme('iboview')
       : theme
+    const nightTheme = resolveTheme('dark')
+    const rendererTheme = appearance === 'night'
+      ? {
+          ...nightTheme,
+          scene: {
+            ...nightTheme.scene,
+            backgroundColor: '#000000',
+            highlightColor: '#ffffff',
+          },
+        }
+      : selectedTheme
     r.theme = rendererTheme
-    r.renderStyle = renderStyle
+    r.setRenderStyle(renderStyle)
     r.scene.background = new THREE.Color(parseInt(rendererTheme.scene.backgroundColor.replace('#', ''), 16))
-  }, [theme, renderStyle, rendererRef])
+  }, [theme, renderStyle, appearance, rendererRef])
 
   // ── 场景渲染 ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const r = rendererRef.current
     if (!r) return
-    const styleChanged = prevRenderStyleRef.current !== renderStyle
-    prevRenderStyleRef.current = renderStyle
-    if (styleChanged) pendingRenderStyleFitRef.current = true
     r.renderScene(
       sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds,
     )
-    if (pendingRenderStyleFitRef.current && !toolCan(activeTool, 'transformsObject')) {
-      const activeObj = sceneObjects.find(o => o.id === activeObjectId)
-      if (activeObj && activeObj.molecule.atoms.length > 0) {
-        r.fitToMolecule([...activeObj.molecule.atoms])
-        pendingRenderStyleFitRef.current = false
-      }
-    }
-  }, [sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds, theme, renderStyle, activeTool, rendererRef])
+  }, [sceneObjects, activeObjectId, displayMode, selectedAtomIds, selectedBondIds, theme, renderStyle, appearance, rendererRef])
 
   // ── 视角跟随 ─────────────────────────────────────────────────────────────
   // move-object 激活时跳过：否则 modelGroup 偏移导致所有分子一起移动

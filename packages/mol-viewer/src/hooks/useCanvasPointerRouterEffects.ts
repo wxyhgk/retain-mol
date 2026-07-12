@@ -1,7 +1,12 @@
 import * as THREE from 'three'
 import type { Molecule } from '../lib/molecule'
-import { runRotateAtomGroupCommand, runTranslateAtomGroupCommand } from '../lib/builder/commands/moveCommands'
-import type { AtomPosition, ObjectTransformCommandResult, QuaternionLike } from '../lib/builder/commands/moveCommands'
+import {
+  runRotateAtomGroupCommand,
+  runTranslateAtomGroupCommand,
+  type AtomPosition,
+  type ObjectTransformCommandResult,
+  type QuaternionLike,
+} from '../lib/builder/commands/scene'
 import { activateAndResolve } from '../lib/builder/queries'
 
 export interface BoxSelectBounds {
@@ -14,6 +19,13 @@ export interface BoxSelectBounds {
 export interface BoxSelectModifierState {
   readonly shift: boolean
   readonly alt: boolean
+}
+
+export interface BoxSelectStartInput {
+  readonly button: number
+  readonly shiftKey: boolean
+  readonly pickedAtomId: string | null
+  readonly pickedBondId: string | null
 }
 
 export type BoxSelectMode = 'replace' | 'add' | 'subtract'
@@ -61,6 +73,33 @@ export interface CommitObjectPointerTransformInput extends ObjectPointerTransfor
     targetObjectId: string,
     positions: ReadonlyMap<string, AtomPosition>,
   ) => void
+}
+
+export interface ObjectTransformLifecycleState {
+  dragging: boolean
+  fragmentIds: Set<string> | null
+  targetObjectId: string | null
+}
+
+export interface EndableEditSession {
+  readonly end: () => void
+}
+
+export function cancelObjectTransform(
+  state: ObjectTransformLifecycleState,
+  session: EndableEditSession,
+): void {
+  if (state.dragging) session.end()
+  state.dragging = false
+  state.fragmentIds = null
+  state.targetObjectId = null
+}
+
+export function shouldStartBoxSelect(input: BoxSelectStartInput): boolean {
+  const isRight = input.button === 2
+  const isShiftLeft = input.button === 0 && input.shiftKey
+  if (!isRight && !isShiftLeft) return false
+  return !input.pickedAtomId && !input.pickedBondId
 }
 
 export function resolveBoxSelectBounds(

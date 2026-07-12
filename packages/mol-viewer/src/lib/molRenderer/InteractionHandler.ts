@@ -2,12 +2,31 @@ import * as THREE from 'three'
 import type { MolControls } from '../controls/MolControls'
 import { INTERACTION } from '../../config/interaction.config'
 import { GhostVisuals } from './GhostVisuals'
+import { InteractionPicker } from './InteractionPicker'
+import {
+  advanceInteractionGesture,
+  activeAtomDragId,
+  beginAtomPress,
+  beginBondPress,
+  idleInteractionGesture,
+  isAtomGesture,
+  isBondGesture,
+  updateBondDragTarget,
+  type InteractionGestureState,
+} from './interactionGestureState'
 
-import type { Molecule } from '../molecule'
 import type { GrowGuideSpec } from '../types'
-import type { ResolvedTheme } from '../../presets'
-import type { RenderStyle } from '../../styles'
 export type { GrowGuideSpec }
+
+interface PendingAtomClick {
+  readonly atomId: string
+  readonly event: MouseEvent
+  readonly callback: InteractionHandler['onAtomClick']
+  readonly clientX: number
+  readonly clientY: number
+  readonly timeStamp: number
+  readonly timer: ReturnType<typeof setTimeout>
+}
 
 /**
  * canvas 指针事件的手势状态机：点击拾取、原子拖拽、bond-drag（成键/拖出生长）。
@@ -19,8 +38,6 @@ export class InteractionHandler {
   onBondClick?: (id: string, event: MouseEvent) => void
   /** viewDirLocal：相机视线方向（模型局部坐标），供放置片段时朝向相机 */
   onBackgroundClick?: (worldPos: THREE.Vector3, event: MouseEvent, viewDirLocal?: THREE.Vector3) => void
-  /** 双击空白（放置原子/片段走这里，单击空白只做无害操作） */
-  onBackgroundDoubleClick?: (worldPos: THREE.Vector3, event: MouseEvent, viewDirLocal?: THREE.Vector3) => void
   onAtomDragStart?: (id: string) => void
   onAtomDrag?: (id: string, x: number, y: number, z: number) => void
   onAtomDragEnd?: (id: string) => void
@@ -42,23 +59,18 @@ export class InteractionHandler {
     => { pos: THREE.Vector3; radius: number; color: number } | null
   /** 拖出生长开始时调用一次，返回候选槽位参考几何（环/点），用于空间感提示 */
   getGrowGuide?: (sourceId: string) => GrowGuideSpec
-  /** 空白放置预览：返回将要放置的临时分子；renderer 只负责显示，不提交。 */
-  getPlacementPreview?: (worldPos: THREE.Vector3, viewDirLocal?: THREE.Vector3) => Molecule | null
-
   /** 平面草图模式：非空时绘制/拖动都约束在该平面（模型局部坐标） */
   sketchPlane: { origin: THREE.Vector3; normal: THREE.Vector3 } | null = null
 
   private _ghost: GhostVisuals
-  private _dragAtomId: string | null = null
-  private _dragPlane: THREE.Plane | null = null
-  private _dragging = false
-  private _mouseDownPos = new THREE.Vector2()
-  private _bondDragSourceId: string | null = null
-  private _bondDragTarget: string | null = null
-  private _bondDragMoved = false
-  private _bondDragDownPos = new THREE.Vector2()
-  private _growPreviewPos: THREE.Vector3 | null = null
+  private _picker: InteractionPicker
+  private _gesture: InteractionGestureState = idleInteractionGesture()
+  private _atomDragPlane: THREE.Plane | null = null
   private _suppressNextClick = false
+  private _idleCursor = ''
+  private _activePointerId: number | null = null
+  private _pendingAtomClick: PendingAtomClick | null = null
+  private _ignoreNextNativeDoubleClick = false
   // 任意左键按下的位置：浏览器在拖拽（如转相机）松手后仍会派发 click，
   // 用按下→抬起的位移判断"这不是一次点击"，避免旋转视角误触发点击语义
   private _downClient = new THREE.Vector2()
@@ -71,46 +83,23 @@ export class InteractionHandler {
     private controls: MolControls,
     private getAtomMeshes: () => Map<string, THREE.Mesh>,
     private getBondMeshes: () => Map<string, THREE.Group>,
-    private getTheme: () => ResolvedTheme,
-    private getRenderStyle: () => RenderStyle,
+    invalidate: () => void = () => undefined,
   ) {
-    this._ghost = new GhostVisuals(canvas, camera, modelGroup, getTheme, getRenderStyle)
+    this._ghost = new GhostVisuals(canvas, camera, modelGroup, invalidate)
+    this._picker = new InteractionPicker(canvas, camera, getAtomMeshes, getBondMeshes)
     canvas.addEventListener('click', this.handleClick)
     canvas.addEventListener('dblclick', this.handleDblClick)
     canvas.addEventListener('pointerdown', this.handlePointerDown, { capture: true })
     canvas.addEventListener('pointermove', this.handlePointerMove)
     canvas.addEventListener('pointerup', this.handlePointerUp)
     canvas.addEventListener('pointercancel', this.handlePointerCancel)
-    canvas.addEventListener('pointerleave', this.handlePointerLeave)
   }
 
-  /**
-   * three 的 Raycaster 不检查 visible：隐藏对象（Group.visible=false）的子 mesh
-   * 仍会被射线命中。沿 parent 链检查 visible（到 scene 为止），保证隐藏分子
-   * 不进入任何拾取集合——否则它还能被点中、编辑、遮挡点击。
-   */
-  private isPickable(obj: THREE.Object3D): boolean {
-    let cur: THREE.Object3D | null = obj
-    while (cur) {
-      if (!cur.visible) return false
-      if ((cur as THREE.Scene).isScene) break
-      cur = cur.parent
-    }
-    return true
-  }
+  get idleCursor(): string { return this._idleCursor }
 
-  /** 可拾取的原子 mesh 集合（过滤祖先链上被隐藏的） */
-  private pickableAtomObjs(): THREE.Object3D[] {
-    return [...this.getAtomMeshes().values()].filter(m => this.isPickable(m))
-  }
-
-  /** 可拾取的键 mesh 集合（过滤祖先链上被隐藏的） */
-  private pickableBondObjs(): THREE.Object3D[] {
-    const objs: THREE.Object3D[] = []
-    for (const grp of this.getBondMeshes().values()) {
-      grp.traverse(c => { if ((c as THREE.Mesh).isMesh && this.isPickable(c)) objs.push(c) })
-    }
-    return objs
+  set idleCursor(value: string) {
+    this._idleCursor = value
+    if (this._gesture.kind === 'idle') this.canvas.style.cursor = value
   }
 
   /** 按下→抬起位移超过阈值：是拖拽（转相机等）不是点击 */
@@ -120,34 +109,77 @@ export class InteractionHandler {
     return Math.sqrt(dx * dx + dy * dy) >= INTERACTION.dragStartThreshold
   }
 
+  private cancelPendingAtomClick() {
+    if (!this._pendingAtomClick) return
+    clearTimeout(this._pendingAtomClick.timer)
+    this._pendingAtomClick = null
+  }
+
+  private flushPendingAtomClick() {
+    const pending = this._pendingAtomClick
+    if (!pending) return
+    clearTimeout(pending.timer)
+    this._pendingAtomClick = null
+    pending.callback?.(pending.atomId, pending.event)
+  }
+
+  private handleAtomClickCandidate(atomId: string, event: MouseEvent) {
+    if (!this.onAtomDoubleClick) {
+      this.onAtomClick?.(atomId, event)
+      return
+    }
+
+    const pending = this._pendingAtomClick
+    if (pending) {
+      const elapsed = event.timeStamp - pending.timeStamp
+      const distance = Math.hypot(
+        event.clientX - pending.clientX,
+        event.clientY - pending.clientY,
+      )
+      if (
+        pending.atomId === atomId &&
+        elapsed >= 0 &&
+        elapsed <= INTERACTION.doubleClickDelay &&
+        distance <= INTERACTION.doubleClickDistance
+      ) {
+        this.cancelPendingAtomClick()
+        this._ignoreNextNativeDoubleClick = true
+        this.onAtomDoubleClick(atomId, event)
+        return
+      }
+      this.flushPendingAtomClick()
+    }
+
+    if (event.detail > 1) this._ignoreNextNativeDoubleClick = true
+    const callback = this.onAtomClick
+    const timer = setTimeout(() => this.flushPendingAtomClick(), INTERACTION.doubleClickDelay)
+    this._pendingAtomClick = {
+      atomId,
+      event,
+      callback,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      timeStamp: event.timeStamp,
+      timer,
+    }
+  }
+
   private handleClick = (e: MouseEvent) => {
-    if (this._dragging) { this._dragging = false; return }
     if (this._suppressNextClick) { this._suppressNextClick = false; return }
     if (this.movedSinceDown(e)) return
-    const rect = this.canvas.getBoundingClientRect()
-    const mouse = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1,
-    )
-
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(mouse, this.camera)
-
-    const atomObjs = this.pickableAtomObjs()
-    const bondObjs = this.pickableBondObjs()
-
-    const atomHits = raycaster.intersectObjects(atomObjs)
-    if (atomHits.length > 0) {
-      this.onAtomClick?.(atomHits[0].object.userData.id, e)
+    const atomId = this._picker.atomIdAt(e.clientX, e.clientY)
+    if (atomId) {
+      this.handleAtomClickCandidate(atomId, e)
       return
     }
-    const bondHits = raycaster.intersectObjects(bondObjs)
-    if (bondHits.length > 0) {
-      this.onBondClick?.(bondHits[0].object.userData.id, e)
+    this.flushPendingAtomClick()
+    const bondId = this._picker.bondIdAt(e.clientX, e.clientY)
+    if (bondId) {
+      this.onBondClick?.(bondId, e)
       return
     }
 
-    const bg = this.backgroundPosAt(raycaster)
+    const bg = this.backgroundPosAt(this._picker.raycasterAt(e.clientX, e.clientY))
     if (bg) this.onBackgroundClick?.(bg.localPos, e, bg.viewDirLocal)
   }
 
@@ -192,28 +224,20 @@ export class InteractionHandler {
   private handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return
     this._downClient.set(e.clientX, e.clientY)
-    const rect = this.canvas.getBoundingClientRect()
-    const mouse = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1,
-    )
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(mouse, this.camera)
-    const hits = raycaster.intersectObjects(this.pickableAtomObjs())
-    if (hits.length === 0) return
-    const atomId = hits[0].object.userData.id as string
+    const hit = this._picker.atomHitAt(e.clientX, e.clientY)
+    if (!hit) return
+    const atomId = hit.object.userData.id as string
 
     // ── Bond-drag 模式（优先于原子位置拖拽）────────────────────────────────
     // 此时还不知道是点击还是拖拽：先进入候选状态，位移超过阈值才算拖拽，
     // 否则在 pointerup 放行 click（点击生长由 click 处理器负责）
     if (this.onBondDragStart?.(atomId)) {
-      this._bondDragSourceId = atomId
-      this._bondDragMoved = false
-      this._bondDragDownPos.set(e.clientX, e.clientY)
+      this._gesture = beginBondPress(atomId, { x: e.clientX, y: e.clientY })
       this.setGhostLineStart(atomId)
       this.controls.enabled = false
       e.stopImmediatePropagation()
       this.canvas.setPointerCapture(e.pointerId)
+      this._activePointerId = e.pointerId
       return
     }
 
@@ -221,30 +245,42 @@ export class InteractionHandler {
     if (!this.onAtomDrag) return
     if (this.canDragAtom && !this.canDragAtom(atomId)) return
 
-    this._mouseDownPos.set(e.clientX, e.clientY)
-    this._dragAtomId = atomId
+    this._gesture = beginAtomPress(atomId, { x: e.clientX, y: e.clientY })
     if (this.sketchPlane) {
       // 草图模式：原子拖动约束在平面内
-      this._dragPlane = this.sketchPlaneWorld()
+      this._atomDragPlane = this.sketchPlaneWorld()
     } else {
       const atomWorldPos = new THREE.Vector3()
-      ;(hits[0].object as THREE.Mesh).getWorldPosition(atomWorldPos)
+      ;(hit.object as THREE.Mesh).getWorldPosition(atomWorldPos)
       const camDir = new THREE.Vector3()
       this.camera.getWorldDirection(camDir)
-      this._dragPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, atomWorldPos)
+      this._atomDragPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, atomWorldPos)
     }
     this.controls.enabled = false
     e.stopImmediatePropagation()
     this.canvas.setPointerCapture(e.pointerId)
+    this._activePointerId = e.pointerId
   }
 
   private handlePointerMove = (e: PointerEvent) => {
     const rect = this.canvas.getBoundingClientRect()
     const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1
     const my = -((e.clientY - rect.top) / rect.height) * 2 + 1
+    const previous = this._gesture
+    this._gesture = advanceInteractionGesture(
+      previous,
+      { x: e.clientX, y: e.clientY },
+      INTERACTION.dragStartThreshold,
+    )
 
-    if (this._ghost.hasLine) {
-      // 计算光标在 modelGroup 局部坐标系中的位置（草图模式投到草图平面）
+    if (isBondGesture(this._gesture)) {
+      if (this._gesture.kind === 'bond-press') return
+      const sourceId = this._gesture.sourceId
+      if (previous.kind === 'bond-press') {
+        const guide = this.getGrowGuide?.(sourceId)
+        if (guide) this._ghost.showGuide(guide)
+      }
+
       const ray = new THREE.Raycaster()
       ray.setFromCamera(new THREE.Vector2(mx, my), this.camera)
       let plane: THREE.Plane
@@ -253,194 +289,143 @@ export class InteractionHandler {
       } else {
         const camDir = new THREE.Vector3()
         this.camera.getWorldDirection(camDir)
-        const startWorld = this.modelGroup.localToWorld(this._ghost.lineStartPos!.clone())
+        const lineStart = this._ghost.lineStartPos
+        if (!lineStart) return
+        const startWorld = this.modelGroup.localToWorld(lineStart.clone())
         plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, startWorld)
       }
       const endWorld = new THREE.Vector3()
       if (!ray.ray.intersectPlane(plane, endWorld)) return
       const cursorLocal = this.modelGroup.worldToLocal(endWorld)
-
       let endLocal = cursorLocal
-      let validTarget = false
 
-      if (this._bondDragSourceId) {
-        // 位移未超阈值 → 还是潜在点击，不显示任何预览
-        if (!this._bondDragMoved) {
-          const dx = e.clientX - this._bondDragDownPos.x
-          const dy = e.clientY - this._bondDragDownPos.y
-          if (Math.sqrt(dx*dx + dy*dy) < INTERACTION.dragStartThreshold) return
-          this._bondDragMoved = true
-          // 真正进入拖拽：画出候选槽位参考几何（环 / 点）
-          const guide = this.getGrowGuide?.(this._bondDragSourceId)
-          if (guide) this._ghost.showGuide(guide)
+      const hoveredId = this.pickAtomIdAt(e.clientX, e.clientY)
+      const targetId = hoveredId !== null && hoveredId !== sourceId ? hoveredId : null
+      if (targetId !== this._gesture.targetId) this.onBondDragHover?.(targetId)
+
+      if (targetId) {
+        const targetMesh = this.getAtomMeshes().get(targetId)
+        if (targetMesh) endLocal = targetMesh.position.clone()
+        this._gesture = updateBondDragTarget(this._gesture, targetId, null)
+        this._ghost.removeAtom()
+        this.canvas.style.cursor = 'cell'
+      } else {
+        let preview: { pos: THREE.Vector3; radius: number; color: number } | null = null
+        const spec = this._ghost.guideSpec
+        if (!e.shiftKey && spec) {
+          const pos = this._ghost.pickOnGuide(e.clientX, e.clientY)
+          if (pos) preview = { pos, radius: spec.ghostRadius, color: spec.ghostColor }
         }
+        if (!preview) preview = this.getGrowPreview?.(sourceId, cursorLocal, e.shiftKey) ?? null
 
-        // 检测悬停目标，实现吸附 + 颜色变化
-        const hoveredId = this.pickAtomIdAt(e.clientX, e.clientY)
-        validTarget = hoveredId !== null && hoveredId !== this._bondDragSourceId
-
-        if (hoveredId !== this._bondDragTarget) {
-          this._bondDragTarget = hoveredId
-          this.onBondDragHover?.(validTarget ? hoveredId : null)
-        }
-
-        if (validTarget) {
-          const targetMesh = this.getAtomMeshes().get(hoveredId!)
-          if (targetMesh) endLocal = targetMesh.position.clone()   // 吸附到目标原子中心
-          this._growPreviewPos = null
-          this._ghost.removeAtom()
-          this.canvas.style.cursor = 'cell'
+        this._gesture = updateBondDragTarget(this._gesture, null, preview?.pos ?? null)
+        if (preview) {
+          endLocal = preview.pos
+          this._ghost.showAtom(preview.pos, preview.radius, preview.color)
         } else {
-          // 拖到空白：显示生长预览。
-          // 候选位选择在屏幕空间求解（环投影离光标最近的点）——环侧视时
-          // 用相机平面光标做 3D 点积会失效；Shift/无 guide 时退回 3D 自由方向。
-          let preview: { pos: THREE.Vector3; radius: number; color: number } | null = null
-          const spec = this._ghost.guideSpec
-          if (!e.shiftKey && spec) {
-            const pos = this._ghost.pickOnGuide(e.clientX, e.clientY)
-            if (pos) preview = { pos, radius: spec.ghostRadius, color: spec.ghostColor }
-          }
-          if (!preview) {
-            preview = this.getGrowPreview?.(this._bondDragSourceId, cursorLocal, e.shiftKey) ?? null
-          }
-          if (preview) {
-            endLocal = preview.pos
-            this._growPreviewPos = preview.pos.clone()
-            this._ghost.showAtom(preview.pos, preview.radius, preview.color)
-          } else {
-            this._growPreviewPos = null
-            this._ghost.removeAtom()
-          }
-          this.canvas.style.cursor = 'crosshair'
+          this._ghost.removeAtom()
         }
+        this.canvas.style.cursor = 'crosshair'
       }
 
-      this._ghost.updateLine(endLocal, validTarget)
+      this._ghost.updateLine(endLocal, targetId !== null)
+      return
     }
 
-    if (this._bondDragSourceId) return
-    if (!this._dragAtomId) this.updatePlacementPreview(e, mx, my)
-    if (!this._dragAtomId || !this._dragPlane) return
-    const dx = e.clientX - this._mouseDownPos.x
-    const dy = e.clientY - this._mouseDownPos.y
-    if (!this._dragging && Math.sqrt(dx * dx + dy * dy) < INTERACTION.dragStartThreshold) return
-
-    if (!this._dragging) {
-      this._dragging = true
-      this.onAtomDragStart?.(this._dragAtomId)
-    }
+    if (!isAtomGesture(this._gesture) || !this._atomDragPlane) return
+    if (this._gesture.kind === 'atom-press') return
+    if (previous.kind === 'atom-press') this.onAtomDragStart?.(this._gesture.atomId)
 
     const ray = new THREE.Raycaster()
     ray.setFromCamera(new THREE.Vector2(mx, my), this.camera)
     const worldPos = new THREE.Vector3()
-    ray.ray.intersectPlane(this._dragPlane, worldPos)
+    if (!ray.ray.intersectPlane(this._atomDragPlane, worldPos)) return
     const localPos = this.modelGroup.worldToLocal(worldPos.clone())
-    this.onAtomDrag?.(this._dragAtomId, localPos.x, localPos.y, localPos.z)
-  }
-
-  private updatePlacementPreview(e: PointerEvent, mx: number, my: number) {
-    if (!this.getPlacementPreview) {
-      this._ghost.removePlacement()
-      return
-    }
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(new THREE.Vector2(mx, my), this.camera)
-    const hasAtomHit = raycaster.intersectObjects(this.pickableAtomObjs()).length > 0
-    if (hasAtomHit) {
-      this._ghost.removePlacement()
-      return
-    }
-    const hasBondHit = raycaster.intersectObjects(this.pickableBondObjs()).length > 0
-    if (hasBondHit) {
-      this._ghost.removePlacement()
-      return
-    }
-    const bg = this.backgroundPosAt(raycaster)
-    if (!bg) {
-      this._ghost.removePlacement()
-      return
-    }
-    this._ghost.showPlacement(this.getPlacementPreview(bg.localPos, bg.viewDirLocal))
+    this.onAtomDrag?.(this._gesture.atomId, localPos.x, localPos.y, localPos.z)
   }
 
   private handlePointerUp = (e: PointerEvent) => {
     if (e.button !== 0) return
+    const gesture = this._gesture
 
     // ── Bond-drag 结束 ──────────────────────────────────────────────────────
-    if (this._bondDragSourceId) {
-      if (this._bondDragMoved) {
+    if (isBondGesture(gesture)) {
+      if (gesture.kind === 'bond-drag') {
         const targetId = this.pickAtomIdAt(e.clientX, e.clientY)
-        const validTarget = targetId !== null && targetId !== this._bondDragSourceId
+        const validTarget = targetId !== null && targetId !== gesture.sourceId
+        const dropPosition = gesture.dropPosition
+          ? new THREE.Vector3(
+              gesture.dropPosition.x,
+              gesture.dropPosition.y,
+              gesture.dropPosition.z,
+            )
+          : null
         this.onBondDragEnd?.(
-          this._bondDragSourceId,
+          gesture.sourceId,
           validTarget ? targetId : null,
-          validTarget ? null : this._growPreviewPos,
+          validTarget ? null : dropPosition,
         )
         this._suppressNextClick = true
       }
       // 未超过阈值：视为点击，放行 click 事件（点击生长 / 换元素由 click 处理）
-      this.resetBondDrag()
-      if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId)
+      this.resetInteractionGesture()
       return
     }
 
     // ── 原子位置拖拽结束 ────────────────────────────────────────────────────
-    if (this._dragAtomId) {
-      if (this._dragging) this.onAtomDragEnd?.(this._dragAtomId)
-      this._dragAtomId = null
-      this._dragPlane = null
-      this.controls.enabled = true
-      if (this.canvas.hasPointerCapture(e.pointerId)) {
-        this.canvas.releasePointerCapture(e.pointerId)
+    if (isAtomGesture(gesture)) {
+      if (gesture.kind === 'atom-drag') {
+        this.onAtomDragEnd?.(gesture.atomId)
+        this._suppressNextClick = true
       }
+      this.resetInteractionGesture()
     }
   }
 
   private handlePointerCancel = () => {
-    if (this._bondDragSourceId) {
-      this.resetBondDrag()
-    }
-    if (this._dragAtomId) {
-      if (this._dragging) this.onAtomDragEnd?.(this._dragAtomId)
-      this._dragAtomId = null
-      this._dragPlane = null
-      this._dragging = false
-      this.controls.enabled = true
-    }
+    this.cancelActiveGesture()
   }
 
-  private handlePointerLeave = () => {
-    this._ghost.removePlacement()
+  /** Cancel before callbacks are detached so active edit sessions always close. */
+  cancelActiveGesture() {
+    this.cancelPendingAtomClick()
+    this._ignoreNextNativeDoubleClick = false
+    const atomId = activeAtomDragId(this._gesture)
+    if (atomId) this.onAtomDragEnd?.(atomId)
+    this.resetInteractionGesture()
   }
 
-  /** bond-drag 状态与预览视觉的统一复位 */
-  private resetBondDrag() {
-    this.onBondDragHover?.(null)
-    this._bondDragTarget = null
-    this._bondDragMoved = false
-    this._growPreviewPos = null
-    this._ghost.clear()
-    this._bondDragSourceId = null
+  /** 所有 pointer 手势共享同一复位出口，避免残留 drag/transaction 状态。 */
+  private resetInteractionGesture() {
+    if (isBondGesture(this._gesture)) {
+      this.onBondDragHover?.(null)
+      this._ghost.clear()
+    }
+    this._gesture = idleInteractionGesture()
+    this._atomDragPlane = null
+    if (
+      this._activePointerId !== null &&
+      this.canvas.hasPointerCapture(this._activePointerId)
+    ) {
+      this.canvas.releasePointerCapture(this._activePointerId)
+    }
+    this._activePointerId = null
     this.controls.enabled = true
-    this.canvas.style.cursor = ''
+    this.canvas.style.cursor = this._idleCursor
   }
 
   private handleDblClick = (e: MouseEvent) => {
-    if (this.movedSinceDown(e)) return
-    const rect = this.canvas.getBoundingClientRect()
-    const mouse = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1,
-    )
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(mouse, this.camera)
-    const hits = raycaster.intersectObjects(this.pickableAtomObjs())
-    if (hits.length > 0) {
-      this.onAtomDoubleClick?.(hits[0].object.userData.id, e)
+    if (this._ignoreNextNativeDoubleClick) {
+      this._ignoreNextNativeDoubleClick = false
       return
     }
-    const bg = this.backgroundPosAt(raycaster)
-    if (bg) this.onBackgroundDoubleClick?.(bg.localPos, e, bg.viewDirLocal)
+    if (this.movedSinceDown(e)) return
+    const atomId = this._picker.atomIdAt(e.clientX, e.clientY)
+    if (atomId) {
+      this.cancelPendingAtomClick()
+      this.onAtomDoubleClick?.(atomId, e)
+      return
+    }
   }
 
   setGhostLineStart(atomId: string | null) {
@@ -450,38 +435,23 @@ export class InteractionHandler {
 
   /** 在屏幕像素处做原子拾取，供 overlay 判断是否拦截事件 */
   pickAtomIdAt(clientX: number, clientY: number): string | null {
-    const rect = this.canvas.getBoundingClientRect()
-    const m = new THREE.Vector2(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1,
-    )
-    const rc = new THREE.Raycaster()
-    rc.setFromCamera(m, this.camera)
-    const hits = rc.intersectObjects(this.pickableAtomObjs())
-    return hits.length > 0 ? (hits[0].object.userData.id as string) : null
+    return this._picker.atomIdAt(clientX, clientY)
   }
 
   /** 在屏幕像素处做键拾取（路由层判断 Shift+点键时不进框选） */
   pickBondIdAt(clientX: number, clientY: number): string | null {
-    const rect = this.canvas.getBoundingClientRect()
-    const m = new THREE.Vector2(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1,
-    )
-    const rc = new THREE.Raycaster()
-    rc.setFromCamera(m, this.camera)
-    const hits = rc.intersectObjects(this.pickableBondObjs())
-    return hits.length > 0 ? (hits[0].object.userData.id as string) : null
+    return this._picker.bondIdAt(clientX, clientY)
   }
 
   dispose() {
+    this.cancelActiveGesture()
     this.canvas.removeEventListener('click', this.handleClick)
     this.canvas.removeEventListener('dblclick', this.handleDblClick)
     this.canvas.removeEventListener('pointerdown', this.handlePointerDown, { capture: true } as AddEventListenerOptions)
     this.canvas.removeEventListener('pointermove', this.handlePointerMove)
     this.canvas.removeEventListener('pointerup', this.handlePointerUp)
     this.canvas.removeEventListener('pointercancel', this.handlePointerCancel)
-    this.canvas.removeEventListener('pointerleave', this.handlePointerLeave)
     this._ghost.dispose()
+    this.canvas.style.cursor = ''
   }
 }

@@ -6,25 +6,21 @@ import {
   applyActiveMoleculeEditWithSelection,
   getActiveMol,
 } from './helpers'
-import { runAddAtomCommand } from '../../lib/builder/commands/moleculeStoreCommands'
 import {
   getAddOneHydrogenAvailabilityCommand,
   getAddOneHydrogensAvailabilityCommand,
   runAddHydrogensCommand,
   runAddOneHydrogenCommand,
   runAddOneHydrogensCommand,
+  runAddAtomCommand,
   runGrowFromHydrogenCommand,
-  runReplaceAtomCommand,
-  runReplaceAtomsCommand,
-} from '../../lib/builder/commands/atomTopologyCommands'
-import {
   runRemoveAtomCommand,
   runRemoveAtomsCommand,
-} from '../../lib/builder/commands/removalStoreCommands'
-import {
+  runReplaceAtomCommand,
+  runReplaceAtomsCommand,
   runSetAtomChargeCommand,
   runSetAtomRadicalCommand,
-} from '../../lib/builder/commands/geometryStoreCommands'
+} from '../../lib/builder/commands/atom'
 
 type AtomEditActions = Pick<
   EditSlice,

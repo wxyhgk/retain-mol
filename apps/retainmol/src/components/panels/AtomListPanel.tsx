@@ -1,4 +1,4 @@
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@/domain/viewerAdapter'
+import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { getElementConfig as getElement } from '@retainmol/mol-viewer/core'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'

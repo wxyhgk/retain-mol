@@ -35,13 +35,10 @@ export function fuseFragmentOnBond(
   if (!fragmentFrame) return { ok: false, reason: '模板几何异常' }
   const targetFrame = buildRingFuseTargetFrame(mol, target.targetAtom1, target.targetAtom2)
 
-  const valenceError = validateRingFuseSharedValence(mol, [target.targetAtom1, target.targetAtom2])
-  if (valenceError) return { ok: false, reason: valenceError }
-
   const orderOverride = buildRingFuseOrderOverride(frag, f1i, f2i, target.bond.order, isH)
 
-  // 方向自动探索：两侧都构建，优先零合并的干净并环（外侧），
-  // 其次才是合并式并环（凹区拼稠环，如菲 bay → 芘）
+  // 方向自动探索：交换共享边端点并尝试两侧，共四种构型。优先零合并的
+  // 干净并环（外侧），其次才是合并式并环（凹区拼稠环，如菲 bay → 芘）。
   const candidate = planRingFusePlacement({
     molecule: mol,
     fragment: frag,
@@ -63,5 +60,14 @@ export function fuseFragmentOnBond(
     atomById,
   })
   if (!candidate) return { ok: false, reason: '该键两侧空间都放不下新环' }
+  // 没有几何合并时，共享端点必然各新增一条连接，可做严格键价检查。
+  // peri 路径会把模板原子合并到现有原子，必须由最终拓扑检查决定。
+  if (candidate.mergeCount === 0) {
+    const valenceError = validateRingFuseSharedValence(
+      mol,
+      [target.targetAtom1, target.targetAtom2],
+    )
+    if (valenceError) return { ok: false, reason: valenceError }
+  }
   return { ok: true, molecule: candidate.molecule }
 }

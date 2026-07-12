@@ -2,14 +2,31 @@ import { describe, expect, it } from 'vitest'
 import { newAtom, newBond } from '../../molecule'
 import {
   runAddAtomCommand,
+  getAddOneHydrogenAvailabilityCommand,
+  getAddOneHydrogensAvailabilityCommand,
+  runAddHydrogensCommand,
+  runAddOneHydrogenCommand,
+  runAddOneHydrogensCommand,
+  runGrowFromHydrogenCommand,
+  runRemoveAtomCommand,
+  runRemoveAtomsCommand,
+  runReplaceAtomCommand,
+  runReplaceAtomsCommand,
+  runSetAtomChargeCommand,
+} from './atom'
+import {
+  runAddBondCommand,
   runAutoInferBondsCommand,
-  runCenterMoleculeCommand,
-  runClearMoleculeCommand,
-  runMoveAtomCommand,
-  runSetMoleculeCommand,
-} from './moleculeStoreCommands'
+  runBondViaHydrogenCommand,
+  runCycleBondOrderCommand,
+  runRemoveBondCommand,
+} from './bond'
+import { runCopySelectionCommand, runPasteAtomsCommand } from './clipboard'
+import { runMoveAtomCommand, runSetBondLengthCommand } from './geometry'
 import {
   runAddSceneObjectCommand,
+  runCenterMoleculeCommand,
+  runClearMoleculeCommand,
   runRemoveSceneObjectCommand,
   runRenameSceneObjectCommand,
   runSetActiveSceneObjectCommand,
@@ -18,37 +35,10 @@ import {
   runSplitSceneObjectCommand,
   runResetSceneToMoleculeCommand,
   runSetMoleculeInSceneCommand,
+  runSetMoleculeCommand,
   runSetSceneObjectAtomPositionsCommand,
-} from './sceneStoreCommands'
-import {
-  getAddOneHydrogenAvailabilityCommand,
-  getAddOneHydrogensAvailabilityCommand,
-  runAddHydrogensCommand,
-  runAddOneHydrogenCommand,
-  runAddOneHydrogensCommand,
-  runGrowFromHydrogenCommand,
-  runReplaceAtomCommand,
-  runReplaceAtomsCommand,
-} from './atomTopologyCommands'
-import {
-  runAddBondCommand,
-  runBondViaHydrogenCommand,
-  runCycleBondOrderCommand,
-} from './bondTopologyCommands'
-import {
-  runRemoveAtomCommand,
-  runRemoveAtomsCommand,
-  runRemoveBondCommand,
-  runRemoveSelectedCommand,
-} from './removalStoreCommands'
-import {
-  runCopySelectionCommand,
-  runPasteAtomsCommand,
-} from './clipboardStoreCommands'
-import {
-  runSetAtomChargeCommand,
-  runSetBondLengthCommand,
-} from './geometryStoreCommands'
+} from './scene'
+import { runRemoveSelectedCommand } from './interaction'
 
 describe('store basic molecule commands', () => {
   it('wraps scene object creation with auto-offset and unique molecule ids', () => {
@@ -155,6 +145,57 @@ describe('store basic molecule commands', () => {
     expect(resetResult.objectOrder).toEqual([resetResult.activeObjectId])
     expect(resetResult.objectsById[resetResult.activeObjectId].name).toBe('Reset')
     expect(resetResult.clearSelection).toBe(true)
+
+    const appendedResult = runSetMoleculeInSceneCommand(
+      { active: object },
+      ['active'],
+      null,
+      { atoms: [nextAtom], bonds: [], name: 'Appended' },
+    )
+
+    expect(appendedResult.objectOrder).toEqual(['active', appendedResult.activeObjectId])
+    expect(appendedResult.objectsById.active).toBe(object)
+    expect(appendedResult.objectsById[appendedResult.activeObjectId].name).toBe('Appended')
+  })
+
+  it('rewrites setMolecule ids that collide with other scene objects', () => {
+    const occupied = {
+      id: 'occupied',
+      molecule: {
+        atoms: [
+          { id: 'a1', symbol: 'C', x: 0, y: 0, z: 0 },
+          { id: 'a2', symbol: 'C', x: 1.4, y: 0, z: 0 },
+        ],
+        bonds: [{ id: 'b1', atomId1: 'a1', atomId2: 'a2', order: 1 as const }],
+      },
+      name: 'Occupied',
+      visible: true,
+      locked: false,
+      offset: { x: 0, y: 0, z: 0 },
+      createdAt: 1,
+    }
+    const active = {
+      ...occupied,
+      id: 'active',
+      molecule: { atoms: [], bonds: [] },
+      name: 'Active',
+      createdAt: 2,
+    }
+    const incoming = occupied.molecule
+
+    const result = runSetMoleculeInSceneCommand(
+      { occupied, active },
+      ['occupied', 'active'],
+      'active',
+      incoming,
+    )
+
+    const replaced = result.objectsById.active.molecule
+    expect(replaced.atoms.map(atom => atom.id)).not.toEqual(['a1', 'a2'])
+    expect(replaced.bonds[0].id).not.toBe('b1')
+    expect(replaced.bonds[0].atomId1).toBe(replaced.atoms[0].id)
+    expect(replaced.bonds[0].atomId2).toBe(replaced.atoms[1].id)
+    expect(result.objectsById.occupied).toBe(occupied)
   })
 
   it('updates atom positions for a specific scene object', () => {
@@ -528,7 +569,7 @@ describe('store deletion and clipboard commands', () => {
       { selectedAtomIds: new Set([c1.id, c2.id]), selectedBondIds: new Set([bond.id]) },
     )
 
-    expect(result.changed).toBe(true)
+    expect(result.moleculeChanged).toBe(true)
     expect(result.molecule.atoms.map(atom => atom.id)).toEqual([c2.id])
     expect(result.molecule.bonds).toHaveLength(0)
     expect(result.selectedAtomIds).toEqual(new Set([c2.id]))
@@ -550,7 +591,7 @@ describe('store deletion and clipboard commands', () => {
       { selectedAtomIds: new Set([c1.id, c2.id, c3.id]), selectedBondIds: new Set([b12.id, b23.id, b34.id]) },
     )
 
-    expect(result.changed).toBe(true)
+    expect(result.moleculeChanged).toBe(true)
     expect(result.molecule.atoms.map(atom => atom.id)).toEqual([c2.id, c4.id])
     expect(result.molecule.bonds).toHaveLength(0)
     expect(result.selectedAtomIds).toEqual(new Set([c2.id]))
@@ -568,7 +609,7 @@ describe('store deletion and clipboard commands', () => {
       { selectedAtomIds: new Set([c1.id]), selectedBondIds: new Set([bond.id]) },
     )
 
-    expect(result.changed).toBe(true)
+    expect(result.moleculeChanged).toBe(true)
     expect(result.molecule.bonds).toHaveLength(0)
     expect(result.selectedAtomIds).toEqual(new Set([c1.id]))
     expect(result.selectedBondIds).toEqual(new Set())
@@ -586,7 +627,7 @@ describe('store deletion and clipboard commands', () => {
       { selectedAtomIds: new Set([c1.id]), selectedBondIds: new Set([b23.id]) },
     )
 
-    expect(result.changed).toBe(true)
+    expect(result.moleculeChanged).toBe(true)
     expect(result.molecule.atoms.map(atom => atom.id)).toEqual([c2.id, c3.id])
     expect(result.molecule.bonds).toHaveLength(0)
     expect(result.selectedAtomIds).toEqual(new Set())
@@ -611,6 +652,27 @@ describe('store deletion and clipboard commands', () => {
     expect(pasted.newAtomIds).toHaveLength(2)
     expect(pasted.molecule.atoms).toHaveLength(4)
     expect(pasted.molecule.bonds).toHaveLength(2)
+  })
+
+  it('preserves authored coordination metadata through copy and paste', () => {
+    const iron = {
+      ...newAtom('Fe', 0, 0, 0),
+      coordinationGeometry: 'square-planar',
+      coordinationNumber: 4,
+      coordinationDirections: [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]] as const,
+    }
+    const copy = runCopySelectionCommand({ atoms: [iron], bonds: [] }, new Set([iron.id])).clipboard
+    expect(copy).not.toBeNull()
+    if (!copy) return
+
+    const pasted = runPasteAtomsCommand({ atoms: [iron], bonds: [] }, copy, 3)
+    expect(pasted.changed).toBe(true)
+    if (!pasted.changed) return
+    const pastedIron = pasted.molecule.atoms.at(-1)
+    expect(pastedIron?.coordinationGeometry).toBe('square-planar')
+    expect(pastedIron?.coordinationNumber).toBe(4)
+    expect(pastedIron?.coordinationDirections).toEqual(iron.coordinationDirections)
+    expect(pastedIron?.coordinationDirections).not.toBe(iron.coordinationDirections)
   })
 })
 

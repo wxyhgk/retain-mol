@@ -1,4 +1,6 @@
 export { AppShell } from './AppShell'
 export { BusyOverlay } from './BusyOverlay'
 export { CanvasLabel } from './CanvasLabel'
+export { SelectionHud } from './SelectionHud'
 export { StatusBar } from './StatusBar'
+export { ViewportToolbar } from './ViewportToolbar'

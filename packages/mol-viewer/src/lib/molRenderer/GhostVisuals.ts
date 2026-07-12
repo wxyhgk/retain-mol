@@ -1,12 +1,8 @@
 import * as THREE from 'three'
 import type { GrowGuideSpec } from '../types'
-import type { Molecule } from '../molecule'
-import type { ResolvedTheme } from '../../presets'
-import type { RenderStyle } from '../../styles'
 import { GHOST_LINE, GROW_GUIDE, RENDER } from '../../config/render.config'
-import { ticker } from '../animation'
+import { ticker as defaultTicker } from '../animation'
 import { buildDepthCuedRing } from './ghostGeometry'
-import { resolvePlacementGhostVisualSpec } from './placementGhostStyle'
 
 /**
  * 拖出生长手势的全部预览视觉（与 MeasureVisuals 对称）：
@@ -21,7 +17,6 @@ export class GhostVisuals {
   private line: THREE.Line | null = null
   private atom: THREE.Mesh | null = null
   private guideGroup: THREE.Group | null = null
-  private placementGroup: THREE.Group | null = null
 
   private _lineStart: THREE.Vector3 | null = null
   private _guideSpec: GrowGuideSpec = null
@@ -34,8 +29,7 @@ export class GhostVisuals {
     private canvas: HTMLCanvasElement,
     private camera: THREE.PerspectiveCamera,
     private modelGroup: THREE.Group,
-    private getTheme: () => ResolvedTheme,
-    private getRenderStyle: () => RenderStyle,
+    private invalidate: () => void = () => defaultTicker.invalidate(),
   ) {}
 
   get hasLine(): boolean { return this.line !== null && this._lineStart !== null }
@@ -47,7 +41,13 @@ export class GhostVisuals {
   setLineStart(pos: THREE.Vector3 | null) {
     this.removeLine()
     if (!pos) return
-    const geo = new THREE.BufferGeometry().setFromPoints([pos.clone(), pos.clone()])
+    const position = new THREE.Float32BufferAttribute([
+      pos.x, pos.y, pos.z,
+      pos.x, pos.y, pos.z,
+    ], 3)
+    position.setUsage(THREE.DynamicDrawUsage)
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', position)
     const mat = new THREE.LineBasicMaterial({
       color: GHOST_LINE.color,
       linewidth: GHOST_LINE.linewidth,
@@ -62,21 +62,21 @@ export class GhostVisuals {
   /** 更新终点与颜色（绿色=合法成键目标，蓝色=无目标） */
   updateLine(end: THREE.Vector3, validTarget: boolean) {
     if (!this.line || !this._lineStart) return
-    const positions = new Float32Array([
-      this._lineStart.x, this._lineStart.y, this._lineStart.z,
-      end.x, end.y, end.z,
-    ])
-    this.line.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    this.line.geometry.attributes.position.needsUpdate = true
+    const position = this.line.geometry.getAttribute('position') as THREE.BufferAttribute
+    position.setXYZ(0, this._lineStart.x, this._lineStart.y, this._lineStart.z)
+    position.setXYZ(1, end.x, end.y, end.z)
+    position.needsUpdate = true
     ;(this.line.material as THREE.LineBasicMaterial)
       .color.setHex(validTarget ? GHOST_LINE.targetColor : GHOST_LINE.color)
-    ticker.invalidate()
+    this.invalidate()
   }
 
   private removeLine() {
     if (this.line) {
       this.modelGroup.remove(this.line)
       this.line.geometry.dispose()
+      const materials = Array.isArray(this.line.material) ? this.line.material : [this.line.material]
+      materials.forEach(material => material.dispose())
       this.line = null
     }
     this._lineStart = null
@@ -94,7 +94,7 @@ export class GhostVisuals {
     ;(this.atom.material as THREE.MeshBasicMaterial).color.setHex(color)
     this.atom.scale.setScalar(radius)
     this.atom.position.copy(posLocal)
-    ticker.invalidate()
+    this.invalidate()
   }
 
   removeAtom() {
@@ -103,7 +103,7 @@ export class GhostVisuals {
       this.atom.geometry.dispose()
       ;(this.atom.material as THREE.Material).dispose()
       this.atom = null
-      ticker.invalidate()
+      this.invalidate()
     }
   }
 
@@ -148,7 +148,7 @@ export class GhostVisuals {
       })
     }
 
-    ticker.invalidate()
+    this.invalidate()
   }
 
   get guideSpec(): GrowGuideSpec { return this._guideSpec }
@@ -165,62 +165,8 @@ export class GhostVisuals {
         if (mesh.material) (mesh.material as THREE.Material).dispose()
       })
       this.guideGroup = null
-      ticker.invalidate()
+      this.invalidate()
     }
-  }
-
-  // ── 空白放置分子预览 ─────────────────────────────────────────────────────
-
-  showPlacement(molecule: Molecule | null) {
-    this.removePlacement()
-    if (!molecule || molecule.atoms.length === 0) return
-    const visual = resolvePlacementGhostVisualSpec(this.getTheme(), this.getRenderStyle())
-
-    const group = new THREE.Group()
-    group.userData.kind = 'placement-preview'
-    this.placementGroup = group
-    this.modelGroup.add(group)
-
-    for (const bond of molecule.bonds) {
-      const a = molecule.atoms.find(atom => atom.id === bond.atomId1)
-      const b = molecule.atoms.find(atom => atom.id === bond.atomId2)
-      if (!a || !b) continue
-      const start = new THREE.Vector3(a.x, a.y, a.z)
-      const end = new THREE.Vector3(b.x, b.y, b.z)
-      const dir = end.clone().sub(start)
-      const len = dir.length()
-      if (len < 1e-6) continue
-      const radius = visual.bondRadius()
-      const geo = new THREE.CylinderGeometry(radius, radius, len, 12)
-      const mat = visual.bondMaterial(a.symbol, b.symbol)
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.position.copy(start).add(end).multiplyScalar(0.5)
-      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-      group.add(mesh)
-    }
-
-    for (const atom of molecule.atoms) {
-      const radius = visual.atomRadius(atom.symbol)
-      const geo = new THREE.SphereGeometry(radius, RENDER.sphereSegments, RENDER.sphereSegments)
-      const mat = visual.atomMaterial(atom.symbol)
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.position.set(atom.x, atom.y, atom.z)
-      group.add(mesh)
-    }
-
-    ticker.invalidate()
-  }
-
-  removePlacement() {
-    if (!this.placementGroup) return
-    this.modelGroup.remove(this.placementGroup)
-    this.placementGroup.traverse(o => {
-      const mesh = o as THREE.Mesh
-      if (mesh.geometry) mesh.geometry.dispose()
-      if (mesh.material) (mesh.material as THREE.Material).dispose()
-    })
-    this.placementGroup = null
-    ticker.invalidate()
   }
 
   /**
@@ -281,7 +227,6 @@ export class GhostVisuals {
     this.removeLine()
     this.removeAtom()
     this.removeGuide()
-    this.removePlacement()
   }
 
   dispose() { this.clear() }

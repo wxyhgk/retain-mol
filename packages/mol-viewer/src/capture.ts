@@ -9,13 +9,35 @@
 
 import { RENDER } from './config/render.config'
 
-type CaptureFn = (scale?: number) => string | null
+export type CaptureFn = (scale?: number) => string | null
 
-let _capture: CaptureFn | null = null
+export interface ViewportCaptureRegistry {
+  register(fn: CaptureFn): () => void
+  capture(scale?: number): string | null
+}
+
+export function createViewportCaptureRegistry(): ViewportCaptureRegistry {
+  let capture: CaptureFn | null = null
+  return {
+    register(fn) {
+      capture = fn
+      return () => {
+        if (capture === fn) capture = null
+      }
+    },
+    capture(scale = RENDER.captureScale) {
+      return capture ? capture(scale) : null
+    },
+  }
+}
+
+export const defaultCaptureRegistry = createViewportCaptureRegistry()
+let disposeDefaultCapture: (() => void) | null = null
 
 /** MolViewer 内部调用：renderer 就绪传入截图函数，销毁时传 null */
 export function registerViewportCapture(fn: CaptureFn | null): void {
-  _capture = fn
+  disposeDefaultCapture?.()
+  disposeDefaultCapture = fn ? defaultCaptureRegistry.register(fn) : null
 }
 
 /**
@@ -23,5 +45,5 @@ export function registerViewportCapture(fn: CaptureFn | null): void {
  * 无活跃视口时返回 null。
  */
 export function captureViewportImage(scale = RENDER.captureScale): string | null {
-  return _capture ? _capture(scale) : null
+  return defaultCaptureRegistry.capture(scale)
 }

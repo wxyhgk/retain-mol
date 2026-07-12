@@ -6,42 +6,61 @@
 
 import type { Molecule } from '../../lib/molecule'
 import type { SceneObject } from '../../lib/sceneObject'
-import type { EditCommandResult, EditCommandResultWithMeta } from '../../lib/builder/commands/commandResult'
-import type { EditCommandWithSelectionResult, GeomCommandResult } from '../../lib/builder/commands/storeCommandTypes'
+import type {
+  EditCommandResult,
+  EditCommandResultWithMeta,
+  EditCommandWithSelectionResult,
+  GeomCommandResult,
+} from '../../lib/builder/commands/shared'
 import type {
   AddSceneObjectCommandResult,
   RemoveSceneObjectCommandResult,
   SceneObjectUpdatedCommandResult,
   SetMoleculeInSceneCommandResult,
   SplitSceneObjectCommandResult,
-} from '../../lib/builder/commands/sceneStoreCommands'
-import type { SelectionCommandResult } from '../../lib/builder/commands/selectionCommands'
+} from '../../lib/builder/commands/scene'
+import type { SelectionCommandResult } from '../../lib/builder/commands/selection'
 import type { MoleculeState } from './types'
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
+
+const EMPTY_MOLECULE: Molecule = { atoms: [], bonds: [], name: 'New Molecule' }
 
 export function selectActiveMolecule(s: MoleculeState): Molecule | null {
   return s.activeObjectId ? (s.objectsById[s.activeObjectId]?.molecule ?? null) : null
 }
 
 export function selectActiveMoleculeOrEmpty(s: MoleculeState): Molecule {
-  return selectActiveMolecule(s) ?? { atoms: [], bonds: [], name: 'New Molecule' }
+  return selectActiveMolecule(s) ?? EMPTY_MOLECULE
 }
 
 // ── 内部工具 ──────────────────────────────────────────────────────────────────
 
+export function isSceneObjectEditable(object: SceneObject | undefined): object is SceneObject {
+  return Boolean(object && object.visible !== false && object.locked !== true)
+}
+
+export function getEditableObject(
+  s: MoleculeState,
+  objectId: string | null,
+): SceneObject | null {
+  if (!objectId) return null
+  const object = s.objectsById[objectId]
+  return isSceneObjectEditable(object) ? object : null
+}
+
 export function getActiveMol(s: MoleculeState): Molecule | null {
-  return s.activeObjectId ? (s.objectsById[s.activeObjectId]?.molecule ?? null) : null
+  return getEditableObject(s, s.activeObjectId)?.molecule ?? null
 }
 
 export function patchActiveMol(s: MoleculeState, newMol: Molecule): Partial<MoleculeState> {
-  if (!s.activeObjectId) return {}
-  const obj = s.objectsById[s.activeObjectId]
-  if (!obj) return {}
+  const objectId = s.activeObjectId
+  const obj = getEditableObject(s, objectId)
+  if (!objectId || !obj) return {}
   return {
     objectsById: {
       ...s.objectsById,
-      [s.activeObjectId]: { ...obj, molecule: newMol, name: newMol.name ?? obj.name },
+      [objectId]: { ...obj, molecule: newMol, name: newMol.name ?? obj.name },
     },
   }
 }
@@ -50,7 +69,7 @@ export function applySelectionResult(
   s: MoleculeState,
   result: SelectionCommandResult,
 ): Partial<MoleculeState> {
-  if (!result.changed) return {}
+  if (!result.selectionChanged) return {}
   return {
     selectedAtomIds: result.selectedAtomIds,
     selectedBondIds: result.selectedBondIds,
@@ -58,7 +77,10 @@ export function applySelectionResult(
   }
 }
 
-function clearSelectionPatch(s: MoleculeState): Pick<MoleculeState, 'selectedAtomIds' | 'selectedBondIds' | 'selectionVersion'> {
+function clearSelectionPatch(
+  s: MoleculeState,
+): Partial<Pick<MoleculeState, 'selectedAtomIds' | 'selectedBondIds' | 'selectionVersion'>> {
+  if (s.selectedAtomIds.size === 0 && s.selectedBondIds.size === 0) return {}
   return {
     selectedAtomIds: new Set(),
     selectedBondIds: new Set(),
@@ -155,10 +177,6 @@ export function applyActiveMoleculeEdit(
   }
 }
 
-export interface ApplyActiveMoleculeEditWithSelectionOptions {
-  readonly bumpSelectionVersion?: boolean | ((result: EditCommandWithSelectionResult) => boolean)
-}
-
 export function applyActiveMoleculeEditWithMeta<TMeta extends object>(
   get: () => MoleculeState,
   set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
@@ -182,46 +200,43 @@ export function applyActiveMoleculeEditWithMeta<TMeta extends object>(
 export function applyActiveMoleculeEditWithSelection(
   s: MoleculeState,
   edit: (mol: Molecule, selection: MoleculeState) => EditCommandWithSelectionResult | { ok: false; reason: string },
-  options: ApplyActiveMoleculeEditWithSelectionOptions = {},
 ): Partial<MoleculeState> {
   const mol = getActiveMol(s)
   if (!mol) return {}
   const result = edit(mol, s)
   if (!result.ok) return {}
-  return applyActiveMoleculeSelectionResult(s, result, options)
+  return applyActiveMoleculeSelectionResult(s, result)
 }
 
 export function applyActiveMoleculeSelectionCommand(
   get: () => MoleculeState,
   set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
   edit: (mol: Molecule, selection: MoleculeState) => EditCommandWithSelectionResult | { ok: false; reason: string },
-  options: ApplyActiveMoleculeEditWithSelectionOptions = {},
 ): { ok: boolean; reason?: string } {
   const state = get()
   const mol = getActiveMol(state)
   if (!mol) return { ok: false, reason: '没有活跃分子' }
   const result = edit(mol, state)
   if (result.ok === false) return { ok: false, reason: result.reason }
-  if (!result.changed) return { ok: true }
-  set((s) => applyActiveMoleculeSelectionResult(s, result, options))
+  if (!result.moleculeChanged && !result.selectionChanged) return { ok: true }
+  set((s) => applyActiveMoleculeSelectionResult(s, result))
   return { ok: true }
 }
 
 export function applyActiveMoleculeSelectionResult(
   s: MoleculeState,
   result: EditCommandWithSelectionResult,
-  options: ApplyActiveMoleculeEditWithSelectionOptions = {},
 ): Partial<MoleculeState> {
-  if (!result.changed) return {}
-  const shouldBumpSelectionVersion =
-    typeof options.bumpSelectionVersion === 'function'
-      ? options.bumpSelectionVersion(result)
-      : options.bumpSelectionVersion ?? true
+  if (!result.moleculeChanged && !result.selectionChanged) return {}
   return {
-    ...patchActiveMol(s, result.molecule),
-    selectedAtomIds: result.selectedAtomIds,
-    selectedBondIds: result.selectedBondIds,
-    ...(shouldBumpSelectionVersion ? { selectionVersion: s.selectionVersion + 1 } : {}),
+    ...(result.moleculeChanged ? patchActiveMol(s, result.molecule) : {}),
+    ...(result.selectionChanged
+      ? {
+          selectedAtomIds: result.selectedAtomIds,
+          selectedBondIds: result.selectedBondIds,
+          selectionVersion: s.selectionVersion + 1,
+        }
+      : {}),
   }
 }
 

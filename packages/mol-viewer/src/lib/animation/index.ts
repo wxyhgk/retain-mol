@@ -1,2 +1,2 @@
-export { ticker, Phase } from './Ticker'
+export { ticker, Ticker, Phase } from './Ticker'
 export type { FrameContext, TickFn } from './Ticker'

@@ -19,13 +19,15 @@ export interface AttachFragmentGeometry {
 
 export function buildAttachFragmentGeometry(input: AttachFragmentGeometryInput): AttachFragmentGeometry {
   const attachAtom = input.fragment.atoms[input.fragment.attachIndex]
-  const attachHydrogen = input.fragment.atoms[input.fragment.attachHIndex]
   const attachOrigin = new THREE.Vector3(attachAtom.x, attachAtom.y, attachAtom.z)
-  const attachDirection = new THREE.Vector3(
-    attachHydrogen.x - attachAtom.x,
-    attachHydrogen.y - attachAtom.y,
-    attachHydrogen.z - attachAtom.z,
-  ).normalize()
+  const attachHydrogen = input.fragment.atoms[input.fragment.attachHIndex]
+  const attachDirection = attachHydrogen
+    ? new THREE.Vector3(
+        attachHydrogen.x - attachAtom.x,
+        attachHydrogen.y - attachAtom.y,
+        attachHydrogen.z - attachAtom.z,
+      ).normalize()
+    : new THREE.Vector3(...(input.fragment.attachDirection ?? [1, 0, 0])).normalize()
 
   const alignedRotation = new THREE.Quaternion().setFromUnitVectors(
     attachDirection,

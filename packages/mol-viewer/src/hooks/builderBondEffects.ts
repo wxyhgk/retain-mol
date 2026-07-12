@@ -1,14 +1,16 @@
 import type { Molecule } from '../lib/molecule'
-import type { BondClickRoute } from '../lib/builder/commands/bondClickRoute'
-import type { BuilderIntent } from '../lib/builder/commands/builderIntent'
-import { routeBondClickForIntent } from '../lib/builder/commands/bondClickRoute'
-import { runBondClickCommand } from '../lib/builder/commands/bondClickCommands'
-import { runBondDragEndCommand } from '../lib/builder/commands/bondDragCommands'
-import { canStartBondDragCommand } from '../lib/builder/commands/interactionCommands'
+import {
+  routeBondClickForIntent,
+  runBondClickCommand,
+  runBondDragEndCommand,
+  type BondClickRoute,
+} from '../lib/builder/commands/interaction'
+import { canStartBondDragCommand } from '../lib/builder/commands/bond'
 import {
   shouldAttemptBondDragStartForIntent,
   shouldRunEditCommandForIntent,
-} from '../lib/builder/commands/gestureIntentGates'
+  type BuilderIntent,
+} from '../lib/builder/commands/interaction'
 import {
   runEditCommand,
   type BuilderVector3,
@@ -16,7 +18,7 @@ import {
 } from './builderEditCommandEffects'
 
 export interface BondClickRouteEffects {
-  readonly selectBond: (includeAtoms: boolean) => void
+  readonly selectBond: (multi: boolean) => void
   readonly runCommand: (
     route: Extract<BondClickRoute, { kind: 'command' }>,
   ) => void
@@ -28,7 +30,7 @@ export function applyBondClickRoute(
 ): void {
   switch (route.kind) {
     case 'select':
-      effects.selectBond(route.includeAtoms)
+      effects.selectBond(route.multi)
       break
     case 'command':
       effects.runCommand(route)
@@ -45,7 +47,7 @@ export interface BondClickIntentInput {
 }
 
 export interface BondClickIntentEffects {
-  readonly selectBond: (includeAtoms: boolean) => void
+  readonly selectBond: (multi: boolean) => void
   readonly editEffects: EditCommandEffects
 }
 

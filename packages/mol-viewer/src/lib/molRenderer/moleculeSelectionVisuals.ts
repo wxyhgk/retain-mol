@@ -4,7 +4,7 @@ import { hexToInt } from '../../presets'
 import { BOND_DRAG_HOVER, RENDER, RENDER_ORDER } from '../../config/render.config'
 import { OUTLINE_OFFSET } from './publicationMaterials'
 import { outlineColor } from './moleculeStylePrimitives'
-import { ticker } from '../animation'
+import { ticker as defaultTicker } from '../animation'
 
 export class MoleculeSelectionVisuals {
   private highlightMeshes = new Map<string, THREE.Mesh>()
@@ -15,6 +15,7 @@ export class MoleculeSelectionVisuals {
   constructor(
     private modelGroup: THREE.Group,
     private getTheme: () => ResolvedTheme,
+    private invalidate: () => void = () => defaultTicker.invalidate(),
   ) {}
 
   syncHighlight(atomId: string, x: number, y: number, z: number, radius: number, selected: boolean) {
@@ -72,7 +73,7 @@ export class MoleculeSelectionVisuals {
     this.dragHoverMesh.position.copy(atomMesh.position)
     this.modelGroup.add(this.dragHoverMesh)
     this.dragHoverId = atomId
-    ticker.invalidate()
+    this.invalidate()
   }
 
   clearDragHover(invalidate = true) {
@@ -83,7 +84,7 @@ export class MoleculeSelectionVisuals {
       this.dragHoverMesh = null
     }
     this.dragHoverId = null
-    if (invalidate) ticker.invalidate()
+    if (invalidate) this.invalidate()
   }
 
   dispose() {

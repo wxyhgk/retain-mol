@@ -36,6 +36,20 @@ export function fitToMolecule(
   camera.position.set(0, 0, dist)
 }
 
+/** Change perspective FOV without changing the apparent size of the current view. */
+export function setFovPreservingScale(
+  camera: THREE.PerspectiveCamera,
+  nextFov: number,
+) {
+  if (!Number.isFinite(nextFov) || nextFov <= 0 || nextFov >= 180 || Math.abs(camera.fov - nextFov) < 1e-8) return
+
+  const previousHalfFov = THREE.MathUtils.degToRad(camera.fov / 2)
+  const nextHalfFov = THREE.MathUtils.degToRad(nextFov / 2)
+  camera.position.z *= Math.tan(previousHalfFov) / Math.tan(nextHalfFov)
+  camera.fov = nextFov
+  camera.updateProjectionMatrix()
+}
+
 /**
  * 编辑过程中保持"旋转中心 = 分子 bbox 中心"，同时补偿视觉位置不跳。
  */

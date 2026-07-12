@@ -1,25 +1,13 @@
-import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewerAdapter'
-
-function computeFormula(atoms: readonly { symbol: string }[]): string {
-  if (atoms.length === 0) return ''
-  const counts: Record<string, number> = {}
-  for (const atom of atoms) counts[atom.symbol] = (counts[atom.symbol] || 0) + 1
-  const priority = ['C', 'H']
-  const keys = [
-    ...priority.filter(symbol => counts[symbol]),
-    ...Object.keys(counts).filter(symbol => !priority.includes(symbol)).sort(),
-  ]
-  return keys.map(symbol => `${symbol}${counts[symbol] > 1 ? counts[symbol] : ''}`).join('')
-}
+import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { getMolecularFormula } from '@retainmol/mol-viewer/core'
 
 export function CanvasLabel() {
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
-  const { selectedAtomIds, selectedBondIds } = useMoleculeStore()
-  const formula = computeFormula(molecule.atoms)
-  const selTotal = selectedAtomIds.size + selectedBondIds.size
+  const formula = getMolecularFormula(molecule.atoms)
+  const selTotal = useMoleculeStore(state => state.selectedAtomIds.size + state.selectedBondIds.size)
 
   return (
-    <div className="absolute left-[100px] top-4 z-10 flex items-center gap-1.5 select-none pointer-events-none">
+    <div className="pointer-events-none absolute left-4 top-4 z-10 flex select-none items-center gap-1.5">
       <span className="text-xs font-medium text-gray-700 bg-white/85 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm border border-gray-200/60">
         {molecule.name || 'New Molecule'}
       </span>

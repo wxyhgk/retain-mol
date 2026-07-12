@@ -17,13 +17,12 @@ export default function BoxSelectOverlay({ rect }: Props) {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')!
-    const dpr = window.devicePixelRatio || 1
 
     const sync = () => {
       const parent = canvas.parentElement
       if (!parent) return
       const r = parent.getBoundingClientRect()
+      const dpr = window.devicePixelRatio || 1
       canvas.width  = Math.max(1, Math.round(r.width  * dpr))
       canvas.height = Math.max(1, Math.round(r.height * dpr))
       canvas.style.width  = `${r.width}px`

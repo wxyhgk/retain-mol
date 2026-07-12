@@ -1,0 +1,215 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as THREE from 'three'
+import type { MolControls } from '../controls/MolControls'
+import { InteractionHandler } from './InteractionHandler'
+import { collectPickableBondObjects } from './InteractionPicker'
+import type { InteractionGestureState } from './interactionGestureState'
+
+class FakeCanvas extends EventTarget {
+  readonly style = { cursor: '' }
+  private readonly capturedPointers = new Set<number>()
+
+  capture(pointerId: number) {
+    this.capturedPointers.add(pointerId)
+  }
+
+  hasPointerCapture(pointerId: number): boolean {
+    return this.capturedPointers.has(pointerId)
+  }
+
+  releasePointerCapture(pointerId: number) {
+    this.capturedPointers.delete(pointerId)
+  }
+}
+
+function createHandler() {
+  const canvas = new FakeCanvas()
+  const controls = { enabled: false } as MolControls
+  const handler = new InteractionHandler(
+    canvas as unknown as HTMLCanvasElement,
+    new THREE.PerspectiveCamera(),
+    new THREE.Group(),
+    new THREE.Group(),
+    controls,
+    () => new Map(),
+    () => new Map(),
+  )
+  return { canvas, controls, handler }
+}
+
+function setActiveAtomDrag(
+  handler: InteractionHandler,
+  canvas: FakeCanvas,
+  atomId: string,
+  pointerId: number,
+) {
+  canvas.capture(pointerId)
+  const mutable = handler as unknown as {
+    _gesture: InteractionGestureState
+    _activePointerId: number | null
+  }
+  mutable._gesture = { kind: 'atom-drag', atomId, down: { x: 0, y: 0 } }
+  mutable._activePointerId = pointerId
+}
+
+function queueAtomClick(
+  handler: InteractionHandler,
+  atomId: string,
+  input: { timeStamp: number; clientX?: number; clientY?: number; detail?: number },
+) {
+  const event = {
+    clientX: input.clientX ?? 10,
+    clientY: input.clientY ?? 10,
+    detail: input.detail ?? 1,
+    timeStamp: input.timeStamp,
+  } as MouseEvent
+  ;(handler as unknown as {
+    handleAtomClickCandidate: (id: string, event: MouseEvent) => void
+  }).handleAtomClickCandidate(atomId, event)
+}
+
+describe('InteractionHandler lifecycle', () => {
+  it('closes atom drag state before edit callbacks are detached', () => {
+    const { canvas, controls, handler } = createHandler()
+    const ended: string[] = []
+    handler.onAtomDragEnd = atomId => ended.push(atomId)
+    setActiveAtomDrag(handler, canvas, 'a1', 7)
+
+    handler.cancelActiveGesture()
+    handler.cancelActiveGesture()
+
+    expect(ended).toEqual(['a1'])
+    expect(canvas.hasPointerCapture(7)).toBe(false)
+    expect(controls.enabled).toBe(true)
+    handler.dispose()
+  })
+
+  it('closes an active atom drag during dispose', () => {
+    const { canvas, handler } = createHandler()
+    const ended: string[] = []
+    handler.onAtomDragEnd = atomId => ended.push(atomId)
+    setActiveAtomDrag(handler, canvas, 'a2', 9)
+
+    handler.dispose()
+
+    expect(ended).toEqual(['a2'])
+    expect(canvas.hasPointerCapture(9)).toBe(false)
+  })
+})
+
+describe('InteractionPicker bond identity', () => {
+  it('only exposes meshes carrying a valid bond identity to raycasting', () => {
+    const valid = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial())
+    valid.userData = { type: 'bond', id: 'b1' }
+    const decoration = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial())
+    const group = new THREE.Group()
+    group.add(valid, decoration)
+
+    const pickable = collectPickableBondObjects([group])
+
+    expect(pickable).toEqual([valid])
+    valid.geometry.dispose()
+    ;(valid.material as THREE.Material).dispose()
+    decoration.geometry.dispose()
+    ;(decoration.material as THREE.Material).dispose()
+  })
+})
+
+describe('InteractionHandler atom click arbitration', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('commits immediately when double-click behavior is disabled', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+
+    queueAtomClick(handler, 'a1', { timeStamp: 100 })
+
+    expect(calls).toEqual(['click:a1'])
+    expect(vi.getTimerCount()).toBe(0)
+    handler.dispose()
+  })
+
+  it('commits a single atom click only after the double-click window', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+    handler.onAtomDoubleClick = id => calls.push(`double:${id}`)
+
+    queueAtomClick(handler, 'a1', { timeStamp: 100 })
+    expect(calls).toEqual([])
+
+    vi.runAllTimers()
+    expect(calls).toEqual(['click:a1'])
+    handler.dispose()
+  })
+
+  it('turns two nearby clicks on the same atom into one double-click', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+    handler.onAtomDoubleClick = id => calls.push(`double:${id}`)
+
+    queueAtomClick(handler, 'a1', { timeStamp: 100, clientX: 10, clientY: 10 })
+    queueAtomClick(handler, 'a1', {
+      timeStamp: 220,
+      clientX: 12,
+      clientY: 11,
+      detail: 2,
+    })
+    vi.runAllTimers()
+
+    expect(calls).toEqual(['double:a1'])
+    handler.dispose()
+  })
+
+  it('keeps rapid clicks on different atoms as separate single clicks', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+    handler.onAtomDoubleClick = id => calls.push(`double:${id}`)
+
+    queueAtomClick(handler, 'a1', { timeStamp: 100 })
+    queueAtomClick(handler, 'a2', { timeStamp: 180, detail: 2 })
+    expect(calls).toEqual(['click:a1'])
+
+    vi.runAllTimers()
+    expect(calls).toEqual(['click:a1', 'click:a2'])
+    handler.dispose()
+  })
+
+  it('keeps same-atom clicks outside the time window as separate singles', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+    handler.onAtomDoubleClick = id => calls.push(`double:${id}`)
+
+    queueAtomClick(handler, 'a1', { timeStamp: 100 })
+    vi.runAllTimers()
+    queueAtomClick(handler, 'a1', { timeStamp: 500, detail: 2 })
+    vi.runAllTimers()
+
+    expect(calls).toEqual(['click:a1', 'click:a1'])
+    handler.dispose()
+  })
+
+  it('drops pending atom clicks on cancel and dispose', () => {
+    const first = createHandler()
+    const second = createHandler()
+    const calls: string[] = []
+    first.handler.onAtomClick = id => calls.push(`first:${id}`)
+    first.handler.onAtomDoubleClick = () => undefined
+    second.handler.onAtomClick = id => calls.push(`second:${id}`)
+    second.handler.onAtomDoubleClick = () => undefined
+
+    queueAtomClick(first.handler, 'a1', { timeStamp: 100 })
+    queueAtomClick(second.handler, 'a2', { timeStamp: 100 })
+    first.handler.cancelActiveGesture()
+    second.handler.dispose()
+    vi.runAllTimers()
+
+    expect(calls).toEqual([])
+    first.handler.dispose()
+  })
+})

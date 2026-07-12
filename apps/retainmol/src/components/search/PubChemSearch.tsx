@@ -3,7 +3,7 @@ import { Search, Loader2, AlertCircle } from 'lucide-react'
 import { fetchCompoundSdf } from '@retainmol/mol-viewer/pubchem'
 import type { Molecule } from '@retainmol/mol-viewer/core'
 import { parseSdf, is2D } from '@retainmol/mol-viewer/io'
-import { placeMoleculeInViewer } from '@/domain/moleculePlacementService'
+import { placeMoleculeInViewer } from '@/features/molecule-placement'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -28,6 +28,15 @@ export default function PubChemSearch({ open, onClose }: Props) {
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose, open])
+
   const handleSearch = async () => {
     if (!query.trim() || status === 'loading') return
     setStatus('loading'); setErrorMsg(''); setIs2DWarning(false); setFetchedMol(null)
@@ -48,13 +57,13 @@ export default function PubChemSearch({ open, onClose }: Props) {
 
   const handleReplace = async () => {
     if (!fetchedMol) return
-    await placeMoleculeInViewer(fetchedMol, { mode: 'replace', animate2DTo3D: false })
+    await placeMoleculeInViewer(fetchedMol, { mode: 'replace' })
     onClose()
   }
 
   const handleAddToScene = async () => {
     if (!fetchedMol) return
-    await placeMoleculeInViewer(fetchedMol, { mode: 'add-to-scene', animate2DTo3D: false })
+    await placeMoleculeInViewer(fetchedMol, { mode: 'add-to-scene' })
     onClose()
   }
 
@@ -64,12 +73,12 @@ export default function PubChemSearch({ open, onClose }: Props) {
     <>
       {/* 遮罩 */}
       <div
-        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]"
+        className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-[1px]"
         onClick={onClose}
       />
 
       {/* 搜索框：居中偏上 */}
-      <div className="fixed z-50 left-1/2 top-[20%] -translate-x-1/2 w-[480px]">
+      <div role="dialog" aria-modal="true" aria-label="搜索 PubChem 分子" className="fixed left-1/2 top-[20%] z-[61] w-[min(480px,calc(100vw-24px))] -translate-x-1/2">
         <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
 
           {/* 输入行 */}
@@ -96,7 +105,7 @@ export default function PubChemSearch({ open, onClose }: Props) {
 
           {/* 错误提示 */}
           {status === 'error' && (
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border-t border-red-100 text-xs text-red-600">
+            <div className="flex items-center gap-2 border-t border-border bg-muted px-4 py-2.5 text-xs text-foreground">
               <AlertCircle size={13} />
               {errorMsg}
             </div>
@@ -104,8 +113,8 @@ export default function PubChemSearch({ open, onClose }: Props) {
 
           {/* 2D 警告 */}
           {is2DWarning && (
-            <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-100 text-xs text-amber-700">
-              ⚠️ 未找到 3D 构型，已导入 2D 平面结构，建议使用力场优化几何
+            <div className="border-t border-border bg-muted px-4 py-2.5 text-xs text-foreground">
+              未找到 3D 构型，导入时将使用距离几何生成初始 3D 结构
             </div>
           )}
 

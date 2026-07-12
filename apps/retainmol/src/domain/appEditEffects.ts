@@ -1,5 +1,6 @@
 import type { MolClipboard } from '@retainmol/mol-viewer/core'
-import { useEditorStore, useMoleculeStore } from '@/domain/viewerAdapter'
+import { useEditorStore } from '@/domain/viewer/editorState'
+import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 
 export interface CopySelectionEffects {
   readonly copySelection: () => MolClipboard | null
@@ -45,6 +46,7 @@ export function connectSelectedAtomsEffect(effects: ConnectSelectedAtomsEffects)
     effects.flashHint(result.reason ?? '无法成键')
     return false
   }
+  effects.flashHint('已连接两个原子')
   return true
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { placeFragmentStandalone, fuseFragmentOnBond } from './fragmentOps'
+import { placeFragmentStandalone, fuseFragmentOnBond } from './fragment'
 import { getFragment } from '../fragmentLibrary'
 import type { Molecule, Bond } from '../../molecule'
 

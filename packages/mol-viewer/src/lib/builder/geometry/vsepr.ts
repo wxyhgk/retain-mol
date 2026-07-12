@@ -267,6 +267,14 @@ function uniqueDirections(dirs: readonly Vec3[]): Vec3[] {
   return out
 }
 
+function availableCoordinationDirections(centerAtom: Atom, neighborDirs: readonly Vec3[]): Vec3[] {
+  const authored = centerAtom.coordinationDirections
+  if (!authored || authored.length === 0) return []
+  return authored
+    .map(direction => normalize([...direction] as Vec3))
+    .filter(direction => neighborDirs.every(neighbor => dot(direction, neighbor) < 0.94))
+}
+
 function chooseLeastClashingDirection(
   centerAtom: Atom,
   atoms: readonly Atom[],
@@ -319,12 +327,16 @@ export function calcGrowPosition(
     const neighborDirs = getNeighborDirs(centerAtom, bonds, atomById)
     const hybridization = inferHybridization(bonds, centerAtom.id)
     const bLen = calcBondLength(centerAtom.symbol, newSymbol)
+    const coordinationCandidates = availableCoordinationDirections(centerAtom, neighborDirs)
+      .sort((a, b) => dot(b, preferred) - dot(a, preferred))
     dir = chooseLeastClashingDirection(
       centerAtom,
       atoms,
       newSymbol,
       bLen,
-      candidateDirsForGrow(centerAtom.symbol, neighborDirs, hybridization, preferred),
+      coordinationCandidates.length > 0
+        ? coordinationCandidates
+        : candidateDirsForGrow(centerAtom.symbol, neighborDirs, hybridization, preferred),
     )
   } else {
     dir = preferred
@@ -380,6 +392,8 @@ export function getGrowGuide(
   const atomById = new Map(atoms.map(a => [a.id, a]))
   const neighborDirs = getNeighborDirs(centerAtom, bonds, atomById)
   const n = neighborDirs.length
+  const coordinationCandidates = availableCoordinationDirections(centerAtom, neighborDirs)
+  if (centerAtom.coordinationDirections && coordinationCandidates.length === 0) return { kind: 'points', positions: [] }
   if (n === 0) return { kind: 'free' }
 
   const hybridization = inferHybridization(bonds, centerAtom.id)
@@ -390,6 +404,10 @@ export function getGrowGuide(
   const c: Vec3 = [centerAtom.x, centerAtom.y, centerAtom.z]
   const at = (dir: Vec3): [number, number, number] =>
     [c[0] + dir[0]*bLen, c[1] + dir[1]*bLen, c[2] + dir[2]*bLen]
+
+  if (coordinationCandidates.length > 0) {
+    return { kind: 'points', positions: coordinationCandidates.map(at) }
+  }
 
   if (n === 1) {
     // 合法方向构成绕 d0 张角 θ 的圆锥
@@ -437,15 +455,19 @@ export function calcAddAtomOnExisting(
   const neighborDirs = getNeighborDirs(centerAtom, bonds, atomById)
   const hybridization = inferHybridization(bonds, centerAtom.id)
   const bLen = calcBondLength(centerAtom.symbol, newSymbol)
+  const coordinationCandidates = availableCoordinationDirections(centerAtom, neighborDirs)
+  const defaultDirection = findNextBondDir(centerAtom.symbol, neighborDirs, hybridization)
   const dir = chooseLeastClashingDirection(
     centerAtom,
     atoms,
     newSymbol,
     bLen,
-    candidateDirsForGrow(centerAtom.symbol, neighborDirs, hybridization, findNextBondDir(centerAtom.symbol, neighborDirs, hybridization)),
+    coordinationCandidates.length > 0
+      ? coordinationCandidates
+      : candidateDirsForGrow(centerAtom.symbol, neighborDirs, hybridization, defaultDirection),
   )
-  const maxBonds = getElementConfig(centerAtom.symbol).maxBonds
-  const geometry = inferGeometry(centerAtom.symbol, neighborDirs.length, hybridization)
+  const maxBonds = centerAtom.coordinationNumber ?? getElementConfig(centerAtom.symbol).maxBonds
+  const geometry = centerAtom.coordinationGeometry ?? inferGeometry(centerAtom.symbol, neighborDirs.length, hybridization)
 
   return {
     position: [

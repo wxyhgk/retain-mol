@@ -31,6 +31,7 @@ export function heavyValenceUsed(mol: Molecule, atomId: string): number {
 }
 
 export function maxValence(atom: Atom): number {
+  if (atom.coordinationNumber !== undefined) return atom.coordinationNumber
   return effectiveMaxBonds(atom.symbol, atom.charge ?? 0, atom.radical ?? 0)
 }
 
@@ -54,4 +55,3 @@ export function availableValence(mol: Molecule, atom: Atom): number {
 export function availableMaxValenceByBonds(atom: Atom, bonds: readonly Bond[]): number {
   return maxValence(atom) - valenceUsedByBonds(bonds, atom.id)
 }
-

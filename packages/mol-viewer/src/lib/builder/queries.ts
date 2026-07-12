@@ -12,7 +12,7 @@
 import type { Molecule } from '../molecule'
 import { degree } from './graph'
 import { getConnectedFragment } from './analysis/fragments'
-import { effectiveMaxBonds } from '../../config/elements.config'
+import { maxValence } from './valence'
 
 /**
  * 是否是"槽位 H"：带键的 H 原子。
@@ -30,7 +30,7 @@ export function isSlotH(mol: Molecule, atomId: string): boolean {
 export function canGrowFrom(mol: Molecule, atomId: string): boolean {
   const atom = mol.atoms.find(a => a.id === atomId)
   if (!atom || atom.symbol === 'H') return false
-  return degree(mol.bonds, atomId) < effectiveMaxBonds(atom.symbol, atom.charge ?? 0, atom.radical ?? 0)
+  return degree(mol.bonds, atomId) < maxValence(atom)
 }
 
 /**

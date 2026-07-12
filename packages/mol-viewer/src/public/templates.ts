@@ -12,3 +12,19 @@ export type {
   MoleculeTemplateDef,
   MoleculeTemplateSummary,
 } from '../lib/templates'
+export {
+  cloneTemplateMolecule,
+  createAtomAttachmentSite,
+  createEdgeAttachmentSite,
+  createFragmentFromTemplateSite,
+  createTemplateDraft,
+  validateTemplateDraft,
+} from '../lib/templateAuthoring'
+export type {
+  AtomAttachmentSite,
+  EdgeAttachmentSite,
+  MolecularTemplateDraft,
+  TemplateAttachmentSite,
+  TemplateDraftCategory,
+  TemplateValidationIssue,
+} from '../lib/templateAuthoring'

@@ -13,18 +13,20 @@ import {
   readBuilderSelectionEffects,
 } from './builderHandlerContext'
 import type { MoleculeStoreApi } from './builderPointerTypes'
+import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 
 export function handleBuilderAtomClick(
   store: MoleculeStoreApi,
   atomId: string,
   event: MouseEvent,
+  editorStore: EditorStoreApi = useEditorStore,
 ): void {
-  const { intent } = readBuilderHandlerSnapshot(store)
-  const editorEffects = readBuilderEditorEffects()
+  const { intent } = readBuilderHandlerSnapshot(store, editorStore)
+  const editorEffects = readBuilderEditorEffects(editorStore)
   const selectionEffects = readBuilderSelectionEffects(store)
 
   if (!ensureEditableAtomObject(atomId, readBuilderObjectActivationEffects(store))) return
-  const { molecule, editEffects } = readBuilderEditSnapshot(store)
+  const { molecule, editEffects } = readBuilderEditSnapshot(store, editorStore)
 
   applyAtomClickForIntent(intent, molecule, {
     atomId,
@@ -39,10 +41,11 @@ export function handleBuilderAtomClick(
 export function handleBuilderAtomDoubleClick(
   store: MoleculeStoreApi,
   atomId: string,
+  editorStore: EditorStoreApi = useEditorStore,
 ): void {
-  const { intent } = readBuilderHandlerSnapshot(store)
+  const { intent } = readBuilderHandlerSnapshot(store, editorStore)
   if (!ensureEditableAtomObject(atomId, readBuilderObjectActivationEffects(store))) return
-  const { molecule } = readBuilderEditSnapshot(store)
+  const { molecule } = readBuilderEditSnapshot(store, editorStore)
   const selectionEffects = readBuilderSelectionEffects(store)
   applyAtomDoubleClickForIntent(intent, molecule, atomId, {
     selectAtoms: selectionEffects.selectAtomsReplace,

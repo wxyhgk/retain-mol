@@ -51,14 +51,21 @@ export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIs
     issues.push(issue(fragment, 'attach.index.hydrogen', 'attachIndex 不能是 H'))
   }
 
-  if (fragment.attachHIndex < 0 || fragment.attachHIndex >= atomCount) {
-    issues.push(issue(fragment, 'attach.h.index.invalid', 'attachHIndex 引用了不存在的原子'))
-  } else if (fragment.atoms[fragment.attachHIndex]?.symbol !== 'H') {
-    issues.push(issue(fragment, 'attach.h.not_hydrogen', 'attachHIndex 必须指向 H'))
+  const usesEdgeAttachment = fragment.attachBond !== undefined
+  const usesExplicitDirection = !usesEdgeAttachment
+    && fragment.attachHIndex < 0
+    && fragment.attachDirection !== undefined
+  if (!usesEdgeAttachment && !usesExplicitDirection) {
+    if (fragment.attachHIndex < 0 || fragment.attachHIndex >= atomCount) {
+      issues.push(issue(fragment, 'attach.h.index.invalid', 'attachHIndex 引用了不存在的原子'))
+    } else if (fragment.atoms[fragment.attachHIndex]?.symbol !== 'H') {
+      issues.push(issue(fragment, 'attach.h.not_hydrogen', 'attachHIndex 必须指向 H'))
+    }
   }
 
   if (
     fragment.attachIndex >= 0 && fragment.attachIndex < atomCount &&
+    !usesEdgeAttachment && !usesExplicitDirection &&
     fragment.attachHIndex >= 0 && fragment.attachHIndex < atomCount &&
     !bondPairs.has(fragment.attachIndex < fragment.attachHIndex
       ? `${fragment.attachIndex}:${fragment.attachHIndex}`
@@ -81,6 +88,24 @@ export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIs
         issues.push(issue(fragment, 'attach.bond.missing', 'attachBond 两端没有模板键'))
       }
     }
+  }
+
+  if (fragment.coordination) {
+    if (fragment.group !== 'coordination') {
+      issues.push(issue(fragment, 'coordination.group.invalid', '配位构型片段必须使用 coordination 分组'))
+    }
+    if (fragment.coordination.coordinationNumber !== fragment.coordination.directions.length) {
+      issues.push(issue(fragment, 'coordination.count.mismatch', '配位数与方向数量不一致'))
+    }
+    fragment.coordination.directions.forEach((direction, index) => {
+      if (direction.length !== 3 || direction.some(value => !Number.isFinite(value))) {
+        issues.push(issue(fragment, 'coordination.direction.invalid', `coordination direction[${index}] 不是有效三维向量`))
+      }
+      const magnitude = Math.hypot(direction[0] ?? 0, direction[1] ?? 0, direction[2] ?? 0)
+      if (magnitude < 0.999 || magnitude > 1.001) {
+        issues.push(issue(fragment, 'coordination.direction.not_unit', `coordination direction[${index}] 不是单位向量`))
+      }
+    })
   }
 
   return issues

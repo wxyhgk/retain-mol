@@ -1,95 +1,47 @@
-import { useMoleculeStore, useEditorStore, selectActiveMoleculeOrEmpty } from '@/domain/viewerAdapter'
-import { GeometryPanel } from '@/features/geometry'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SelectionInspector } from '@/features/selection-inspector'
 import { MeasurePanel } from '@/features/measure'
-import ScenePanel from '@/features/scene/components/ScenePanel'
-import StylePanel from '@/features/style/components/StylePanel'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Link2, FlaskRound, Eraser, Sparkles } from 'lucide-react'
-import { moleculePositionWriter } from '@/domain/moleculePositionWriter'
-import { minimizeGeometryAsync, morphObjectPositions } from '@/lib/moleculeOpt'
-import { uffOptimizeAsync } from '@/lib/uffOptimize'
-import { cn } from '@/lib/utils'
+import { useEditorStore } from '@/domain/viewer/editorState'
+import { WorkspaceDisplayPanel, WorkspaceScenePanel } from '@/features/workspace-panels'
 
 export default function RightPanel() {
-  const { autoInferBonds, addHydrogens, clearMolecule } = useMoleculeStore()
-  const flashHint = useEditorStore(s => s.flashHint)
-  const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
-
-  // 几何清理：先用 MMFF94（OCL，对有机物更准），失败（含硼/过渡金属等 MMFF 不支持
-  // 的元素）时回退到 UFF（OpenBabel WASM，覆盖全周期表）。两条路都 morph 弛豫过去。
-  const handleCleanup = async () => {
-    if (molecule.atoms.length < 2 || molecule.bonds.length === 0) return
-    flashHint('几何清理中…')
-    const r = await minimizeGeometryAsync(molecule)
-    const objId = useMoleculeStore.getState().activeObjectId
-    if (!objId) return
-    if (!r.ok) {
-      // MMFF 处理不了该元素 → UFF（全元素力场，含硼）
-      flashHint('MMFF 不支持该元素，改用 UFF 优化…')
-      const u = await uffOptimizeAsync(molecule)
-      if (!u.ok) { flashHint(u.reason ?? 'UFF 优化失败'); return }
-      await morphObjectPositions(objId, molecule, u.molecule!, { writer: moleculePositionWriter })
-      return
-    }
-    await morphObjectPositions(objId, r.initial ?? molecule, r.molecule, { writer: moleculePositionWriter })
-  }
-
   return (
-    <Tabs defaultValue="scene" className="h-full flex flex-col min-h-0">
-
-      {/* ── 顶部：分子名 + 编辑操作 ── */}
-      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-100">
-        <span className="text-xs font-medium text-gray-800 flex-1 truncate">
-          {molecule.name || 'New Molecule'}
-        </span>
-        <div className="flex items-center gap-0.5">
-          <ActionBtn icon={<Sparkles size={11} />} label="清理几何" onClick={handleCleanup} />
-          <ActionBtn icon={<Link2 size={11} />} label="推断键" onClick={autoInferBonds} />
-          <ActionBtn icon={<FlaskRound size={11} />} label="补氢" onClick={() => addHydrogens()} />
-          <ActionBtn
-            icon={<Eraser size={11} />} label="清空" danger
-            onClick={() => { if (confirm('清空所有原子和键？')) clearMolecule() }}
-          />
-        </div>
-      </div>
-
-      {/* ── Tab 选择栏 ── */}
-      <div className="shrink-0 px-2 pt-2 pb-1.5 border-b border-gray-100">
-        <TabsList className="grid grid-cols-4 w-full h-8 bg-gray-100 p-0.5 rounded-lg">
-          <TabsTrigger value="scene"    className="text-[11px] font-medium h-7 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-gray-500">场景</TabsTrigger>
-          <TabsTrigger value="style"    className="text-[11px] font-medium h-7 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-gray-500">样式</TabsTrigger>
-          <TabsTrigger value="geometry" className="text-[11px] font-medium h-7 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-gray-500">几何</TabsTrigger>
-          <TabsTrigger value="measure"  className="text-[11px] font-medium h-7 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm text-gray-500">测量</TabsTrigger>
+    <Tabs defaultValue="inspector" className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
+      <div className="shrink-0 border-b border-border px-2">
+        <TabsList className="grid h-10 w-full grid-cols-3 rounded-none bg-transparent p-0">
+          <PanelTab value="inspector" label="Inspector" />
+          <PanelTab value="scene" label="Scene" />
+          <PanelTab value="display" label="Display" />
         </TabsList>
       </div>
 
-      {/* ── 可滚动内容区 ── */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <TabsContent value="scene"    className="mt-0"><ScenePanel /></TabsContent>
-        <TabsContent value="style"    className="mt-0"><StylePanel /></TabsContent>
-        <TabsContent value="geometry" className="mt-0"><GeometryPanel /></TabsContent>
-        <TabsContent value="measure"  className="mt-0"><MeasurePanel /></TabsContent>
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
+        <TabsContent value="inspector" className="mt-0 min-w-0">
+          <InspectorContent />
+        </TabsContent>
+        <TabsContent value="scene" className="mt-0 min-w-0">
+          <WorkspaceScenePanel />
+        </TabsContent>
+        <TabsContent value="display" className="mt-0 min-w-0">
+          <WorkspaceDisplayPanel />
+        </TabsContent>
       </div>
-
     </Tabs>
   )
 }
 
-function ActionBtn({ icon, label, onClick, danger = false }: {
-  icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean
-}) {
+function InspectorContent() {
+  const activeTool = useEditorStore(state => state.activeTool)
+  return activeTool === 'measure' ? <MeasurePanel /> : <SelectionInspector />
+}
+
+function PanelTab({ value, label }: { value: string; label: string }) {
   return (
-    <button
-      title={label}
-      onClick={onClick}
-      className={cn(
-        'w-7 h-7 rounded-lg flex items-center justify-center transition-all',
-        danger
-          ? 'text-gray-400 hover:text-red-500 hover:bg-red-50'
-          : 'text-gray-400 hover:text-gray-800 hover:bg-gray-100'
-      )}
+    <TabsTrigger
+      value={value}
+      className="relative h-10 min-w-0 rounded-none border-b-2 border-transparent px-1 text-[11px] font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
     >
-      {icon}
-    </button>
+      <span>{label}</span>
+    </TabsTrigger>
   )
 }

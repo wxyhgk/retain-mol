@@ -1,6 +1,6 @@
 {
   "name": "@retainmol/mol-viewer",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
@@ -52,7 +52,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.build.json",
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/prune-declarations.mjs && node scripts/check-dist.mjs",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -60,9 +60,7 @@
     "react-dom": ">=18"
   },
   "dependencies": {
-    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.8.0",
     "openchemlib": "^9.21.0",
     "tailwind-merge": "^3.5.0",
     "three": "^0.184.0",

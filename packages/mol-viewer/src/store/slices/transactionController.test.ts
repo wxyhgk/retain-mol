@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { StoreApi } from 'zustand'
 import type { TemporalState } from 'zundo'
 import type { MoleculeState } from './types'
-import { UNDO_LIMIT } from './undoConfig'
+import { partializeForUndo, UNDO_LIMIT } from './undoConfig'
 import { createUndoTransactionController } from './transactionController'
 
 function createState(id: string): MoleculeState {
@@ -91,6 +91,47 @@ describe('createUndoTransactionController', () => {
     expect(temporal.getState().pastStates).toHaveLength(0)
   })
 
+  it('preserves redo and the full past history for an empty transaction', () => {
+    const current = createState('stable')
+    const temporal = createTemporalMock()
+    const past = Array.from({ length: UNDO_LIMIT }, (_, index) => (
+      partializeForUndo(createState(`past-${index}`))
+    ))
+    const future = [partializeForUndo(createState('future'))]
+    temporal.setState({ pastStates: past, futureStates: future })
+    const controller = createUndoTransactionController(
+      () => temporal,
+      () => current,
+    )
+
+    controller.begin()
+    controller.end()
+
+    expect(temporal.getState().pastStates).toEqual(past)
+    expect(temporal.getState().futureStates).toEqual(future)
+  })
+
+  it('clears redo and retains the transaction start for a changed transaction', () => {
+    let current = createState('start')
+    const temporal = createTemporalMock()
+    temporal.setState({
+      futureStates: [partializeForUndo(createState('future'))],
+    })
+    const controller = createUndoTransactionController(
+      () => temporal,
+      () => current,
+    )
+
+    controller.begin()
+    current = createState('changed')
+    controller.end()
+
+    expect(temporal.getState().pastStates).toEqual([
+      partializeForUndo(createState('start')),
+    ])
+    expect(temporal.getState().futureStates).toEqual([])
+  })
+
   it('limits stored transaction snapshots to the undo limit', () => {
     let current = createState('state-0')
     const temporal = createTemporalMock()
@@ -108,7 +149,7 @@ describe('createUndoTransactionController', () => {
     expect(temporal.getState().pastStates).toHaveLength(UNDO_LIMIT)
   })
 
-  it('recovers temporal tracking when end is called without a matching begin', () => {
+  it('does not resume tracking owned outside the controller on unmatched end', () => {
     const temporal = createTemporalMock()
     const controller = createUndoTransactionController(
       () => temporal,
@@ -119,8 +160,56 @@ describe('createUndoTransactionController', () => {
     controller.end()
 
     expect(controller.getDepth()).toBe(0)
-    expect((temporal.getState() as unknown as { paused: boolean }).paused).toBe(
-      false,
+    expect((temporal.getState() as unknown as { paused: boolean }).paused).toBe(true)
+  })
+
+  it('rejects a concurrent transaction owned by another interaction', () => {
+    const temporal = createTemporalMock()
+    const controller = createUndoTransactionController(
+      () => temporal,
+      () => createState('stable'),
     )
+
+    const atomDrag = controller.begin('atom-drag')
+    expect(controller.getOwner()).toBe('atom-drag')
+    expect(() => controller.begin('geometry-optimization')).toThrow(/atom-drag/)
+    atomDrag.commit()
+    expect(controller.getOwner()).toBeNull()
+  })
+
+  it('rolls state and history back when an owned transaction is cancelled', () => {
+    let current = createState('start')
+    const temporal = createTemporalMock()
+    const controller = createUndoTransactionController(
+      () => temporal,
+      () => current,
+      snapshot => { current = snapshot as MoleculeState },
+    )
+
+    const handle = controller.begin('atom-drag')
+    current = createState('changed')
+    handle.cancel()
+
+    expect(current.activeObjectId).toBe('start')
+    expect(temporal.getState().pastStates).toHaveLength(0)
+    expect(controller.getOwner()).toBeNull()
+    expect(handle.active).toBe(false)
+  })
+
+  it('cancels and rethrows when runTransaction fails', () => {
+    let current = createState('start')
+    const temporal = createTemporalMock()
+    const controller = createUndoTransactionController(
+      () => temporal,
+      () => current,
+      snapshot => { current = snapshot as MoleculeState },
+    )
+
+    expect(() => controller.run('command', () => {
+      current = createState('changed')
+      throw new Error('failed')
+    })).toThrow('failed')
+    expect(current.activeObjectId).toBe('start')
+    expect(controller.getDepth()).toBe(0)
   })
 })

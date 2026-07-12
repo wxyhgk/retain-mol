@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { placeFragmentStandalone, attachFragmentToAtom, placeHybridPrototype } from './fragmentOps'
+import { placeFragmentStandalone, attachFragmentToAtom, placeHybridPrototype } from './fragment'
 import { getFragment } from '../fragmentLibrary'
 import { newAtom } from '../../molecule'
 import type { Molecule } from '../../molecule'

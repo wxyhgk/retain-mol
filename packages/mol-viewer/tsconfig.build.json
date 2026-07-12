@@ -4,8 +4,19 @@
     "noEmit": false,
     "emitDeclarationOnly": true,
     "declaration": true,
-    "declarationMap": true
+    "declarationMap": false
   },
-  "include": ["src"],
+  "files": [
+    "src/index.ts",
+    "src/optimize.ts",
+    "src/public/core.ts",
+    "src/public/fragments.ts",
+    "src/public/io.ts",
+    "src/public/pubchem.ts",
+    "src/public/samples.ts",
+    "src/public/styles.ts",
+    "src/public/templates.ts",
+    "src/public/viewer.ts"
+  ],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

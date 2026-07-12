@@ -27,13 +27,19 @@ export function createEditSlice(
   getTemporal: GetTemporal,
 ): StateCreator<MoleculeState, [], [], EditSlice> {
   return (set, get) => {
-    const transactions = createUndoTransactionController(getTemporal, get)
+    const transactions = createUndoTransactionController(getTemporal, get, snapshot => {
+      set(state => ({
+        ...snapshot,
+        atomPositionVersion: state.atomPositionVersion + 1,
+      }))
+    })
 
     return {
       atomPositionVersion: 0,
 
       beginTransaction: transactions.begin,
       endTransaction: transactions.end,
+      runTransaction: transactions.run,
       ...createMoleculeEditActions({ get, set }),
       ...createAtomEditActions({ get, set }),
       ...createGeometryEditActions({ get, set }),

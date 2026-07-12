@@ -6,7 +6,7 @@ import {
   applyBackgroundClickForIntent,
   applyAtomDoubleClickFragmentSelection,
   applyBackgroundClickRoute,
-  applyBackgroundDoubleClickPlacement,
+  applyBackgroundPlacement,
   applyBondClickForIntent,
   applyBondClickRoute,
   applyBondDragEndCommand,
@@ -16,14 +16,13 @@ import {
   ensureEditableBondObject,
   getGrowGuideForIntent,
   getGrowPreviewForIntent,
-  getPlacementPreviewForIntent,
   shouldAttemptBondDragForIntent,
   shouldHandleBondClickForIntent,
   shouldStartBondDragForIntent,
 } from './builderCommandEffects'
 import { newAtom, newBond } from '../lib/molecule'
 import type { Molecule } from '../lib/molecule'
-import { resolveBuilderIntent } from '../lib/builder/commands/builderIntent'
+import { resolveBuilderIntent } from '../lib/builder/commands/interaction'
 
 describe('builder command effects', () => {
   const selectIntent = resolveBuilderIntent({
@@ -112,6 +111,7 @@ describe('builder command effects', () => {
 
     applyBackgroundClickRoute({ kind: 'commitMeasure' }, effects)
     applyBackgroundClickRoute({ kind: 'clearSelection' }, effects)
+    applyBackgroundClickRoute({ kind: 'place' }, effects)
     applyBackgroundClickRoute({ kind: 'noop' }, effects)
 
     expect(calls).toEqual(['commitMeasure', 'clearSelection'])
@@ -149,10 +149,10 @@ describe('builder command effects', () => {
       effects,
     )
 
-    expect(calls).toEqual(['commitMeasure', 'clearSelection'])
+    expect(calls).toEqual(['commitMeasure'])
   })
 
-  it('applies background double-click placement only for build intents', () => {
+  it('applies background placement only for build intents', () => {
     const calls: string[] = []
     const molecule: Molecule = { atoms: [], bonds: [], name: 'Base' }
     const effects = {
@@ -161,14 +161,14 @@ describe('builder command effects', () => {
       flashHint: (message: string) => calls.push(`hint:${message}`),
     }
 
-    applyBackgroundDoubleClickPlacement(
+    applyBackgroundPlacement(
       selectIntent,
       molecule,
       { x: 1, y: 2, z: 3 },
       undefined,
       effects,
     )
-    applyBackgroundDoubleClickPlacement(
+    applyBackgroundPlacement(
       buildIntent,
       molecule,
       { x: 1, y: 2, z: 3 },
@@ -177,26 +177,6 @@ describe('builder command effects', () => {
     )
 
     expect(calls).toEqual(['set:1:C'])
-  })
-
-  it('resolves placement preview only for build intents', () => {
-    const molecule: Molecule = { atoms: [], bonds: [], name: 'Base' }
-
-    expect(
-      getPlacementPreviewForIntent(selectIntent, molecule, {
-        x: 1,
-        y: 2,
-        z: 3,
-      }),
-    ).toBeNull()
-    const preview = getPlacementPreviewForIntent(buildIntent, molecule, {
-      x: 1,
-      y: 2,
-      z: 3,
-    })
-
-    expect(preview?.atoms).toHaveLength(1)
-    expect(preview?.atoms[0]).toMatchObject({ symbol: 'C', x: 1, y: 2, z: 3 })
   })
 
   it('resolves grow preview and guide only for editable intents', () => {
@@ -379,12 +359,12 @@ describe('builder command effects', () => {
   it('applies bond click routes through injected effects', () => {
     const calls: string[] = []
     const effects = {
-      selectBond: (includeAtoms: boolean) =>
-        calls.push(`select:${includeAtoms}`),
+      selectBond: (multi: boolean) =>
+        calls.push(`select:${multi}`),
       runCommand: () => calls.push('command'),
     }
 
-    applyBondClickRoute({ kind: 'select', includeAtoms: true }, effects)
+    applyBondClickRoute({ kind: 'select', multi: true }, effects)
     applyBondClickRoute({ kind: 'command', cycleLength: false }, effects)
     applyBondClickRoute({ kind: 'noop' }, effects)
 
@@ -406,7 +386,7 @@ describe('builder command effects', () => {
         altKey: true,
       },
       {
-        selectBond: (includeAtoms) => calls.push(`select:${includeAtoms}`),
+        selectBond: (multi) => calls.push(`select:${multi}`),
         editEffects: {
           setMolecule: (next) => calls.push(`set:${next.bonds[0]?.order}`),
           flashHint: (message) => calls.push(`hint:${message}`),
@@ -423,7 +403,7 @@ describe('builder command effects', () => {
         altKey: false,
       },
       {
-        selectBond: (includeAtoms) => calls.push(`select:${includeAtoms}`),
+        selectBond: (multi) => calls.push(`select:${multi}`),
         editEffects: {
           setMolecule: (next) => calls.push(`set:${next.bonds[0]?.order}`),
           flashHint: (message) => calls.push(`hint:${message}`),
@@ -431,7 +411,24 @@ describe('builder command effects', () => {
       },
     )
 
-    expect(calls).toEqual(['select:true', 'set:2'])
+    applyBondClickForIntent(
+      selectIntent,
+      { atoms: [c1, c2], bonds: [bond] },
+      {
+        bondId: bond.id,
+        shiftKey: true,
+        altKey: false,
+      },
+      {
+        selectBond: (multi) => calls.push(`select:${multi}`),
+        editEffects: {
+          setMolecule: (next) => calls.push(`set:${next.bonds[0]?.order}`),
+          flashHint: (message) => calls.push(`hint:${message}`),
+        },
+      },
+    )
+
+    expect(calls).toEqual(['select:true', 'set:2', 'select:true'])
   })
 
   it('exposes bond click noop gating before object activation', () => {

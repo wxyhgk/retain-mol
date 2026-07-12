@@ -10,8 +10,7 @@
 
 import { useRef, useMemo, useState, useEffect } from 'react'
 import { MolRenderer } from '../../lib/molRenderer'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
-import { useEditorStore } from '../../store/editorStore'
+import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import { fitPlane } from '../../lib/builder/geometry/plane'
 import type { DisplayMode } from '../../lib/types'
 import { toolCan } from '../../config/toolCapabilities.config'
@@ -19,7 +18,12 @@ import { useBuilder } from '../../hooks/useBuilder'
 import { useMolViewerSync } from '../../hooks/useMolViewerSync'
 import { useRendererBinding } from '../../hooks/useRendererBinding'
 import { useCanvasPointerRouter } from '../../hooks/useCanvasPointerRouter'
-import { registerViewportCapture } from '../../capture'
+import { createViewportController } from '../../viewport'
+import {
+  ViewerRuntimeProvider,
+  useViewerRuntime,
+  type ViewerRuntime,
+} from '../../runtime/ViewerRuntime'
 import BuilderHint from '../builder/BuilderHint'
 import MeasureOverlay from './MeasureOverlay'
 import AtomLabelOverlay from './AtomLabelOverlay'
@@ -38,15 +42,31 @@ export interface MolViewerProps {
   displayMode?:       DisplayMode
   theme?:             string
   showAtomLabels?:    boolean
+  /** UI chrome appearance. Night mode applies a temporary dark-safe scene theme. */
+  appearance?:        'day' | 'night'
+  /** Initial grid visibility. Reapplied when the renderer is recreated. */
+  gridVisible?:       boolean
   readOnly?:          boolean
   overlays?:          React.ReactNode
   className?:         string
   style?:             React.CSSProperties
+  /** Isolated state/rendering session. Omit to use the compatibility runtime. */
+  runtime?:           ViewerRuntime
 }
 
 // ── 組件 ─────────────────────────────────────────────────────────────────────
 
-export default function MolViewer({
+export default function MolViewer(props: MolViewerProps = {}) {
+  const inheritedRuntime = useViewerRuntime()
+  const runtime = props.runtime ?? inheritedRuntime
+  return (
+    <ViewerRuntimeProvider runtime={runtime}>
+      <MolViewerContent {...props} />
+    </ViewerRuntimeProvider>
+  )
+}
+
+function MolViewerContent({
   molecule: moleculeProp,
   onMoleculeChange,
   selectedAtomIds: selectedAtomIdsProp,
@@ -54,11 +74,16 @@ export default function MolViewer({
   displayMode: displayModeProp,
   theme: themeProp,
   showAtomLabels: showAtomLabelsProp,
+  appearance = 'day',
+  gridVisible: gridVisibleProp,
   readOnly = false,
   overlays,
   className,
   style,
-}: MolViewerProps = {}) {
+}: MolViewerProps) {
+  const runtime = useViewerRuntime()
+  const moleculeStore = runtime.moleculeStore
+  const editorStore = runtime.editorStore
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const rendererRef  = useRef<MolRenderer | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -67,18 +92,18 @@ export default function MolViewer({
   const [renderer, setRenderer] = useState<MolRenderer | null>(null)
 
   // ── store 状态（逐字段 selector，避免无关变更触发整组件重渲）─────────────
-  const objectsById     = useMoleculeStore(s => s.objectsById)
-  const objectOrder     = useMoleculeStore(s => s.objectOrder)
-  const activeObjectId  = useMoleculeStore(s => s.activeObjectId)
-  const selectedAtomIds = useMoleculeStore(s => s.selectedAtomIds)
-  const selectedBondIds = useMoleculeStore(s => s.selectedBondIds)
-  const activeTool      = useEditorStore(s => s.activeTool)
-  const brushArmed      = useEditorStore(s => s.brushArmed)
-  const measurements    = useEditorStore(s => s.measurements)
-  const pendingAtomIds  = useEditorStore(s => s.pendingAtomIds)
-  const measureStyle    = useEditorStore(s => s.measureStyle)
-  const sketchPlane     = useEditorStore(s => s.sketchPlane)
-  const renderStyle     = useEditorStore(s => s.renderStyle)
+  const objectsById     = moleculeStore(s => s.objectsById)
+  const objectOrder     = moleculeStore(s => s.objectOrder)
+  const activeObjectId  = moleculeStore(s => s.activeObjectId)
+  const selectedAtomIds = moleculeStore(s => s.selectedAtomIds)
+  const selectedBondIds = moleculeStore(s => s.selectedBondIds)
+  const activeTool      = editorStore(s => s.activeTool)
+  const brushArmed      = editorStore(s => s.brushArmed)
+  const measurements    = editorStore(s => s.measurements)
+  const pendingAtomIds  = editorStore(s => s.pendingAtomIds)
+  const measureStyle    = editorStore(s => s.measureStyle)
+  const sketchPlane     = editorStore(s => s.sketchPlane)
+  const renderStyle     = editorStore(s => s.renderStyle)
 
   const sceneObjects = useMemo(
     () => objectOrder.map(id => objectsById[id]).filter(Boolean),
@@ -91,16 +116,16 @@ export default function MolViewer({
     selectedAtomIds: selectedAtomIdsProp, onSelectionChange,
     displayMode: displayModeProp, theme: themeProp,
     showAtomLabels: showAtomLabelsProp,
-  })
+  }, runtime)
 
   // ── 渲染器绑定（生命周期 / 事件 / 场景 / 相机 / 测量）────────────────────
-  const handlers = useBuilder()
+  const handlers = useBuilder(runtime)
   useRendererBinding({
     containerRef, rendererRef, canvasRef,
-    readOnly, activeTool,
+    readOnly, activeTool, brushArmed,
     sceneObjects, activeObjectId,
     selectedAtomIds, selectedBondIds,
-    displayMode, renderStyle, theme,
+    displayMode, renderStyle, theme, appearance,
     measurements, pendingAtomIds, measureStyle, sketchPlane,
     handlers,
     onRendererChange: setRenderer,
@@ -108,9 +133,20 @@ export default function MolViewer({
 
   // 向 app 层注册截图能力（不暴露 renderer 本身，保持边界干净）
   useEffect(() => {
-    registerViewportCapture(renderer ? (scale) => renderer.captureImage(scale) : null)
-    return () => registerViewportCapture(null)
-  }, [renderer])
+    if (!renderer) return
+    return runtime.capture.register(scale => renderer.captureImage(scale))
+  }, [renderer, runtime])
+
+  // 仅注册窄命令面；每次调用时读取最新 store，app 不持有 renderer 实例。
+  useEffect(() => {
+    if (!renderer) return
+    return runtime.viewport.register(createViewportController(renderer, moleculeStore.getState))
+  }, [renderer, moleculeStore, runtime])
+
+  useEffect(() => {
+    if (!renderer || gridVisibleProp === undefined) return
+    renderer.setGridVisible(gridVisibleProp)
+  }, [renderer, gridVisibleProp])
 
   // ── 平面草图模式：双击 p 进入/退出，Esc 退出 ─────────────────────────────
   useEffect(() => {
@@ -119,7 +155,7 @@ export default function MolViewer({
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      const { sketchPlane: sp, setSketchPlane, flashHint } = useEditorStore.getState()
+      const { sketchPlane: sp, setSketchPlane, flashHint } = editorStore.getState()
 
       if (e.key === 'Escape' && sp) {
         setSketchPlane(null)
@@ -128,7 +164,7 @@ export default function MolViewer({
       }
       // Esc 解除笔刷武装 → 纯选择态（显式的构建/选择模式切换）
       if (e.key === 'Escape') {
-        const ed = useEditorStore.getState()
+        const ed = editorStore.getState()
         if (toolCan(ed.activeTool, 'canEdit') && ed.brushArmed && ed.pendingAtomIds.length === 0) {
           ed.disarmBrush()
           flashHint('选择模式 · 点元素/片段恢复构建')
@@ -147,7 +183,7 @@ export default function MolViewer({
         return
       }
       // 平面优先级：选中原子拟合 → 整个分子拟合 → 当前相机视角平面
-      const st = useMoleculeStore.getState()
+      const st = moleculeStore.getState()
       const mol = selectActiveMoleculeOrEmpty(st)
       const selected = mol.atoms.filter(a => st.selectedAtomIds.has(a.id))
       const basis = selected.length >= 3 ? selected : mol.atoms
@@ -165,7 +201,7 @@ export default function MolViewer({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [readOnly])
+  }, [readOnly, editorStore, moleculeStore])
 
   // ── 统一指针事件路由（move-object + 框选）────────────────────────────────
   const { boxRect } = useCanvasPointerRouter(containerRef, rendererRef, readOnly)

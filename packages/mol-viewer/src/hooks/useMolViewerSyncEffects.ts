@@ -10,6 +10,26 @@ export interface ControlledSelectionSyncEffects {
   readonly getSelectionVersion: () => number
 }
 
+export interface ControlledSyncGuard {
+  current: boolean
+}
+
+export function runControlledStoreCommit<T>(
+  guard: ControlledSyncGuard,
+  commit: () => T,
+): T {
+  guard.current = true
+  try {
+    return commit()
+  } finally {
+    guard.current = false
+  }
+}
+
+export function shouldNotifyControlledStoreChange(guard: ControlledSyncGuard): boolean {
+  return !guard.current
+}
+
 export function commitControlledMoleculeProp(
   molecule: Molecule | undefined,
   lastPropMolecule: Molecule | undefined,

@@ -17,7 +17,7 @@ import { UNDO_LIMIT, partializeForUndo, undoSnapshotEqual, type UndoSnapshot } f
 import { createSceneSlice } from './slices/sceneSlice'
 import { createSelectionSlice } from './slices/selectionSlice'
 import { createEditSlice } from './slices/editSlice'
-import { runPruneSelectionCommand } from '../lib/builder/commands/selectionCommands'
+import { runPruneSelectionCommand } from '../lib/builder/commands/selection'
 
 // ── 对外 Selectors（保持导出面不变）─────────────────────────────────────────────
 export { selectActiveMolecule, selectActiveMoleculeOrEmpty } from './slices/helpers'
@@ -33,7 +33,7 @@ type SelectorSubscribe<T> = {
   }
 }
 
-type MoleculeStoreApi = UseBoundStore<StoreApi<MoleculeState> & SelectorSubscribe<MoleculeState>> & {
+export type MoleculeStoreApi = UseBoundStore<StoreApi<MoleculeState> & SelectorSubscribe<MoleculeState>> & {
   temporal: StoreApi<TemporalState<MoleculeState>>
 }
 
@@ -44,8 +44,8 @@ type MoleculeStoreApi = UseBoundStore<StoreApi<MoleculeState> & SelectorSubscrib
  *  - 选择不在快照里，剔除指向已不存在原子/键的 id
  * 这里的 setState 不会污染历史：快照字段引用未变，equality 会跳过记录。
  */
-function afterTimeTravel() {
-  useMoleculeStore.setState((s) => {
+function afterTimeTravel(store: MoleculeStoreApi) {
+  store.setState((s) => {
     const validAtoms = new Set<string>()
     const validBonds = new Set<string>()
     for (const obj of Object.values(s.objectsById)) {
@@ -55,9 +55,13 @@ function afterTimeTravel() {
     const selection = runPruneSelectionCommand(s.selectedAtomIds, s.selectedBondIds, validAtoms, validBonds)
     return {
       atomPositionVersion: s.atomPositionVersion + 1,
-      selectionVersion:    s.selectionVersion + 1,
-      selectedAtomIds:     selection.selectedAtomIds,
-      selectedBondIds:     selection.selectedBondIds,
+      ...(selection.selectionChanged
+        ? {
+            selectionVersion: s.selectionVersion + 1,
+            selectedAtomIds: selection.selectedAtomIds,
+            selectedBondIds: selection.selectedBondIds,
+          }
+        : {}),
     }
   })
 }
@@ -66,14 +70,16 @@ function afterTimeTravel() {
 // editSlice 的事务 action 需要 temporal store；用 getter 延迟到调用时读取
 // useMoleculeStore.temporal（此时 store 已初始化），避免 slice 反向 import 形成环。
 
-const stateCreator: StateCreator<MoleculeState, [], []> = (set, get, store) => ({
-  ...createSceneSlice(set, get, store),
-  ...createSelectionSlice(set, get, store),
-  ...createEditSlice(() => useMoleculeStore.temporal)(set, get, store),
-})
+export function createMoleculeStore(): MoleculeStoreApi {
+  let moleculeStore: MoleculeStoreApi
+  const stateCreator: StateCreator<MoleculeState, [], []> = (set, get, store) => ({
+    ...createSceneSlice(set, get, store),
+    ...createSelectionSlice(set, get, store),
+    ...createEditSlice(() => moleculeStore.temporal)(set, get, store),
+  })
 
-export const useMoleculeStore = (create<MoleculeState>()(
-  temporal(subscribeWithSelector(stateCreator) as unknown as StateCreator<MoleculeState>, {
+  moleculeStore = (create<MoleculeState>()(
+    temporal(subscribeWithSelector(stateCreator) as unknown as StateCreator<MoleculeState>, {
     limit: UNDO_LIMIT,
     partialize: (s) => partializeForUndo(s) as MoleculeState,
     // 不配 equality 时 zundo 对每次 set 都无条件入栈（包括纯选择/版本号变更）
@@ -82,11 +88,24 @@ export const useMoleculeStore = (create<MoleculeState>()(
       const state = config(set, get, store)
       return {
         ...state,
-        undo: (steps?: number) => { state.undo(steps); afterTimeTravel() },
-        redo: (steps?: number) => { state.redo(steps); afterTimeTravel() },
+        undo: (steps?: number) => {
+          if (!get().isTracking) return
+          state.undo(steps)
+          afterTimeTravel(moleculeStore)
+        },
+        redo: (steps?: number) => {
+          if (!get().isTracking) return
+          state.redo(steps)
+          afterTimeTravel(moleculeStore)
+        },
       }
     },
-  }) as unknown as StateCreator<MoleculeState>,
-)) as unknown as MoleculeStoreApi
+    }) as unknown as StateCreator<MoleculeState>,
+  )) as unknown as MoleculeStoreApi
+  return moleculeStore
+}
+
+/** 默认运行时兼容入口。新的多视口代码应通过 ViewerRuntime 获取实例 store。 */
+export const useMoleculeStore = createMoleculeStore()
 
 export const useMoleculeTemporal = useMoleculeStore.temporal as unknown as UseBoundStore<StoreApi<TemporalState<MoleculeState>>>

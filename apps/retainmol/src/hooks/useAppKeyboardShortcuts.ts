@@ -1,10 +1,9 @@
 import { useEffect } from 'react'
-import { useStore } from 'zustand'
 import { handleEditorShortcut } from '@/domain/editorCommands'
-import { useMoleculeTemporal } from '@/domain/viewerAdapter'
+import { useMoleculeHistory } from '@/domain/viewer/history'
 
 export function useAppKeyboardShortcuts(openSearch: () => void) {
-  const { undo, redo } = useStore(useMoleculeTemporal)
+  const { undo, redo } = useMoleculeHistory()
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {

@@ -3,11 +3,12 @@ import { MolControls } from '../controls/MolControls'
 import type { Atom, Molecule } from '../molecule'
 import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
 import { CAMERA, CONTROLS } from '../../config/camera.config'
-import { SKETCH_GRID, RENDER } from '../../config/render.config'
+import { SKETCH_GRID } from '../../config/render.config'
 import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
 import { resolveRenderProfile, type RenderStyle } from '../../styles'
-import { ticker, Phase } from '../animation'
+import { ticker as defaultTicker, Phase, type Ticker } from '../animation'
 import { MoleculeRenderer } from './MoleculeRenderer'
+import { MoleculeSceneLayer } from './MoleculeSceneLayer'
 import { InteractionHandler } from './InteractionHandler'
 import { MeasureVisuals } from './MeasureVisuals'
 import * as CameraUtils from './CameraUtils'
@@ -15,6 +16,9 @@ import { AromaticRingCache } from './aromaticData'
 import { captureCanvasPNG } from './capture'
 import { setupLights, syncLightsForProfile, addBackgroundGrid, makeDepthFog, syncDepthFog, type LightRig } from './sceneRig'
 import { DepthOfField } from './postprocessing'
+
+const VIEWPORT_AXES_SIZE = 4
+let rendererSequence = 0
 
 /**
  * 薄 orchestrator：负责场景图组装、动画循环、resize，
@@ -33,11 +37,17 @@ export class MolRenderer {
   /** 渲染风格：realistic（写实光照）| publication（论文描边）| iboview（高光球棍） */
   renderStyle: RenderStyle = 'realistic'
   private _backgroundGrid: THREE.GridHelper | null = null
+  private _axesHelper: THREE.AxesHelper | null = null
+  private _gridVisibleOverride: boolean | null = null
   private _lights: LightRig | null = null
   private _lastCameraFov = CAMERA.fov
 
   private _measureGroup = new THREE.Group()
   private _unsubTicker: () => void = () => {}
+  private readonly _tickerKey = `mol-render:${rendererSequence += 1}`
+
+  /** 兼容通过 Object.create 构造的轻量测试实例；正式实例始终使用注入 ticker。 */
+  private get frameTicker(): Ticker { return this.ticker ?? defaultTicker }
 
   // 景深后处理（虚实）：对焦注视点，远处虚化
   private _dof: DepthOfField | null = null
@@ -46,12 +56,9 @@ export class MolRenderer {
   private _sketchGrid: THREE.GridHelper | null = null
 
   private _molRenderer: MoleculeRenderer
+  private _sceneLayer: MoleculeSceneLayer
   private _interaction: InteractionHandler
   private _measureVisuals: MeasureVisuals
-
-  // Multi-object scene support
-  private _molRenderers = new Map<string, MoleculeRenderer>()
-  private _objectGroups = new Map<string, THREE.Group>()
 
   // 芳香环心缓存（DFS 结果按 bonds 引用缓存，环心每帧实时算）
   private _aromatic = new AromaticRingCache()
@@ -65,8 +72,6 @@ export class MolRenderer {
   set onBondClick(v) { this._interaction.onBondClick = v }
   get onBackgroundClick() { return this._interaction.onBackgroundClick }
   set onBackgroundClick(v) { this._interaction.onBackgroundClick = v }
-  get onBackgroundDoubleClick() { return this._interaction.onBackgroundDoubleClick }
-  set onBackgroundDoubleClick(v) { this._interaction.onBackgroundDoubleClick = v }
   get onAtomDragStart() { return this._interaction.onAtomDragStart }
   set onAtomDragStart(v) { this._interaction.onAtomDragStart = v }
   get onAtomDrag() { return this._interaction.onAtomDrag }
@@ -85,8 +90,8 @@ export class MolRenderer {
   set getGrowPreview(v) { this._interaction.getGrowPreview = v }
   get getGrowGuide() { return this._interaction.getGrowGuide }
   set getGrowGuide(v) { this._interaction.getGrowGuide = v }
-  get getPlacementPreview() { return this._interaction.getPlacementPreview }
-  set getPlacementPreview(v) { this._interaction.getPlacementPreview = v }
+  get idleCursor() { return this._interaction.idleCursor }
+  set idleCursor(v) { this._interaction.idleCursor = v }
 
   // ── 平面草图模式 ──────────────────────────────────────────────────────────
 
@@ -116,7 +121,7 @@ export class MolRenderer {
       this.modelGroup.add(grid)
       this._sketchGrid = grid
     }
-    ticker.invalidate()
+    this.frameTicker.invalidate()
   }
 
   /** 相机平滑转到垂直于草图平面的视角（旋转 rotationGroup 使法向朝向相机） */
@@ -135,7 +140,7 @@ export class MolRenderer {
       const t = Math.min(1, (performance.now() - t0) / DURATION)
       const ease = 1 - Math.pow(1 - t, 3)   // ease-out cubic
       this.rotationGroup.quaternion.slerpQuaternions(qStart, qEnd, ease)
-      ticker.invalidate()
+      this.frameTicker.invalidate()
       if (t < 1) requestAnimationFrame(step)
     }
     requestAnimationFrame(step)
@@ -154,10 +159,19 @@ export class MolRenderer {
   }
 
   setDragHoverAtom(atomId: string | null) {
-    for (const r of this._molRenderers.values()) {
-      if (atomId && r.atomMeshes.has(atomId)) r.setDragHover(atomId)
-      else r.clearDragHover()
-    }
+    this._sceneLayer.setDragHoverAtom(atomId)
+  }
+
+  invalidateViewport() {
+    this.frameTicker.invalidate()
+  }
+
+  startContinuous(reason: string) {
+    this.frameTicker.startContinuous(`${reason}:${this._tickerKey}`)
+  }
+
+  stopContinuous(reason: string) {
+    this.frameTicker.stopContinuous(`${reason}:${this._tickerKey}`)
   }
 
   // ── 测量样式（转发给 MeasureVisuals）──
@@ -165,7 +179,7 @@ export class MolRenderer {
   set measureStyle(v: MeasureStyle) { this._measureVisuals.measureStyle = v }
   get measureLabelPositions() { return this._measureVisuals.measureLabelPositions }
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, private readonly ticker: Ticker = defaultTicker) {
     this.canvas = canvas
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(hexToInt(this.theme.scene.backgroundColor))
@@ -185,47 +199,34 @@ export class MolRenderer {
 
     // 网格：极淡颜色，不影响分子渲染
     this._backgroundGrid = addBackgroundGrid(this.scene)
+    this._axesHelper = new THREE.AxesHelper(VIEWPORT_AXES_SIZE)
+    this._axesHelper.visible = false
+    this.scene.add(this._axesHelper)
 
     this.controls = new MolControls(this.camera, this.rotationGroup, this.modelGroup, canvas)
     this.controls.rotateSpeed = CONTROLS.rotateSpeed
     this.controls.panSpeed = CONTROLS.panSpeed
     this.controls.zoomSpeed = CONTROLS.zoomSpeed
 
-    this._molRenderer = new MoleculeRenderer(this.modelGroup, () => this.theme)
+    this._molRenderer = new MoleculeRenderer(this.modelGroup, () => this.theme, () => this.frameTicker.invalidate())
+    this._sceneLayer = new MoleculeSceneLayer(this.modelGroup, () => this.theme, () => this.frameTicker.invalidate())
     this._interaction = new InteractionHandler(
       canvas, this.camera, this.rotationGroup, this.modelGroup, this.controls,
       () => {
-        // Aggregate atom meshes from all scene-object renderers; fall back to legacy single renderer
-        const merged = new Map<string, THREE.Mesh>()
-        if (this._molRenderers.size > 0) {
-          for (const r of this._molRenderers.values()) {
-            for (const [id, mesh] of r.atomMeshes) merged.set(id, mesh)
-          }
-        } else {
-          for (const [id, mesh] of this._molRenderer.atomMeshes) merged.set(id, mesh)
-        }
-        return merged
+        return this._sceneLayer.aggregateAtomMeshes(this._molRenderer.atomMeshes)
       },
       () => {
-        const merged = new Map<string, THREE.Group>()
-        if (this._molRenderers.size > 0) {
-          for (const r of this._molRenderers.values()) {
-            for (const [id, group] of r.bondMeshes) merged.set(id, group)
-          }
-        } else {
-          for (const [id, group] of this._molRenderer.bondMeshes) merged.set(id, group)
-        }
-        return merged
+        return this._sceneLayer.aggregateBondMeshes(this._molRenderer.bondMeshes)
       },
-      () => this.theme,
-      () => this.renderStyle,
+      () => this.frameTicker.invalidate(),
     )
     this._measureVisuals = new MeasureVisuals(this._measureGroup, canvas, () => this.theme)
 
     // 相机拖拽期间持续渲染，其余场景按需渲染
-    this.controls.onInteractionStart = () => ticker.startContinuous('viewport')
-    this.controls.onInteractionEnd = () => { ticker.stopContinuous('viewport'); ticker.invalidate() }
-    this.controls.onWheelChange = () => ticker.invalidate()
+    const viewportReason = `viewport:${this._tickerKey}`
+    this.controls.onInteractionStart = () => this.frameTicker.startContinuous(viewportReason)
+    this.controls.onInteractionEnd = () => { this.frameTicker.stopContinuous(viewportReason); this.frameTicker.invalidate() }
+    this.controls.onWheelChange = () => this.frameTicker.invalidate()
 
     // 深度雾化由 render profile 决定；IboView 使用 shader 内 fragment depth cue。
     this.scene.fog = makeDepthFog(hexToInt(this.theme.scene.backgroundColor))
@@ -234,15 +235,14 @@ export class MolRenderer {
     this._dof = DepthOfField.create(this.renderer, this.scene, this.camera, canvas.clientWidth, canvas.clientHeight)
 
     // 注册到共享 Ticker 的 Render 阶段（最后执行）
-    this._unsubTicker = ticker.subscribe('mol-render', Phase.Render, () => {
+    this._unsubTicker = this.frameTicker.subscribe(this._tickerKey, Phase.Render, () => {
       this.controls.update()
       const profile = resolveRenderProfile(this.renderStyle)
-      if (this._backgroundGrid) this._backgroundGrid.visible = profile.backgroundGrid
+      this.syncGridVisibility(profile.backgroundGrid)
       if (this._lights) syncLightsForProfile(this._lights, profile)
       const targetFov = profile.cameraFov
       if (Math.abs(this.camera.fov - targetFov) > 1e-6 || this._lastCameraFov !== targetFov) {
-        this.camera.fov = targetFov
-        this.camera.updateProjectionMatrix()
+        CameraUtils.setFovPreservingScale(this.camera, targetFov)
         this._lastCameraFov = targetFov
       }
       // 雾与景深焦点随相机-注视点距离同步；雾色跟随主题背景
@@ -258,19 +258,21 @@ export class MolRenderer {
       if (this._dof) this._dof.render(dist)
       else this.renderer.render(this.scene, this.camera)
     })
-    ticker.invalidate() // 初始帧
+    this.frameTicker.invalidate() // 初始帧
 
     this._lights = setupLights(this.scene)
   }
 
   resize(width: number, height: number) {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return
+    this.renderer.setPixelRatio(window.devicePixelRatio || 1)
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height, false)
     this._dof?.setSize(width, height)
     this.controls.handleResize()
     this._measureVisuals.onResize(width, height)
-    ticker.invalidate()
+    this.frameTicker.invalidate()
   }
 
   /**
@@ -280,7 +282,7 @@ export class MolRenderer {
    */
   captureImage(scale = 2): string {
     const url = captureCanvasPNG(this.renderer, this.scene, this.camera, scale)
-    ticker.invalidate()                  // 触发下一帧恢复实时视图（含景深）
+    this.frameTicker.invalidate()        // 触发下一帧恢复实时视图（含景深）
     return url
   }
 
@@ -288,7 +290,7 @@ export class MolRenderer {
 
   render(molecule: Molecule, displayMode: DisplayMode, selectedAtoms: Set<string>, selectedBonds: Set<string>) {
     this._molRenderer.render(molecule, displayMode, selectedAtoms, selectedBonds, this._aromatic.centroids(molecule), this.renderStyle)
-    ticker.invalidate()
+    this.frameTicker.invalidate()
   }
 
   renderScene(
@@ -298,56 +300,51 @@ export class MolRenderer {
     selectedAtoms: Set<string>,
     selectedBonds: Set<string>,
   ): void {
-    // 1. 删除不再存在的对象
-    for (const [id] of this._molRenderers) {
-      if (!objects.find(o => o.id === id)) {
-        this._molRenderers.get(id)!.dispose()
-        this._molRenderers.delete(id)
-        const grp = this._objectGroups.get(id)
-        if (grp) this.modelGroup.remove(grp)
-        this._objectGroups.delete(id)
-      }
-    }
+    this._sceneLayer.render(
+      objects,
+      activeObjectId,
+      displayMode,
+      selectedAtoms,
+      selectedBonds,
+      this.renderStyle,
+      molecule => this._aromatic.centroids(molecule),
+    )
+    this.frameTicker.invalidate()
+  }
 
-    // 2. 渲染每个对象
-    for (const obj of objects) {
-      // 确保 group 存在
-      if (!this._objectGroups.has(obj.id)) {
-        const grp = new THREE.Group()
-        this.modelGroup.add(grp)
-        this._objectGroups.set(obj.id, grp)
-      }
-      const grp = this._objectGroups.get(obj.id)!
-      grp.visible = obj.visible
-
-      if (!obj.visible) continue
-
-      // 确保 MoleculeRenderer 存在
-      if (!this._molRenderers.has(obj.id)) {
-        this._molRenderers.set(obj.id, new MoleculeRenderer(grp, () => this.theme))
-      }
-      const molRenderer = this._molRenderers.get(obj.id)!
-
-      const isActive = obj.id === activeObjectId
-      molRenderer.render(
-        obj.molecule,
-        displayMode,
-        isActive ? selectedAtoms : new Set<string>(),
-        isActive ? selectedBonds : new Set<string>(),
-        this._aromatic.centroids(obj.molecule),
-        this.renderStyle,
-        { opacity: isActive ? 1.0 : RENDER.inactiveObjectOpacity },
-      )
-    }
-
-    ticker.invalidate()
+  /** Switch material/profile rendering while preserving orbit, pan and apparent zoom. */
+  setRenderStyle(renderStyle: RenderStyle) {
+    if (this.renderStyle === renderStyle) return
+    const profile = resolveRenderProfile(renderStyle)
+    CameraUtils.setFovPreservingScale(this.camera, profile.cameraFov)
+    this._lastCameraFov = profile.cameraFov
+    this.renderStyle = renderStyle
+    this.syncGridVisibility(profile.backgroundGrid)
+    this.frameTicker.invalidate()
   }
 
   // ── 相机 / 视图 ──
 
+  private syncGridVisibility(profileVisible: boolean) {
+    if (this._backgroundGrid) {
+      this._backgroundGrid.visible = this._gridVisibleOverride ?? profileVisible
+    }
+  }
+
+  setAxesVisible(visible: boolean) {
+    if (this._axesHelper) this._axesHelper.visible = visible
+    this.frameTicker.invalidate()
+  }
+
+  setGridVisible(visible: boolean) {
+    this._gridVisibleOverride = visible
+    if (this._backgroundGrid) this._backgroundGrid.visible = visible
+    this.frameTicker.invalidate()
+  }
+
   resetCamera() {
     CameraUtils.resetCamera(this.camera, this.rotationGroup, this.modelGroup)
-    ticker.invalidate()
+    this.frameTicker.invalidate()
   }
 
   fitToMolecule(atoms: Atom[]) {
@@ -364,12 +361,12 @@ export class MolRenderer {
       this.modelGroup,
       profile.cameraFitMultiplier,
     )
-    ticker.invalidate()
+    this.frameTicker.invalidate()
   }
 
   updateOrbitTarget(atoms: readonly Atom[]) {
     CameraUtils.updateOrbitTarget(atoms, this.rotationGroup, this.modelGroup)
-    ticker.invalidate()
+    this.frameTicker.invalidate()
   }
 
   projectToScreen(worldPos: THREE.Vector3, containerWidth: number, containerHeight: number) {
@@ -398,7 +395,7 @@ export class MolRenderer {
 
   setGhostLineStart(atomId: string | null) {
     this._interaction.setGhostLineStart(atomId)
-    ticker.invalidate()
+    this.frameTicker.invalidate()
   }
 
   // ── 测量可视化 ──
@@ -408,14 +405,19 @@ export class MolRenderer {
     pending: Atom[],
   ) {
     this._measureVisuals.update(committed, pending)
-    ticker.invalidate()
+    this.frameTicker.invalidate()
+  }
+
+  cancelActiveInteraction() {
+    this._interaction.cancelActiveGesture()
   }
 
   dispose() {
     this._unsubTicker()
-    ticker.stopContinuous('viewport')
+    this.frameTicker.stopContinuous(`viewport:${this._tickerKey}`)
     this._interaction.dispose()
     this._molRenderer.dispose()
+    this._sceneLayer.dispose()
     this._measureVisuals.dispose()
     if (this._sketchGrid) {
       this.modelGroup.remove(this._sketchGrid)
@@ -427,6 +429,11 @@ export class MolRenderer {
       disposeObject3D(this._backgroundGrid)
       this._backgroundGrid = null
     }
+    if (this._axesHelper) {
+      this.scene.remove(this._axesHelper)
+      disposeObject3D(this._axesHelper)
+      this._axesHelper = null
+    }
     if (this._lights) {
       this._lights.key.shadow.map?.dispose()
       this._lights.fill.shadow.map?.dispose()
@@ -436,13 +443,6 @@ export class MolRenderer {
     }
     this.controls.dispose()
     this._dof?.dispose()
-    for (const [, r] of this._molRenderers) r.dispose()
-    this._molRenderers.clear()
-    for (const [, grp] of this._objectGroups) {
-      this.modelGroup.remove(grp)
-      disposeObject3D(grp)
-    }
-    this._objectGroups.clear()
     this.modelGroup.remove(this._measureGroup)
     this.rotationGroup.remove(this.modelGroup)
     this.scene.remove(this.rotationGroup)

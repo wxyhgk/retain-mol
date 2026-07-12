@@ -71,7 +71,7 @@ describe('app edit effects', () => {
 
     expect(ok).toBe(true)
     expect(failed).toBe(false)
-    expect(calls).toEqual(['bad bond'])
+    expect(calls).toEqual(['已连接两个原子', 'bad bond'])
   })
 
   it('writes object atom positions through an injected effect', () => {

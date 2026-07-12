@@ -7,18 +7,19 @@
  * 分子数据、场景对象、选择状态 → 在 moleculeStore。
  */
 
-import { create } from 'zustand'
+import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
 import type { Tool, DisplayMode, MeasureType, MeasureStyle, Measurement, MolClipboard } from '../lib/types'
 import { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '../lib/types'
 import { resolveTheme, type ResolvedTheme } from '../presets'
 import { resolveStylePreset, type RenderStyle } from '../styles'
 import { registerEditorIntegrity } from './integrity'
+import { useMoleculeStore, type MoleculeStoreApi } from './moleculeStore'
 
 export type { Tool, DisplayMode, MeasureType, MeasureStyle, Measurement, MolClipboard }
 export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT }
 
-interface EditorState {
+export interface EditorState {
   // ── 工具 ──────────────────────────────────────────────────────────────────
   activeTool:    Tool
   activeElement: string
@@ -28,7 +29,7 @@ interface EditorState {
   activeFragmentId: string | null
   /**
    * 笔刷武装态：显式的「构建 / 选择」模式开关，消除同一次点击既可能选择
-   * 又可能编辑的歧义。true = 构建态（点 H 生长、双击放置、拖 H 成键）；
+   * 又可能编辑的歧义。true = 构建态（点 H 生长、单击空白放置、拖 H 成键）；
    * false = 选择态（点击只做选择，任何点击都不产生编辑）。
    * 选元素/片段自动武装；Esc 或选择工具按钮解除。
    */
@@ -93,7 +94,21 @@ interface EditorState {
   setSketchPlane: (p: { origin: [number, number, number]; normal: [number, number, number] } | null) => void
 }
 
-export const useEditorStore = create<EditorState>()(subscribeWithSelector(set => ({
+type SelectorSubscribe<T> = {
+  subscribe: {
+    (listener: (state: T, prevState: T) => void): () => void
+    <U>(
+      selector: (state: T) => U,
+      listener: (selected: U, previous: U) => void,
+      options?: { equalityFn?: (a: U, b: U) => boolean; fireImmediately?: boolean },
+    ): () => void
+  }
+}
+
+export type EditorStoreApi = UseBoundStore<StoreApi<EditorState> & SelectorSubscribe<EditorState>>
+
+export function createEditorStore(moleculeStore: MoleculeStoreApi): EditorStoreApi {
+  const editorStore = create<EditorState>()(subscribeWithSelector(set => ({
   activeTool:    'select',
   activeElement: 'C',
   atomClickMode: 'grow',
@@ -125,7 +140,7 @@ export const useEditorStore = create<EditorState>()(subscribeWithSelector(set =>
   setActiveFragment: (id) => set({ activeFragmentId: id, brushArmed: id !== null }),
   // 只切换武装态，不动 activeElement / activeFragmentId：恢复上次的笔刷
   armBrush:          () => set({ brushArmed: true }),
-  disarmBrush:       () => set({ brushArmed: false, activeFragmentId: null }),
+  disarmBrush:       () => set({ brushArmed: false }),
   setBondingAtom:    (id) => set({ bondingAtomId: id }),
 
   setDisplayMode:    (mode) => set({ stylePresetId: 'custom', displayMode: mode }),
@@ -213,7 +228,13 @@ export const useEditorStore = create<EditorState>()(subscribeWithSelector(set =>
   flashHint: (text) => set(s => ({ hint: { text, seq: (s.hint?.seq ?? 0) + 1 } })),
 
   setSketchPlane: (p) => set({ sketchPlane: p }),
-})))
+  }))) as EditorStoreApi
+
+  registerEditorIntegrity(moleculeStore, editorStore)
+  return editorStore
+}
+
+/** 默认运行时兼容入口。新的多视口代码应通过 ViewerRuntime 获取实例 store。 */
+export const useEditorStore = createEditorStore(useMoleculeStore)
 
 // 跨 store 完整性：原子删除后级联清理 measurements / pendingAtomIds / bondingAtomId
-registerEditorIntegrity(useEditorStore)

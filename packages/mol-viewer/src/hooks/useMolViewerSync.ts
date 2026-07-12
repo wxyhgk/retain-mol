@@ -8,14 +8,16 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { useMoleculeStore, selectActiveMolecule } from '../store/moleculeStore'
-import { useEditorStore } from '../store/editorStore'
+import { selectActiveMolecule } from '../store/moleculeStore'
+import { useViewerRuntime, type ViewerRuntime } from '../runtime/ViewerRuntime'
 import { resolveTheme, type ResolvedTheme } from '../presets'
 import type { DisplayMode } from '../lib/types'
 import type { Molecule } from '../lib/molecule'
 import {
   commitControlledMoleculePropToStore,
   commitControlledSelectedAtomsPropToStore,
+  runControlledStoreCommit,
+  shouldNotifyControlledStoreChange,
 } from './useMolViewerSyncEffects'
 
 interface SyncProps {
@@ -42,71 +44,90 @@ export function useMolViewerSync({
   displayMode: displayModeProp,
   theme: themeProp,
   showAtomLabels: showAtomLabelsProp,
-}: SyncProps): SyncResult {
+}: SyncProps, runtimeOverride?: ViewerRuntime): SyncResult {
+  const contextRuntime = useViewerRuntime()
+  const runtime = runtimeOverride ?? contextRuntime
+  const moleculeStore = runtime.moleculeStore
+  const editorStore = runtime.editorStore
 
-  const storeDisplayMode    = useEditorStore(s => s.displayMode)
-  const storeShowAtomLabels = useEditorStore(s => s.showAtomLabels)
-  const storeTheme          = useEditorStore(s => s.theme)
+  const storeDisplayMode    = editorStore(s => s.displayMode)
+  const storeShowAtomLabels = editorStore(s => s.showAtomLabels)
+  const storeTheme          = editorStore(s => s.theme)
 
   // ── molecule prop → store ────────────────────────────────────────────────
   // lastPropMolRef：记住最后一次由 prop 写入的引用，防止 store 变更回调给外部再循环写入
   const lastPropMolRef = useRef<Molecule | undefined>(undefined)
+  const controlledMoleculeCommitRef = useRef(false)
 
   useEffect(() => {
-    lastPropMolRef.current = commitControlledMoleculePropToStore(
-      moleculeProp,
-      lastPropMolRef.current,
-      useMoleculeStore.getState,
+    lastPropMolRef.current = runControlledStoreCommit(
+      controlledMoleculeCommitRef,
+      () => commitControlledMoleculePropToStore(
+        moleculeProp,
+        lastPropMolRef.current,
+        moleculeStore.getState,
+      ),
     )
-  }, [moleculeProp])
+  }, [moleculeProp, moleculeStore])
 
   // ── store → onMoleculeChange ─────────────────────────────────────────────
   useEffect(() => {
     if (!onMoleculeChange) return
-    return useMoleculeStore.subscribe(
+    return moleculeStore.subscribe(
       s => selectActiveMolecule(s),
       (mol) => {
-        if (mol && mol !== lastPropMolRef.current) onMoleculeChange(mol)
+        if (
+          shouldNotifyControlledStoreChange(controlledMoleculeCommitRef) &&
+          mol &&
+          mol !== lastPropMolRef.current
+        ) {
+          onMoleculeChange(mol)
+        }
       },
     )
-  }, [onMoleculeChange])
+  }, [onMoleculeChange, moleculeStore])
 
   // ── selectedAtomIds prop → store ─────────────────────────────────────────
   // selectionVersion 防循环：prop 写入后记住版本号，subscription 收到同版本时跳过
   const lastPropSelVersionRef = useRef(-1)
+  const controlledSelectionCommitRef = useRef(false)
 
   useEffect(() => {
-    const version = commitControlledSelectedAtomsPropToStore(
-      selectedAtomIdsProp,
-      useMoleculeStore.getState,
+    const version = runControlledStoreCommit(
+      controlledSelectionCommitRef,
+      () => commitControlledSelectedAtomsPropToStore(
+        selectedAtomIdsProp,
+        moleculeStore.getState,
+      ),
     )
     if (version !== null) lastPropSelVersionRef.current = version
-  }, [selectedAtomIdsProp])
+  }, [selectedAtomIdsProp, moleculeStore])
 
   // ── store → onSelectionChange ────────────────────────────────────────────
   useEffect(() => {
     if (!onSelectionChange) return
-    return useMoleculeStore.subscribe(
+    return moleculeStore.subscribe(
       s => s.selectionVersion,
       (version) => {
+        if (!shouldNotifyControlledStoreChange(controlledSelectionCommitRef)) return
         if (version === lastPropSelVersionRef.current) return
-        const { selectedAtomIds: a, selectedBondIds: b } = useMoleculeStore.getState()
+        const { selectedAtomIds: a, selectedBondIds: b } = moleculeStore.getState()
         onSelectionChange(new Set(a), new Set(b))
       },
     )
-  }, [onSelectionChange])
+  }, [onSelectionChange, moleculeStore])
 
   // ── theme prop → store ───────────────────────────────────────────────────
   useEffect(() => {
     if (themeProp === undefined) return
-    useEditorStore.getState().setTheme(themeProp)
-  }, [themeProp])
+    editorStore.getState().setTheme(themeProp)
+  }, [themeProp, editorStore])
 
   // ── showAtomLabels prop → store ──────────────────────────────────────────
   useEffect(() => {
     if (showAtomLabelsProp === undefined) return
-    useEditorStore.getState().setShowAtomLabels(showAtomLabelsProp)
-  }, [showAtomLabelsProp])
+    editorStore.getState().setShowAtomLabels(showAtomLabelsProp)
+  }, [showAtomLabelsProp, editorStore])
 
   // ── 解析最终生效值（prop 优先）──────────────────────────────────────────
   const theme = themeProp != null

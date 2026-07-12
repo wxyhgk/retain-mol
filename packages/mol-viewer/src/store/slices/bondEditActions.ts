@@ -1,5 +1,6 @@
 import type { EditSlice } from './types'
 import type { EditActionContext } from './editActionTypes'
+import type { Molecule } from '../../lib/molecule'
 import {
   applyActiveMoleculeEdit,
   applyActiveMoleculeEditWithSelection,
@@ -7,18 +8,53 @@ import {
 } from './helpers'
 import {
   runAddBondCommand,
+  runBondSelectedAtomsCommand,
+  runBondViaHydrogenCommand,
   runCycleBondOrderCommand,
-} from '../../lib/builder/commands/bondTopologyCommands'
-import { runRemoveBondCommand } from '../../lib/builder/commands/removalStoreCommands'
+  runRemoveBondCommand,
+  runSetBondOrderCommand,
+} from '../../lib/builder/commands/bond'
 import {
-  runBondSelectedAtomsWithSelectionCommand,
-  runBondViaHydrogenWithSelectionCommand,
-} from '../../lib/builder/commands/selectionCommands'
+  runSyncSelectionToMoleculeCommand,
+} from '../../lib/builder/commands/selection'
+import {
+  editWithSelection,
+  editWithSelectionSets,
+  type CommandSelectionState,
+  type EditCommandResult,
+  type EditCommandWithSelectionResult,
+} from '../../lib/builder/commands/shared'
+
+function combineBondEditWithSelection(
+  molecule: Molecule,
+  selection: CommandSelectionState,
+  result: EditCommandResult,
+  atomIdsToDeselect: readonly string[],
+): EditCommandWithSelectionResult | { readonly ok: false; readonly reason: string } {
+  if (result.ok === false) return result
+  if (!result.changed) {
+    return editWithSelection(molecule, selection, { moleculeChanged: false })
+  }
+  const synced = runSyncSelectionToMoleculeCommand({
+    selectedAtomIds: selection.selectedAtomIds,
+    selectedBondIds: selection.selectedBondIds,
+    molecule: result.molecule,
+    removeAtomIds: atomIdsToDeselect,
+  })
+  return editWithSelectionSets(
+    result.molecule,
+    synced.selectedAtomIds,
+    synced.selectedBondIds,
+    selection,
+    { moleculeChanged: true },
+  )
+}
 
 type BondEditActions = Pick<
   EditSlice,
   | 'addBond'
   | 'removeBond'
+  | 'setBondOrder'
   | 'cycleBondOrder'
   | 'bondViaHydrogen'
   | 'bondSelectedAtoms'
@@ -44,28 +80,41 @@ export function createBondEditActions({
         ),
       ),
 
+    setBondOrder: (id, order) =>
+      set((s) =>
+        applyActiveMoleculeEdit(s, (mol) => runSetBondOrderCommand(mol, id, order)),
+      ),
+
     cycleBondOrder: (id) =>
       set((s) =>
         applyActiveMoleculeEdit(s, (mol) => runCycleBondOrderCommand(mol, id)),
       ),
 
     bondViaHydrogen: (sourceHId, targetId) =>
-      applyActiveMoleculeSelectionCommand(get, set, (mol, selection) =>
-        runBondViaHydrogenWithSelectionCommand(
+      applyActiveMoleculeSelectionCommand(get, set, (mol, selection) => {
+        const result = runBondViaHydrogenCommand(mol, sourceHId, targetId)
+        return combineBondEditWithSelection(
           mol,
-          { sourceHId, targetId },
           selection,
-        ),
-      ),
+          result,
+          [sourceHId, targetId],
+        )
+      }),
 
     bondSelectedAtoms: () =>
       applyActiveMoleculeSelectionCommand(
         get,
         set,
-        runBondSelectedAtomsWithSelectionCommand,
-        {
-          bumpSelectionVersion: (commandResult) =>
-            commandResult.selectionChanged ?? true,
+        (mol, selection) => {
+          const result = runBondSelectedAtomsCommand(mol, {
+            atomIds: [...selection.selectedAtomIds],
+          })
+          return combineBondEditWithSelection(
+            mol,
+            selection,
+            result,
+            result.ok ? result.atomIdsToDeselect : [],
+          )
         },
       ),
   }

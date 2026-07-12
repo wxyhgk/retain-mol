@@ -4,10 +4,11 @@
  */
 
 import { useCallback } from 'react'
-import { useMoleculeStore, selectActiveMoleculeOrEmpty, captureViewportImage } from '@/domain/viewerAdapter'
+import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { captureViewportImage } from '@/domain/viewer/viewport'
 import { parseXYZ, exportXYZ } from '@retainmol/mol-viewer/core'
 import { exportGJF, parseMol, parseSdf, exportMol, exportSdf } from '@retainmol/mol-viewer/io'
-import { placeMoleculeInViewer } from '@/domain/moleculePlacementService'
+import { placeMoleculeInViewer } from '@/features/molecule-placement'
 
 function download(text: string, filename: string, mime = 'text/plain') {
   const blob = new Blob([text], { type: mime })

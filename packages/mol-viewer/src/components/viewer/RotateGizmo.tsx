@@ -4,15 +4,14 @@
  * Three.js 逻辑全部在 RotateGizmoController.ts 中。
  * store 依赖全部在此文件，RotateGizmoController 本身无 store 依赖。
  */
-import { useEffect } from 'react'
-import { useMoleculeStore } from '../../store/moleculeStore'
-import { useEditorStore } from '../../store/editorStore'
+import { useEffect, useId } from 'react'
 import { MolRenderer } from '../../lib/molRenderer'
-import { ticker, Phase } from '../../lib/animation'
+import { Phase } from '../../lib/animation'
 import { RotateGizmoController } from '../../lib/molRenderer/RotateGizmoController'
 import { toolCan } from '../../config/toolCapabilities.config'
 import { createObjectTransformEditSession } from '../../hooks/editSessionFactory'
 import { createRotateGizmoCallbacks } from './rotateGizmoEffects'
+import { useViewerRuntime } from '../../runtime/ViewerRuntime'
 
 interface Props {
   renderer: MolRenderer | null
@@ -20,28 +19,35 @@ interface Props {
 }
 
 export default function RotateGizmo({ renderer, readOnly = false }: Props) {
-  const selectedAtomIds = useMoleculeStore(s => s.selectedAtomIds)
-  const selectedBondIds = useMoleculeStore(s => s.selectedBondIds)
-  const activeTool = useEditorStore(s => s.activeTool)
+  const { moleculeStore, editorStore, ticker } = useViewerRuntime()
+  const selectedAtomIds = moleculeStore(s => s.selectedAtomIds)
+  const selectedBondIds = moleculeStore(s => s.selectedBondIds)
+  const activeTool = editorStore(s => s.activeTool)
+  const subscriptionId = useId()
 
   useEffect(() => {
     if (readOnly) return
     if (!renderer || !toolCan(activeTool, 'canEdit')) return
 
-    const transaction = createObjectTransformEditSession()
-    const cb = createRotateGizmoCallbacks(useMoleculeStore.getState, transaction)
+    const transaction = createObjectTransformEditSession(moleculeStore)
+    const cb = createRotateGizmoCallbacks(moleculeStore.getState, transaction)
 
-    const ctrl = new RotateGizmoController(renderer, selectedAtomIds, selectedBondIds, cb)
+    const schedulerReason = `gizmo-drag:${subscriptionId}`
+    const ctrl = new RotateGizmoController(renderer, selectedAtomIds, selectedBondIds, cb, {
+      invalidate: () => ticker.invalidate(),
+      startContinuous: () => ticker.startContinuous(schedulerReason),
+      stopContinuous: () => ticker.stopContinuous(schedulerReason),
+    })
     if (!ctrl.isValid) return
 
-    const unsubTicker = ticker.subscribe('rotate-gizmo', Phase.Gizmo, () => ctrl.update())
+    const unsubTicker = ticker.subscribe(`rotate-gizmo:${subscriptionId}`, Phase.Gizmo, () => ctrl.update())
     ticker.invalidate()
 
     return () => {
       unsubTicker()
       ctrl.dispose()
     }
-  }, [renderer, selectedAtomIds, selectedBondIds, activeTool, readOnly])
+  }, [renderer, selectedAtomIds, selectedBondIds, activeTool, readOnly, moleculeStore, ticker, subscriptionId])
 
   return null
 }

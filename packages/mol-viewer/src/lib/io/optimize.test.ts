@@ -186,4 +186,22 @@ M  END`
   it('退化输入：单原子 → 原样返回 ok', () => {
     expect(generate3D({ atoms: [newAtom('C', 0, 0, 0)], bonds: [] }).ok).toBe(true)
   })
+
+  it('二维四面体碳经过距离几何后具有明显的 z 轴厚度', () => {
+    const carbon = newAtom('C', 0, 0, 0)
+    const hydrogens = [
+      newAtom('H', 1, 0, 0),
+      newAtom('H', -1, 0, 0),
+      newAtom('H', 0, 1, 0),
+      newAtom('H', 0, -1, 0),
+    ]
+    const planar = {
+      atoms: [carbon, ...hydrogens],
+      bonds: hydrogens.map(hydrogen => newBond(carbon.id, hydrogen.id, 1)),
+    }
+    const result = generate3D(planar)
+    expect(result.ok).toBe(true)
+    const z = result.molecule.atoms.map(atom => atom.z)
+    expect(Math.max(...z) - Math.min(...z)).toBeGreaterThan(0.5)
+  })
 })

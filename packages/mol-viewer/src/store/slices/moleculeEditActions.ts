@@ -5,22 +5,27 @@ import {
   applyActiveMoleculeEditWithSelection,
   applySceneObjectUpdatedResult,
   applySetMoleculeInSceneResult,
+  getEditableObject,
 } from './helpers'
+import { runAutoInferBondsCommand } from '../../lib/builder/commands/bond'
 import {
-  runAutoInferBondsCommand,
-  runCenterMoleculeCommand,
   runMoveAtomCommand,
   runSetAtomPositionsCommand,
-} from '../../lib/builder/commands/moleculeStoreCommands'
+} from '../../lib/builder/commands/geometry'
 import {
+  runCenterMoleculeCommand,
+  runClearMoleculeCommand,
   runSetMoleculeInSceneCommand,
   runSetSceneObjectAtomPositionsCommand,
-} from '../../lib/builder/commands/sceneStoreCommands'
-import { runClearMoleculeWithSelectionCommand } from '../../lib/builder/commands/selectionCommands'
+} from '../../lib/builder/commands/scene'
+import { runClearSelectionCommand } from '../../lib/builder/commands/selection'
+import { editWithSelectionSets } from '../../lib/builder/commands/shared'
+import { editChanged, type EditCommandResult } from '../../lib/builder/commands/shared'
 
 type MoleculeEditActions = Pick<
   EditSlice,
   | 'setMolecule'
+  | 'commitEditResult'
   | 'moveAtom'
   | 'setAtomPositions'
   | 'setObjectAtomPositions'
@@ -32,17 +37,39 @@ type MoleculeEditActions = Pick<
 export function createMoleculeEditActions({
   set,
 }: EditActionContext): MoleculeEditActions {
+  const commitEditResult = (
+    result: EditCommandResult,
+    options: { selectionPolicy?: 'clear' | 'preserve'; bumpAtomPositionVersion?: boolean } = {},
+  ) => {
+    if (!result.ok || !result.changed) return
+    set((s) => {
+      if (s.activeObjectId && !getEditableObject(s, s.activeObjectId)) return {}
+      const sceneResult = runSetMoleculeInSceneCommand(
+        s.objectsById,
+        s.objectOrder,
+        s.activeObjectId,
+        result.molecule,
+      )
+      const patch = applySetMoleculeInSceneResult(s, sceneResult)
+      if (options.selectionPolicy !== 'preserve') return patch
+
+      const validAtomIds = new Set(result.molecule.atoms.map(atom => atom.id))
+      const validBondIds = new Set(result.molecule.bonds.map(bond => bond.id))
+      return {
+        ...patch,
+        selectedAtomIds: new Set([...s.selectedAtomIds].filter(id => validAtomIds.has(id))),
+        selectedBondIds: new Set([...s.selectedBondIds].filter(id => validBondIds.has(id))),
+        selectionVersion: s.selectionVersion + 1,
+        ...(options.bumpAtomPositionVersion
+          ? { atomPositionVersion: s.atomPositionVersion + 1 }
+          : {}),
+      }
+    })
+  }
+
   return {
-    setMolecule: (mol) =>
-      set((s) => {
-        const result = runSetMoleculeInSceneCommand(
-          s.objectsById,
-          s.objectOrder,
-          s.activeObjectId,
-          mol,
-        )
-        return applySetMoleculeInSceneResult(s, result)
-      }),
+    setMolecule: mol => commitEditResult(editChanged(mol)),
+    commitEditResult,
 
     moveAtom: (id, x, y, z) =>
       set((s) =>
@@ -68,6 +95,7 @@ export function createMoleculeEditActions({
 
     setObjectAtomPositions: (objectId, positions) =>
       set((s) => {
+        if (!getEditableObject(s, objectId)) return {}
         const result = runSetSceneObjectAtomPositionsCommand(
           s.objectsById,
           objectId,
@@ -83,9 +111,20 @@ export function createMoleculeEditActions({
 
     clearMolecule: () =>
       set((s) =>
-        applyActiveMoleculeEditWithSelection(s, () =>
-          runClearMoleculeWithSelectionCommand(),
-        ),
+        applyActiveMoleculeEditWithSelection(s, (_molecule, selection) => {
+          const molecule = runClearMoleculeCommand().molecule
+          const cleared = runClearSelectionCommand(
+            selection.selectedAtomIds,
+            selection.selectedBondIds,
+          )
+          return editWithSelectionSets(
+            molecule,
+            cleared.selectedAtomIds,
+            cleared.selectedBondIds,
+            selection,
+            { moleculeChanged: true },
+          )
+        }),
       ),
 
     centerMolecule: () =>

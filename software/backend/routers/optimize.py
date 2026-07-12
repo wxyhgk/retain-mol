@@ -14,7 +14,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -26,6 +26,7 @@ router = APIRouter(prefix="/optimize", tags=["optimize"])
 # ── 数据模型 ──────────────────────────────────────────────────────────────────
 
 class Atom(BaseModel):
+    id: str
     symbol: str
     x: float
     y: float
@@ -35,11 +36,12 @@ class OptimizeRequest(BaseModel):
     atoms: list[Atom]
     charge: int = 0
     multiplicity: int = 1
-    method: str = Field(default="gfn2", description="gfn2 | gfn1 | gfnff")
+    method: Literal["gfn2", "gfn1", "gfnff"] = "gfn2"
     max_steps: int = Field(default=200, ge=1, le=1000)
-    optlevel: str = Field(default="normal", description="crude|sloppy|loose|lax|normal|tight|vtight|extreme")
+    optlevel: Literal["crude", "sloppy", "loose", "lax", "normal", "tight", "vtight", "extreme"] = "normal"
 
 class AtomResult(BaseModel):
+    id: str
     symbol: str
     x: float
     y: float
@@ -77,6 +79,18 @@ def _read_first_existing_xyz(*paths: Path) -> list[dict] | None:
         if path.exists():
             return _read_xyz(path)
     return None
+
+
+def _attach_atom_ids(atoms: list[dict], source: list[Atom]) -> list[dict]:
+    """XYZ does not carry ids; restore the stable request ids by preserved atom order."""
+    if len(atoms) != len(source):
+        raise ValueError(f"xTB 返回 {len(atoms)} 个原子，但请求包含 {len(source)} 个原子")
+    result = []
+    for atom, original in zip(atoms, source):
+        if atom["symbol"].lower() != original.symbol.lower():
+            raise ValueError(f"xTB 原子顺序发生变化：期望 {original.symbol}，得到 {atom['symbol']}")
+        result.append({"id": original.id, **atom})
+    return result
 
 
 _ENERGY_RE = re.compile(r"TOTAL ENERGY\s+([-\d.]+)\s+Eh")
@@ -249,7 +263,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
                         "step": idx + 1,
                         "energy": frame["energy"],
                         "gnorm": frame["gnorm"],
-                        "atoms": frame["atoms"],
+                        "atoms": _attach_atom_ids(frame["atoms"], req.atoms),
                     }
                     yield f"data: {json.dumps(event)}\n\n"
 
@@ -273,7 +287,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
                     "step": idx + 1,
                     "energy": frame["energy"],
                     "gnorm": frame["gnorm"],
-                    "atoms": frame["atoms"],
+                    "atoms": _attach_atom_ids(frame["atoms"], req.atoms),
                 }
                 yield f"data: {json.dumps(event)}\n\n"
 
@@ -322,7 +336,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
                     "step": frames_sent,
                     "energy": energy,
                     "gnorm": 0.0,
-                    "atoms": final_atoms,
+                    "atoms": _attach_atom_ids(final_atoms, req.atoms),
                 }
                 yield f"data: {json.dumps(final_frame_event)}\n\n"
 
@@ -331,7 +345,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
             "converged": converged and proc.returncode == 0,
             "steps": steps if steps > 0 else frames_sent,
             "energy": energy,
-            "atoms": final_atoms,
+            "atoms": _attach_atom_ids(final_atoms, req.atoms) if final_atoms else None,
             "warning": log[-1200:] if proc.returncode not in (0, None) else None,
         }
         yield f"data: {json.dumps(done_event)}\n\n"
@@ -398,7 +412,7 @@ async def optimize(req: OptimizeRequest) -> OptimizeResponse:
         energy, steps, converged = _parse_energy_steps(log)
 
     result_atoms = [
-        AtomResult(symbol=req.atoms[i].symbol, x=a["x"], y=a["y"], z=a["z"])
+        AtomResult(id=req.atoms[i].id, symbol=req.atoms[i].symbol, x=a["x"], y=a["y"], z=a["z"])
         for i, a in enumerate(opt_atoms)
     ]
 

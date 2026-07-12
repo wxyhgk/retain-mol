@@ -1,10 +1,14 @@
 import type { Molecule } from '../lib/molecule'
-import type { AtomClickRoute } from '../lib/builder/commands/atomClickRoute'
-import type { BuilderIntent } from '../lib/builder/commands/builderIntent'
-import { routeAtomClickForIntent } from '../lib/builder/commands/atomClickRoute'
-import { runAtomClickCommand } from '../lib/builder/commands/atomClickCommands'
-import { runSelectConnectedFragmentCommand } from '../lib/builder/commands/selectionCommands'
-import { shouldSelectFragmentOnAtomDoubleClickForIntent } from '../lib/builder/commands/gestureIntentGates'
+import {
+  routeAtomClickForIntent,
+  runAtomClickCommand,
+  type AtomClickRoute,
+} from '../lib/builder/commands/interaction'
+import { runSelectConnectedFragmentCommand } from '../lib/builder/commands/selection'
+import {
+  shouldSelectFragmentOnAtomDoubleClickForIntent,
+  type BuilderIntent,
+} from '../lib/builder/commands/interaction'
 import {
   runEditCommand,
   type EditCommandEffects,

@@ -14,8 +14,13 @@ export interface ClashScore {
   readonly overlapPenalty: number
 }
 
-function atomRadius(symbol: string): number {
+export function clashAtomRadius(symbol: string): number {
   return getElementConfig(symbol).covalentRadius
+}
+
+export function clashDistanceThreshold(symbolA: string, symbolB: string): number {
+  return (clashAtomRadius(symbolA) + clashAtomRadius(symbolB))
+    * BONDING.buildClashRadiusFactor
 }
 
 export function clashClearance(a: ClashPosition, b: ClashPosition): number {
@@ -23,7 +28,7 @@ export function clashClearance(a: ClashPosition, b: ClashPosition): number {
   const dy = a.y - b.y
   const dz = a.z - b.z
   const distance = Math.hypot(dx, dy, dz)
-  const minDistance = (atomRadius(a.symbol) + atomRadius(b.symbol)) * BONDING.buildClashRadiusFactor
+  const minDistance = clashDistanceThreshold(a.symbol, b.symbol)
   return distance - minDistance
 }
 

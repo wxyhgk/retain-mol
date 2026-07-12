@@ -8,6 +8,10 @@ RetainMol 后端 — FastAPI
   uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 """
 
+import re
+import shutil
+import subprocess
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,4 +38,19 @@ app.include_router(prepare.router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": app.version}
+    executable = shutil.which("xtb")
+    xtb_version = None
+    if executable:
+        try:
+            output = subprocess.run(
+                [executable, "--version"], capture_output=True, text=True, timeout=5,
+            ).stdout
+            match = re.search(r"xtb version\s+([^\s]+)", output, re.IGNORECASE)
+            xtb_version = match.group(1) if match else "unknown"
+        except (OSError, subprocess.SubprocessError):
+            xtb_version = "unknown"
+    return {
+        "status": "ok" if executable else "degraded",
+        "version": app.version,
+        "xtb": {"available": bool(executable), "version": xtb_version},
+    }
