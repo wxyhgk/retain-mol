@@ -5,21 +5,21 @@
  * store 依赖全部在此文件，RotateGizmoController 本身无 store 依赖。
  */
 import { useEffect, useId } from 'react'
-import { MolRenderer } from '../../lib/molRenderer'
+import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
 import { RotateGizmoController } from '../../lib/molRenderer/RotateGizmoController'
 import { toolCan } from '../../config/toolCapabilities.config'
 import { createObjectTransformEditSession } from '../../hooks/editSessionFactory'
 import { createRotateGizmoCallbacks } from './rotateGizmoEffects'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 
 interface Props {
-  renderer: MolRenderer | null
+  renderer: ThreeRendererPort | null
   readOnly?: boolean
 }
 
 export default function RotateGizmo({ renderer, readOnly = false }: Props) {
-  const { moleculeStore, editorStore, ticker } = useViewerRuntime()
+  const { moleculeStore, editorStore, ticker } = useViewerRuntimeServices()
   const selectedAtomIds = moleculeStore(s => s.selectedAtomIds)
   const selectedBondIds = moleculeStore(s => s.selectedBondIds)
   const activeTool = editorStore(s => s.activeTool)

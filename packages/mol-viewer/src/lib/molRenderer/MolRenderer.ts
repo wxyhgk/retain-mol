@@ -67,8 +67,12 @@ export class MolRenderer {
   set onAtomDrag(v) { this._interaction.onAtomDrag = v }
   get onAtomDragEnd() { return this._interaction.onAtomDragEnd }
   set onAtomDragEnd(v) { this._interaction.onAtomDragEnd = v }
+  get onAtomDragCancel() { return this._interaction.onAtomDragCancel }
+  set onAtomDragCancel(v) { this._interaction.onAtomDragCancel = v }
   get canDragAtom() { return this._interaction.canDragAtom }
   set canDragAtom(v) { this._interaction.canDragAtom = v }
+  get canStartBondDrag() { return this._interaction.canStartBondDrag }
+  set canStartBondDrag(v) { this._interaction.canStartBondDrag = v }
   get onBondDragStart() { return this._interaction.onBondDragStart }
   set onBondDragStart(v) { this._interaction.onBondDragStart = v }
   get onBondDragEnd() { return this._interaction.onBondDragEnd }
@@ -79,6 +83,8 @@ export class MolRenderer {
   set getGrowPreview(v) { this._interaction.getGrowPreview = v }
   get getGrowGuide() { return this._interaction.getGrowGuide }
   set getGrowGuide(v) { this._interaction.getGrowGuide = v }
+  get canStartFragmentTorsion() { return this._interaction.canStartFragmentTorsion }
+  set canStartFragmentTorsion(v) { this._interaction.canStartFragmentTorsion = v }
   get onFragmentTorsionStart() { return this._interaction.onFragmentTorsionStart }
   set onFragmentTorsionStart(v) { this._interaction.onFragmentTorsionStart = v }
   get getFragmentTorsionPreview() { return this._interaction.getFragmentTorsionPreview }
@@ -275,6 +281,12 @@ export class MolRenderer {
     this._renderPipeline.setFovPreservingScale(profile.cameraFov)
     this.renderStyle = renderStyle
     this._viewportGuides.syncGridVisibility(profile.backgroundGrid)
+    this.frameTicker.invalidate()
+  }
+
+  setTheme(theme: ResolvedTheme) {
+    this.theme = theme
+    this.scene.background = new THREE.Color(hexToInt(theme.scene.backgroundColor))
     this.frameTicker.invalidate()
   }
 

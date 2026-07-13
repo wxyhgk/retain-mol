@@ -37,7 +37,10 @@ function oclToMolecule(oclMol: OCLMol, fallbackName = 'Imported'): Molecule {
     const bo = oclMol.getBondOrder(i)
     const order: 1 | 2 | 3 = bo === 2 ? 2 : bo === 3 ? 3 : 1
     const aromatic = isAromaticBondFn?.(i) === true || undefined
-    bonds.push({ ...newBond(atoms[a1].id, atoms[a2].id, order), ...(aromatic ? { aromatic: true } : {}) })
+    const atom1 = atoms[a1]
+    const atom2 = atoms[a2]
+    if (atom1 === undefined || atom2 === undefined) continue
+    bonds.push({ ...newBond(atom1.id, atom2.id, order), ...(aromatic ? { aromatic: true } : {}) })
   }
 
   // OCL 在部分版本里可能有 getName()，没有则用首行兜底
@@ -69,7 +72,9 @@ function moleculeToOCL(mol: Molecule): OCLMol {
     const a1 = idxMap.get(b.atomId1)
     const a2 = idxMap.get(b.atomId2)
     if (a1 === undefined || a2 === undefined) continue
-    addOrChangeBond.call(oclMol, a1, a2, BOND_TYPE[b.order])
+    const bondType = BOND_TYPE[b.order]
+    if (bondType === undefined) continue
+    addOrChangeBond.call(oclMol, a1, a2, bondType)
   }
   const setName = (oclMol as unknown as { setName?: (n: string) => void }).setName
   if (mol.name && setName) setName.call(oclMol, mol.name)
@@ -88,7 +93,7 @@ function normalizeMolHeader(text: string): string {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
   let countsIdx = -1
   for (let i = 0; i < Math.min(lines.length, 20); i++) {
-    if (/\bV[23]000\b/i.test(lines[i])) { countsIdx = i; break }
+    if (/\bV[23]000\b/i.test(lines[i] ?? '')) { countsIdx = i; break }
   }
   if (countsIdx < 0 || countsIdx === 3) return lines.join('\n')
 
@@ -106,7 +111,9 @@ export function parseMol(text: string): Molecule {
     const normalized = normalizeMolHeader(text)
     const oclMol = OCL.Molecule.fromMolfile(normalized)
     const firstLine = normalized.split('\n')[0]?.trim() || ''
-    return oclToMolecule(oclMol, firstLine || 'Imported')
+    const molecule = oclToMolecule(oclMol, firstLine || 'Imported')
+    if (molecule.atoms.length === 0) throw new Error('未解析到任何原子')
+    return molecule
   } catch (e) {
     throw new Error(`MOL 解析失败：${(e as Error).message}`)
   }
@@ -194,8 +201,10 @@ function minimizeConnected(frag: Molecule): { coords: Map<string, XYZ>; eBefore:
     const label = oclMol.getAtomCustomLabel(k)
     const origIdx = label === null ? k : parseInt(label, 10)
     if (origIdx < 0 || origIdx >= optimized.length) return null
+    const originalAtom = frag.atoms[origIdx]
+    if (originalAtom === undefined) return null
     optimized[origIdx] = {
-      id: frag.atoms[origIdx].id,
+      id: originalAtom.id,
       x: oclMol.getAtomX(k), y: -oclMol.getAtomY(k), z: -oclMol.getAtomZ(k),
     }
   }

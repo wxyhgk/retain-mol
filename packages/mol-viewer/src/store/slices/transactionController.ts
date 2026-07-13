@@ -1,6 +1,7 @@
 import type { StoreApi } from 'zustand'
 import type { TemporalState } from 'zundo'
 import type { MoleculeState } from './types'
+import type { UndoTransactionHandle } from '../contracts/transaction'
 import {
   UNDO_LIMIT,
   partializeForUndo,
@@ -11,12 +12,7 @@ import {
 export type GetTemporal = () => StoreApi<TemporalState<MoleculeState>>
 export type GetMoleculeState = () => MoleculeState
 
-export interface UndoTransactionHandle {
-  readonly owner: string
-  readonly active: boolean
-  commit(): void
-  cancel(): void
-}
+export type { UndoTransactionHandle } from '../contracts/transaction'
 
 export interface UndoTransactionController {
   readonly begin: (owner?: string) => UndoTransactionHandle

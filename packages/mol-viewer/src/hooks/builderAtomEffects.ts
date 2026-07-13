@@ -70,7 +70,7 @@ export function applyAtomClickForIntent(
             atomId: input.atomId,
             activeElement: intent.activeElement,
             atomClickMode: intent.atomClickMode,
-            fragment: commandRoute.fragment,
+            ...(commandRoute.fragment !== undefined ? { fragment: commandRoute.fragment } : {}),
           }),
         effects.editEffects,
       )

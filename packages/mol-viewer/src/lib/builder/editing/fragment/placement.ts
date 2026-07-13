@@ -1,10 +1,23 @@
-import * as THREE from 'three'
 import type { Molecule } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { lookupBondLengthByOrder } from '../../../../config/geometry.config'
 import { newBond } from '../../../molecule'
 import { calcBondLength } from '../../geometry/vsepr'
 import { instantiate } from './instantiate'
+import {
+  add,
+  applyQuat,
+  identityQuat,
+  length,
+  multiplyQuats,
+  normalize,
+  quatFromEuler,
+  quatFromUnitVectors,
+  scale,
+  sub,
+  type Vec3,
+} from '../../math'
+import { getFragmentAtom, requireFragmentAtomAttachment } from './fragmentGuards'
 
 /**
  * 点空白放置完整片段。viewDir（模型局部坐标的相机视线方向）用于把
@@ -16,29 +29,32 @@ export function placeFragmentStandalone(
   center: { x: number; y: number; z: number },
   viewDir?: { x: number; y: number; z: number },
 ): Molecule {
-  const q = new THREE.Quaternion()
+  let q = identityQuat()
   const coordinationTilt = frag.group === 'coordination'
-    ? new THREE.Quaternion().setFromEuler(new THREE.Euler(0.38, -0.46, 0.16))
+    ? quatFromEuler(0.38, -0.46, 0.16)
     : null
   if (viewDir) {
-    const v = new THREE.Vector3(viewDir.x, viewDir.y, viewDir.z)
-    if (v.lengthSq() > 1e-9) q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v.normalize())
+    const v: Vec3 = [viewDir.x, viewDir.y, viewDir.z]
+    if (length(v) > 1e-9) q = quatFromUnitVectors([0, 0, 1], normalize(v))
   }
-  if (coordinationTilt) q.multiply(coordinationTilt)
+  if (coordinationTilt) q = multiplyQuats(q, coordinationTilt)
 
   // Coordination fragments are authored around the metal center. Other
   // fragments keep their historical centroid anchor.
-  const centroid = new THREE.Vector3()
+  let centroid: Vec3 = [0, 0, 0]
   if (frag.group === 'coordination') {
-    const center = frag.atoms[frag.attachIndex]
-    centroid.set(center.x, center.y, center.z)
+    const centerAtom = getFragmentAtom(frag, frag.attachIndex)
+    if (!centerAtom || centerAtom.symbol === 'H') {
+      throw new Error(`${frag.name}: attachIndex 必须指向有效的重原子`)
+    }
+    centroid = [centerAtom.x, centerAtom.y, centerAtom.z]
   } else {
-    for (const a of frag.atoms) centroid.add(new THREE.Vector3(a.x, a.y, a.z))
-    centroid.divideScalar(frag.atoms.length)
+    for (const atom of frag.atoms) centroid = add(centroid, [atom.x, atom.y, atom.z])
+    centroid = scale(centroid, 1 / frag.atoms.length)
   }
-  const target = new THREE.Vector3(center.x, center.y, center.z)
+  const target: Vec3 = [center.x, center.y, center.z]
 
-  const { atoms, bonds } = instantiate(frag, p => p.sub(centroid).applyQuaternion(q).add(target))
+  const { atoms, bonds } = instantiate(frag, p => add(applyQuat(sub(p, centroid), q), target))
   return { ...mol, atoms: [...mol.atoms, ...atoms], bonds: [...mol.bonds, ...bonds] }
 }
 
@@ -58,36 +74,50 @@ export function placeHybridPrototype(
   center: { x: number; y: number; z: number },
   viewDir?: { x: number; y: number; z: number },
 ): Molecule {
-  const q = new THREE.Quaternion()
+  let q = identityQuat()
   if (viewDir) {
-    const v = new THREE.Vector3(viewDir.x, viewDir.y, viewDir.z)
-    if (v.lengthSq() > 1e-9) q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v.normalize())
+    const v: Vec3 = [viewDir.x, viewDir.y, viewDir.z]
+    if (length(v) > 1e-9) q = quatFromUnitVectors([0, 0, 1], normalize(v))
   }
 
   // 中心桩：attach 原子落到点击点，attach-H 方向（= 开价轴）经相机旋转到世界系
-  const cA = frag.atoms[frag.attachIndex], cH = frag.atoms[frag.attachHIndex]
-  const cOrigin = new THREE.Vector3(cA.x, cA.y, cA.z)
-  const axis = new THREE.Vector3(cH.x - cA.x, cH.y - cA.y, cH.z - cA.z).normalize().applyQuaternion(q)
-  const target = new THREE.Vector3(center.x, center.y, center.z)
-  const centerInst = instantiate(frag, p => p.sub(cOrigin).applyQuaternion(q).add(target), frag.attachHIndex)
+  const centerAttachment = requireFragmentAtomAttachment(frag)
+  const partnerAttachment = requireFragmentAtomAttachment(partner)
+  if (centerAttachment.attachHydrogenIndex === null || partnerAttachment.attachHydrogenIndex === null) {
+    throw new Error('杂化原型必须使用 attach-H 定义连接方向')
+  }
+  const cA = centerAttachment.attachAtom
+  const cOrigin: Vec3 = [cA.x, cA.y, cA.z]
+  const axis = applyQuat(normalize(centerAttachment.authoredDirection), q)
+  const target: Vec3 = [center.x, center.y, center.z]
+  const centerInst = instantiate(
+    frag,
+    p => add(applyQuat(sub(p, cOrigin), q), target),
+    centerAttachment.attachHydrogenIndex,
+  )
 
   // 键长按键级取（双/三键更短），退回单键估算
   const order = partner.attachOrder ?? 1
-  const pA = partner.atoms[partner.attachIndex], pH = partner.atoms[partner.attachHIndex]
+  const pA = partnerAttachment.attachAtom
   const bLen = lookupBondLengthByOrder(cA.symbol, pA.symbol, order) ?? calcBondLength(cA.symbol, pA.symbol)
 
   // 伙伴桩：attach 原子落在开价轴上、按键长拉开；其 attach 轴对齐到 -axis（指回中心）
-  const pOrigin = new THREE.Vector3(pA.x, pA.y, pA.z)
-  const pAxis = new THREE.Vector3(pH.x - pA.x, pH.y - pA.y, pH.z - pA.z).normalize()
-  const qP = new THREE.Quaternion().setFromUnitVectors(pAxis, axis.clone().negate())
-  const anchor = target.clone().addScaledVector(axis, bLen)
-  const partnerInst = instantiate(partner, p => p.sub(pOrigin).applyQuaternion(qP).add(anchor), partner.attachHIndex)
-
-  const link = newBond(
-    centerInst.idByIndex.get(frag.attachIndex)!,
-    partnerInst.idByIndex.get(partner.attachIndex)!,
-    order,
+  const pOrigin: Vec3 = [pA.x, pA.y, pA.z]
+  const pAxis = normalize(partnerAttachment.authoredDirection)
+  const qP = quatFromUnitVectors(pAxis, scale(axis, -1))
+  const anchor = add(target, scale(axis, bLen))
+  const partnerInst = instantiate(
+    partner,
+    p => add(applyQuat(sub(p, pOrigin), qP), anchor),
+    partnerAttachment.attachHydrogenIndex,
   )
+
+  const centerAttachAtomId = centerInst.idByIndex.get(centerAttachment.attachAtomIndex)
+  const partnerAttachAtomId = partnerInst.idByIndex.get(partnerAttachment.attachAtomIndex)
+  if (centerAttachAtomId === undefined || partnerAttachAtomId === undefined) {
+    throw new Error('杂化原型连接原子未被实例化')
+  }
+  const link = newBond(centerAttachAtomId, partnerAttachAtomId, order)
   return {
     ...mol,
     atoms: [...mol.atoms, ...centerInst.atoms, ...partnerInst.atoms],

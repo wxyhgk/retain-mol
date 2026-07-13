@@ -15,6 +15,7 @@ import { resolveTheme, type ResolvedTheme } from '../presets'
 import { resolveStylePreset, type RenderStyle } from '../styles'
 import { registerEditorIntegrity } from './integrity'
 import { useMoleculeStore, type MoleculeStoreApi } from './moleculeStore'
+import type { SelectorStoreApi } from './contracts/selectorStore'
 
 export type { Tool, DisplayMode, MeasureType, MeasureStyle, Measurement, MolClipboard }
 export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT }
@@ -94,18 +95,7 @@ export interface EditorState {
   setSketchPlane: (p: { origin: [number, number, number]; normal: [number, number, number] } | null) => void
 }
 
-type SelectorSubscribe<T> = {
-  subscribe: {
-    (listener: (state: T, prevState: T) => void): () => void
-    <U>(
-      selector: (state: T) => U,
-      listener: (selected: U, previous: U) => void,
-      options?: { equalityFn?: (a: U, b: U) => boolean; fireImmediately?: boolean },
-    ): () => void
-  }
-}
-
-export type EditorStoreApi = UseBoundStore<StoreApi<EditorState> & SelectorSubscribe<EditorState>>
+export type EditorStoreApi = UseBoundStore<SelectorStoreApi<EditorState>>
 
 export function createEditorStore(moleculeStore: MoleculeStoreApi): EditorStoreApi {
   const editorStore = create<EditorState>()(subscribeWithSelector(set => ({

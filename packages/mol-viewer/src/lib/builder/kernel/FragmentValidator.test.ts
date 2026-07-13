@@ -32,4 +32,26 @@ describe('FragmentValidator', () => {
 
     expect(validateFragmentDef(edgeTemplate)).toEqual([])
   })
+
+  it('rejects templates whose local topology already exceeds element valence', () => {
+    const invalid: FragmentDef = {
+      id: 'over-valent-hydrogen',
+      name: 'invalid',
+      short: 'invalid',
+      formula: 'H-C-H',
+      atoms: [
+        { symbol: 'H', x: 0, y: 0, z: 0 },
+        { symbol: 'C', x: 1, y: 0, z: 0 },
+        { symbol: 'H', x: -1, y: 0, z: 0 },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 0, b: 2, order: 1 },
+      ],
+      attachIndex: 1,
+      attachHIndex: 0,
+    }
+
+    expect(validateFragmentDef(invalid).map(issue => issue.code)).toContain('atom.valence.exceeded')
+  })
 })

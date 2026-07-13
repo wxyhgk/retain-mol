@@ -1,19 +1,14 @@
 import type { Molecule } from '@retainmol/mol-viewer/core'
 import { GeometryRelaxer } from '@retainmol/mol-viewer/io'
 import { createObjectPositionWriteEditSession } from '@/domain/viewer/editSessions'
+import type { AtomPosition, MoleculePositionWriter } from '@/domain/viewer/positionWriter'
 import { OPTIMIZE_ANIM } from '@/config/optimize.config'
-
-type XYZ = { x: number; y: number; z: number }
-
-export type MoleculePositionWriter = {
-  setObjectAtomPositions: (objectId: string, positions: ReadonlyMap<string, XYZ>) => void
-}
 
 function createPositionWriteSession(objectId: string, writer: MoleculePositionWriter) {
   const session = createObjectPositionWriteEditSession(objectId)
   return {
     start: () => session.start(),
-    write: (positions: ReadonlyMap<string, XYZ>) => writer.setObjectAtomPositions(objectId, positions),
+    write: (positions: ReadonlyMap<string, AtomPosition>) => writer.setObjectAtomPositions(objectId, positions),
     end: () => session.end(),
   }
 }
@@ -115,10 +110,10 @@ export function morphObjectPositions(
   opts: { writer: MoleculePositionWriter; durationMs?: number },
 ): Promise<void> {
   const { writer, durationMs = OPTIMIZE_ANIM.morphDurationMs } = opts
-  const fromMap = new Map<string, XYZ>(from.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
-  const toMap = new Map<string, XYZ>(to.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
+  const fromMap = new Map<string, AtomPosition>(from.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
+  const toMap = new Map<string, AtomPosition>(to.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
   const frame = (t: number) => {
-    const positions = new Map<string, XYZ>()
+    const positions = new Map<string, AtomPosition>()
     for (const [id, b] of toMap) {
       const a = fromMap.get(id)
       positions.set(id, a

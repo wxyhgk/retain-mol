@@ -1,6 +1,6 @@
 {
   "name": "@retainmol/mol-viewer",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
@@ -23,9 +23,33 @@
       "types": "./dist/public/viewer.d.ts",
       "import": "./dist/public/viewer.js"
     },
+    "./runtime": {
+      "types": "./dist/public/runtime.d.ts",
+      "import": "./dist/public/runtime.js"
+    },
+    "./state": {
+      "types": "./dist/public/state.d.ts",
+      "import": "./dist/public/state.js"
+    },
+    "./editing": {
+      "types": "./dist/public/editing.d.ts",
+      "import": "./dist/public/editing.js"
+    },
+    "./geometry": {
+      "types": "./dist/public/geometry.d.ts",
+      "import": "./dist/public/geometry.js"
+    },
+    "./graph": {
+      "types": "./dist/public/graph.d.ts",
+      "import": "./dist/public/graph.js"
+    },
     "./styles": {
       "types": "./dist/public/styles.d.ts",
       "import": "./dist/public/styles.js"
+    },
+    "./three": {
+      "types": "./dist/public/three.d.ts",
+      "import": "./dist/public/three.js"
     },
     "./fragments": {
       "types": "./dist/public/fragments.d.ts",
@@ -56,27 +80,37 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.build.json && node scripts/prune-declarations.mjs && node scripts/check-dist.mjs",
-    "typecheck": "tsc --noEmit"
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/prune-declarations.mjs && node scripts/rewrite-declaration-imports.mjs && node scripts/check-dist.mjs",
+    "preapi:report": "npm run build",
+    "api:report": "node scripts/check-api.mjs --local",
+    "preapi:check": "npm run build",
+    "api:check": "node scripts/check-api.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "test:pack": "npm run build && node scripts/test-pack-consumer.mjs",
+    "typecheck": "tsc --noEmit",
+    "typecheck:strict": "tsc -p tsconfig.strict.json",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "three": ">=0.184.0 <0.185.0"
   },
   "dependencies": {
     "clsx": "^2.1.1",
     "openchemlib": "^9.21.0",
     "tailwind-merge": "^3.5.0",
-    "three": "^0.184.0",
     "zod": "^4.4.3",
     "zundo": "^2.3.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@microsoft/api-extractor": "^7.58.9",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.0",
+    "three": "^0.184.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.10",
     "vitest": "^4.1.5"

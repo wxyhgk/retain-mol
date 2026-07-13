@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import * as THREE from 'three'
 import { resolveTheme, type ResolvedTheme } from '../presets'
 import type { RenderStyle } from '../styles'
 import type { RendererSceneStateBindingOptions } from './rendererSceneBindingTypes'
@@ -41,11 +40,8 @@ export function useRendererSceneStateBinding({
     if (!renderer) return
 
     const rendererTheme = resolveRendererTheme(theme, renderStyle, appearance)
-    renderer.theme = rendererTheme
+    renderer.setTheme(rendererTheme)
     renderer.setRenderStyle(renderStyle)
-    renderer.scene.background = new THREE.Color(
-      parseInt(rendererTheme.scene.backgroundColor.replace('#', ''), 16),
-    )
   }, [theme, renderStyle, appearance, rendererRef])
 
   useEffect(() => {

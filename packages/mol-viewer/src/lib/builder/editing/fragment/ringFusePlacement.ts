@@ -1,8 +1,16 @@
-import * as THREE from 'three'
 import type { Atom, Molecule } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { isBetterPlacementScore, scoreMoleculePlacement, type PlacementScore } from '../../geometry/placementPlanner'
 import { detectMergeAtoms, remapAndMergeBonds, selectHydrogensToRemove } from './ringFuseTopology'
+import {
+  add,
+  applyMat3,
+  cross,
+  rotationBetweenOrthonormalBases,
+  scale,
+  sub,
+  type Vec3,
+} from '../../math'
 
 export interface RingFusePlacementInput {
   readonly molecule: Molecule
@@ -13,14 +21,14 @@ export interface RingFusePlacementInput {
   readonly targetAtom2: Atom
   readonly skip: Set<number>
   readonly isHydrogenIndex: (index: number) => boolean
-  readonly fragmentMidpoint: THREE.Vector3
-  readonly fragmentAxis1: THREE.Vector3
-  readonly fragmentAxis2: THREE.Vector3
-  readonly fragmentAxis3: THREE.Vector3
-  readonly fragmentCentroid: THREE.Vector3
-  readonly targetMidpoint: THREE.Vector3
-  readonly targetAxis1: THREE.Vector3
-  readonly preferredTargetAxis2: THREE.Vector3
+  readonly fragmentMidpoint: Vec3
+  readonly fragmentAxis1: Vec3
+  readonly fragmentAxis2: Vec3
+  readonly fragmentAxis3: Vec3
+  readonly fragmentCentroid: Vec3
+  readonly targetMidpoint: Vec3
+  readonly targetAxis1: Vec3
+  readonly preferredTargetAxis2: Vec3
   readonly orderOverride: Map<string, 1 | 2 | 3>
   readonly atomById: Map<string, Atom>
 }
@@ -36,12 +44,12 @@ export function planRingFusePlacement(input: RingFusePlacementInput): RingFusePl
     ...input,
     targetAtom1: input.targetAtom2,
     targetAtom2: input.targetAtom1,
-    targetAxis1: input.targetAxis1.clone().negate(),
+    targetAxis1: scale(input.targetAxis1, -1),
   }
   const candidates = [input, reversedInput]
     .flatMap(orientedInput => [
       buildRingFuseCandidate(orientedInput, orientedInput.preferredTargetAxis2),
-      buildRingFuseCandidate(orientedInput, orientedInput.preferredTargetAxis2.clone().negate()),
+      buildRingFuseCandidate(orientedInput, scale(orientedInput.preferredTargetAxis2, -1)),
     ])
     .filter((candidate): candidate is RingFusePlacementCandidate => candidate !== null)
 
@@ -58,18 +66,15 @@ function compareRingFuseCandidates(a: RingFusePlacementCandidate, b: RingFusePla
 
 function buildRingFuseCandidate(
   input: RingFusePlacementInput,
-  targetAxis2: THREE.Vector3,
+  targetAxis2: Vec3,
 ): RingFusePlacementCandidate | null {
-  const targetAxis3 = input.targetAxis1.clone().cross(targetAxis2)
-  const fragmentBasis = new THREE.Matrix4().makeBasis(
-    input.fragmentAxis1,
-    input.fragmentAxis2,
-    input.fragmentAxis3,
+  const targetAxis3 = cross(input.targetAxis1, targetAxis2)
+  const rotation = rotationBetweenOrthonormalBases(
+    [input.fragmentAxis1, input.fragmentAxis2, input.fragmentAxis3],
+    [input.targetAxis1, targetAxis2, targetAxis3],
   )
-  const targetBasis = new THREE.Matrix4().makeBasis(input.targetAxis1, targetAxis2, targetAxis3)
-  const rotation = targetBasis.multiply(fragmentBasis.clone().transpose())
-  const transform = (p: THREE.Vector3) => p.sub(input.fragmentMidpoint).applyMatrix4(rotation).add(input.targetMidpoint)
-  const newCentroid = transform(input.fragmentCentroid.clone())
+  const transform = (p: Vec3) => add(applyMat3(sub(p, input.fragmentMidpoint), rotation), input.targetMidpoint)
+  const newCentroid = transform(input.fragmentCentroid)
 
   const merge = detectMergeAtoms(
     input.fragment,

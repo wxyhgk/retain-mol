@@ -644,7 +644,7 @@ describe('store deletion and clipboard commands', () => {
     expect(copy).not.toBeNull()
     if (!copy) return
     expect(copy.atoms.map(atom => atom.symbol)).toEqual(['C', 'O'])
-    expect(copy.bonds).toEqual([{ a: 0, b: 1, order: 2, aromatic: undefined }])
+    expect(copy.bonds).toEqual([{ a: 0, b: 1, order: 2 }])
 
     const pasted = runPasteAtomsCommand(mol, copy, 3)
     expect(pasted.changed).toBe(true)

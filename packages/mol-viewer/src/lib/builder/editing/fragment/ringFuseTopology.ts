@@ -1,17 +1,17 @@
-import * as THREE from 'three'
 import type { Atom, Bond, Molecule } from '../../../molecule'
 import { newAtom, newBond } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { BONDING } from '../../../../config/bonding.config'
 import { getElementConfig } from '../../../../config/elements.config'
 import { degree, findBond, hNeighborsOf } from '../../graph'
+import { dot, sub, type Vec3 } from '../../math'
 
 /** ① 几何 pass 的产物：合并映射 + 已算好的重原子落点 */
 type MergeResult = {
   /** 模板索引 → 已有原子 id（凹区并环共用） */
   mergeByIndex: Map<number, string>
   /** 模板索引 → 变换后落点（重原子） */
-  posByIndex: Map<number, THREE.Vector3>
+  posByIndex: Map<number, Vec3>
 }
 
 /**
@@ -21,7 +21,7 @@ type MergeResult = {
 export function detectMergeAtoms(
   frag: FragmentDef,
   mol: Molecule,
-  transform: (p: THREE.Vector3) => THREE.Vector3,
+  transform: (p: Vec3) => Vec3,
   skip: Set<number>,
   isH: (i: number) => boolean,
   t1Id: string,
@@ -29,16 +29,16 @@ export function detectMergeAtoms(
 ): MergeResult | null {
   const mergeByIndex = new Map<number, string>()
   const claimedExistingAtomIds = new Set<string>()
-  const posByIndex = new Map<number, THREE.Vector3>()
-  for (let i = 0; i < frag.atoms.length; i++) {
+  const posByIndex = new Map<number, Vec3>()
+  for (const [i, fragmentAtom] of frag.atoms.entries()) {
     if (skip.has(i) || isH(i)) continue
-    const p = transform(new THREE.Vector3(frag.atoms[i].x, frag.atoms[i].y, frag.atoms[i].z))
+    const p = transform([fragmentAtom.x, fragmentAtom.y, fragmentAtom.z])
     posByIndex.set(i, p)
     for (const ea of mol.atoms) {
       if (ea.id === t1Id || ea.id === t2Id || ea.symbol === 'H') continue
-      const dd = (p.x - ea.x) ** 2 + (p.y - ea.y) ** 2 + (p.z - ea.z) ** 2
+      const dd = (p[0] - ea.x) ** 2 + (p[1] - ea.y) ** 2 + (p[2] - ea.z) ** 2
       if (dd < BONDING.fuseMergeEps * BONDING.fuseMergeEps &&
-          ea.symbol === frag.atoms[i].symbol &&
+          ea.symbol === fragmentAtom.symbol &&
           !claimedExistingAtomIds.has(ea.id)) {
         mergeByIndex.set(i, ea.id)   // 凹区并环：与已有原子重合 → 合并共用
         claimedExistingAtomIds.add(ea.id)
@@ -56,19 +56,21 @@ export function detectMergeAtoms(
  */
 export function selectHydrogensToRemove(
   mol: Molecule,
-  newCentroid: THREE.Vector3,
+  newCentroid: Vec3,
   hostIds: string[],
 ): Set<string> {
   const removeIds = new Set<string>()
   for (const hostId of hostIds) {
     const hs = hNeighborsOf(mol, hostId).filter(h => !removeIds.has(h.id))
     if (hs.length === 0) continue
-    let best = hs[0], bestD = Infinity
+    let best: Atom | undefined
+    let bestD = Infinity
     for (const h of hs) {
-      const dd = newCentroid.distanceToSquared(new THREE.Vector3(h.x, h.y, h.z))
+      const delta = sub(newCentroid, [h.x, h.y, h.z])
+      const dd = dot(delta, delta)
       if (dd < bestD) { bestD = dd; best = h }
     }
-    removeIds.add(best.id)
+    if (best) removeIds.add(best.id)
   }
   return removeIds
 }
@@ -81,7 +83,7 @@ export function selectHydrogensToRemove(
 export function remapAndMergeBonds(
   frag: FragmentDef,
   mol: Molecule,
-  transform: (p: THREE.Vector3) => THREE.Vector3,
+  transform: (p: Vec3) => Vec3,
   ctx: {
     f1i: number; f2i: number; T1id: string; T2id: string
     skip: Set<number>; isH: (i: number) => boolean
@@ -99,22 +101,22 @@ export function remapAndMergeBonds(
     return fb ? (fb.a === hi ? fb.b : fb.a) : null
   }
   const newAtoms: Atom[] = []
-  for (let i = 0; i < frag.atoms.length; i++) {
+  for (const [i, fragmentAtom] of frag.atoms.entries()) {
     if (skip.has(i) || idByIndex.has(i)) continue
     if (isH(i)) {
       const host = hHostIndex(i)
       if (host !== null && mergeByIndex.has(host)) continue   // 合并原子的模板 H 不实例化
     }
-    const p = posByIndex.get(i) ?? transform(new THREE.Vector3(frag.atoms[i].x, frag.atoms[i].y, frag.atoms[i].z))
-    if (frag.atoms[i].symbol !== 'H') {
+    const p = posByIndex.get(i) ?? transform([fragmentAtom.x, fragmentAtom.y, fragmentAtom.z])
+    if (fragmentAtom.symbol !== 'H') {
       for (const ea of mol.atoms) {
         if (ea.id === T1id || ea.id === T2id || removeIds.has(ea.id)) continue
         if (mergeByIndex.size > 0 && [...mergeByIndex.values()].includes(ea.id)) continue
-        const dd = (p.x - ea.x) ** 2 + (p.y - ea.y) ** 2 + (p.z - ea.z) ** 2
+        const dd = (p[0] - ea.x) ** 2 + (p[1] - ea.y) ** 2 + (p[2] - ea.z) ** 2
         if (dd < BONDING.fuseClashEps * BONDING.fuseClashEps) return null
       }
     }
-    const atom = newAtom(frag.atoms[i].symbol, p.x, p.y, p.z)
+    const atom = newAtom(fragmentAtom.symbol, p[0], p[1], p[2])
     idByIndex.set(i, atom.id)
     newAtoms.push(atom)
   }
@@ -128,7 +130,9 @@ export function remapAndMergeBonds(
   for (const fb of frag.bonds) {
     if (skip.has(fb.a) && skip.has(fb.b)) continue
     if (!idByIndex.has(fb.a) || !idByIndex.has(fb.b)) continue
-    const id1 = idByIndex.get(fb.a)!, id2 = idByIndex.get(fb.b)!
+    const id1 = idByIndex.get(fb.a)
+    const id2 = idByIndex.get(fb.b)
+    if (id1 === undefined || id2 === undefined) continue
     const existing = findBond(mol.bonds, id1, id2)
     const key = `${Math.min(fb.a, fb.b)}-${Math.max(fb.a, fb.b)}`
     if (existing) {
@@ -144,20 +148,21 @@ export function remapAndMergeBonds(
 
   // 自动重合宿主至少不能超过元素允许的连接数。完整键级合法化属于
   // Kekule 重排阶段；这里不能用局部键级求和破坏现有 peri 连续并环。
-  const finalBonds = [
+  const finalBonds: Bond[] = [
     ...mol.bonds
       .filter(b => !removeIds.has(b.atomId1) && !removeIds.has(b.atomId2))
       .map(b => {
         const o = orderByExistingId.get(b.id)
-        return o === undefined ? b : { ...b, order: o, aromatic: undefined }
+        if (o === undefined) return b
+        const { aromatic: _aromatic, ...bondWithoutAromatic } = b
+        return { ...bondWithoutAromatic, order: o }
       }),
     ...newBonds,
   ]
   const finalAtoms = [...mol.atoms.filter(a => !removeIds.has(a.id)), ...newAtoms]
   const atomById = new Map(finalAtoms.map(atom => [atom.id, atom]))
-  for (const mergedId of mergeByIndex.values()) {
-    const atom = atomById.get(mergedId)
-    if (!atom || degree(finalBonds, mergedId) > getElementConfig(atom.symbol).maxBonds) return null
+  for (const atom of atomById.values()) {
+    if (degree(finalBonds, atom.id) > getElementConfig(atom.symbol).maxBonds) return null
   }
 
   return {

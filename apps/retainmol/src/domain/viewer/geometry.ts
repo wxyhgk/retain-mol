@@ -1,1 +1,1 @@
-export { calcAngle, calcDihedral, calcDistance } from '@retainmol/mol-viewer/viewer'
+export { calcAngle, calcDihedral, calcDistance } from '@retainmol/mol-viewer/geometry'

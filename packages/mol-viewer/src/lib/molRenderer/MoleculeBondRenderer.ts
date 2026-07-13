@@ -188,7 +188,7 @@ export class MoleculeBondRenderer {
     atomRadius2: number
     stickRadius: number
     lineSpecs: BondLineSpec[]
-    aromaticCentroid?: THREE.Vector3
+    aromaticCentroid: THREE.Vector3 | undefined
     gap: number
     singleColor: boolean
     color1: number
@@ -202,11 +202,13 @@ export class MoleculeBondRenderer {
       if (!cylinder.isMesh) continue
       const aromaticDash = input.aromaticCentroid ? index >= 2 : false
       if (aromaticDash) {
+        const aromaticCentroid = input.aromaticCentroid
+        if (!aromaticCentroid) continue
         const dashIndex = index - 2
         const dashLength = RENDER.aromaticDashSize
         const gapLength = RENDER.aromaticGapSize
         const distance = gapLength / 2 + dashIndex * (dashLength + gapLength)
-        const toCenter = new THREE.Vector3().subVectors(input.aromaticCentroid!, input.midpoint)
+        const toCenter = new THREE.Vector3().subVectors(aromaticCentroid, input.midpoint)
         toCenter.addScaledVector(input.directionUnit, -toCenter.dot(input.directionUnit))
         if (toCenter.lengthSq() < 1e-6) toCenter.set(1, 0, 0)
         else toCenter.normalize()
@@ -219,6 +221,7 @@ export class MoleculeBondRenderer {
         const spec = input.aromaticCentroid
           ? { offset: 0, radius: input.stickRadius }
           : input.lineSpecs[Math.min(line, input.lineSpecs.length - 1)]
+        if (!spec) continue
         const halves = this.meshFactory.halfBondSegments(
           input.start, input.directionUnit, input.length, input.atomRadius1, input.atomRadius2,
         )

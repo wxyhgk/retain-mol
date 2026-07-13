@@ -19,7 +19,9 @@ export function useRendererSceneLifecycleBinding({
     if (!container) return
 
     const observer = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect
+      const entry = entries[0]
+      if (!entry) return
+      const { width, height } = entry.contentRect
       rendererRef.current?.resize(width, height)
     })
     observer.observe(container)

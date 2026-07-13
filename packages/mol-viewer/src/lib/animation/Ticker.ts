@@ -22,7 +22,7 @@ export const Phase = {
   Render: 100,
 } as const
 
-type PhaseValue = (typeof Phase)[keyof typeof Phase]
+export type PhaseValue = (typeof Phase)[keyof typeof Phase]
 
 export class Ticker {
   private items: { id: string; phase: number; fn: TickFn }[] = []

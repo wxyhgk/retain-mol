@@ -8,13 +8,13 @@ import {
   setViewportGridVisible,
 } from '@/domain/viewer/viewport'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
-import { useEditorStore } from '@/domain/viewer/editorState'
 import {
-  activateWorkspaceTool,
   deriveWorkspaceTool,
+  selectWorkspacePanel,
   useWorkspaceToolStore,
-  type WorkspaceToolEffects,
 } from '@/domain/workspaceToolStore'
+import { useEditorStore } from '@/domain/viewer/editorState'
+import { activateAppWorkspaceTool } from '@/domain/workspaceToolController'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
@@ -29,29 +29,9 @@ export function ViewportToolbar() {
   )
   const [axesVisible, setAxesVisible] = useState(false)
   const [gridVisible, setGridVisible] = useState(false)
-  const activePanel = useWorkspaceToolStore(state => state.activePanel)
-  const coreTool = useEditorStore(state => state.activeTool)
-  const brushArmed = useEditorStore(state => state.brushArmed)
-  const workspaceTool = deriveWorkspaceTool(coreTool, brushArmed, activePanel)
-  const setActiveTool = useEditorStore(state => state.setActiveTool)
-  const setActiveElement = useEditorStore(state => state.setActiveElement)
-  const setAtomClickMode = useEditorStore(state => state.setAtomClickMode)
-  const setActiveFragment = useEditorStore(state => state.setActiveFragment)
-  const armBrush = useEditorStore(state => state.armBrush)
-  const disarmBrush = useEditorStore(state => state.disarmBrush)
-
-  const activateBuildTool = (tool: 'select' | 'draw') => {
-    const effects: WorkspaceToolEffects = {
-      setActiveTool,
-      setActiveElement,
-      setAtomClickMode,
-      setActiveFragment,
-      armBrush,
-      disarmBrush,
-    }
-    activateWorkspaceTool(tool, effects)
-  }
-
+  const panel = useWorkspaceToolStore(selectWorkspacePanel)
+  const editorTool = useEditorStore(state => state.activeTool)
+  const workspaceTool = deriveWorkspaceTool(panel, editorTool)
   const toggleAxes = () => {
     const next = !axesVisible
     if (setViewportAxesVisible(next)) setAxesVisible(next)
@@ -72,14 +52,14 @@ export function ViewportToolbar() {
         <ViewportButton
           label="选择"
           pressed={workspaceTool === 'select'}
-          onClick={() => activateBuildTool('select')}
+          onClick={() => activateAppWorkspaceTool('select')}
         >
           <MousePointer2 size={16} />
         </ViewportButton>
         <ViewportButton
           label="绘制"
           pressed={workspaceTool === 'draw'}
-          onClick={() => activateBuildTool('draw')}
+          onClick={() => activateAppWorkspaceTool('draw')}
         >
           <Pencil size={16} />
         </ViewportButton>

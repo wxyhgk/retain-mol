@@ -56,9 +56,10 @@ export function getAddOneHydrogensAvailabilityCommand(
   )
   if (allowedAtomIds.length > 0) return { ok: true, allowedAtomIds }
   if (atomIds.length === 0) return { ok: false, allowedAtomIds, reason: '没有选中原子' }
-  if (atomIds.length === 1) {
+  const [onlyAtomId] = atomIds
+  if (onlyAtomId) {
     return {
-      ...getAddOneHydrogenAvailabilityCommand(molecule, atomIds[0]),
+      ...getAddOneHydrogenAvailabilityCommand(molecule, onlyAtomId),
       allowedAtomIds,
     }
   }

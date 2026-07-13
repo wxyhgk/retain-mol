@@ -49,7 +49,8 @@ export function CoordinationSitePicker({
     camera.lookAt(0, 0, 0)
 
     const root = new THREE.Group()
-    root.quaternion.copy(rotationRef.current)
+    const savedRotation = rotationRef.current
+    root.quaternion.copy(savedRotation)
     scene.add(root)
 
     const styles = getComputedStyle(document.documentElement)
@@ -186,7 +187,7 @@ export function CoordinationSitePicker({
     canvas.addEventListener('pointercancel', pointerCancel)
 
     return () => {
-      rotationRef.current.copy(root.quaternion)
+      savedRotation.copy(root.quaternion)
       resizeObserver.disconnect()
       canvas.removeEventListener('pointerdown', pointerDown)
       canvas.removeEventListener('pointermove', pointerMove)

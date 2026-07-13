@@ -50,6 +50,7 @@ describe('public fragment attachment sites', () => {
     try {
       const result = attachFragmentToAtom(methane, derived, targetHydrogen.id)
       expect(result.ok).toBe(true)
+      if (result.ok === false) throw new Error(result.reason)
       expect(result.molecule.atoms.filter(atom => atom.symbol === 'C')).toHaveLength(3)
       expect(result.molecule.bonds.some(bond => bond.order === 2)).toBe(true)
     } finally {

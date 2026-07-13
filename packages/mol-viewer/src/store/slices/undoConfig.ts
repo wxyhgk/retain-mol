@@ -8,13 +8,13 @@
  * 的组装层共享，独立成模块避免两者互相 import 形成环。
  */
 
-import type { MoleculeState } from './types'
+import type { UndoableSceneState, UndoSnapshot } from '../contracts/undo'
+
+export type { UndoSnapshot } from '../contracts/undo'
 
 export const UNDO_LIMIT = 50
 
-export type UndoSnapshot = Pick<MoleculeState, 'objectsById' | 'objectOrder' | 'activeObjectId'>
-
-export function partializeForUndo(s: MoleculeState): UndoSnapshot {
+export function partializeForUndo(s: UndoableSceneState): UndoSnapshot {
   return {
     objectsById:    s.objectsById,
     objectOrder:    s.objectOrder,

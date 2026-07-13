@@ -32,7 +32,7 @@ export function fitPlane(points: readonly { x: number; y: number; z: number }[])
   // 法向 = C 的最小特征向量 = (trace·I − C) 的最大特征向量，幂迭代求解
   const t = xx + yy + zz
   if (t < 1e-12) return null   // 所有点重合
-  const B = [
+  const B: readonly [Vec3, Vec3, Vec3] = [
     [t - xx, -xy, -xz],
     [-xy, t - yy, -yz],
     [-xz, -yz, t - zz],

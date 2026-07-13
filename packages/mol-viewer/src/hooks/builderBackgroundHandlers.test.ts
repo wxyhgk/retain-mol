@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { useEditorStore } from '../store/editorStore'
 import type { Molecule } from '../lib/molecule'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import { handleBuilderBackgroundClick } from './builderBackgroundHandlers'
 
 const editorSnapshot = useEditorStore.getState()
@@ -11,7 +11,7 @@ afterEach(() => {
   useEditorStore.setState(editorSnapshot, true)
 })
 
-function makeStore(onSetMolecule: (molecule: Molecule) => void): MoleculeStoreApi {
+function makeStore(onSetMolecule: (molecule: Molecule) => void): BuilderMoleculeStoreApi {
   const molecule: Molecule = { atoms: [], bonds: [], name: 'Empty' }
   return {
     getState: () => ({
@@ -32,7 +32,7 @@ function makeStore(onSetMolecule: (molecule: Molecule) => void): MoleculeStoreAp
       selectBond: () => undefined,
       clearSelection: () => undefined,
     }),
-  } as unknown as MoleculeStoreApi
+  } as unknown as BuilderMoleculeStoreApi
 }
 
 describe('builder background handler', () => {

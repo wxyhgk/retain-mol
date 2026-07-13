@@ -1,4 +1,4 @@
-import * as THREE from 'three'
+import type { Vector3Data } from '../lib/types'
 import {
   applyBackgroundClickForIntent,
   applyBackgroundPlacement,
@@ -8,14 +8,14 @@ import {
   readBuilderHandlerSnapshot,
   readBuilderSelectionEffects,
 } from './builderHandlerContext'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 
 export function handleBuilderBackgroundClick(
-  store: MoleculeStoreApi,
-  worldPos: THREE.Vector3,
+  store: BuilderMoleculeStoreApi,
+  worldPos: Vector3Data,
   event: MouseEvent,
-  viewDirLocal?: THREE.Vector3,
+  viewDirLocal?: Vector3Data,
   editorStore: EditorStoreApi = useEditorStore,
 ): void {
   const { intent, molecule, editEffects } = readBuilderHandlerSnapshot(store, editorStore)

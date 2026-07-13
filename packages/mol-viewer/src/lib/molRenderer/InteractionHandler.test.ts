@@ -13,6 +13,14 @@ class FakeCanvas extends EventTarget {
     this.capturedPointers.add(pointerId)
   }
 
+  setPointerCapture(pointerId: number) {
+    this.capture(pointerId)
+  }
+
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 100, height: 100 }
+  }
+
   hasPointerCapture(pointerId: number): boolean {
     return this.capturedPointers.has(pointerId)
   }
@@ -20,6 +28,33 @@ class FakeCanvas extends EventTarget {
   releasePointerCapture(pointerId: number) {
     this.capturedPointers.delete(pointerId)
   }
+}
+
+function dispatchAtomPointerDown(
+  handler: InteractionHandler,
+  atomId: string,
+  pointerId = 1,
+) {
+  const object = new THREE.Object3D()
+  object.userData = { id: atomId }
+  const mutable = handler as unknown as {
+    _picker: { atomHitAt: () => { object: THREE.Object3D } }
+    handlePointerDown: (event: PointerEvent) => void
+  }
+  mutable._picker = { atomHitAt: () => ({ object }) }
+  mutable.handlePointerDown({
+    button: 0,
+    clientX: 0,
+    clientY: 0,
+    pointerId,
+    stopImmediatePropagation: () => undefined,
+  } as unknown as PointerEvent)
+}
+
+function dispatchPointerMove(handler: InteractionHandler, clientX: number, clientY = 0) {
+  ;(handler as unknown as {
+    handlePointerMove: (event: PointerEvent) => void
+  }).handlePointerMove({ clientX, clientY, shiftKey: false } as PointerEvent)
 }
 
 function createHandler() {
@@ -69,10 +104,10 @@ function queueAtomClick(
 }
 
 describe('InteractionHandler lifecycle', () => {
-  it('closes atom drag state before edit callbacks are detached', () => {
+  it('cancels atom drag state before edit callbacks are detached', () => {
     const { canvas, controls, handler } = createHandler()
     const ended: string[] = []
-    handler.onAtomDragEnd = atomId => ended.push(atomId)
+    handler.onAtomDragCancel = atomId => ended.push(atomId)
     setActiveAtomDrag(handler, canvas, 'a1', 7)
 
     handler.cancelActiveGesture()
@@ -84,16 +119,58 @@ describe('InteractionHandler lifecycle', () => {
     handler.dispose()
   })
 
-  it('closes an active atom drag during dispose', () => {
+  it('cancels an active atom drag during dispose', () => {
     const { canvas, handler } = createHandler()
     const ended: string[] = []
-    handler.onAtomDragEnd = atomId => ended.push(atomId)
+    handler.onAtomDragCancel = atomId => ended.push(atomId)
     setActiveAtomDrag(handler, canvas, 'a2', 9)
 
     handler.dispose()
 
     expect(ended).toEqual(['a2'])
     expect(canvas.hasPointerCapture(9)).toBe(false)
+  })
+})
+
+describe('InteractionHandler deferred builder sessions', () => {
+  it('does not begin bond editing until the drag threshold is crossed', () => {
+    const { handler } = createHandler()
+    const canStart = vi.fn(() => true)
+    const begin = vi.fn(() => false)
+    handler.canStartBondDrag = canStart
+    handler.onBondDragStart = begin
+
+    dispatchAtomPointerDown(handler, 'a1')
+    expect(canStart).toHaveBeenCalledWith('a1')
+    expect(begin).not.toHaveBeenCalled()
+
+    dispatchPointerMove(handler, 1)
+    expect(begin).not.toHaveBeenCalled()
+
+    dispatchPointerMove(handler, 10)
+    expect(begin).toHaveBeenCalledTimes(1)
+    expect(begin).toHaveBeenCalledWith('a1')
+    handler.dispose()
+  })
+
+  it('does not begin fragment torsion until the drag threshold is crossed', () => {
+    const { handler } = createHandler()
+    const canStart = vi.fn(() => true)
+    const begin = vi.fn(() => false)
+    handler.canStartFragmentTorsion = canStart
+    handler.onFragmentTorsionStart = begin
+
+    dispatchAtomPointerDown(handler, 'a2')
+    expect(canStart).toHaveBeenCalledWith('a2')
+    expect(begin).not.toHaveBeenCalled()
+
+    dispatchPointerMove(handler, 1)
+    expect(begin).not.toHaveBeenCalled()
+
+    dispatchPointerMove(handler, 10)
+    expect(begin).toHaveBeenCalledTimes(1)
+    expect(begin).toHaveBeenCalledWith('a2')
+    handler.dispose()
   })
 })
 

@@ -24,6 +24,11 @@ export type BondEditResult =
   | { ok: true; molecule: Molecule }
   | { ok: false; reason: string }
 
+function withBondOrder(bond: Bond, order: Bond['order']): Bond {
+  const { aromatic: _aromatic, ...plainBond } = bond
+  return { ...plainBond, order }
+}
+
 /**
  * H 槽位成键（价态完整模型下 H 就是可用的成键槽位）：
  *  - 目标是带键的 H：删除两个 H，把各自的父原子相连（闭环的标准操作）
@@ -143,12 +148,13 @@ export function cycleBondLength(mol: Molecule, bondId: string): CycleBondLengthR
     return { ok: false, reason: `${a1.symbol}–${a2.symbol} 只有单键` }
   }
   const next = orders[(orders.indexOf(bond.order) + 1) % orders.length]
+  if (next === undefined) return { ok: false, reason: '没有可用的下一键级' }
 
   // 用户显式调整键级 = 覆盖导入的 aromatic 标记
   const withOrder: Molecule = {
     ...mol,
     bonds: mol.bonds.map(b =>
-      b.id === bondId ? { ...b, order: next, aromatic: undefined } : b),
+      b.id === bondId ? withBondOrder(b, next) : b),
   }
 
   // 环判定：去掉这条键后 a2 仍能到达 a1 → 环内，只改键级

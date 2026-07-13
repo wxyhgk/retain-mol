@@ -22,12 +22,17 @@ import {
 } from '../viewport'
 
 export interface ViewerRuntime {
+  /** Release resources owned by this isolated viewer session. */
+  dispose(): void
+}
+
+/** Internal services. Public entry points expose only the opaque ViewerRuntime handle. */
+export interface ViewerRuntimeServices {
   readonly moleculeStore: MoleculeStoreApi
   readonly editorStore: EditorStoreApi
   readonly ticker: Ticker
   readonly capture: ViewportCaptureRegistry
   readonly viewport: ViewportRegistry
-  dispose(): void
 }
 
 interface ViewerRuntimeOptions {
@@ -38,6 +43,8 @@ interface ViewerRuntimeOptions {
   viewport?: ViewportRegistry
 }
 
+const runtimeServices = new WeakMap<ViewerRuntime, ViewerRuntimeServices>()
+
 function assembleViewerRuntime(options: ViewerRuntimeOptions = {}): ViewerRuntime {
   const moleculeStore = options.moleculeStore ?? createMoleculeStore()
   const editorStore = options.editorStore ?? createEditorStore(moleculeStore)
@@ -45,16 +52,30 @@ function assembleViewerRuntime(options: ViewerRuntimeOptions = {}): ViewerRuntim
   const capture = options.capture ?? createViewportCaptureRegistry()
   const viewport = options.viewport ?? createViewportRegistry()
 
-  return {
+  const services: ViewerRuntimeServices = {
     moleculeStore,
     editorStore,
     ticker,
     capture,
     viewport,
+  }
+  let disposed = false
+  const runtime: ViewerRuntime = {
     dispose() {
+      if (disposed) return
+      disposed = true
       ticker.dispose()
+      runtimeServices.delete(runtime)
     },
   }
+  runtimeServices.set(runtime, services)
+  return runtime
+}
+
+export function getViewerRuntimeServices(runtime: ViewerRuntime): ViewerRuntimeServices {
+  const services = runtimeServices.get(runtime)
+  if (!services) throw new Error('ViewerRuntime is disposed or was not created by this package')
+  return services
 }
 
 /** Create an isolated molecule editing and rendering session. */
@@ -86,4 +107,10 @@ export function ViewerRuntimeProvider({
 
 export function useViewerRuntime(): ViewerRuntime {
   return useContext(ViewerRuntimeContext)
+}
+
+/** Internal hook used by package components; intentionally absent from public subpaths. */
+export function useViewerRuntimeServices(runtimeOverride?: ViewerRuntime): ViewerRuntimeServices {
+  const contextRuntime = useViewerRuntime()
+  return getViewerRuntimeServices(runtimeOverride ?? contextRuntime)
 }

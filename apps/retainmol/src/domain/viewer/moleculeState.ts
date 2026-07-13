@@ -1,6 +1,6 @@
 export {
   selectActiveMolecule,
   selectActiveMoleculeOrEmpty,
-  splitConnectedComponents,
   useMoleculeStore,
-} from '@retainmol/mol-viewer/viewer'
+} from '@retainmol/mol-viewer/state'
+export { splitConnectedComponents } from '@retainmol/mol-viewer/graph'

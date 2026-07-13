@@ -14,12 +14,15 @@ export function routeBondClickForIntent(
   if (!intent.canBuild) {
     return { kind: 'select', multi: input.shiftKey || input.altKey }
   }
-  if (intent.fragment || input.shiftKey) {
+  if (intent.fragment) {
     return {
       kind: 'command',
       fragment: intent.fragment,
       cycleLength: input.shiftKey,
     }
+  }
+  if (input.shiftKey) {
+    return { kind: 'command', cycleLength: true }
   }
   return { kind: 'select', multi: input.altKey }
 }

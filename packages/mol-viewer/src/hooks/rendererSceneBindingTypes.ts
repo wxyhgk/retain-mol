@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import type { MolRenderer } from '../lib/molRenderer'
+import type { ThreeRendererPort } from '../lib/molRenderer'
 import type { SceneObject } from '../lib/sceneObject'
 import type { DisplayMode, Measurement, MeasureStyle, Tool } from '../lib/types'
 import type { ResolvedTheme } from '../presets'
@@ -12,7 +12,7 @@ export interface SketchPlane {
 
 export interface RendererSceneBindingOptions {
   readonly containerRef: RefObject<HTMLDivElement | null>
-  readonly rendererRef: RefObject<MolRenderer | null>
+  readonly rendererRef: RefObject<ThreeRendererPort | null>
   readonly activeTool: Tool
   readonly sceneObjects: SceneObject[]
   readonly activeObjectId: string | null

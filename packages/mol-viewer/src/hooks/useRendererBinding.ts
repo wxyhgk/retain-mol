@@ -1,5 +1,5 @@
 import { resolveRenderProfile } from '../styles'
-import { useViewerRuntime } from '../runtime/ViewerRuntime'
+import { useViewerRuntimeServices } from '../runtime/ViewerRuntime'
 import type { RendererBindingOptions } from './rendererBindingTypes'
 import { useRendererInteractionBinding } from './useRendererInteractionBinding'
 import { useRendererLifecycle } from './useRendererLifecycle'
@@ -7,7 +7,7 @@ import { useRendererSceneBinding } from './useRendererSceneBinding'
 
 /** Composes renderer lifetime, interaction callbacks and scene synchronization. */
 export function useRendererBinding(options: RendererBindingOptions) {
-  const { moleculeStore, ticker } = useViewerRuntime()
+  const { moleculeStore, ticker } = useViewerRuntimeServices()
   const rendererAdapterId = resolveRenderProfile(options.renderStyle).rendererAdapterId ?? 'three'
 
   useRendererLifecycle({

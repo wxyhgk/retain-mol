@@ -15,6 +15,10 @@ function makeAtom(symbol: string, x: number, y: number, z: number): Atom {
   return { id: genId(), symbol, x, y, z }
 }
 
+function lineAt(lines: readonly string[], index: number): string {
+  return lines[index] ?? ''
+}
+
 // ─── 格式识别 ───────────────────────────────
 
 export function detectPasteFormat(text: string): PasteFormat {
@@ -24,7 +28,7 @@ export function detectPasteFormat(text: string): PasteFormat {
 
   // MOL：前 10 行含 V2000/V3000 标记
   for (let i = 0; i < Math.min(10, lines.length); i++) {
-    if (/\bV[23]000\b/.test(lines[i])) return 'mol'
+    if (/\bV[23]000\b/.test(lineAt(lines, i))) return 'mol'
   }
 
   // GJF：顶部有 % 指令，或前 10 行有 # 路由
@@ -33,7 +37,7 @@ export function detectPasteFormat(text: string): PasteFormat {
   if (hasPercent || hasRoute) return 'gjf'
 
   // XYZ：首行是纯整数
-  const first = lines[0].trim()
+  const first = lineAt(lines, 0).trim()
   const n = parseInt(first, 10)
   if (!isNaN(n) && n > 0 && n < 100000 && String(n) === first) return 'xyz'
 
@@ -52,19 +56,19 @@ export function parseGJF(text: string): Molecule {
   let i = 0
 
   // 跳过 % 指令
-  while (i < lines.length && lines[i].trim().startsWith('%')) i++
+  while (i < lines.length && lineAt(lines, i).trim().startsWith('%')) i++
 
   // 路由段（以 # 开头，到空行结束，可跨多行）
-  if (i >= lines.length || !lines[i].trim().startsWith('#')) {
+  if (i >= lines.length || !lineAt(lines, i).trim().startsWith('#')) {
     throw new Error('GJF 缺少 # 路由行')
   }
-  while (i < lines.length && lines[i].trim() !== '') i++
+  while (i < lines.length && lineAt(lines, i).trim() !== '') i++
   i++ // 空行
 
   // 标题（到下一空行）
   const titleLines: string[] = []
-  while (i < lines.length && lines[i].trim() !== '') {
-    titleLines.push(lines[i].trim())
+  while (i < lines.length && lineAt(lines, i).trim() !== '') {
+    titleLines.push(lineAt(lines, i).trim())
     i++
   }
   i++ // 空行
@@ -75,23 +79,23 @@ export function parseGJF(text: string): Molecule {
 
   // 原子行
   const atoms: Atom[] = []
-  while (i < lines.length && lines[i].trim() !== '') {
-    const parts = lines[i].trim().split(/\s+/)
+  while (i < lines.length && lineAt(lines, i).trim() !== '') {
+    const parts = lineAt(lines, i).trim().split(/\s+/)
     // 可能格式：
     //   "C x y z"
     //   "C 0 x y z"  （0/-1/1 是 ONIOM 冻结标记）
     //   "C(Frag=1) x y z"  （片段标记）
-    let symbol = parts[0].replace(/\(.*\)$/, '') // 去掉 (Frag=...) 之类
+    let symbol = (parts[0] ?? '').replace(/\(.*\)$/, '') // 去掉 (Frag=...) 之类
     let x: number, y: number, z: number
-    if (parts.length >= 5 && /^-?[01]$/.test(parts[1])) {
-      x = parseFloat(parts[2]); y = parseFloat(parts[3]); z = parseFloat(parts[4])
+    if (parts.length >= 5 && /^-?[01]$/.test(parts[1] ?? '')) {
+      x = Number(parts[2]); y = Number(parts[3]); z = Number(parts[4])
     } else if (parts.length >= 4) {
-      x = parseFloat(parts[1]); y = parseFloat(parts[2]); z = parseFloat(parts[3])
+      x = Number(parts[1]); y = Number(parts[2]); z = Number(parts[3])
     } else { i++; continue }
 
     // 元素符号可能带原子序号（"C1" → "C"）
     const m = symbol.match(/^([A-Z][a-z]?)/)
-    if (m) symbol = m[1]
+    if (m?.[1]) symbol = m[1]
 
     if (!isNaN(x) && !isNaN(y) && !isNaN(z) && symbol) {
       atoms.push(makeAtom(symbol, x, y, z))
@@ -139,8 +143,9 @@ export function parseRawCoords(text: string): Molecule {
   for (const line of text.split(/\r?\n/)) {
     const parts = line.trim().split(/\s+/)
     if (parts.length < 4) continue
-    const symbol = parts[0]
-    const x = parseFloat(parts[1]), y = parseFloat(parts[2]), z = parseFloat(parts[3])
+    const [symbol, xToken, yToken, zToken] = parts
+    if (symbol === undefined || xToken === undefined || yToken === undefined || zToken === undefined) continue
+    const x = Number(xToken), y = Number(yToken), z = Number(zToken)
     if (/^[A-Z][a-z]?$/.test(symbol) && !isNaN(x) && !isNaN(y) && !isNaN(z)) {
       atoms.push(makeAtom(symbol, x, y, z))
     }

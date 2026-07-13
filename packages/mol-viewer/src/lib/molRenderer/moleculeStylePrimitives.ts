@@ -12,6 +12,7 @@ const IBOVIEW_DRAW_RADII: Record<string, number> = {
   Na: 2.91, Mg: 2.69, Al: 2.35, Si: 2.11, P: 2.08, S: 2.04, Cl: 1.97, Ar: 1.95,
   K: 3.69, Ca: 3.33, Fe: 2.35, Co: 2.20, Ni: 2.46, Cu: 2.25, Zn: 2.38, Br: 2.17, I: 2.61,
 }
+const IBOVIEW_DEFAULT_DRAW_RADIUS = 1.43
 
 export function elementColor(theme: ResolvedTheme, symbol: string): number {
   const hex = theme.elements[symbol]?.color ?? theme.fallbackColor
@@ -62,7 +63,7 @@ export function atomDisplayRadius(
   } else if (displayMode === 'stick' || displayMode === 'wireframe') {
     radius = r.bondRadiusStick * RENDER.stickAtomMultiplier
   } else if (profile.atomRadiusMode === 'iboview-draw-radius') {
-    radius = (IBOVIEW_DRAW_RADII[symbol] ?? IBOVIEW_DRAW_RADII.C) * (profile.atomRadiusScale ?? 0.4)
+    radius = (IBOVIEW_DRAW_RADII[symbol] ?? IBOVIEW_DEFAULT_DRAW_RADIUS) * (profile.atomRadiusScale ?? 0.4)
   } else {
     radius = el.covalentRadius * r.ballScale
   }

@@ -6,6 +6,19 @@ dist/
 **/.ipynb_checkpoints/
 *.tsbuildinfo
 packages/mol-viewer/node_modules
+packages/mol-viewer/temp/
+
+# Local credentials and private keys
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
 
 # Python
 __pycache__/

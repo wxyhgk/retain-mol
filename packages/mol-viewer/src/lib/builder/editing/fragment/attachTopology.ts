@@ -1,17 +1,17 @@
-import * as THREE from 'three'
 import type { Atom, Molecule } from '../../../molecule'
 import { newBond } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { instantiate } from './instantiate'
+import { add, applyQuat, sub, type Quat, type Vec3 } from '../../math'
 
 export interface ApplyAttachFragmentTopologyInput {
   readonly molecule: Molecule
   readonly fragment: FragmentDef
   readonly host: Atom
   readonly order: 1 | 2 | 3
-  readonly attachOrigin: THREE.Vector3
-  readonly rotation: THREE.Quaternion
-  readonly anchor: THREE.Vector3
+  readonly attachOrigin: Vec3
+  readonly rotation: Quat
+  readonly anchor: Vec3
   readonly removeAtomIds: ReadonlySet<string>
   readonly hostCoordinationSiteId?: string
 }
@@ -20,7 +20,7 @@ export function applyAttachFragmentTopology(input: ApplyAttachFragmentTopologyIn
   const { molecule, fragment, host, order, attachOrigin, rotation, anchor, removeAtomIds, hostCoordinationSiteId } = input
   const { atoms, bonds, idByIndex } = instantiate(
     fragment,
-    p => p.sub(attachOrigin).applyQuaternion(rotation).add(anchor),
+    p => add(applyQuat(sub(p, attachOrigin), rotation), anchor),
     fragment.attachHIndex,
   )
   const attachAtomId = idByIndex.get(fragment.attachIndex)

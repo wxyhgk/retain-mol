@@ -12,11 +12,11 @@ import {
   readBuilderObjectActivationEffects,
   readBuilderSelectionEffects,
 } from './builderHandlerContext'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 
 export function handleBuilderAtomClick(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   atomId: string,
   event: MouseEvent,
   editorStore: EditorStoreApi = useEditorStore,
@@ -39,7 +39,7 @@ export function handleBuilderAtomClick(
 }
 
 export function handleBuilderAtomDoubleClick(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   atomId: string,
   editorStore: EditorStoreApi = useEditorStore,
 ): void {

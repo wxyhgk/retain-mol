@@ -9,7 +9,7 @@
  */
 
 import { useRef, useMemo, useState } from 'react'
-import { MolRenderer } from '../../lib/molRenderer'
+import type { RendererPort, ThreeRendererPort } from '../../lib/molRenderer'
 import type { DisplayMode } from '../../lib/types'
 import { toolCan } from '../../config/toolCapabilities.config'
 import { useBuilder } from '../../hooks/useBuilder'
@@ -19,6 +19,7 @@ import { useCanvasPointerRouter } from '../../hooks/useCanvasPointerRouter'
 import {
   ViewerRuntimeProvider,
   useViewerRuntime,
+  useViewerRuntimeServices,
   type ViewerRuntime,
 } from '../../runtime/ViewerRuntime'
 import { MolViewerOverlays } from './MolViewerOverlays'
@@ -46,6 +47,8 @@ export interface MolViewerProps {
   style?:             React.CSSProperties
   /** Isolated state/rendering session. Omit to use the compatibility runtime. */
   runtime?:           ViewerRuntime
+  /** Receives the renderer's stable, implementation-agnostic command surface. */
+  onRendererChange?:  (renderer: RendererPort | null) => void
 }
 
 // ── 組件 ─────────────────────────────────────────────────────────────────────
@@ -74,16 +77,16 @@ function MolViewerContent({
   overlays,
   className,
   style,
+  onRendererChange,
 }: MolViewerProps) {
   const runtime = useViewerRuntime()
-  const moleculeStore = runtime.moleculeStore
-  const editorStore = runtime.editorStore
+  const { moleculeStore, editorStore } = useViewerRuntimeServices()
   const canvasRef    = useRef<HTMLCanvasElement>(null)
-  const rendererRef  = useRef<MolRenderer | null>(null)
+  const rendererRef  = useRef<ThreeRendererPort | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   // renderer 同时存一份 state：ref 赋值不触发重渲，直接把 ref.current 传给
   // overlay 会让它们在首次渲染时拿到 null 后永远挂空
-  const [renderer, setRenderer] = useState<MolRenderer | null>(null)
+  const [renderer, setRenderer] = useState<ThreeRendererPort | null>(null)
 
   // ── store 状态（逐字段 selector，避免无关变更触发整组件重渲）─────────────
   const objectsById     = moleculeStore(s => s.objectsById)
@@ -100,16 +103,21 @@ function MolViewerContent({
   const renderStyle     = editorStore(s => s.renderStyle)
 
   const sceneObjects = useMemo(
-    () => objectOrder.map(id => objectsById[id]).filter(Boolean),
+    () => objectOrder
+      .map(id => objectsById[id])
+      .filter((object): object is NonNullable<typeof object> => object !== undefined),
     [objectsById, objectOrder],
   )
 
   // ── 受控/非受控 prop ↔ store 双向同步 ────────────────────────────────────
   const { displayMode, theme } = useMolViewerSync({
-    molecule: moleculeProp, onMoleculeChange,
-    selectedAtomIds: selectedAtomIdsProp, onSelectionChange,
-    displayMode: displayModeProp, theme: themeProp,
-    showAtomLabels: showAtomLabelsProp,
+    ...(moleculeProp !== undefined ? { molecule: moleculeProp } : {}),
+    ...(onMoleculeChange !== undefined ? { onMoleculeChange } : {}),
+    ...(selectedAtomIdsProp !== undefined ? { selectedAtomIds: selectedAtomIdsProp } : {}),
+    ...(onSelectionChange !== undefined ? { onSelectionChange } : {}),
+    ...(displayModeProp !== undefined ? { displayMode: displayModeProp } : {}),
+    ...(themeProp !== undefined ? { theme: themeProp } : {}),
+    ...(showAtomLabelsProp !== undefined ? { showAtomLabels: showAtomLabelsProp } : {}),
   }, runtime)
 
   // ── 渲染器绑定（生命周期 / 事件 / 场景 / 相机 / 测量）────────────────────
@@ -122,7 +130,10 @@ function MolViewerContent({
     displayMode, renderStyle, theme, appearance,
     measurements, pendingAtomIds, measureStyle, sketchPlane,
     handlers,
-    onRendererChange: setRenderer,
+    onRendererChange: nextRenderer => {
+      setRenderer(nextRenderer)
+      onRendererChange?.(nextRenderer)
+    },
   })
 
   useViewerRuntimeBridge(renderer, gridVisibleProp)

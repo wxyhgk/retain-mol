@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import type { MolRenderer } from '../../lib/molRenderer'
+import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
 import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import {
@@ -8,12 +8,12 @@ import {
   type BondLengthEditPlan,
   type BondLengthHandle,
 } from '../../lib/builder/geometry/bondLengthHandle'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { createBondLengthEditSession } from '../../hooks/editSessionFactory'
 import type { BondLengthGizmoViewHandle } from './BondLengthGizmoView'
 
 interface Options {
-  readonly renderer: MolRenderer | null
+  readonly renderer: ThreeRendererPort | null
   readonly visible: boolean
   readonly readOnly: boolean
   readonly atomIds: readonly [string, string] | null
@@ -32,7 +32,7 @@ const MIN_LENGTH = 0.1
 const MAX_LENGTH = 10
 
 export function useBondLengthGizmoController({ renderer, visible, readOnly, atomIds }: Options) {
-  const { moleculeStore, editorStore, ticker } = useViewerRuntime()
+  const { moleculeStore, editorStore, ticker } = useViewerRuntimeServices()
   const viewRef = useRef<BondLengthGizmoViewHandle>(null)
   const dragRef = useRef<DragSession | null>(null)
   const atomId1 = atomIds?.[0] ?? null

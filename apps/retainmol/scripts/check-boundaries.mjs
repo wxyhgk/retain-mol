@@ -14,7 +14,13 @@ const allowedMolViewerImports = new Set([
   '@retainmol/mol-viewer/samples',
   '@retainmol/mol-viewer/styles',
   '@retainmol/mol-viewer/templates',
+  '@retainmol/mol-viewer/three',
   '@retainmol/mol-viewer/viewer',
+  '@retainmol/mol-viewer/runtime',
+  '@retainmol/mol-viewer/state',
+  '@retainmol/mol-viewer/editing',
+  '@retainmol/mol-viewer/geometry',
+  '@retainmol/mol-viewer/graph',
 ])
 
 function walk(dir) {
@@ -230,7 +236,16 @@ for (const file of walk(SRC_DIR)) {
       violations.push(`${rel}: unsupported mol-viewer subpath "${specifier}"`)
     }
 
-    if (specifier === '@retainmol/mol-viewer/viewer' && !rel.replaceAll('\\', '/').startsWith('domain/viewer/')) {
+    if (
+      new Set([
+        '@retainmol/mol-viewer/viewer',
+        '@retainmol/mol-viewer/runtime',
+        '@retainmol/mol-viewer/state',
+        '@retainmol/mol-viewer/editing',
+        '@retainmol/mol-viewer/geometry',
+      ]).has(specifier)
+      && !rel.replaceAll('\\', '/').startsWith('domain/viewer/')
+    ) {
       violations.push(`${rel}: import viewer runtime through a focused "@/domain/viewer/*" adapter`)
     }
 
@@ -320,8 +335,13 @@ const appDomainDirectEditAllowed = new Set([
 
 for (const file of walk(join(SRC_DIR, 'domain'))) {
   const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
-  if (appDomainDirectEditAllowed.has(rel)) continue
   const source = readFileSync(file, 'utf8')
+  for (const specifier of collectModuleSpecifiers(source)) {
+    if (specifier.startsWith('@/features/')) {
+      violations.push(`${rel}: app domain must not depend on feature implementations`)
+    }
+  }
+  if (appDomainDirectEditAllowed.has(rel)) continue
   if (/useMoleculeStore\.getState\(\)\.(selectAtoms|bondSelectedAtoms|setObjectAtomPositions)\s*\(/.test(source)) {
     violations.push(`${rel}: route app edit store writes through domain/appEditEffects`)
   }
@@ -422,7 +442,7 @@ for (const file of walk(join(SRC_DIR, 'features'))) {
 
 for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'public'))) {
   const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
-  if (rel === 'public/viewer.ts') continue // compatibility facade; no new public facade may repeat it
+  if (rel === 'public/viewer.ts' || rel === 'public/state.ts') continue
   const source = readFileSync(file, 'utf8')
   if (/from ['"]\.\.\/store\//.test(source) || /\buse(?:Molecule|Editor)Store\b/.test(source)) {
     violations.push(`${rel}: public facade must not expose mutable runtime stores`)

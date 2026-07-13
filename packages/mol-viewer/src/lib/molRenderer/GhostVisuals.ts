@@ -175,29 +175,33 @@ export class GhostVisuals {
     // 供屏幕空间拾取：记录 guide 与环平面内基
     this._guideSpec = guide
     if (guide.kind === 'ring') {
+      const axis = new THREE.Vector3(guide.axis.x, guide.axis.y, guide.axis.z)
+      const center = new THREE.Vector3(guide.center.x, guide.center.y, guide.center.z)
       const q = new THREE.Quaternion()
-        .setFromUnitVectors(new THREE.Vector3(0, 0, 1), guide.axis.clone().normalize())
+        .setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis.normalize())
       this._ringU.set(1, 0, 0).applyQuaternion(q)
       this._ringV.set(0, 1, 0).applyQuaternion(q)
-      group.add(buildDepthCuedRing(guide, this.camera, this.modelGroup))
+      group.add(buildDepthCuedRing({ center, axis, radius: guide.radius }, this.camera, this.modelGroup))
     } else {
       // 候选点：近的实、远的虚
       const camWorld = this.camera.position
       const wp = new THREE.Vector3()
       const dists = guide.positions.map(p => {
-        wp.copy(p).applyMatrix4(this.modelGroup.matrixWorld)
+        wp.set(p.x, p.y, p.z).applyMatrix4(this.modelGroup.matrixWorld)
         return wp.distanceTo(camWorld)
       })
       const dMin = Math.min(...dists), dMax = Math.max(...dists)
       guide.positions.forEach((p, i) => {
-        const t = dMax - dMin < 1e-6 ? 1 : 1 - (dists[i] - dMin) / (dMax - dMin)   // 1=最近
+        const distance = dists[i]
+        if (distance === undefined) return
+        const t = dMax - dMin < 1e-6 ? 1 : 1 - (distance - dMin) / (dMax - dMin)   // 1=最近
         const opacity = GROW_GUIDE.pointAlphaFar + (GROW_GUIDE.pointAlphaNear - GROW_GUIDE.pointAlphaFar) * t
         const geo = new THREE.SphereGeometry(GROW_GUIDE.pointRadius, GROW_GUIDE.pointSegments, GROW_GUIDE.pointSegments)
         const mat = new THREE.MeshBasicMaterial({
           color: GROW_GUIDE.color, transparent: true, opacity, depthWrite: false,
         })
         const dot = new THREE.Mesh(geo, mat)
-        dot.position.copy(p)
+        dot.position.set(p.x, p.y, p.z)
         group.add(dot)
       })
     }
@@ -246,9 +250,10 @@ export class GhostVisuals {
       let bestAngle = 0
       let bestPos: THREE.Vector3 | null = null
       const p = new THREE.Vector3()
+      const center = new THREE.Vector3(spec.center.x, spec.center.y, spec.center.z)
       for (let i = 0; i < samples; i++) {
         const a = (i / samples) * Math.PI * 2
-        p.copy(spec.center)
+        p.copy(center)
           .addScaledVector(this._ringU, Math.cos(a) * spec.radius)
           .addScaledVector(this._ringV, Math.sin(a) * spec.radius)
         const s = toScreen(p)
@@ -266,14 +271,16 @@ export class GhostVisuals {
     let bestCost = Infinity
     let bestIdx = -1
     spec.positions.forEach((pos, i) => {
-      const s = toScreen(pos)
+      const s = toScreen(new THREE.Vector3(pos.x, pos.y, pos.z))
       let cost = Math.hypot(s.x - cx, s.y - cy)
       if (this._prevPointIndex === i) cost -= GROW_GUIDE.hysteresisPx
       if (cost < bestCost) { bestCost = cost; bestIdx = i }
     })
     if (bestIdx < 0) return null
     this._prevPointIndex = bestIdx
-    return spec.positions[bestIdx].clone()
+    const best = spec.positions[bestIdx]
+    if (!best) return null
+    return new THREE.Vector3(best.x, best.y, best.z)
   }
 
   /** 拖拽结束/取消：移除全部预览视觉 */

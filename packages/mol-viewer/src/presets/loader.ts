@@ -81,8 +81,10 @@ export function resolveTheme(id: string): ResolvedTheme {
   }
 
   // 从 base 到 override 逐层 merge
+  const requestedTheme = chain.at(-1)
+  if (!requestedTheme) throw new Error(`未找到主题: ${id}`)
   const merged: ResolvedTheme = {
-    metadata: chain[chain.length - 1].metadata,
+    metadata: requestedTheme.metadata,
     scene: { backgroundColor: '#f0f4f8', highlightColor: '#00d4ff', highlightOpacity: 0.35 },
     render: { ballScale: 0.4, bondRadiusStick: 0.08, bondGap: 0.18, spacefillScale: 0.8 },
     bonds: { defaultColor: 'inherit-from-atoms' },

@@ -1,1 +1,1 @@
-export { useEditorStore } from '@retainmol/mol-viewer/viewer'
+export { useEditorStore } from '@retainmol/mol-viewer/state'

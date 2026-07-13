@@ -9,7 +9,7 @@
 
 import { useEffect, useRef } from 'react'
 import { selectActiveMolecule } from '../store/moleculeStore'
-import { useViewerRuntime, type ViewerRuntime } from '../runtime/ViewerRuntime'
+import { useViewerRuntimeServices, type ViewerRuntime } from '../runtime/ViewerRuntime'
 import { resolveTheme, type ResolvedTheme } from '../presets'
 import type { DisplayMode } from '../lib/types'
 import type { Molecule } from '../lib/molecule'
@@ -45,10 +45,7 @@ export function useMolViewerSync({
   theme: themeProp,
   showAtomLabels: showAtomLabelsProp,
 }: SyncProps, runtimeOverride?: ViewerRuntime): SyncResult {
-  const contextRuntime = useViewerRuntime()
-  const runtime = runtimeOverride ?? contextRuntime
-  const moleculeStore = runtime.moleculeStore
-  const editorStore = runtime.editorStore
+  const { moleculeStore, editorStore } = useViewerRuntimeServices(runtimeOverride)
 
   const storeDisplayMode    = editorStore(s => s.displayMode)
   const storeShowAtomLabels = editorStore(s => s.showAtomLabels)

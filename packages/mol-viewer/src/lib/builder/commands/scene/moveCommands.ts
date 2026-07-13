@@ -62,6 +62,7 @@ export interface AtomDragCommandSessionDeps {
   readonly setAtomPositions: (positions: ReadonlyMap<string, AtomPosition>) => void
   readonly startEditSession: () => void
   readonly endEditSession: () => void
+  readonly cancelEditSession: () => void
 }
 
 export class AtomDragCommandSession {
@@ -99,11 +100,18 @@ export class AtomDragCommandSession {
     this.snapshot = null
     this.deps.endEditSession()
   }
+
+  cancel(): void {
+    if (!this.snapshot) return
+    this.snapshot = null
+    this.deps.cancelEditSession()
+  }
 }
 
 export interface ObjectTransformCommandSessionDeps {
   readonly startEditSession: () => void
   readonly endEditSession: () => void
+  readonly cancelEditSession: () => void
 }
 
 export class ObjectTransformCommandSession {
@@ -125,6 +133,12 @@ export class ObjectTransformCommandSession {
     if (!this.active) return
     this.active = false
     this.deps.endEditSession()
+  }
+
+  cancel(): void {
+    if (!this.active) return
+    this.active = false
+    this.deps.cancelEditSession()
   }
 }
 
@@ -159,6 +173,10 @@ export class ObjectPositionWriteSession {
 
   end(): void {
     this.transaction.end()
+  }
+
+  cancel(): void {
+    this.transaction.cancel()
   }
 }
 

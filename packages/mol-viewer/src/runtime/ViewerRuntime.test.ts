@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { newAtom, type Molecule } from '../lib/molecule'
-import { createViewerRuntime } from './ViewerRuntime'
+import { createViewerRuntime, getViewerRuntimeServices } from './ViewerRuntime'
 
 function molecule(symbol: string): Molecule {
   return {
@@ -14,22 +14,24 @@ describe('ViewerRuntime', () => {
   it('isolates molecule, selection, and editor state between instances', () => {
     const first = createViewerRuntime()
     const second = createViewerRuntime()
+    const firstServices = getViewerRuntimeServices(first)
+    const secondServices = getViewerRuntimeServices(second)
 
-    first.moleculeStore.getState().setMolecule(molecule('N'))
-    const atomId = first.moleculeStore.getState().objectsById[
-      first.moleculeStore.getState().activeObjectId!
+    firstServices.moleculeStore.getState().setMolecule(molecule('N'))
+    const atomId = firstServices.moleculeStore.getState().objectsById[
+      firstServices.moleculeStore.getState().activeObjectId!
     ].molecule.atoms[0].id
-    first.moleculeStore.getState().selectAtom(atomId)
-    first.editorStore.getState().setActiveElement('O')
-    first.editorStore.getState().setTheme('iboview')
+    firstServices.moleculeStore.getState().selectAtom(atomId)
+    firstServices.editorStore.getState().setActiveElement('O')
+    firstServices.editorStore.getState().setTheme('iboview')
 
-    expect(first.moleculeStore.getState().selectedAtomIds.has(atomId)).toBe(true)
-    const secondObjectId = second.moleculeStore.getState().activeObjectId!
-    expect(secondObjectId).not.toBe(first.moleculeStore.getState().activeObjectId)
-    expect(second.moleculeStore.getState().objectsById[secondObjectId].molecule.atoms).toHaveLength(0)
-    expect(second.moleculeStore.getState().selectedAtomIds.size).toBe(0)
-    expect(second.editorStore.getState().activeElement).toBe('C')
-    expect(second.editorStore.getState().themeId).toBe('default')
+    expect(firstServices.moleculeStore.getState().selectedAtomIds.has(atomId)).toBe(true)
+    const secondObjectId = secondServices.moleculeStore.getState().activeObjectId!
+    expect(secondObjectId).not.toBe(firstServices.moleculeStore.getState().activeObjectId)
+    expect(secondServices.moleculeStore.getState().objectsById[secondObjectId].molecule.atoms).toHaveLength(0)
+    expect(secondServices.moleculeStore.getState().selectedAtomIds.size).toBe(0)
+    expect(secondServices.editorStore.getState().activeElement).toBe('C')
+    expect(secondServices.editorStore.getState().themeId).toBe('default')
 
     first.dispose()
     second.dispose()
@@ -38,9 +40,11 @@ describe('ViewerRuntime', () => {
   it('keeps viewport and capture registrations scoped to the runtime', () => {
     const first = createViewerRuntime()
     const second = createViewerRuntime()
-    const disposeCapture = first.capture.register(() => 'first')
+    const firstServices = getViewerRuntimeServices(first)
+    const secondServices = getViewerRuntimeServices(second)
+    const disposeCapture = firstServices.capture.register(() => 'first')
     const calls: string[] = []
-    const disposeViewport = first.viewport.register({
+    const disposeViewport = firstServices.viewport.register({
       fitViewport: () => calls.push('fit'),
       focusViewportSelection: () => undefined,
       resetViewport: () => undefined,
@@ -48,16 +52,16 @@ describe('ViewerRuntime', () => {
       setViewportGridVisible: () => undefined,
     })
 
-    expect(first.capture.capture()).toBe('first')
-    expect(second.capture.capture()).toBeNull()
-    expect(first.viewport.invoke(controller => controller.fitViewport())).toBe(true)
-    expect(second.viewport.invoke(controller => controller.fitViewport())).toBe(false)
+    expect(firstServices.capture.capture()).toBe('first')
+    expect(secondServices.capture.capture()).toBeNull()
+    expect(firstServices.viewport.invoke(controller => controller.fitViewport())).toBe(true)
+    expect(secondServices.viewport.invoke(controller => controller.fitViewport())).toBe(false)
     expect(calls).toEqual(['fit'])
 
     disposeCapture()
     disposeViewport()
-    expect(first.capture.capture()).toBeNull()
-    expect(first.viewport.invoke(controller => controller.fitViewport())).toBe(false)
+    expect(firstServices.capture.capture()).toBeNull()
+    expect(firstServices.viewport.invoke(controller => controller.fitViewport())).toBe(false)
 
     first.dispose()
     second.dispose()

@@ -23,9 +23,13 @@ export function runPlacementCommand(
   const placementResult = input.fragment
     ? runCreateFragmentPlacementCommand({
         fragment: input.fragment,
-        hybridPartner: input.hybridPartner,
         position: input.position,
-        orientation: input.orientation,
+        ...(input.hybridPartner === undefined
+          ? {}
+          : { hybridPartner: input.hybridPartner }),
+        ...(input.orientation === undefined
+          ? {}
+          : { orientation: input.orientation }),
       })
     : runAddAtomCommand(
         { name: 'Placement', atoms: [], bonds: [] },
@@ -36,8 +40,12 @@ export function runPlacementCommand(
       )
   if (!placementResult.ok || !placementResult.changed) return placementResult
   const plan = planMoleculePlacement(molecule.atoms, placementResult.molecule, {
-    avoidClashes: input.avoidClashes,
-    orientation: input.orientation,
+    ...(input.avoidClashes === undefined
+      ? {}
+      : { avoidClashes: input.avoidClashes }),
+    ...(input.orientation === undefined
+      ? {}
+      : { orientation: input.orientation }),
   })
   if (input.avoidClashes !== false && plan.score.overlapPenalty > 1e-9) {
     return editFailed('放置位置空间不足，请在更远处重试')

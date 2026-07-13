@@ -28,7 +28,7 @@ export function createGeometryEditActions({
         get,
         set,
         (mol) => runCycleBondLengthCommand(mol, id),
-        (result) => ({ moved: result.moved }),
+        (result) => result.moved === undefined ? {} : { moved: result.moved },
       )
     },
 

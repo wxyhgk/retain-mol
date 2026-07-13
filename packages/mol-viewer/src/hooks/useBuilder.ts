@@ -3,14 +3,15 @@
  * 连接 builder commands（纯编辑命令）和 Zustand store（状态）
  */
 
-import { useCallback, useEffect, useRef } from 'react'
-import * as THREE from 'three'
-import type { FragmentTorsionPreview, GrowGuideSpec } from '../lib/types'
-import { useViewerRuntime, type ViewerRuntime } from '../runtime/ViewerRuntime'
+import { useCallback, useEffect, useMemo } from 'react'
+import type { BuilderInteractionHandlers } from '../lib/interaction/contracts'
+import { useViewerRuntimeServices, type ViewerRuntime } from '../runtime/ViewerRuntime'
 import { createAtomDragEditSession } from './editSessionFactory'
 import {
   getBuilderGrowGuide,
   getBuilderGrowPreview,
+  canHandleBuilderBondDrag,
+  canHandleBuilderFragmentTorsion,
   handleBuilderAtomClick,
   handleBuilderAtomDoubleClick,
   handleBuilderBackgroundClick,
@@ -22,35 +23,12 @@ import {
   getBuilderFragmentTorsionPreview,
 } from './builderPointerHandlers'
 
-export interface BuilderHandlers {
-  onAtomClick: (atomId: string, event: MouseEvent) => void
-  onAtomDoubleClick: (atomId: string, event: MouseEvent) => void
-  onBondClick: (bondId: string, event: MouseEvent) => void
-  onBackgroundClick: (worldPos: THREE.Vector3, event: MouseEvent, viewDirLocal?: THREE.Vector3) => void
-  onAtomDragStart: (id: string) => void
-  onAtomDrag: (id: string, x: number, y: number, z: number) => void
-  onAtomDragEnd: (id: string) => void
-  onBondDragStart: (sourceId: string) => boolean
-  onBondDragEnd: (sourceId: string, targetId: string | null, dropLocal: THREE.Vector3 | null) => void
-  getGrowPreview: (sourceId: string, cursorLocal: THREE.Vector3, freeDirection: boolean)
-    => { pos: THREE.Vector3; radius: number; color: number } | null
-  getGrowGuide: (sourceId: string) => GrowGuideSpec
-  onFragmentTorsionStart: (targetId: string) => boolean
-  getFragmentTorsionPreview: (targetId: string, angleDegrees: number) => FragmentTorsionPreview | null
-  onFragmentTorsionEnd: (targetId: string, angleDegrees: number) => void
-}
+export type BuilderHandlers = BuilderInteractionHandlers
 
 export function useBuilder(runtimeOverride?: ViewerRuntime): BuilderHandlers {
-  const contextRuntime = useViewerRuntime()
-  const runtime = runtimeOverride ?? contextRuntime
-  const store = runtime.moleculeStore
-  const editorStore = runtime.editorStore
-  const atomDragSessionRef = useRef<ReturnType<typeof createAtomDragEditSession> | null>(null)
-  if (!atomDragSessionRef.current) {
-    atomDragSessionRef.current = createAtomDragEditSession(store)
-  }
-
-  useEffect(() => () => atomDragSessionRef.current?.end(), [])
+  const { moleculeStore: store, editorStore } = useViewerRuntimeServices(runtimeOverride)
+  const atomDragSession = useMemo(() => createAtomDragEditSession(store), [store])
+  useEffect(() => () => atomDragSession.cancel(), [atomDragSession])
 
   const onAtomClick = useCallback((atomId: string, event: MouseEvent) => {
     handleBuilderAtomClick(store, atomId, event, editorStore)
@@ -62,47 +40,59 @@ export function useBuilder(runtimeOverride?: ViewerRuntime): BuilderHandlers {
 
   // 空白点击由 intent 路由：构建态放置，选择态清选择，测量态提交。
   // 相机拖拽会被 InteractionHandler 的位移阈值拦截，不会误触放置。
-  const onBackgroundClick = useCallback((worldPos: THREE.Vector3, event: MouseEvent, viewDirLocal?: THREE.Vector3) => {
+  const onBackgroundClick: BuilderHandlers['onBackgroundClick'] = useCallback((worldPos, event, viewDirLocal) => {
     handleBuilderBackgroundClick(store, worldPos, event, viewDirLocal, editorStore)
   }, [store, editorStore])
 
   const onAtomDragStart = useCallback((id: string) => {
-    atomDragSessionRef.current?.start(id)
-  }, [])
+    atomDragSession.start(id)
+  }, [atomDragSession])
 
   const onAtomDrag = useCallback((id: string, x: number, y: number, z: number) => {
-    atomDragSessionRef.current?.move(id, { x, y, z })
-  }, [])
+    atomDragSession.move(id, { x, y, z })
+  }, [atomDragSession])
 
   const onAtomDragEnd = useCallback((_id: string) => {
-    atomDragSessionRef.current?.end()
-  }, [])
+    atomDragSession.end()
+  }, [atomDragSession])
+
+  const onAtomDragCancel = useCallback((_id: string) => {
+    atomDragSession.cancel()
+  }, [atomDragSession])
 
   const onAtomDoubleClick = useCallback((atomId: string, _event: MouseEvent) => {
     handleBuilderAtomDoubleClick(store, atomId, editorStore)
   }, [store, editorStore])
 
-  // 返回 true 则 InteractionHandler 进入 bond-drag 候选模式（智能指针的拖拽手势：
-  // 拖到原子=成键，拖到空白=生长新原子；位移不足时由 click 处理器接管）
+  // Pointer down only performs this pure eligibility query. Scene activation is
+  // deferred until the gesture crosses the drag threshold.
+  const canStartBondDrag = useCallback((sourceId: string): boolean => {
+    return canHandleBuilderBondDrag(store, sourceId, editorStore)
+  }, [store, editorStore])
+
   const onBondDragStart = useCallback((sourceId: string): boolean => {
     return handleBuilderBondDragStart(store, sourceId, editorStore)
   }, [store, editorStore])
 
-  const onBondDragEnd = useCallback((sourceId: string, targetId: string | null, dropLocal: THREE.Vector3 | null) => {
+  const onBondDragEnd: BuilderHandlers['onBondDragEnd'] = useCallback((sourceId, targetId, dropLocal) => {
     handleBuilderBondDragEnd(store, sourceId, targetId, dropLocal, editorStore)
   }, [store, editorStore])
 
   // 拖出生长的实时预览：返回 VSEPR 吸附后的落点和新原子外观
-  const getGrowPreview = useCallback((
-    sourceId: string, cursorLocal: THREE.Vector3, freeDirection: boolean,
-  ): { pos: THREE.Vector3; radius: number; color: number } | null => {
+  const getGrowPreview: BuilderHandlers['getGrowPreview'] = useCallback((
+    sourceId, cursorLocal, freeDirection,
+  ) => {
     return getBuilderGrowPreview(store, sourceId, cursorLocal, freeDirection, editorStore)
   }, [store, editorStore])
 
   // 拖出生长开始时的候选槽位参考几何（环 / 点）
-  const getGrowGuide = useCallback((sourceId: string): GrowGuideSpec => {
+  const getGrowGuide: BuilderHandlers['getGrowGuide'] = useCallback((sourceId) => {
     return getBuilderGrowGuide(store, sourceId, editorStore)
   }, [store, editorStore])
+
+  const canStartFragmentTorsion = useCallback((targetId: string) => (
+    canHandleBuilderFragmentTorsion(store, targetId, editorStore)
+  ), [store, editorStore])
 
   const onFragmentTorsionStart = useCallback((targetId: string) => (
     handleBuilderFragmentTorsionStart(store, targetId, editorStore)
@@ -118,8 +108,9 @@ export function useBuilder(runtimeOverride?: ViewerRuntime): BuilderHandlers {
 
   return {
     onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
-    onAtomDragStart, onAtomDrag, onAtomDragEnd,
-    onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
-    onFragmentTorsionStart, getFragmentTorsionPreview, onFragmentTorsionEnd,
+    onAtomDragStart, onAtomDrag, onAtomDragEnd, onAtomDragCancel,
+    canStartBondDrag, onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
+    canStartFragmentTorsion, onFragmentTorsionStart,
+    getFragmentTorsionPreview, onFragmentTorsionEnd,
   }
 }

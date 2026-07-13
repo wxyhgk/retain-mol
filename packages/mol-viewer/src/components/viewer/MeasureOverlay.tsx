@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef } from 'react'
-import { MolRenderer } from '../../lib/molRenderer'
+import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { MEASURE_LABEL as L } from '../../config/overlay.config'
 
 interface Props {
-  renderer: MolRenderer | null
+  renderer: ThreeRendererPort | null
 }
 
 function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
@@ -27,8 +27,7 @@ function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext
 
 export default function MeasureOverlay({ renderer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const runtime = useViewerRuntime()
-  const { moleculeStore, editorStore, ticker } = runtime
+  const { moleculeStore, editorStore, ticker } = useViewerRuntimeServices()
   const subscriptionId = useId()
 
   useEffect(() => {

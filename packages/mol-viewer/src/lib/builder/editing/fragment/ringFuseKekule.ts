@@ -24,6 +24,7 @@ export function buildRingFuseOrderOverride(
   for (let index = 0; index < ringPath.length - 1; index += 1) {
     const cur = ringPath[index]
     const next = ringPath[index + 1]
+    if (cur === undefined || next === undefined) continue
     orderOverride.set(`${Math.min(cur, next)}-${Math.max(cur, next)}`, order)
     order = order === 2 ? 1 : 2
   }
@@ -43,6 +44,7 @@ function findAlternatePath(
 
   for (let head = 0; head < queue.length; head += 1) {
     const current = queue[head]
+    if (current === undefined) break
     if (current === goal) break
     for (const next of adjacency.get(current) ?? []) {
       const isBlockedEdge = (current === blockedA && next === blockedB)

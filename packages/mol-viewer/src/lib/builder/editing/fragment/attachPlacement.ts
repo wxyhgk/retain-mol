@@ -1,16 +1,24 @@
-import * as THREE from 'three'
 import type { Molecule } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { isBetterPlacementScore, scoreMoleculePlacement } from '../../geometry/placementPlanner'
 import { SINGLE_BOND_TORSION_ANGLES } from '../../geometry/singleBondTorsion'
+import {
+  add,
+  applyQuat,
+  multiplyQuats,
+  quatFromAxisAngle,
+  sub,
+  type Quat,
+  type Vec3,
+} from '../../math'
 
 export interface AttachPlacementInput {
   readonly molecule: Molecule
   readonly fragment: FragmentDef
-  readonly attachOrigin: THREE.Vector3
-  readonly alignedRotation: THREE.Quaternion
-  readonly anchor: THREE.Vector3
-  readonly axis: THREE.Vector3
+  readonly attachOrigin: Vec3
+  readonly alignedRotation: Quat
+  readonly anchor: Vec3
+  readonly axis: Vec3
   readonly skipIndex: number
   readonly excludeAtomIds: ReadonlySet<string>
   /** Explicit single-bond roll. Undefined selects the least-clashing angle automatically. */
@@ -18,7 +26,7 @@ export interface AttachPlacementInput {
 }
 
 export interface AttachPlacementPlan {
-  readonly rotation: THREE.Quaternion
+  readonly rotation: Quat
 }
 
 export function planAttachFragmentPlacement(input: AttachPlacementInput): AttachPlacementPlan {
@@ -44,19 +52,16 @@ export function planAttachFragmentPlacement(input: AttachPlacementInput): Attach
 }
 
 function rotationAtAngle(input: AttachPlacementInput, angleRadians: number) {
-  const roll = new THREE.Quaternion().setFromAxisAngle(input.axis, angleRadians)
-  return roll.multiply(input.alignedRotation.clone())
+  const roll = quatFromAxisAngle(input.axis, angleRadians)
+  return multiplyQuats(roll, input.alignedRotation)
 }
 
-function scoreAttachRotation(input: AttachPlacementInput, rotation: THREE.Quaternion) {
+function scoreAttachRotation(input: AttachPlacementInput, rotation: Quat) {
   const candidates = input.fragment.atoms
     .map((atom, index) => {
       if (index === input.skipIndex) return null
-      const p = new THREE.Vector3(atom.x, atom.y, atom.z)
-        .sub(input.attachOrigin)
-        .applyQuaternion(rotation)
-        .add(input.anchor)
-      return { id: `${index}`, symbol: atom.symbol, x: p.x, y: p.y, z: p.z }
+      const p = add(applyQuat(sub([atom.x, atom.y, atom.z], input.attachOrigin), rotation), input.anchor)
+      return { id: `${index}`, symbol: atom.symbol, x: p[0], y: p[1], z: p[2] }
     })
     .filter((p): p is { id: string; symbol: string; x: number; y: number; z: number } => p !== null)
   return scoreMoleculePlacement(

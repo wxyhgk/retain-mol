@@ -6,27 +6,43 @@ import {
 } from './builderFragmentTorsionEffects'
 import {
   readBuilderEditSnapshot,
+  readEditableMoleculeContainingAtom,
   readBuilderHandlerSnapshot,
   readBuilderObjectActivationEffects,
 } from './builderHandlerContext'
 import { ensureEditableAtomObject } from './builderActivationEffects'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 
 export function handleBuilderFragmentTorsionStart(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
+  targetId: string,
+  editorStore: EditorStoreApi = useEditorStore,
+): boolean {
+  if (!canHandleBuilderFragmentTorsion(store, targetId, editorStore)) return false
+  if (!ensureEditableAtomObject(targetId, readBuilderObjectActivationEffects(store))) return false
+  const { intent } = readBuilderHandlerSnapshot(store, editorStore)
+  return canStartFragmentTorsion(
+    intent,
+    readBuilderEditSnapshot(store, editorStore).molecule,
+    targetId,
+  )
+}
+
+/** Pure pointer-down eligibility check. It must never activate a scene object. */
+export function canHandleBuilderFragmentTorsion(
+  store: BuilderMoleculeStoreApi,
   targetId: string,
   editorStore: EditorStoreApi = useEditorStore,
 ): boolean {
   const { intent } = readBuilderHandlerSnapshot(store, editorStore)
   if (intent.kind !== 'build-fragment' || !intent.fragment || (intent.fragment.attachOrder ?? 1) !== 1) return false
-  if (!ensureEditableAtomObject(targetId, readBuilderObjectActivationEffects(store))) return false
-  const molecule = readBuilderEditSnapshot(store, editorStore).molecule
-  return canStartFragmentTorsion(intent, molecule, targetId)
+  const molecule = readEditableMoleculeContainingAtom(store, targetId)
+  return molecule !== null && canStartFragmentTorsion(intent, molecule, targetId)
 }
 
 export function getBuilderFragmentTorsionPreview(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   targetId: string,
   angleDegrees: number,
   editorStore: EditorStoreApi = useEditorStore,
@@ -36,7 +52,7 @@ export function getBuilderFragmentTorsionPreview(
 }
 
 export function handleBuilderFragmentTorsionEnd(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   targetId: string,
   angleDegrees: number,
   editorStore: EditorStoreApi = useEditorStore,

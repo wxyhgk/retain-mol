@@ -18,7 +18,27 @@ import {
   type InteractionGestureState,
 } from './interactionGestureState'
 
-import type { FragmentTorsionPreview, GrowGuideSpec } from '../types'
+import type { GrowGuideSpec } from '../types'
+import type {
+  AtomClickHandler,
+  AtomDragEligibility,
+  AtomDragCancelHandler,
+  AtomDragEndHandler,
+  AtomDragHandler,
+  AtomDragStartHandler,
+  BackgroundClickHandler,
+  BondClickHandler,
+  BondDragEligibility,
+  BondDragEndHandler,
+  BondDragHoverHandler,
+  BondDragStartHandler,
+  FragmentTorsionEligibility,
+  FragmentTorsionEndHandler,
+  FragmentTorsionPreviewProvider,
+  FragmentTorsionStartHandler,
+  GrowGuideProvider,
+  GrowPreviewProvider,
+} from '../interaction/contracts'
 export type { GrowGuideSpec }
 
 interface PendingAtomClick {
@@ -36,35 +56,40 @@ interface PendingAtomClick {
  * 通过回调与外部通信，不持有 store 引用；预览视觉委托给 GhostVisuals。
  */
 export class InteractionHandler {
-  onAtomClick?: (id: string, event: MouseEvent) => void
-  onAtomDoubleClick?: (id: string, event: MouseEvent) => void
-  onBondClick?: (id: string, event: MouseEvent) => void
+  onAtomClick: AtomClickHandler | undefined
+  onAtomDoubleClick: AtomClickHandler | undefined
+  onBondClick: BondClickHandler | undefined
   /** viewDirLocal：相机视线方向（模型局部坐标），供放置片段时朝向相机 */
-  onBackgroundClick?: (worldPos: THREE.Vector3, event: MouseEvent, viewDirLocal?: THREE.Vector3) => void
-  onAtomDragStart?: (id: string) => void
-  onAtomDrag?: (id: string, x: number, y: number, z: number) => void
-  onAtomDragEnd?: (id: string) => void
-  canDragAtom?: (id: string) => boolean
-  /** 返回 true 表示进入 bond-drag 模式，此次 pointerdown 不再走 atomDrag / click */
-  onBondDragStart?: (sourceId: string) => boolean
+  onBackgroundClick: BackgroundClickHandler | undefined
+  onAtomDragStart: AtomDragStartHandler | undefined
+  onAtomDrag: AtomDragHandler | undefined
+  onAtomDragEnd: AtomDragEndHandler | undefined
+  onAtomDragCancel: AtomDragCancelHandler | undefined
+  canDragAtom: AtomDragEligibility | undefined
+  /** Pure pointer-down eligibility query. Must not mutate editor state. */
+  canStartBondDrag: BondDragEligibility | undefined
+  /** Called once after the pointer crosses the drag threshold. */
+  onBondDragStart: BondDragStartHandler | undefined
   /**
    * bond-drag 松手：targetId 非空 = 拖到了已有原子（成键）；
    * targetId 为空且 dropLocal 非空 = 拖到空白（在 dropLocal 处生长新原子+键）。
    * 位移小于阈值时不会触发（视为普通点击）。
    */
-  onBondDragEnd?: (sourceId: string, targetId: string | null, dropLocal: THREE.Vector3 | null) => void
-  onBondDragHover?: (targetId: string | null) => void
-  onFragmentTorsionStart?: (targetId: string) => boolean
-  getFragmentTorsionPreview?: (targetId: string, angleDegrees: number) => FragmentTorsionPreview | null
-  onFragmentTorsionEnd?: (targetId: string, angleDegrees: number) => void
+  onBondDragEnd: BondDragEndHandler | undefined
+  onBondDragHover: BondDragHoverHandler | undefined
+  /** Pure pointer-down eligibility query. Must not mutate editor state. */
+  canStartFragmentTorsion: FragmentTorsionEligibility | undefined
+  /** Called once after the pointer crosses the drag threshold. */
+  onFragmentTorsionStart: FragmentTorsionStartHandler | undefined
+  getFragmentTorsionPreview: FragmentTorsionPreviewProvider | undefined
+  onFragmentTorsionEnd: FragmentTorsionEndHandler | undefined
   /**
    * 拖出生长预览：返回新原子的落点（已做 VSEPR 吸附）与外观。
    * 返回 null 表示当前不允许生长（不画幽灵原子）。
    */
-  getGrowPreview?: (sourceId: string, cursorLocal: THREE.Vector3, freeDirection: boolean)
-    => { pos: THREE.Vector3; radius: number; color: number } | null
+  getGrowPreview: GrowPreviewProvider | undefined
   /** 拖出生长开始时调用一次，返回候选槽位参考几何（环/点），用于空间感提示 */
-  getGrowGuide?: (sourceId: string) => GrowGuideSpec
+  getGrowGuide: GrowGuideProvider | undefined
   /** 平面草图模式：非空时绘制/拖动都约束在该平面（模型局部坐标） */
   sketchPlane: { origin: THREE.Vector3; normal: THREE.Vector3 } | null = null
 
@@ -235,7 +260,7 @@ export class InteractionHandler {
     if (!hit) return
     const atomId = hit.object.userData.id as string
 
-    if (this.onFragmentTorsionStart?.(atomId)) {
+    if (this.canStartFragmentTorsion?.(atomId)) {
       this._gesture = beginFragmentPress(atomId, { x: e.clientX, y: e.clientY })
       this.controls.enabled = false
       e.stopImmediatePropagation()
@@ -247,9 +272,8 @@ export class InteractionHandler {
     // ── Bond-drag 模式（优先于原子位置拖拽）────────────────────────────────
     // 此时还不知道是点击还是拖拽：先进入候选状态，位移超过阈值才算拖拽，
     // 否则在 pointerup 放行 click（点击生长由 click 处理器负责）
-    if (this.onBondDragStart?.(atomId)) {
+    if (this.canStartBondDrag?.(atomId)) {
       this._gesture = beginBondPress(atomId, { x: e.clientX, y: e.clientY })
-      this.setGhostLineStart(atomId)
       this.controls.enabled = false
       e.stopImmediatePropagation()
       this.canvas.setPointerCapture(e.pointerId)
@@ -291,6 +315,13 @@ export class InteractionHandler {
 
     if (isFragmentGesture(this._gesture)) {
       if (this._gesture.kind === 'fragment-press') return
+      if (
+        previous.kind === 'fragment-press' &&
+        this.onFragmentTorsionStart?.(this._gesture.targetId) !== true
+      ) {
+        this.resetInteractionGesture()
+        return
+      }
       const angleDegrees = (e.clientX - this._gesture.down.x) * 1.5
       this._gesture = updateFragmentTorsionAngle(this._gesture, angleDegrees)
       if (this._fragmentPreviewFrame === null) {
@@ -312,6 +343,11 @@ export class InteractionHandler {
       if (this._gesture.kind === 'bond-press') return
       const sourceId = this._gesture.sourceId
       if (previous.kind === 'bond-press') {
+        if (this.onBondDragStart?.(sourceId) !== true) {
+          this.resetInteractionGesture()
+          return
+        }
+        this.setGhostLineStart(sourceId)
         const guide = this.getGrowGuide?.(sourceId)
         if (guide) this._ghost.showGuide(guide)
       }
@@ -351,7 +387,15 @@ export class InteractionHandler {
           const pos = this._ghost.pickOnGuide(e.clientX, e.clientY)
           if (pos) preview = { pos, radius: spec.ghostRadius, color: spec.ghostColor }
         }
-        if (!preview) preview = this.getGrowPreview?.(sourceId, cursorLocal, e.shiftKey) ?? null
+        if (!preview) {
+          const result = this.getGrowPreview?.(sourceId, cursorLocal, e.shiftKey) ?? null
+          if (result) {
+            preview = {
+              ...result,
+              pos: new THREE.Vector3(result.pos.x, result.pos.y, result.pos.z),
+            }
+          }
+        }
 
         this._gesture = updateBondDragTarget(this._gesture, null, preview?.pos ?? null)
         if (preview) {
@@ -430,12 +474,12 @@ export class InteractionHandler {
     this.cancelActiveGesture()
   }
 
-  /** Cancel before callbacks are detached so active edit sessions always close. */
+  /** Cancel before callbacks are detached so active edit sessions can roll back. */
   cancelActiveGesture() {
     this.cancelPendingAtomClick()
     this._ignoreNextNativeDoubleClick = false
     const atomId = activeAtomDragId(this._gesture)
-    if (atomId) this.onAtomDragEnd?.(atomId)
+    if (atomId) this.onAtomDragCancel?.(atomId)
     this.resetInteractionGesture()
   }
 

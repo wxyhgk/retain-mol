@@ -1,16 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   readBuilderEditSnapshot,
+  readEditableMoleculeContainingAtom,
   readBuilderObjectActivationEffects,
   readBuilderSelectionEffects,
 } from './builderHandlerContext'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import { useEditorStore } from '../store/editorStore'
 
-function makeStore(state: Record<string, unknown>): MoleculeStoreApi {
+function makeStore(state: Record<string, unknown>): BuilderMoleculeStoreApi {
   return {
     getState: () => state,
-  } as unknown as MoleculeStoreApi
+  } as unknown as BuilderMoleculeStoreApi
 }
 
 describe('builder handler context', () => {
@@ -85,5 +86,32 @@ describe('builder handler context', () => {
     expect(effects.activateObjectContainingAtom('a1')).toBe(true)
     expect(effects.activateObjectContainingBond('b1')).toBe(false)
     expect(calls).toEqual(['atom:a1', 'bond:b1'])
+  })
+
+  it('queries an editable atom host without activating it', () => {
+    const editable = {
+      atoms: [{ id: 'editable-atom', symbol: 'C', x: 0, y: 0, z: 0 }],
+      bonds: [],
+      name: 'editable',
+    }
+    const locked = {
+      atoms: [{ id: 'locked-atom', symbol: 'C', x: 0, y: 0, z: 0 }],
+      bonds: [],
+      name: 'locked',
+    }
+    const activate = vi.fn()
+    const store = makeStore({
+      objectOrder: ['locked', 'editable'],
+      objectsById: {
+        locked: { id: 'locked', molecule: locked, visible: true, locked: true },
+        editable: { id: 'editable', molecule: editable, visible: true, locked: false },
+      },
+      activateObjectContainingAtom: activate,
+    })
+
+    expect(readEditableMoleculeContainingAtom(store, 'editable-atom')).toBe(editable)
+    expect(readEditableMoleculeContainingAtom(store, 'locked-atom')).toBeNull()
+    expect(readEditableMoleculeContainingAtom(store, 'missing')).toBeNull()
+    expect(activate).not.toHaveBeenCalled()
   })
 })

@@ -39,6 +39,6 @@ export function getGrowGuideForIntent(
   return getGrowGuideCommand(molecule, {
     sourceId,
     activeElement: intent.activeElement,
-    sketchPlane: intent.sketchPlane,
+    ...(intent.sketchPlane !== undefined ? { sketchPlane: intent.sketchPlane } : {}),
   })
 }

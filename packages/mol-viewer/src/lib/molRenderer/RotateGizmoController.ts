@@ -14,7 +14,7 @@ export interface GizmoCallbacks {
   startEditSession: () => void
   endEditSession: () => void
 }
-import type { MolRenderer } from './MolRenderer'
+import type { RotateGizmoRendererPort } from './rendererPorts'
 import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../config/rotateGizmo.config'
 import { RENDER_ORDER } from '../../config/render.config'
 import { computeRingRadius, collectBondSideAtoms } from './gizmoMath'
@@ -87,7 +87,7 @@ export class RotateGizmoController {
   private suppressNextClick = false
   private raycaster = new THREE.Raycaster()
   private mouseNDC = new THREE.Vector2()
-  private originalCanDragAtom: MolRenderer['canDragAtom']
+  private originalCanDragAtom: RotateGizmoRendererPort['canDragAtom']
 
   // ── 预分配临时对象，update() / onPointerMoveDrag() 中零分配 ──────────────
   private _modelWorldQ = new THREE.Quaternion()
@@ -107,7 +107,7 @@ export class RotateGizmoController {
   private _dragRaf: number | null = null
 
   constructor(
-    private renderer: MolRenderer,
+    private renderer: RotateGizmoRendererPort,
     selectedAtomIds: Set<string>,
     selectedBondIds: Set<string>,
     private cb: GizmoCallbacks,
@@ -277,8 +277,10 @@ export class RotateGizmoController {
     this.mouseNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1
     this.raycaster.setFromCamera(this.mouseNDC, this.renderer.camera)
     const hits = this.raycaster.intersectObjects(this.rings.map(r => r.picker), false)
-    if (!hits.length) return null
-    const ringId = hits[0].object.userData.ringId as string
+    const firstHit = hits[0]
+    if (!firstHit) return null
+    const ringId = firstHit.object.userData.ringId
+    if (typeof ringId !== 'string') return null
     return this.rings.find(r => r.spec.id === ringId) ?? null
   }
 
@@ -371,7 +373,8 @@ export class RotateGizmoController {
       this._dragRel.copy(w0).sub(this.drag.pivotWorld).applyQuaternion(this._dragQ)
       this._dragNewLocal.copy(this.drag.pivotWorld).add(this._dragRel)
       this.renderer.modelGroup.worldToLocal(this._dragNewLocal)
-      const pos = this._dragPositions.get(id)!
+      const pos = this._dragPositions.get(id)
+      if (!pos) continue
       pos.x = this._dragNewLocal.x
       pos.y = this._dragNewLocal.y
       pos.z = this._dragNewLocal.z
@@ -445,6 +448,7 @@ function buildSpecs(
 
   if (selectedBondIds.size === 1) {
     const bondId = [...selectedBondIds][0]
+    if (bondId === undefined) return specs
     const bond = mol.bonds.find(b => b.id === bondId)
     if (bond) {
       const a1 = mol.atoms.find(a => a.id === bond.atomId1)

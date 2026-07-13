@@ -2,6 +2,16 @@ import type { Molecule } from '../../../molecule'
 import { resaturateAtom } from '../../editing/atomOps'
 import type { EditCommandResult } from '../shared'
 
+function withOptionalNumberProperty<
+  T extends object,
+  K extends 'charge' | 'radical',
+>(value: T, key: K, next: number): T & Partial<Record<K, number>> {
+  if (next !== 0) return { ...value, [key]: next }
+  const copy = { ...value } as T & Partial<Record<K, number>>
+  delete copy[key]
+  return copy
+}
+
 export function runSetAtomChargeCommand(
   molecule: Molecule,
   atomId: string,
@@ -11,7 +21,7 @@ export function runSetAtomChargeCommand(
   const withCharge: Molecule = {
     ...molecule,
     atoms: molecule.atoms.map(atom =>
-      atom.id === atomId ? { ...atom, charge: charge || undefined } : atom),
+      atom.id === atomId ? withOptionalNumberProperty(atom, 'charge', charge) : atom),
   }
   return { ok: true, changed: true, molecule: resaturateAtom(withCharge, atomId) }
 }
@@ -25,7 +35,7 @@ export function runSetAtomRadicalCommand(
   const withRadical: Molecule = {
     ...molecule,
     atoms: molecule.atoms.map(atom =>
-      atom.id === atomId ? { ...atom, radical: radical || undefined } : atom),
+      atom.id === atomId ? withOptionalNumberProperty(atom, 'radical', radical) : atom),
   }
   return { ok: true, changed: true, molecule: resaturateAtom(withRadical, atomId) }
 }

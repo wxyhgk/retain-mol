@@ -1,15 +1,15 @@
 import { useEffect, useId, useRef } from 'react'
 import * as THREE from 'three'
 import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
-import { MolRenderer } from '../../lib/molRenderer'
+import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { ATOM_LABEL as L } from '../../config/overlay.config'
 import { CAMERA } from '../../config/camera.config'
 import { resolveRenderProfile } from '../../styles'
 
 interface Props {
-  renderer: MolRenderer | null
+  renderer: ThreeRendererPort | null
 }
 
 function modBrightness(color: THREE.Color, amount: number): THREE.Color {
@@ -29,12 +29,12 @@ function rgba(color: THREE.Color, alpha = 1): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-function elementLabelColor(renderer: MolRenderer, symbol: string, brightness = 0): string {
+function elementLabelColor(renderer: ThreeRendererPort, symbol: string, brightness = 0): string {
   const hex = renderer.theme.elements[symbol]?.color ?? renderer.theme.fallbackColor
   return rgba(modBrightness(new THREE.Color(hex), brightness), 0.96)
 }
 
-function projectedWorldSize(renderer: MolRenderer, center: THREE.Vector3, worldSize: number, w: number, h: number): number {
+function projectedWorldSize(renderer: ThreeRendererPort, center: THREE.Vector3, worldSize: number, w: number, h: number): number {
   renderer.camera.updateMatrixWorld()
   const right = new THREE.Vector3().setFromMatrixColumn(renderer.camera.matrixWorld, 0).normalize()
   const p0 = renderer.projectToScreen(center, w, h)
@@ -48,7 +48,7 @@ function iboviewDrawRadius(symbol: string): number {
     Na: 2.91, Mg: 2.69, Al: 2.35, Si: 2.11, P: 2.08, S: 2.04, Cl: 1.97, Ar: 1.95,
     K: 3.69, Ca: 3.33, Fe: 2.35, Co: 2.20, Ni: 2.46, Cu: 2.25, Zn: 2.38, Br: 2.17, I: 2.61,
   }
-  return radii[symbol] ?? radii.C
+  return radii[symbol] ?? radii.C ?? 1.43
 }
 
 function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
@@ -70,7 +70,7 @@ function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext
 
 export default function AtomLabelOverlay({ renderer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const { moleculeStore, editorStore, ticker } = useViewerRuntime()
+  const { moleculeStore, editorStore, ticker } = useViewerRuntimeServices()
   const subscriptionId = useId()
 
   useEffect(() => {
@@ -152,6 +152,7 @@ export default function AtomLabelOverlay({ renderer }: Props) {
         if (x < -L.viewportMargin || x > w + L.viewportMargin ||
             y < -L.viewportMargin || y > h + L.viewportMargin) return
         const text = labels[i]
+        if (text === undefined) return
         if (showElementLabels) {
           const worldPos = renderer.modelGroup.localToWorld(pos.clone())
           if (renderer.renderStyle === 'iboview') {

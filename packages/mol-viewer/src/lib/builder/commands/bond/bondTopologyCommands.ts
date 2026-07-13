@@ -15,6 +15,11 @@ type BondOrder = Bond['order']
 
 const BOND_ORDERS: readonly BondOrder[] = [1, 2, 3]
 
+function withBondOrder(bond: Bond, order: BondOrder): Bond {
+  const { aromatic: _aromatic, ...plainBond } = bond
+  return { ...plainBond, order }
+}
+
 function isBondOrder(order: number): order is BondOrder {
   return BOND_ORDERS.includes(order as BondOrder)
 }
@@ -47,6 +52,7 @@ export function runCycleBondOrderCommand(
   const orders = supportedBondOrders(atom1, atom2)
   if (orders.length < 2) return editUnchanged()
   const next = orders[(orders.indexOf(bond.order) + 1) % orders.length]
+  if (next === undefined) return editUnchanged()
 
   return runSetBondOrderCommand(molecule, bondId, next)
 }
@@ -69,7 +75,7 @@ export function runSetBondOrderCommand(
   return editChanged({
     ...molecule,
     bonds: molecule.bonds.map(candidate =>
-      candidate.id === bondId ? { ...candidate, order, aromatic: undefined } : candidate),
+      candidate.id === bondId ? withBondOrder(candidate, order) : candidate),
   })
 }
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Bond, Molecule } from '../molecule'
-import { detectAromaticity } from '../builder/analysis'
+import { detectAromaticity } from '../analysis/aromaticity'
 
 /**
  * 芳香环心缓存。

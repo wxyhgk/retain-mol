@@ -16,8 +16,14 @@
     "src/public/pubchem.ts",
     "src/public/samples.ts",
     "src/public/styles.ts",
+    "src/public/three.ts",
     "src/public/templates.ts",
-    "src/public/viewer.ts"
+    "src/public/viewer.ts",
+    "src/public/runtime.ts",
+    "src/public/state.ts",
+    "src/public/editing.ts",
+    "src/public/geometry.ts",
+    "src/public/graph.ts"
   ],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

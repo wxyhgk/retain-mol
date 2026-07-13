@@ -16,7 +16,7 @@ export const RenderStyleSchema = z.union([
   z.literal('iboview'),
 ]).or(z.string().min(1))
 
-export type RenderStyle = z.infer<typeof RenderStyleSchema>
+export type RenderStyle = 'realistic' | 'publication' | 'iboview' | (string & {})
 
 export const StylePresetSchema = z.object({
   $schemaVersion: z.literal('1'),
@@ -40,7 +40,23 @@ export const StylePresetSchema = z.object({
   }
 })
 
-export type StylePreset = z.infer<typeof StylePresetSchema>
+export interface StylePreset {
+  $schemaVersion: '1'
+  kind: 'molecular-style-preset'
+  metadata: {
+    id: string
+    name: string
+    description: string
+    source?: string | undefined
+    author?: string | undefined
+    version: string
+  }
+  extends?: string | undefined
+  displayMode?: DisplayMode | undefined
+  themeId?: string | undefined
+  renderStyle?: RenderStyle | undefined
+  showAtomLabels?: boolean | undefined
+}
 
 export interface ResolvedStylePreset {
   metadata: StylePreset['metadata']

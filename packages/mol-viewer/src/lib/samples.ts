@@ -57,6 +57,7 @@ export const SAMPLE_MOLECULES: { name: string; mol: () => Molecule }[] = [
         const c = atoms[i * 2]
         const h = atoms[i * 2 + 1]
         const nextC = atoms[((i + 1) % 6) * 2]
+        if (!c || !h || !nextC) throw new Error('Invalid benzene atom layout')
         bonds.push({ ...newBond(c.id, nextC.id, 1), aromatic: true })
         bonds.push(newBond(c.id, h.id, 1))
       }

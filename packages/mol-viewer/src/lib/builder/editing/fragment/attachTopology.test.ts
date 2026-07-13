@@ -1,8 +1,8 @@
-import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { newAtom, newBond } from '../../../molecule'
 import { getFragment } from '../../fragmentLibrary'
 import { applyAttachFragmentTopology } from './attachTopology'
+import { identityQuat } from '../../math'
 
 describe('applyAttachFragmentTopology', () => {
   it('removes displaced atoms and their bonds before adding the fragment', () => {
@@ -21,9 +21,9 @@ describe('applyAttachFragmentTopology', () => {
       fragment,
       host,
       order: 1,
-      attachOrigin: new THREE.Vector3(0, 0, 0),
-      rotation: new THREE.Quaternion(),
-      anchor: new THREE.Vector3(2, 0, 0),
+      attachOrigin: [0, 0, 0],
+      rotation: identityQuat(),
+      anchor: [2, 0, 0],
       removeAtomIds: new Set([displacedH.id]),
     })
 
@@ -44,9 +44,9 @@ describe('applyAttachFragmentTopology', () => {
       fragment,
       host,
       order: 2,
-      attachOrigin: new THREE.Vector3(0, 0, 0),
-      rotation: new THREE.Quaternion(),
-      anchor: new THREE.Vector3(1.34, 0, 0),
+      attachOrigin: [0, 0, 0],
+      rotation: identityQuat(),
+      anchor: [1.34, 0, 0],
       removeAtomIds: new Set(),
     })
 

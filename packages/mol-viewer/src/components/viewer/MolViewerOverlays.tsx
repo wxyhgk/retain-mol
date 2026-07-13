@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { toolCan } from '../../config/toolCapabilities.config'
-import type { MolRenderer } from '../../lib/molRenderer'
+import type { ThreeRendererPort } from '../../lib/molRenderer'
 import type { Tool } from '../../lib/types'
 import BuilderHint from '../builder/BuilderHint'
 import AtomContextMenu from './AtomContextMenu'
@@ -12,7 +12,7 @@ import RotateGizmo from './RotateGizmo'
 import type { BoxRect } from '../../hooks/useCanvasPointerRouter'
 
 interface Props {
-  readonly renderer: MolRenderer | null
+  readonly renderer: ThreeRendererPort | null
   readonly activeTool: Tool
   readonly brushArmed: boolean
   readonly readOnly: boolean

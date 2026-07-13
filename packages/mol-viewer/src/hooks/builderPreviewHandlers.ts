@@ -1,20 +1,19 @@
-import * as THREE from 'three'
-import type { GrowGuideSpec } from '../lib/types'
+import type { GrowGuideSpec, Vector3Data } from '../lib/types'
 import {
   getGrowGuideForIntent,
   getGrowPreviewForIntent,
 } from './builderPreviewEffects'
 import { readBuilderHandlerSnapshot } from './builderHandlerContext'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 
 export function getBuilderGrowPreview(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   sourceId: string,
-  cursorLocal: THREE.Vector3,
+  cursorLocal: Vector3Data,
   freeDirection: boolean,
   editorStore: EditorStoreApi = useEditorStore,
-): { pos: THREE.Vector3; radius: number; color: number } | null {
+): ReturnType<typeof getGrowPreviewForIntent> {
   const { intent, molecule } = readBuilderHandlerSnapshot(store, editorStore)
   return getGrowPreviewForIntent(intent, molecule, {
     sourceId,
@@ -24,7 +23,7 @@ export function getBuilderGrowPreview(
 }
 
 export function getBuilderGrowGuide(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   sourceId: string,
   editorStore: EditorStoreApi = useEditorStore,
 ): GrowGuideSpec {

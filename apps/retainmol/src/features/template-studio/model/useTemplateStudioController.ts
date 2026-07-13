@@ -5,7 +5,7 @@ import {
   type MolecularTemplateDraft,
   type TemplateDraftCategory,
 } from '@retainmol/mol-viewer/templates'
-import { useEditorStore } from '@/domain/viewer/editorState'
+import { activateAppWorkspaceTool } from '@/domain/workspaceToolController'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { placeMoleculeInViewer } from '@/features/molecule-placement'
 import {
@@ -31,9 +31,7 @@ export function useTemplateStudioController() {
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
-    const editor = useEditorStore.getState()
-    editor.setActiveTool('select')
-    editor.disarmBrush()
+    activateAppWorkspaceTool('select')
     useMoleculeStore.getState().clearSelection()
   }, [])
 

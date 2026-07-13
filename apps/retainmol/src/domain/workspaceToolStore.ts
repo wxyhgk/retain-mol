@@ -38,22 +38,17 @@ export const useWorkspaceToolStore = create<WorkspaceToolState>(() => ({
   ...INITIAL_WORKSPACE_TOOL_STATE,
 }))
 
-export function workspacePanelFor(tool: WorkspaceTool): WorkspacePanel | null {
-  return tool === 'draw' || tool === 'template' ? tool : null
-}
-
 export const selectWorkspacePanel = (state: WorkspaceToolState) =>
   state.activePanel
 
 export function deriveWorkspaceTool(
-  coreTool: Tool,
-  brushArmed: boolean,
-  activePanel: WorkspacePanel | null,
+  panel: WorkspacePanel | null,
+  editorTool: Tool,
 ): WorkspaceTool {
-  if (activePanel) return activePanel
-  if (coreTool === 'move-object') return 'move'
-  if (coreTool === 'measure') return 'measure'
-  return brushArmed ? 'draw' : 'select'
+  if (panel) return panel
+  if (editorTool === 'move-object') return 'move'
+  if (editorTool === 'measure') return 'measure'
+  return 'select'
 }
 
 function applyDrawOperation(operation: DrawOperation, effects: WorkspaceToolEffects) {
@@ -91,9 +86,7 @@ export function activateWorkspaceTool(
     effects.disarmBrush()
   }
 
-  useWorkspaceToolStore.setState({
-    activePanel: workspacePanelFor(tool),
-  })
+  useWorkspaceToolStore.setState({ activePanel: tool === 'draw' || tool === 'template' ? tool : null })
 }
 
 export function activateDrawOperation(

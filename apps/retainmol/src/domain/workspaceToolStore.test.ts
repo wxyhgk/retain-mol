@@ -5,6 +5,7 @@ import {
   activateTemplateFragment,
   activateWorkspaceTool,
   closeWorkspacePanel,
+  deriveWorkspaceTool,
   resetWorkspaceToolState,
   selectWorkspacePanel,
   useWorkspaceToolStore,
@@ -56,7 +57,8 @@ describe('workspaceToolStore', () => {
         coreTool: state.coreTool,
         brushArmed: state.brushArmed,
         panel: selectWorkspacePanel(workspace),
-      }).toEqual(result)
+        workspaceTool: deriveWorkspaceTool(workspace.activePanel, state.coreTool),
+      }).toEqual({ ...result, workspaceTool: tool })
     }
   })
 

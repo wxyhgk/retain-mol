@@ -15,6 +15,14 @@ import type { Vec3 } from '../math/vec3'
 import type { SketchPlane } from './plane'
 import { isBetterClashScore, scoreClashes } from './clash'
 
+function directionAt(directions: readonly Vec3[], index: number): Vec3 {
+  const direction = directions[index]
+  if (!direction) {
+    throw new RangeError(`Missing VSEPR direction at index ${index}`)
+  }
+  return direction
+}
+
 // ── 键长 ──────────────────────────────────────────────────────────────────────
 
 export function calcBondLength(sym1: string, sym2: string): number {
@@ -96,7 +104,7 @@ export function findNextBondDir(
   if (n === 0) return [1, 0, 0]
 
   if (n === 1) {
-    const d0 = neighborDirs[0]
+    const d0 = directionAt(neighborDirs, 0)
     const perp = upwardPerp(d0)
     return normalize([
       cosθ*d0[0] + sinθ*perp[0],
@@ -106,7 +114,8 @@ export function findNextBondDir(
   }
 
   if (n === 2) {
-    const d1 = neighborDirs[0], d2 = neighborDirs[1]
+    const d1 = directionAt(neighborDirs, 0)
+    const d2 = directionAt(neighborDirs, 1)
     const sum = add(d1, d2)
 
     // sp2/linear：第三方向在同一平面内，等于 -normalize(d1+d2)
@@ -129,12 +138,12 @@ export function findNextBondDir(
 
   if (n === 3) {
     const sum = neighborDirs.reduce<Vec3>((acc, d) => add(acc, d), [0, 0, 0])
-    if (length(sum) < 0.05) return upwardPerp(neighborDirs[0])
+    if (length(sum) < 0.05) return upwardPerp(directionAt(neighborDirs, 0))
     return normalize(scale(sum, -1))
   }
 
   const sum = neighborDirs.reduce<Vec3>((acc, d) => add(acc, d), [0, 0, 0])
-  if (length(sum) < 0.05) return upwardPerp(neighborDirs[0])
+  if (length(sum) < 0.05) return upwardPerp(directionAt(neighborDirs, 0))
   return normalize(scale(sum, -1))
 }
 
@@ -160,7 +169,7 @@ export function findSnapBondDir(
 
   if (n === 1) {
     // 候选位是绕 d0 张开 bondAngle 的圆锥；取在 d0 与拖拽方向平面内的那条母线
-    const d0 = neighborDirs[0]
+    const d0 = directionAt(neighborDirs, 0)
     const p = dot(preferredDir, d0)
     const perpRaw: Vec3 = [
       preferredDir[0] - p*d0[0],
@@ -176,7 +185,8 @@ export function findSnapBondDir(
   }
 
   if (n === 2) {
-    const d1 = neighborDirs[0], d2 = neighborDirs[1]
+    const d1 = directionAt(neighborDirs, 0)
+    const d2 = directionAt(neighborDirs, 1)
     const sum = add(d1, d2)
 
     // sp2/linear：唯一候选位在同一平面内
@@ -247,11 +257,17 @@ function candidateDirsForGrow(
   }
 
   if (n === 1) {
-    return uniqueDirections([primary, ...coneCandidateDirs(neighborDirs[0], theta, preferredDir)])
+    return uniqueDirections([
+      primary,
+      ...coneCandidateDirs(directionAt(neighborDirs, 0), theta, preferredDir),
+    ])
   }
 
   if (n === 2 && geometry !== 'trigonal-planar' && geometry !== 'linear') {
-    const cands = tetrahedralCandidates(neighborDirs[0], neighborDirs[1])
+    const cands = tetrahedralCandidates(
+      directionAt(neighborDirs, 0),
+      directionAt(neighborDirs, 1),
+    )
     if (cands) return uniqueDirections([primary, cands[0], cands[1]])
   }
 
@@ -298,7 +314,11 @@ function chooseLeastClashingDirection(
   bondLength: number,
   dirs: readonly Vec3[],
 ): Vec3 {
-  let best = dirs[0]
+  const [first, ...remaining] = dirs
+  if (!first) {
+    throw new RangeError('VSEPR clash scoring requires at least one candidate direction')
+  }
+  let best = first
   let bestScore = scoreClashes([{
     symbol: newSymbol,
     x: centerAtom.x + best[0] * bondLength,
@@ -306,7 +326,7 @@ function chooseLeastClashingDirection(
     z: centerAtom.z + best[2] * bondLength,
   }], atoms, new Set([centerAtom.id]))
 
-  for (const dir of dirs.slice(1)) {
+  for (const dir of remaining) {
     const score = scoreClashes([{
       symbol: newSymbol,
       x: centerAtom.x + dir[0] * bondLength,
@@ -429,7 +449,7 @@ export function getGrowGuide(
 
   if (n === 1) {
     // 合法方向构成绕 d0 张角 θ 的圆锥
-    const d0 = neighborDirs[0]
+    const d0 = directionAt(neighborDirs, 0)
     const h = bLen * Math.cos(θrad)
     return {
       kind: 'ring',
@@ -440,7 +460,8 @@ export function getGrowGuide(
   }
 
   if (n === 2) {
-    const d1 = neighborDirs[0], d2 = neighborDirs[1]
+    const d1 = directionAt(neighborDirs, 0)
+    const d2 = directionAt(neighborDirs, 1)
     const sum = add(d1, d2)
     if (geometry !== 'trigonal-planar' && geometry !== 'linear') {
       // sp3：±法向两个对称候选位

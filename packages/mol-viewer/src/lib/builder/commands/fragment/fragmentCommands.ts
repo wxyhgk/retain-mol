@@ -18,7 +18,9 @@ export function runAttachFragmentToAtomCommand(
   input: AttachFragmentToAtomCommandInput,
 ): EditCommandResult {
   const result = attachFragmentToAtom(molecule, input.fragment, input.atomId, {
-    torsionAngleDegrees: input.torsionAngleDegrees,
+    ...(input.torsionAngleDegrees === undefined
+      ? {}
+      : { torsionAngleDegrees: input.torsionAngleDegrees }),
   })
   return result.ok === false
     ? editFailed(result.reason)

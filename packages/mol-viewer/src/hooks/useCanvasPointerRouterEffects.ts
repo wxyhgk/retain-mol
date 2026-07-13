@@ -81,18 +81,31 @@ export interface ObjectTransformLifecycleState {
   targetObjectId: string | null
 }
 
-export interface EndableEditSession {
+export interface TransformEditSession {
   readonly end: () => void
+  readonly cancel: () => void
+}
+
+function clearObjectTransformState(state: ObjectTransformLifecycleState): void {
+  state.dragging = false
+  state.fragmentIds = null
+  state.targetObjectId = null
+}
+
+export function finishObjectTransform(
+  state: ObjectTransformLifecycleState,
+  session: TransformEditSession,
+): void {
+  if (state.dragging) session.end()
+  clearObjectTransformState(state)
 }
 
 export function cancelObjectTransform(
   state: ObjectTransformLifecycleState,
-  session: EndableEditSession,
+  session: TransformEditSession,
 ): void {
-  if (state.dragging) session.end()
-  state.dragging = false
-  state.fragmentIds = null
-  state.targetObjectId = null
+  if (state.dragging) session.cancel()
+  clearObjectTransformState(state)
 }
 
 export function shouldStartBoxSelect(input: BoxSelectStartInput): boolean {

@@ -33,7 +33,7 @@ export function AppShellView({
         onOpenTemplateStudio={onOpenTemplateStudio}
         onSearchOpen={onOpenSearch}
       />
-      <PubChemSearch open={searchOpen} onClose={onCloseSearch} />
+      {searchOpen && <PubChemSearch onClose={onCloseSearch} />}
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="relative z-30 h-full w-[72px] shrink-0">

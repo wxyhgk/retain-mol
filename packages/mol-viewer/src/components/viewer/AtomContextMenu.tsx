@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
-import { MolRenderer } from '../../lib/molRenderer'
+import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { cn } from '../../lib/utils'
 import {
   commitContextAtomCharge,
@@ -10,10 +10,10 @@ import {
   commitContextAtomReplacement,
   selectContextAtomIfNeeded,
 } from './atomContextMenuEffects'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 
 interface Props {
-  renderer: MolRenderer | null
+  renderer: ThreeRendererPort | null
 }
 
 const COMMON_ELEMENTS = ['C', 'H', 'O', 'N', 'S', 'P', 'F', 'Cl', 'Br', 'I', 'Si', 'B']
@@ -21,7 +21,7 @@ const COMMON_ELEMENTS = ['C', 'H', 'O', 'N', 'S', 'P', 'F', 'Cl', 'Br', 'I', 'Si
 interface MenuState { x: number; y: number; atomId: string }
 
 export default function AtomContextMenu({ renderer }: Props) {
-  const { moleculeStore } = useViewerRuntime()
+  const { moleculeStore } = useViewerRuntimeServices()
   const [menu, setMenu]       = useState<MenuState | null>(null)
   const [showPicker, setShowPicker] = useState(false)
 

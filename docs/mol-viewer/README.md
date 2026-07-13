@@ -4,6 +4,8 @@
 
 App 层应该把它当成一个独立的分子引擎使用。App 代码应优先通过 `@retainmol/mol-viewer/*` 公开子路径导入，不要直接深挖包内部实现。
 
+多人并行开发前先阅读 `docs/architecture/collaboration-audit-2026-07-13.md`，其中列出了可并行 owner 区域、必须协调的共享热点和剩余 P1 风险。
+
 ## 目录总览
 
 ```text
@@ -26,7 +28,8 @@ packages/mol-viewer/src
 App 层和外部集成优先使用这些子路径：
 
 ```ts
-import { MolViewer, useMoleculeStore } from '@retainmol/mol-viewer/viewer'
+import { MolViewer } from '@retainmol/mol-viewer/viewer'
+import { useMoleculeStore } from '@retainmol/mol-viewer/state'
 import { newAtom, centerMolecule } from '@retainmol/mol-viewer/core'
 import { parseMol, exportSdf } from '@retainmol/mol-viewer/io'
 import { listFragments } from '@retainmol/mol-viewer/fragments'
@@ -36,15 +39,42 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 当前公开入口：
 
 - `src/public/core.ts`：分子类型、分子工具、scene object helper、元素配置。
-- `src/public/viewer.ts`：`MolViewer`、viewer/editor store、builder hook、viewer 侧命令。
+- `src/public/viewer.ts`：`MolViewer`、截图和窄视口命令，不导出 store 或 renderer 实现。
+- `src/public/runtime.ts`：不透明的 viewer 生命周期句柄和 provider；外部只能持有和释放，不能访问内部服务。
+- `src/public/state.ts`：显式的 molecule/editor mutable store 入口。
+- `src/public/editing.ts`：窄化的坐标写入事务，不导出 `useBuilder`。
+- `src/public/geometry.ts`：测量几何与当前兼容的图拓扑查询。
+- `src/public/graph.ts`：分子图连通片段和连通分量查询。
 - `src/public/io.ts`：MOL/SDF/XYZ/GJF 解析导出、几何松弛 API。
 - `src/public/fragments.ts`：片段列表和查询。
 - `src/public/styles.ts`：theme、style preset、render profile 注册和解析。
+- `src/public/three.ts`：显式依赖 Three.js 的材质工厂扩展点。
 - `src/public/samples.ts`：内置示例分子。
 - `src/public/pubchem.ts`：PubChem 查询。
 - `src/optimize.ts`：给 worker 或 App 工作流使用的优化入口。
 
 `src/index.ts` 仍然保留用于兼容旧导入方式，但新 App 代码和新文档都应该使用子路径。
+
+### 多人协作时如何选入口
+
+| 需求 | 使用入口 | 不要做 |
+| --- | --- | --- |
+| 展示分子、适配视口、截图 | `/viewer` | 从 `/viewer` 获取 mutable store 或 Three renderer |
+| 读取或修改全局 molecule/editor state | `/state` | 从其他子入口绕过显式可变边界 |
+| 执行动画或优化坐标写入 | `/editing` | 直接调用内部 transaction 或 `useBuilder` |
+| 开发纯化学和图算法 | `/core`、`/geometry`、`/graph` | 引入 React、Zustand 或 Three.js |
+| 添加主题、样式和 profile | `/styles` | 在 preset 中直接操作材质对象 |
+| 扩展 Three.js 材质 | `/three` | 把 Three.js 类型泄漏回 `/styles` 或 `/core` |
+| 读取片段、模板、配位构型 | `/fragments`、`/templates`、`/coordination` | 依赖内部 `FragmentDef` 或 registry 实现 |
+
+以下内容是包内实现，不是团队间可依赖的公共协议：
+
+- `hooks/useBuilder.ts`、`builder*Handlers.ts` 和 pointer router。
+- `ViewerRuntimeServices`、`ThreeRendererPort`、renderer adapter registry。
+- `store/slices/*`、`lib/builder/commands/*` 的领域实现文件。
+- `lib/builder/fragment/*` 的内部 model、registry 和 catalog 组装细节。
+
+跨团队能力必须先在对应 `src/public/*.ts` 中形成窄接口，再由实现层接入。不要为了临时复用新增深路径导入。
 
 ## Store 边界
 
@@ -93,7 +123,15 @@ lib/builder/
 ├── graph.ts        键和邻接图工具
 ├── queries.ts      builder 专用分子查询
 ├── valence.ts      价态计算 helper
-└── fragmentLibrary.ts
+├── fragment/
+│   ├── model.ts            稳定的片段领域模型
+│   ├── registry.ts         运行时注册与查询
+│   ├── catalog.ts          只读聚合，不定义具体片段
+│   └── catalogs/
+│       ├── organicStubs.ts 有机/杂化桩 owner
+│       ├── coordination.ts 配位片段 owner
+│       └── rings.ts        环系 owner
+└── fragmentLibrary.ts      兼容门面，不新增实现
 ```
 
 详细导航见：
@@ -109,6 +147,7 @@ lib/builder/
 - `lib/builder/editing` 只放底层算法，不直接被 App、hook 或 store action 当成交互入口调用。
 - command 返回 `EditCommandResult`、`EditCommandWithSelectionResult`、scene result 或 selection result，状态落地由 `store/slices/helpers.ts` 统一处理。
 - builder 不提供 `BuilderEngine` 聚合入口；编辑能力必须从所属 command 领域或专用纯算法模块取得。
+- Builder 生产代码禁止导入 Three.js；预览和 guide 只返回纯 tuple/DTO。
 
 `hooks/useBuilder.ts` 是 React hook 外壳；具体 pointer/click/drag 分发已经下沉到 builder adapter 文件。后续如果要改构建交互，优先看：
 
@@ -142,6 +181,13 @@ lib/molRenderer/
 └── publicationMaterials.ts         Publication/IboView 类 shader 材质
 ```
 
+Renderer contract 分两层：
+
+- `RendererPort` 是公共窄接口，只包含截图和视口 capability，不出现 Three.js 类型。
+- `ThreeRendererPort` 是包内实现接口，供 overlays、gizmo 和 pointer router 使用，不从 `public/viewer.ts` 导出。
+- renderer adapter registry 目前是包内能力，不对消费者开放；内部 adapter 必须声明 capability，并在绑定前进行运行时能力校验，禁止无校验强转。
+- 只有在 overlay、picking 和交互协议都能与 Three.js 解耦后，才考虑把 renderer adapter 注册升级成公共扩展点。
+
 规则：
 
 - `MolRenderer` 应该只做 scene-level 编排。
@@ -149,6 +195,7 @@ lib/molRenderer/
 - 材质决策应该通过 theme/render profile helper 处理，不要全局遍历 mesh 后粗暴 patch。
 - active/inactive opacity 这类 object visual state 应该传给 molecule renderer，而不是渲染后统一覆盖。
 - renderer 资源必须有明确、可预测的 `dispose()` 路径。
+- renderer 禁止反向导入 `lib/builder`；它只消费准备好的 molecule/preview DTO。
 
 ## Style 边界
 
@@ -181,6 +228,10 @@ registerTheme(theme)
 registerStylePreset(preset)
 registerRenderProfile(profile)
 ```
+
+`styles/` 是声明式层，禁止导入 `lib/molRenderer`。profile 注册不验证 Three.js
+材质工厂；具体 renderer 在组合或实际渲染时解析 `materialModel`。
+需要返回 `THREE.Material` 的插件只能从 `@retainmol/mol-viewer/three` 导入。
 
 相关文档：
 
@@ -224,33 +275,29 @@ App layer
 - 纯 builder 逻辑导入 React 或 Zustand store。
 - store action 依赖 React 组件。
 - style preset 直接修改 renderer 内部对象。
+- App 从 `/viewer` 获取 mutable store；状态必须经 `/state` 和 App 的 `domain/viewer/*` adapter。
 
 ## 当前薄弱点
 
-这些文件目前仍然偏大，后续多人协作容易冲突：
+这些区域仍然是后续多人协作的主要风险：
 
 - `src/hooks/builder*Handlers.ts`：交互 adapter 已按 atom/bond/background/preview 拆开，但模板放置仍是 commit 式。
-- `src/lib/molRenderer/MoleculeRenderer.ts`：atom rendering 和 bond rendering 仍然在同一个类里。
-- `src/lib/molRenderer/MolRenderer.ts`：scene orchestration 还管了较多 scene-level 细节。
-- `src/lib/builder/editing/fragment/ringFuse.ts` 与 `ringFuseTopology.ts`：并环主流程已经拆开，但算法仍然复杂。
+- `src/lib/molRenderer/InteractionHandler.ts`：仍混合 pointer、grow preview、torsion 等多种交互语义。
+- `src/store/slices/helpers.ts`：仍集中 command application、selection patch 和 scene patch，多团队扩展时容易冲突。
+- 根 `src/index.ts`：兼容面仍然较宽，新能力禁止默认继续堆入根入口。
 
 推荐下一步拆分顺序：
 
-1. 把模板放置从 commit 式升级为 preview/session 式。
-2. 把 `MoleculeRenderer.ts` 拆成 atom renderer、bond renderer、bond geometry helper。
-3. 把 grid/fog/light/DOF 这些 scene-level orchestration 收到更小的 renderer services 里。
-4. 逐步收窄根 `index.ts`，但保留兼容。
+1. 把 `InteractionHandler` 拆成 input/pick、gesture intent 和 preview rendering。
+2. 继续逐目录纳入 `tsconfig.strict.json`；VSEPR、renderer 和 store 必须分批修复，禁止批量 `!`。
+3. 把 `/geometry` 中保留的图拓扑兼容导出安排到下一次 breaking window 移除。
 
 ## 验证
 
 改动公开边界前，至少跑：
 
 ```bash
-npm run check:boundaries --workspace retainmol
-npm run build --workspace @retainmol/mol-viewer
-npx vitest run --project packages/mol-viewer
-npm run build --workspace retainmol
-npm test --workspace retainmol -- --run
+npm run verify
 ```
 
 如果改动会影响 App 行为，还需要在本地 Vite 端口做浏览器 smoke。当前本地开发默认应是 `5173`，除非端口被其他进程占用。

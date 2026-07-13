@@ -62,8 +62,8 @@ export function applyBackgroundPlacement(
     activeElement: intent.activeElement,
     activeFragmentId: intent.activeFragmentId,
     position,
-    sketchPlane: intent.sketchPlane,
-    viewDirection,
+    ...(intent.sketchPlane !== undefined ? { sketchPlane: intent.sketchPlane } : {}),
+    ...(viewDirection !== undefined ? { viewDirection } : {}),
   })
   return runEditCommand(molecule, (mol) => session.commit(mol, input), effects)
 }

@@ -9,7 +9,7 @@
 import type { Molecule } from '../../lib/molecule'
 import type { MolClipboard } from '../../lib/types'
 import type { SceneObject } from '../../lib/sceneObject'
-import type { UndoTransactionHandle } from './transactionController'
+import type { UndoTransactionHandle } from '../contracts/transaction'
 import type { EditCommandResult } from '../../lib/builder/commands/shared'
 
 // ── 场景 slice ──────────────────────────────────────────────────────────────

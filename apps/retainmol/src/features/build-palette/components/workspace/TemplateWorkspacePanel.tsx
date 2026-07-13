@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, ChevronRight, FlaskConical, Hexagon, Library, Upload } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ArrowLeft, ChevronRight, Hexagon, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { RuntimeTemplateSite } from '../../application/runtimeTemplateBrush'
 import { listCanvasTemplates, RING_FRAGMENTS, type CanvasTemplateSummary } from '../../domain/buildCatalog'
@@ -90,14 +90,14 @@ export function TemplateWorkspacePanel({ activeFragmentId, onPickTemplate, onPic
       </WorkspaceSection>
 
       {workspaceTemplates.length > 0 && (
-        <TemplateSection icon={<Library size={13} />} title="我的模板" templates={workspaceTemplates} onOpen={setPreviewId} />
+        <TemplateSection title="我的模板" templates={workspaceTemplates} onOpen={setPreviewId} />
       )}
-      <TemplateSection icon={<FlaskConical size={13} />} title="内置分子" templates={builtinTemplates} onOpen={setPreviewId} />
+      <TemplateSection title="内置分子" templates={builtinTemplates} onOpen={setPreviewId} />
     </div>
   )
 }
 
-function TemplateSection({ icon, title, templates, onOpen }: { icon: ReactNode; title: string; templates: readonly CanvasTemplateSummary[]; onOpen: (id: string) => void }) {
+function TemplateSection({ title, templates, onOpen }: { title: string; templates: readonly CanvasTemplateSummary[]; onOpen: (id: string) => void }) {
   return (
     <WorkspaceSection title={title} meta={String(templates.length)}>
       <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">

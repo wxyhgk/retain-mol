@@ -78,4 +78,17 @@ describe('style public registries', () => {
     expect(profile.name).toBe('Runtime Render')
     expect(profile.outline).toBe(true)
   })
+
+  it('keeps profile registration independent from renderer material factories', () => {
+    const base = resolveRenderProfile('realistic')
+    registerRenderProfile({
+      ...base,
+      id: 'test-render-declarative',
+      name: 'Declarative Render',
+      description: 'Resolved later by a renderer adapter',
+      materialModel: 'external-renderer-material',
+    })
+
+    expect(resolveRenderProfile('test-render-declarative').materialModel).toBe('external-renderer-material')
+  })
 })

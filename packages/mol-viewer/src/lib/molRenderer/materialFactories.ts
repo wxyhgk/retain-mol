@@ -25,16 +25,29 @@ export interface MaterialFactory {
 
 const factories = new Map<string, MaterialFactory>()
 
+function makePhongMaterial(color: number, displayMode?: DisplayMode): THREE.MeshPhongMaterial {
+  return new THREE.MeshPhongMaterial({
+    color,
+    shininess: RENDER.atomShininess,
+    specular: RENDER.atomSpecular,
+    wireframe: displayMode === 'wireframe',
+  })
+}
+
 function syncDefault(material: THREE.Material, color: number, profile: ResolvedRenderProfile) {
   const target = material as THREE.ShaderMaterial & { color?: THREE.Color }
-  if (target.isShaderMaterial && target.uniforms?.uHi) {
+  const hiUniform = target.uniforms?.uHi
+  const baseUniform = target.uniforms?.uBase
+  const lowUniform = target.uniforms?.uLo
+  const colorUniform = target.uniforms?.uColor
+  if (target.isShaderMaterial && hiUniform && baseUniform && lowUniform) {
     const shades = sphereShades(color)
-    target.uniforms.uHi.value = shades.hi
-    target.uniforms.uBase.value = shades.base
-    target.uniforms.uLo.value = shades.lo
-  } else if (target.isShaderMaterial && target.uniforms?.uColor) {
-    if (profile.materialModel === 'iboview-shader') target.uniforms.uColor.value.copy(iboviewShaderColor(color))
-    else target.uniforms.uColor.value.setHex(color)
+    hiUniform.value = shades.hi
+    baseUniform.value = shades.base
+    lowUniform.value = shades.lo
+  } else if (target.isShaderMaterial && colorUniform) {
+    if (profile.materialModel === 'iboview-shader') colorUniform.value.copy(iboviewShaderColor(color))
+    else colorUniform.value.setHex(color)
   } else if (target.color) {
     target.color.setHex(color)
   }
@@ -42,12 +55,7 @@ function syncDefault(material: THREE.Material, color: number, profile: ResolvedR
 
 const phongFactory: MaterialFactory = {
   id: 'phong',
-  createAtomMaterial: ({ color, displayMode }) => new THREE.MeshPhongMaterial({
-    color,
-    shininess: RENDER.atomShininess,
-    specular: RENDER.atomSpecular,
-    wireframe: displayMode === 'wireframe',
-  }),
+  createAtomMaterial: ({ color, displayMode }) => makePhongMaterial(color, displayMode),
   createBondMaterial: ({ color }) => new THREE.MeshPhongMaterial({ color, shininess: RENDER.bondShininess }),
   syncColor: syncDefault,
 }
@@ -55,7 +63,7 @@ const phongFactory: MaterialFactory = {
 const publicationFactory: MaterialFactory = {
   id: 'publication-shader',
   createAtomMaterial: ({ color, displayMode }) => displayMode === 'wireframe'
-    ? phongFactory.createAtomMaterial({ profile: {} as ResolvedRenderProfile, color, displayMode })
+    ? makePhongMaterial(color, displayMode)
     : makeSphereMat(color),
   createBondMaterial: ({ color }) => makeCylinderMat(color),
   syncColor: syncDefault,
@@ -63,10 +71,17 @@ const publicationFactory: MaterialFactory = {
 
 const iboviewFactory: MaterialFactory = {
   id: 'iboview-shader',
-  createAtomMaterial: ({ profile, color, displayMode }) => displayMode === 'wireframe'
-    ? phongFactory.createAtomMaterial({ profile, color, displayMode })
-    : makeIboViewMat(color, profile.iboviewMaterial!.atom, profile.depthCue),
-  createBondMaterial: ({ profile, color }) => makeIboViewMat(color, profile.iboviewMaterial!.bond, profile.depthCue),
+  createAtomMaterial: ({ profile, color, displayMode }) => {
+    if (displayMode === 'wireframe') return makePhongMaterial(color, displayMode)
+    const materialProfile = profile.iboviewMaterial
+    if (!materialProfile) throw new Error(`render profile "${profile.id}" is missing iboview material settings`)
+    return makeIboViewMat(color, materialProfile.atom, profile.depthCue)
+  },
+  createBondMaterial: ({ profile, color }) => {
+    const materialProfile = profile.iboviewMaterial
+    if (!materialProfile) throw new Error(`render profile "${profile.id}" is missing iboview material settings`)
+    return makeIboViewMat(color, materialProfile.bond, profile.depthCue)
+  },
   syncColor: syncDefault,
 }
 

@@ -1,12 +1,11 @@
 import type { Molecule } from './molecule'
 import { getMolecularFormula } from './chemistry'
-import type { FragmentDef } from './builder/fragmentLibrary'
 import { getElementConfig } from '../config/elements.config'
 import { maxValence, valenceUsed } from './builder/valence'
 
 export type TemplateDraftCategory = 'fragment' | 'ring' | 'functional-group' | 'molecule'
 
-interface AttachmentSiteBase {
+export interface AttachmentSiteBase {
   readonly id: string
   readonly name: string
   readonly leavingAtomIds: readonly string[]
@@ -44,6 +43,22 @@ export interface TemplateValidationIssue {
   readonly code: string
   readonly path: string
   readonly message: string
+}
+
+/** Stable output contract consumed by the fragment registry. */
+export interface CompiledTemplateFragment {
+  readonly id: string
+  readonly name: string
+  readonly short: string
+  readonly formula: string
+  readonly atoms: { symbol: string; x: number; y: number; z: number }[]
+  readonly bonds: { a: number; b: number; order: 1 | 2 | 3 }[]
+  readonly attachIndex: number
+  readonly attachHIndex: number
+  readonly attachDirection?: [number, number, number]
+  readonly attachBond?: [number, number]
+  readonly attachOrder?: 1 | 2 | 3
+  readonly group?: 'sp3' | 'sp2' | 'sp' | 'coordination' | 'ring' | 'group'
 }
 
 export function cloneTemplateMolecule(molecule: Molecule): Molecule {
@@ -254,7 +269,7 @@ function resolveAtomSiteDirection(molecule: Molecule, atomId: string): [number, 
 export function createFragmentFromTemplateSite(
   draft: MolecularTemplateDraft,
   siteId: string,
-): FragmentDef {
+): CompiledTemplateFragment {
   const site = draft.attachmentSites.find(item => item.id === siteId)
   if (!site) throw new Error(`未找到连接位点：${siteId}`)
 

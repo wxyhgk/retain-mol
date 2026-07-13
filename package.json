@@ -1,6 +1,15 @@
 {
   "name": "retainmol-workspace",
   "private": true,
+  "scripts": {
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check:boundaries": "npm run check:boundaries --workspace @retainmol/mol-viewer && npm run check:boundaries --workspace retainmol",
+    "lint": "npm run lint --workspace retainmol",
+    "typecheck": "npm run typecheck --workspace @retainmol/mol-viewer && npm run typecheck:strict --workspace @retainmol/mol-viewer && npm run build --workspace @retainmol/mol-viewer && npm run typecheck --workspace retainmol",
+    "test": "npm run test --workspace @retainmol/mol-viewer && npm test --workspace retainmol -- --run",
+    "build": "npm run build --workspace retainmol",
+    "verify": "npm run check:secrets && npm run check:boundaries && npm run lint && npm run typecheck && npm test && npm run build && npm run api:check --workspace @retainmol/mol-viewer && npm run test:pack --workspace @retainmol/mol-viewer"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"

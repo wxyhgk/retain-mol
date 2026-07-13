@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import type { MolRenderer } from '../lib/molRenderer'
+import type { ThreeRendererPort } from '../lib/molRenderer'
 import type { SceneObject } from '../lib/sceneObject'
 import type { DisplayMode, Measurement, MeasureStyle, Tool } from '../lib/types'
 import type { ResolvedTheme } from '../presets'
@@ -8,7 +8,7 @@ import type { BuilderHandlers } from './useBuilder'
 
 export interface RendererBindingRefs {
   readonly containerRef: RefObject<HTMLDivElement | null>
-  readonly rendererRef: RefObject<MolRenderer | null>
+  readonly rendererRef: RefObject<ThreeRendererPort | null>
   readonly canvasRef: RefObject<HTMLCanvasElement | null>
 }
 
@@ -29,5 +29,5 @@ export interface RendererBindingOptions extends RendererBindingRefs {
   readonly measureStyle: MeasureStyle
   readonly sketchPlane: { origin: [number, number, number]; normal: [number, number, number] } | null
   readonly handlers: BuilderHandlers
-  readonly onRendererChange?: (renderer: MolRenderer | null) => void
+  readonly onRendererChange?: (renderer: ThreeRendererPort | null) => void
 }

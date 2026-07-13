@@ -1,42 +1,39 @@
-import * as THREE from 'three'
 import { lookupBondLengthByOrder } from '../../../../config/geometry.config'
 import type { Atom } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { calcBondLength } from '../../geometry/vsepr'
+import { add, normalize, quatFromUnitVectors, scale, type Quat, type Vec3 } from '../../math'
+import { requireFragmentAtomAttachment } from './fragmentGuards'
 
 export interface AttachFragmentGeometryInput {
   readonly fragment: FragmentDef
   readonly host: Atom
-  readonly direction: THREE.Vector3
+  readonly direction: Vec3
   readonly order: 1 | 2 | 3
 }
 
 export interface AttachFragmentGeometry {
-  readonly attachOrigin: THREE.Vector3
-  readonly alignedRotation: THREE.Quaternion
-  readonly anchor: THREE.Vector3
+  readonly attachOrigin: Vec3
+  readonly alignedRotation: Quat
+  readonly anchor: Vec3
 }
 
 export function buildAttachFragmentGeometry(input: AttachFragmentGeometryInput): AttachFragmentGeometry {
-  const attachAtom = input.fragment.atoms[input.fragment.attachIndex]
-  const attachOrigin = new THREE.Vector3(attachAtom.x, attachAtom.y, attachAtom.z)
-  const attachHydrogen = input.fragment.atoms[input.fragment.attachHIndex]
-  const attachDirection = attachHydrogen
-    ? new THREE.Vector3(
-        attachHydrogen.x - attachAtom.x,
-        attachHydrogen.y - attachAtom.y,
-        attachHydrogen.z - attachAtom.z,
-      ).normalize()
-    : new THREE.Vector3(...(input.fragment.attachDirection ?? [1, 0, 0])).normalize()
+  const attachment = requireFragmentAtomAttachment(input.fragment)
+  const attachAtom = attachment.attachAtom
+  const attachOrigin: Vec3 = [attachAtom.x, attachAtom.y, attachAtom.z]
+  const attachDirection = normalize(attachment.authoredDirection)
 
-  const alignedRotation = new THREE.Quaternion().setFromUnitVectors(
+  const alignedRotation = quatFromUnitVectors(
     attachDirection,
-    input.direction.clone().negate(),
+    scale(input.direction, -1),
   )
   const bondLength = lookupBondLengthByOrder(input.host.symbol, attachAtom.symbol, input.order)
     ?? calcBondLength(input.host.symbol, attachAtom.symbol)
-  const anchor = new THREE.Vector3(input.host.x, input.host.y, input.host.z)
-    .addScaledVector(input.direction, bondLength)
+  const anchor = add(
+    [input.host.x, input.host.y, input.host.z],
+    scale(input.direction, bondLength),
+  )
 
   return { attachOrigin, alignedRotation, anchor }
 }

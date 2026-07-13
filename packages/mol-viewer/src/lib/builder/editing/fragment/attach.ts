@@ -6,6 +6,8 @@ import { planAttachFragmentPlacement } from './attachPlacement'
 import { resolveAttachFragmentTarget } from './attachTarget'
 import { buildAttachFragmentGeometry } from './attachGeometry'
 import { applyAttachFragmentTopology } from './attachTopology'
+import { maxValence, valenceUsed } from '../../valence'
+import { resolveFragmentAtomAttachment } from './fragmentGuards'
 
 /** 点原子连接片段：点 H 替换之；点不饱和重原子沿 VSEPR 方向生长 */
 export function attachFragmentToAtom(
@@ -14,6 +16,8 @@ export function attachFragmentToAtom(
   targetAtomId: string,
   options: { torsionAngleDegrees?: number } = {},
 ): AttachResult {
+  const fragmentAttachment = resolveFragmentAtomAttachment(frag)
+  if (fragmentAttachment.ok === false) return { ok: false, reason: fragmentAttachment.reason }
   const requestedOrder = frag.attachOrder ?? 1
   const target = resolveAttachFragmentTarget(mol, targetAtomId, requestedOrder)
   if (target.ok === false) return { ok: false, reason: target.reason }
@@ -35,23 +39,31 @@ export function attachFragmentToAtom(
     alignedRotation: geometry.alignedRotation,
     anchor: geometry.anchor,
     axis: target.direction,
-    skipIndex: frag.attachHIndex,
+    skipIndex: fragmentAttachment.value.attachHydrogenIndex ?? -1,
     excludeAtomIds: new Set([target.host.id, ...target.removeHIds]),
-    torsionAngleDegrees: order === 1 ? options.torsionAngleDegrees : undefined,
+    ...(order === 1 && options.torsionAngleDegrees !== undefined
+      ? { torsionAngleDegrees: options.torsionAngleDegrees }
+      : {}),
   })
 
-  return {
-    ok: true,
-    molecule: applyAttachFragmentTopology({
-      molecule: mol,
-      fragment: frag,
-      host: target.host,
-      order,
-      attachOrigin: geometry.attachOrigin,
-      rotation: plan.rotation,
-      anchor: geometry.anchor,
-      removeAtomIds: target.removeHIds,
-      hostCoordinationSiteId: target.hostCoordinationSiteId,
-    }),
+  const molecule = applyAttachFragmentTopology({
+    molecule: mol,
+    fragment: frag,
+    host: target.host,
+    order,
+    attachOrigin: geometry.attachOrigin,
+    rotation: plan.rotation,
+    anchor: geometry.anchor,
+    removeAtomIds: target.removeHIds,
+    ...(target.hostCoordinationSiteId !== undefined
+      ? { hostCoordinationSiteId: target.hostCoordinationSiteId }
+      : {}),
+  })
+  const overValent = molecule.atoms.find(atom => (
+    valenceUsed(molecule, atom.id) > maxValence(atom) + 1e-6
+  ))
+  if (overValent) {
+    return { ok: false, reason: `${overValent.symbol} 连接后超过允许价态` }
   }
+  return { ok: true, molecule }
 }

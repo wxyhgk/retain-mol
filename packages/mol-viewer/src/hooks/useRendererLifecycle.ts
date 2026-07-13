@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { Ticker } from '../lib/animation'
-import { resolveRendererAdapter } from '../lib/molRenderer/rendererAdapters'
+import { createThreeRenderer } from '../lib/molRenderer/rendererAdapters'
 import type { RendererBindingOptions, RendererBindingRefs } from './rendererBindingTypes'
 import type { BuilderHandlers } from './useBuilder'
 
@@ -23,7 +23,7 @@ export function useRendererLifecycle({
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const renderer = resolveRendererAdapter(rendererAdapterId).create(canvas, ticker)
+    const renderer = createThreeRenderer(rendererAdapterId, canvas, ticker)
     rendererRef.current = renderer
     renderer.onAtomClick = initialHandlers.onAtomClick
     renderer.onBondClick = initialHandlers.onBondClick

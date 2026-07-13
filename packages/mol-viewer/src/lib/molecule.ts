@@ -6,19 +6,21 @@ export type { Atom, Bond, Molecule }
 
 export function parseXYZ(text: string): Molecule {
   const lines = text.trim().split('\n')
-  const count = parseInt(lines[0].trim())
+  const count = parseInt(lines[0]?.trim() ?? '0')
   const name = lines[1]?.trim() || 'molecule'
   const atoms: Atom[] = []
 
   for (let i = 2; i < 2 + count && i < lines.length; i++) {
-    const parts = lines[i].trim().split(/\s+/)
+    const parts = lines[i]?.trim().split(/\s+/) ?? []
     if (parts.length >= 4) {
+      const [symbol, x, y, z] = parts
+      if (symbol === undefined || x === undefined || y === undefined || z === undefined) continue
       atoms.push({
         id: genId(),
-        symbol: parts[0],
-        x: parseFloat(parts[1]),
-        y: parseFloat(parts[2]),
-        z: parseFloat(parts[3]),
+        symbol,
+        x: parseFloat(x),
+        y: parseFloat(y),
+        z: parseFloat(z),
       })
     }
   }
@@ -55,6 +57,7 @@ export function inferBonds(atoms: readonly Atom[]): Bond[] {
   for (let i = 0; i < atoms.length; i++) {
     for (let j = i + 1; j < atoms.length; j++) {
       const a = atoms[i], b = atoms[j]
+      if (a === undefined || b === undefined) continue
       const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
       const r1 = getElementConfig(a.symbol).covalentRadius

@@ -46,8 +46,39 @@ export const ThemeSchema = z.object({
   elements: z.record(z.string(), ElementStyleSchema).default({}),
 })
 
-export type Theme = z.infer<typeof ThemeSchema>
-export type ElementStyle = z.infer<typeof ElementStyleSchema>
+export interface ElementStyle {
+  color: string
+}
+
+export interface Theme {
+  $schemaVersion: '1'
+  kind: 'theme'
+  metadata: {
+    id: string
+    name: string
+    description: string
+    source?: string | undefined
+    author?: string | undefined
+    version: string
+  }
+  extends?: string | undefined
+  scene?: {
+    backgroundColor?: string | undefined
+    highlightColor?: string | undefined
+    highlightOpacity?: number | undefined
+  } | undefined
+  render?: {
+    ballScale?: number | undefined
+    bondRadiusStick?: number | undefined
+    bondGap?: number | undefined
+    spacefillScale?: number | undefined
+  } | undefined
+  bonds?: {
+    defaultColor?: 'inherit-from-atoms' | string | undefined
+  } | undefined
+  fallbackColor?: string | undefined
+  elements: Record<string, ElementStyle>
+}
 
 // ─── 合并后的"解析态"主题（所有字段已填，读起来不用 ?.） ──
 export interface ResolvedTheme {

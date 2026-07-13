@@ -62,10 +62,12 @@ export function resolveBuilderIntent(snapshot: BuilderIntentSnapshot): BuilderIn
     activeElement: snapshot.activeElement,
     atomClickMode: snapshot.atomClickMode,
     activeFragmentId: snapshot.activeFragmentId,
-    fragment,
+    ...(fragment === undefined ? {} : { fragment }),
     brushArmed: snapshot.brushArmed,
     canEdit,
     canBuild,
-    sketchPlane: snapshot.sketchPlane,
+    ...(snapshot.sketchPlane === undefined
+      ? {}
+      : { sketchPlane: snapshot.sketchPlane }),
   }
 }

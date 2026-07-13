@@ -19,9 +19,9 @@ describe('resolveAttachFragmentTarget', () => {
     if (!result.ok) return
     expect(result.host).toBe(c)
     expect([...result.removeHIds]).toEqual([h.id])
-    expect(result.direction.x).toBeCloseTo(1)
-    expect(result.direction.y).toBeCloseTo(0)
-    expect(result.direction.z).toBeCloseTo(0)
+    expect(result.direction[0]).toBeCloseTo(1)
+    expect(result.direction[1]).toBeCloseTo(0)
+    expect(result.direction[2]).toBeCloseTo(0)
   })
 
   it('rejects a saturated heavy atom target without forcing hydrogen edits', () => {

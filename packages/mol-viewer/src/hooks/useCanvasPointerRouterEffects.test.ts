@@ -3,6 +3,7 @@ import { newAtom } from '../lib/molecule'
 import {
   applyObjectTransformResult,
   cancelObjectTransform,
+  finishObjectTransform,
   collectBoxSelectedAtomIds,
   commitBoxSelect,
   commitObjectPointerTransform,
@@ -270,16 +271,37 @@ describe('canvas pointer router effects', () => {
       fragmentIds: new Set(['a1']),
       targetObjectId: 'obj-1',
     }
-    const session = { end: () => calls.push('end') }
+    const session = {
+      end: () => calls.push('end'),
+      cancel: () => calls.push('cancel'),
+    }
 
     cancelObjectTransform(state, session)
     cancelObjectTransform(state, session)
 
-    expect(calls).toEqual(['end'])
+    expect(calls).toEqual(['cancel'])
     expect(state).toEqual({
       dragging: false,
       fragmentIds: null,
       targetObjectId: null,
     })
+  })
+
+  it('commits a completed object transform exactly once', () => {
+    const calls: string[] = []
+    const state = {
+      dragging: true,
+      fragmentIds: new Set(['a1']),
+      targetObjectId: 'obj-1',
+    }
+    const session = {
+      end: () => calls.push('end'),
+      cancel: () => calls.push('cancel'),
+    }
+
+    finishObjectTransform(state, session)
+    finishObjectTransform(state, session)
+
+    expect(calls).toEqual(['end'])
   })
 })

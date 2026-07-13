@@ -40,7 +40,11 @@ export function buildDepthCuedRing(
     if (d > dMax) dMax = d
   }
   const range = Math.max(dMax - dMin, 1e-6)
-  for (let i = 0; i < segs; i++) nearness[i] = 1 - (nearness[i] - dMin) / range
+  for (let i = 0; i < segs; i++) {
+    const distance = nearness[i]
+    if (distance === undefined) continue
+    nearness[i] = 1 - (distance - dMin) / range
+  }
 
   // 生成变径圆管 + RGBA 顶点色
   const positions: number[] = []
@@ -49,6 +53,7 @@ export function buildDepthCuedRing(
   const base = new THREE.Color(GROW_GUIDE.color)
   for (let i = 0; i <= segs; i++) {
     const t = nearness[i % segs]
+    if (t === undefined) continue
     const a = (i / segs) * Math.PI * 2
     const rT = GROW_GUIDE.ringTubeFar + (GROW_GUIDE.ringTubeNear - GROW_GUIDE.ringTubeFar) * t
     const alpha = GROW_GUIDE.ringAlphaFar + (GROW_GUIDE.ringAlphaNear - GROW_GUIDE.ringAlphaFar) * t

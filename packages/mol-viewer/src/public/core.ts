@@ -13,6 +13,11 @@ export type { SceneObject } from '../lib/sceneObject'
 export { createSceneObject } from '../lib/sceneObject'
 
 export type {
+  ClipboardAtom,
+  ClipboardBond,
+  CoordinationBondOrder,
+  CoordinationSite,
+  CoordinationSiteAssignment,
   DisplayMode,
   Tool,
   MeasureType,
@@ -25,4 +30,5 @@ export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '../lib/types'
 export { getElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from '../config/elements.config'
 export type { ElementConfig, Hybridization } from '../config/elements.config'
 export { calculateMolecularWeight, getMolecularFormula } from '../lib/chemistry'
+export type { ElementLike } from '../lib/chemistry'
 export { inferHybridization } from './hybridization'

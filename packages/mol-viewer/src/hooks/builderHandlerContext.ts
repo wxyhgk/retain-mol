@@ -4,7 +4,7 @@ import type { Molecule } from '../lib/molecule'
 import type { BuilderIntent } from '../lib/builder/commands/interaction'
 import type { EditCommandEffects } from './builderEditCommandEffects'
 import { readBuilderIntent } from './builderIntentState'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import { createEditUseCaseExecutor } from '../lib/builder/application/EditUseCaseExecutor'
 import { editChanged } from '../lib/builder/commands/shared'
 
@@ -40,7 +40,7 @@ export interface BuilderObjectActivationEffects {
 }
 
 export function readBuilderHandlerSnapshot(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   editorStore: EditorStoreApi = useEditorStore,
 ): BuilderHandlerSnapshot {
   return {
@@ -50,7 +50,7 @@ export function readBuilderHandlerSnapshot(
 }
 
 export function readBuilderEditSnapshot(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   editorStore: EditorStoreApi = useEditorStore,
 ): BuilderEditSnapshot {
   const state = store.getState()
@@ -80,7 +80,7 @@ export function readBuilderEditSnapshot(
   }
 }
 
-export function readBuilderSelectionEffects(store: MoleculeStoreApi): BuilderSelectionEffects {
+export function readBuilderSelectionEffects(store: BuilderMoleculeStoreApi): BuilderSelectionEffects {
   const state = store.getState()
   return {
     selectAtom: (atomId, append) => state.selectAtom(atomId, append),
@@ -90,12 +90,30 @@ export function readBuilderSelectionEffects(store: MoleculeStoreApi): BuilderSel
   }
 }
 
-export function readBuilderObjectActivationEffects(store: MoleculeStoreApi): BuilderObjectActivationEffects {
+export function readBuilderObjectActivationEffects(store: BuilderMoleculeStoreApi): BuilderObjectActivationEffects {
   const state = store.getState()
   return {
     activateObjectContainingAtom: state.activateObjectContainingAtom,
     activateObjectContainingBond: state.activateObjectContainingBond,
   }
+}
+
+/**
+ * Pure editability query used while a pointer gesture is still only a candidate.
+ * It mirrors scene activation ordering and guards without changing activeObjectId.
+ */
+export function readEditableMoleculeContainingAtom(
+  store: BuilderMoleculeStoreApi,
+  atomId: string,
+): Molecule | null {
+  const state = store.getState()
+  for (const objectId of state.objectOrder) {
+    const object = state.objectsById[objectId]
+    if (!object || !object.molecule.atoms.some(atom => atom.id === atomId)) continue
+    if (object.visible === false || object.locked === true) return null
+    return object.molecule
+  }
+  return null
 }
 
 export function readBuilderEditorEffects(

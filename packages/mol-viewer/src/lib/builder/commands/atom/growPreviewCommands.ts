@@ -1,7 +1,6 @@
-import * as THREE from 'three'
 import { getElementConfig } from '../../../../config/elements.config'
 import { RENDER } from '../../../../config/render.config'
-import type { GrowGuideSpec } from '../../../types'
+import type { GrowGuideSpec, Vector3Data } from '../../../types'
 import type { Molecule } from '../../../molecule'
 import { resolveHSlotGrowth } from '../../editing/atomOps'
 import { ringPlaneIntersection } from '../../geometry/plane'
@@ -16,7 +15,7 @@ export interface GrowPreviewCommandInput {
 }
 
 export interface GrowPreviewResult {
-  readonly pos: THREE.Vector3
+  readonly pos: Vector3Data
   readonly radius: number
   readonly color: number
 }
@@ -34,7 +33,7 @@ export function getGrowPreviewCommand(
     const position = resolveHSlotGrowth(molecule, input.sourceId, input.activeElement)
     if (!position) return null
     return {
-      pos: new THREE.Vector3(position.x, position.y, position.z),
+      pos: { x: position.x, y: position.y, z: position.z },
       radius: cfg.covalentRadius * RENDER.growGhostRadiusFactor,
       color: cfg.color,
     }
@@ -49,7 +48,7 @@ export function getGrowPreviewCommand(
     !input.freeDirection,
   )
   return {
-    pos: new THREE.Vector3(position[0], position[1], position[2]),
+    pos: { x: position[0], y: position[1], z: position[2] },
     radius: cfg.covalentRadius * RENDER.growGhostRadiusFactor,
     color: cfg.color,
   }
@@ -87,7 +86,7 @@ export function getGrowGuideCommand(
     if (points.length > 0) {
       return {
         kind: 'points',
-        positions: points.map(point => new THREE.Vector3(point[0], point[1], point[2])),
+        positions: points.map(point => ({ x: point[0], y: point[1], z: point[2] })),
         ghostRadius,
         ghostColor,
       }
@@ -97,8 +96,8 @@ export function getGrowGuideCommand(
   if (guide.kind === 'ring') {
     return {
       kind: 'ring',
-      center: new THREE.Vector3(...guide.center),
-      axis: new THREE.Vector3(...guide.axis),
+      center: { x: guide.center[0], y: guide.center[1], z: guide.center[2] },
+      axis: { x: guide.axis[0], y: guide.axis[1], z: guide.axis[2] },
       radius: guide.radius,
       ghostRadius,
       ghostColor,
@@ -107,7 +106,7 @@ export function getGrowGuideCommand(
 
   return {
     kind: 'points',
-    positions: guide.positions.map(position => new THREE.Vector3(...position)),
+    positions: guide.positions.map(position => ({ x: position[0], y: position[1], z: position[2] })),
     ghostRadius,
     ghostColor,
   }

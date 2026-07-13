@@ -18,22 +18,12 @@ import { createSceneSlice } from './slices/sceneSlice'
 import { createSelectionSlice } from './slices/selectionSlice'
 import { createEditSlice } from './slices/editSlice'
 import { runPruneSelectionCommand } from '../lib/builder/commands/selection'
+import type { SelectorStoreApi } from './contracts/selectorStore'
 
 // ── 对外 Selectors（保持导出面不变）─────────────────────────────────────────────
 export { selectActiveMolecule, selectActiveMoleculeOrEmpty } from './slices/helpers'
 
-type SelectorSubscribe<T> = {
-  subscribe: {
-    (listener: (state: T, prevState: T) => void): () => void
-    <U>(
-      selector: (state: T) => U,
-      listener: (selected: U, previous: U) => void,
-      options?: { equalityFn?: (a: U, b: U) => boolean; fireImmediately?: boolean },
-    ): () => void
-  }
-}
-
-export type MoleculeStoreApi = UseBoundStore<StoreApi<MoleculeState> & SelectorSubscribe<MoleculeState>> & {
+export type MoleculeStoreApi = UseBoundStore<SelectorStoreApi<MoleculeState>> & {
   temporal: StoreApi<TemporalState<MoleculeState>>
 }
 

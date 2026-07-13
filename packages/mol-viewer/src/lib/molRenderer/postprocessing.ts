@@ -42,7 +42,13 @@ export class DepthOfField {
 
   /** 设置对焦距离并渲染当前帧。 */
   render(focusDist: number) {
-    ;(this.bokeh.uniforms as Record<string, { value: number }>)['focus'].value = focusDist
+    const uniforms = this.bokeh.uniforms
+    if (!('focus' in uniforms)) throw new Error('BokehPass is missing the focus uniform')
+    const focusUniform = uniforms.focus
+    if (!focusUniform || typeof focusUniform !== 'object' || !('value' in focusUniform)) {
+      throw new Error('BokehPass has an invalid focus uniform')
+    }
+    focusUniform.value = focusDist
     this.composer.render()
   }
 

@@ -1,15 +1,15 @@
-import * as THREE from 'three'
 import type { Atom, Molecule } from '../../../molecule'
 import { inferHybridization } from '../../analysis/hybridization'
 import { bondsOf, otherEnd } from '../../graph'
 import { findNextBondDir, getNeighborDirs } from '../../geometry/vsepr'
 import { maxValence, valenceUsed } from '../../valence'
+import { length, normalize, type Vec3 } from '../../math'
 
 export type AttachTargetResult =
   | {
       readonly ok: true
       readonly host: Atom
-      readonly direction: THREE.Vector3
+      readonly direction: Vec3
       readonly removeHIds: Set<string>
       readonly order: 1 | 2 | 3
       readonly hostCoordinationSiteId?: string
@@ -32,18 +32,19 @@ export function resolveAttachFragmentTarget(
     ? bondsOf(molecule.bonds, targetAtomId)[0]
     : undefined
 
-  if (target.symbol === 'H' && hBond) {
-    const hostId = otherEnd(hBond, targetAtomId)!
+  if (target.symbol === 'H') {
+    if (!hBond) return { ok: false, reason: 'H 原子没有有效的宿主键' }
+    const hostId = otherEnd(hBond, targetAtomId)
+    if (hostId === null) return { ok: false, reason: 'H 原子的宿主键无效' }
     const host = molecule.atoms.find(atom => atom.id === hostId)
     if (!host) return { ok: false, reason: '原子不存在' }
     removeHIds.add(targetAtomId)
-    const direction = new THREE.Vector3(
+    const rawDirection: Vec3 = [
       target.x - host.x,
       target.y - host.y,
       target.z - host.z,
-    )
-    if (direction.lengthSq() < 1e-9) direction.set(1, 0, 0)
-    direction.normalize()
+    ]
+    const direction = length(rawDirection) < 1e-9 ? [1, 0, 0] as Vec3 : normalize(rawDirection)
     const hostCoordinationSiteId = hBond.coordinationSites
       ?.find(assignment => assignment.atomId === host.id)?.siteId
     const siteOrder = hostCoordinationSiteId
@@ -55,7 +56,7 @@ export function resolveAttachFragmentTarget(
       direction,
       removeHIds,
       order: siteOrder ?? attachOrder,
-      hostCoordinationSiteId,
+      ...(hostCoordinationSiteId !== undefined ? { hostCoordinationSiteId } : {}),
     }
   }
 
@@ -72,7 +73,7 @@ export function resolveAttachFragmentTarget(
   return {
     ok: true,
     host: target,
-    direction: new THREE.Vector3(directionTuple[0], directionTuple[1], directionTuple[2]),
+    direction: [directionTuple[0], directionTuple[1], directionTuple[2]],
     removeHIds,
     order: attachOrder,
   }

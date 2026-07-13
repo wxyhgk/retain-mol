@@ -80,14 +80,17 @@ export function replaceAtomSymbol(
   if (!atom || atom.symbol === newSymbol) return mol
   return {
     ...mol,
-    atoms: mol.atoms.map(a => a.id === atomId ? {
-      ...a,
-      symbol: newSymbol,
-      coordinationGeometry: undefined,
-      coordinationDirections: undefined,
-      coordinationSites: undefined,
-      coordinationNumber: undefined,
-    } : a),
+    atoms: mol.atoms.map(a => {
+      if (a.id !== atomId) return a
+      const {
+        coordinationGeometry: _coordinationGeometry,
+        coordinationDirections: _coordinationDirections,
+        coordinationSites: _coordinationSites,
+        coordinationNumber: _coordinationNumber,
+        ...plainAtom
+      } = a
+      return { ...plainAtom, symbol: newSymbol }
+    }),
   }
 }
 
@@ -182,7 +185,8 @@ export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
     if (needed <= 0) continue
 
     for (let i = 0; i < needed; i++) {
-      const centerAtom = current.atoms.find(a => a.id === target.id)!
+      const centerAtom = current.atoms.find(a => a.id === target.id)
+      if (!centerAtom) break
       const result = calcAddAtomOnExisting(centerAtom, current.bonds, current.atoms, 'H')
       const h = newAtom('H', ...result.position)
       const bond = newBond(target.id, h.id)

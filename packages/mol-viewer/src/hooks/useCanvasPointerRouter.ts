@@ -12,22 +12,23 @@
  * 返回 { boxRect } 供 BoxSelectOverlay 渲染选框。
  */
 
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import * as THREE from 'three'
 import { selectActiveMoleculeOrEmpty, type MoleculeStoreApi } from '../store/moleculeStore'
-import type { MolRenderer } from '../lib/molRenderer'
+import type { ThreeRendererPort } from '../lib/molRenderer'
 import { toolCan } from '../config/toolCapabilities.config'
 import { INTERACTION } from '../config/interaction.config'
 import { createObjectTransformEditSession } from './editSessionFactory'
 import {
   cancelObjectTransform,
+  finishObjectTransform,
   commitBoxSelect,
   commitObjectPointerTransform,
   resolveBoxSelectBounds,
   resolveObjectTransformTarget,
   shouldStartBoxSelect,
 } from './useCanvasPointerRouterEffects'
-import { useViewerRuntime } from '../runtime/ViewerRuntime'
+import { useViewerRuntimeServices } from '../runtime/ViewerRuntime'
 
 export interface BoxRect { x: number; y: number; w: number; h: number }
 
@@ -48,7 +49,7 @@ function makeTransformState(): TransformState {
 function handleTransformDown(
   e: PointerEvent,
   canvas: HTMLCanvasElement,
-  renderer: MolRenderer,
+  renderer: ThreeRendererPort,
   state: TransformState,
   session: ReturnType<typeof createObjectTransformEditSession>,
   moleculeStore: MoleculeStoreApi,
@@ -78,7 +79,7 @@ function handleTransformDown(
 
 function handleTransformMove(
   e: PointerEvent,
-  renderer: MolRenderer,
+  renderer: ThreeRendererPort,
   state: TransformState,
   moleculeStore: MoleculeStoreApi,
 ) {
@@ -129,7 +130,7 @@ function makeBoxState(): BoxSelectState {
 function finishBoxSelect(
   state: BoxSelectState,
   canvas: HTMLCanvasElement,
-  renderer: MolRenderer,
+  renderer: ThreeRendererPort,
   moleculeStore: MoleculeStoreApi,
 ) {
   const rect = canvas.getBoundingClientRect()
@@ -156,20 +157,21 @@ function finishBoxSelect(
 
 export function useCanvasPointerRouter(
   containerRef: RefObject<HTMLDivElement | null>,
-  rendererRef: RefObject<MolRenderer | null>,
+  rendererRef: RefObject<ThreeRendererPort | null>,
   readOnly = false,
 ): { boxRect: BoxRect | null } {
-  const { moleculeStore, editorStore } = useViewerRuntime()
+  const { moleculeStore, editorStore } = useViewerRuntimeServices()
   const activeTool = editorStore(s => s.activeTool)
   const [boxRect, setBoxRect] = useState<BoxRect | null>(null)
 
   const transformRef = useRef<TransformState>(makeTransformState())
-  const transformSessionRef = useRef<ReturnType<typeof createObjectTransformEditSession> | null>(null)
+  const transformSession = useMemo(
+    () => createObjectTransformEditSession(moleculeStore),
+    [moleculeStore],
+  )
   const boxRef       = useRef<BoxSelectState>(makeBoxState())
 
-  if (!transformSessionRef.current) {
-    transformSessionRef.current = createObjectTransformEditSession(moleculeStore)
-  }
+  useEffect(() => () => transformSession.cancel(), [transformSession])
 
   // 同步相机控制开关；切换工具时清理可能残留的变换状态（防止 pointerup 未触发导致状态卡死）
   useEffect(() => {
@@ -177,14 +179,14 @@ export function useCanvasPointerRouter(
     if (r) r.controls.enabled = readOnly || !toolCan(activeTool, 'transformsObject')
     if (readOnly || !toolCan(activeTool, 'transformsObject')) {
       const ts = transformRef.current
-      cancelObjectTransform(ts, transformSessionRef.current!)
+      cancelObjectTransform(ts, transformSession)
       const bs = boxRef.current
       if (bs.active) {
         bs.active = false
         setBoxRect(null)
       }
     }
-  }, [activeTool, readOnly, rendererRef])
+  }, [activeTool, readOnly, rendererRef, transformSession])
 
   useEffect(() => {
     if (readOnly) {
@@ -207,7 +209,7 @@ export function useCanvasPointerRouter(
       // 1. move-object 工具 → 对象变换
       if (toolCan(tool, 'transformsObject')) {
         e.stopImmediatePropagation()
-        handleTransformDown(e, canvas, renderer, transformRef.current, transformSessionRef.current!, moleculeStore)
+        handleTransformDown(e, canvas, renderer, transformRef.current, transformSession, moleculeStore)
         return
       }
 
@@ -267,7 +269,7 @@ export function useCanvasPointerRouter(
       // 对象变换结束
       const ts = transformRef.current
       if (ts.dragging) {
-        cancelObjectTransform(ts, transformSessionRef.current!)
+        finishObjectTransform(ts, transformSession)
         return
       }
 
@@ -284,7 +286,7 @@ export function useCanvasPointerRouter(
     // 拖拽中被 cancel 时若不清理，beginTransaction 会悬挂（zundo 永久 paused）
     const onCancel = () => {
       const ts = transformRef.current
-      cancelObjectTransform(ts, transformSessionRef.current!)
+      cancelObjectTransform(ts, transformSession)
       const bs = boxRef.current
       if (bs.active) {
         bs.active = false
@@ -299,13 +301,13 @@ export function useCanvasPointerRouter(
     container.addEventListener('pointercancel', onCancel)
 
     return () => {
-      cancelObjectTransform(transformRef.current, transformSessionRef.current!)
+      cancelObjectTransform(transformRef.current, transformSession)
       container.removeEventListener('pointerdown', onDown, { capture: true } as AddEventListenerOptions)
       container.removeEventListener('pointermove', onMove)
       container.removeEventListener('pointerup',   onUp)
       container.removeEventListener('pointercancel', onCancel)
     }
-  }, [containerRef, rendererRef, readOnly, moleculeStore, editorStore])
+  }, [containerRef, rendererRef, readOnly, moleculeStore, editorStore, transformSession])
 
   return { boxRect }
 }

@@ -1,6 +1,6 @@
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
-import { activateWorkspaceTool, type WorkspaceToolEffects } from './workspaceToolStore'
+import { activateAppWorkspaceTool } from './workspaceToolController'
 
 export function isTextEditingTarget(target: EventTarget | null) {
   const isInput = typeof HTMLInputElement !== 'undefined' && target instanceof HTMLInputElement
@@ -47,33 +47,25 @@ export function handleEditorShortcut(
 
   const editor = useEditorStore.getState()
   const molecule = useMoleculeStore.getState()
-  const effects: WorkspaceToolEffects = {
-    setActiveTool: editor.setActiveTool,
-    setActiveElement: editor.setActiveElement,
-    setAtomClickMode: editor.setAtomClickMode,
-    setActiveFragment: editor.setActiveFragment,
-    armBrush: editor.armBrush,
-    disarmBrush: editor.disarmBrush,
-  }
   const plainShortcut = !e.metaKey && !e.ctrlKey && !e.altKey
 
   if (plainShortcut && e.key.toLowerCase() === 's') {
-    activateWorkspaceTool('select', effects)
+    activateAppWorkspaceTool('select')
     return true
   }
 
   if (plainShortcut && e.key.toLowerCase() === 'd') {
-    activateWorkspaceTool('draw', effects)
+    activateAppWorkspaceTool('draw')
     return true
   }
 
   if (plainShortcut && e.key.toLowerCase() === 'v') {
-    activateWorkspaceTool('move', effects)
+    activateAppWorkspaceTool('move')
     return true
   }
 
   if (plainShortcut && e.key.toLowerCase() === 'm') {
-    activateWorkspaceTool('measure', effects)
+    activateAppWorkspaceTool('measure')
     return true
   }
 
@@ -88,7 +80,7 @@ export function handleEditorShortcut(
     if (editor.activeTool === 'measure' && editor.pendingAtomIds.length > 0) {
       editor.cancelPendingMeasure()
     }
-    activateWorkspaceTool('select', effects)
+    activateAppWorkspaceTool('select')
     return true
   }
 

@@ -1,4 +1,4 @@
-import * as THREE from 'three'
+import type { Vector3Data } from '../lib/types'
 import {
   ensureEditableAtomObject,
   ensureEditableBondObject,
@@ -12,15 +12,16 @@ import {
 } from './builderBondEffects'
 import {
   readBuilderEditSnapshot,
+  readEditableMoleculeContainingAtom,
   readBuilderHandlerSnapshot,
   readBuilderObjectActivationEffects,
   readBuilderSelectionEffects,
 } from './builderHandlerContext'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 
 export function handleBuilderBondClick(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   bondId: string,
   event: MouseEvent,
   editorStore: EditorStoreApi = useEditorStore,
@@ -47,24 +48,39 @@ export function handleBuilderBondClick(
 }
 
 export function handleBuilderBondDragStart(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
+  sourceId: string,
+  editorStore: EditorStoreApi = useEditorStore,
+): boolean {
+  if (!canHandleBuilderBondDrag(store, sourceId, editorStore)) return false
+  if (!ensureEditableAtomObject(sourceId, readBuilderObjectActivationEffects(store))) return false
+
+  const { intent, selectedAtomIds } = readBuilderHandlerSnapshot(store, editorStore)
+  return shouldStartBondDragForIntent(
+    intent,
+    readBuilderEditSnapshot(store, editorStore).molecule,
+    { sourceId, selectedAtomIds },
+  )
+}
+
+/** Pure pointer-down eligibility check. It must never activate a scene object. */
+export function canHandleBuilderBondDrag(
+  store: BuilderMoleculeStoreApi,
   sourceId: string,
   editorStore: EditorStoreApi = useEditorStore,
 ): boolean {
   const { intent, selectedAtomIds } = readBuilderHandlerSnapshot(store, editorStore)
   const input = { sourceId, selectedAtomIds }
   if (!shouldAttemptBondDragForIntent(intent, input)) return false
-
-  if (!ensureEditableAtomObject(sourceId, readBuilderObjectActivationEffects(store))) return false
-
-  return shouldStartBondDragForIntent(intent, readBuilderEditSnapshot(store, editorStore).molecule, input)
+  const molecule = readEditableMoleculeContainingAtom(store, sourceId)
+  return molecule !== null && shouldStartBondDragForIntent(intent, molecule, input)
 }
 
 export function handleBuilderBondDragEnd(
-  store: MoleculeStoreApi,
+  store: BuilderMoleculeStoreApi,
   sourceId: string,
   targetId: string | null,
-  dropLocal: THREE.Vector3 | null,
+  dropLocal: Vector3Data | null,
   editorStore: EditorStoreApi = useEditorStore,
 ): void {
   const { intent, molecule, editEffects } = readBuilderHandlerSnapshot(store, editorStore)

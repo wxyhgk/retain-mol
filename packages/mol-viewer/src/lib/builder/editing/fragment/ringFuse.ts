@@ -5,6 +5,7 @@ import { planRingFusePlacement } from './ringFusePlacement'
 import { buildRingFuseFragmentFrame, buildRingFuseTargetFrame } from './ringFuseGeometry'
 import { buildRingFuseOrderOverride } from './ringFuseKekule'
 import { buildRingFuseSkipSet, resolveRingFuseTarget, validateRingFuseSharedValence } from './ringFuseRules'
+import { getFragmentAtom, resolveFragmentBondAttachment } from './fragmentGuards'
 
 /**
  * Ketcher 式并环：点击已有的键，把模板环的 attachBond 边融合上去
@@ -22,12 +23,16 @@ export function fuseFragmentOnBond(
   frag: FragmentDef,
   bondId: string,
 ): AttachResult {
-  if (!frag.attachBond) return { ok: false, reason: `${frag.name} 是基团，请点击原子连接` }
+  const fragmentAttachment = resolveFragmentBondAttachment(frag)
+  if (fragmentAttachment.ok === false) {
+    const reason = frag.attachBond ? fragmentAttachment.reason : `${frag.name} 是基团，请点击原子连接`
+    return { ok: false, reason }
+  }
   const target = resolveRingFuseTarget(mol, bondId)
   if (target.ok === false) return { ok: false, reason: target.reason }
 
-  const [f1i, f2i] = frag.attachBond
-  const isH = (i: number) => frag.atoms[i].symbol === 'H'
+  const { index1: f1i, index2: f2i } = fragmentAttachment.value
+  const isH = (i: number) => getFragmentAtom(frag, i)?.symbol === 'H'
   const skip = buildRingFuseSkipSet(frag, f1i, f2i, isH)
 
   const atomById = new Map(mol.atoms.map(a => [a.id, a]))

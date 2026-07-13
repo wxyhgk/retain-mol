@@ -206,15 +206,20 @@ export function runSplitSceneObjectCommand(
     if (id !== objectId) nextObjectsById[id] = candidate
   }
 
-  const splitObjects = parts.map((molecule, index) => ({
-    ...createSceneObject({
-      ...molecule,
-      name: parts.length === 1 ? object.name : `${object.name} #${index + 1}`,
-    }),
-    id: newObjectIds[index],
-    visible: object.visible,
-    locked: object.locked,
-  }))
+  const splitObjects: SceneObject[] = []
+  for (const [index, molecule] of parts.entries()) {
+    const id = newObjectIds[index]
+    if (!id) return { ok: true, changed: false }
+    splitObjects.push({
+      ...createSceneObject({
+        ...molecule,
+        name: parts.length === 1 ? object.name : `${object.name} #${index + 1}`,
+      }),
+      id,
+      visible: object.visible,
+      locked: object.locked,
+    })
+  }
   for (const splitObject of splitObjects) {
     nextObjectsById[splitObject.id] = splitObject
   }

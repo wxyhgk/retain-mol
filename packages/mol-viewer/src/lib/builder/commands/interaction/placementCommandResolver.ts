@@ -24,12 +24,14 @@ export function resolvePlacementCommandInput(
   input: ResolvePlacementCommandInput,
 ): PlacementCommandInput {
   const fragment = input.activeFragmentId ? getFragment(input.activeFragmentId) : undefined
+  const orientation = resolvePlacementOrientation(input)
+  const hybridPartner = resolveHybridPlacementPartner(fragment)
   return {
     activeElement: input.activeElement,
     position: input.position,
-    orientation: resolvePlacementOrientation(input),
-    fragment,
-    hybridPartner: resolveHybridPlacementPartner(fragment),
+    ...(orientation === undefined ? {} : { orientation }),
+    ...(fragment === undefined ? {} : { fragment }),
+    ...(hybridPartner === undefined ? {} : { hybridPartner }),
     avoidClashes: true,
   }
 }

@@ -60,6 +60,9 @@ describe('detectPasteFormat', () => {
   it('未知格式', () => {
     expect(detectPasteFormat('hello world\nfoo bar')).toBe('unknown')
   })
+  it('空文本不会访问不存在的首行', () => {
+    expect(detectPasteFormat(' \n ')).toBe('unknown')
+  })
 })
 
 describe('parseGJF', () => {
@@ -87,6 +90,14 @@ describe('parseGJF', () => {
     const mol = parseGJF(GJF_METHANE)
     expect(mol.bonds.length).toBeGreaterThan(0)
   })
+
+  it('截断的 GJF 给出明确错误', () => {
+    expect(() => parseGJF('#p opt')).toThrow('GJF 缺少电荷/多重度行')
+  })
+
+  it('没有合法坐标时拒绝空分子', () => {
+    expect(() => parseGJF('#p opt\n\ntitle\n\n0 1\nnot-an-atom\n')).toThrow('GJF 未解析到任何原子')
+  })
 })
 
 describe('parseRawCoords', () => {
@@ -99,6 +110,10 @@ describe('parseRawCoords', () => {
   it('忽略无效行', () => {
     const mol = parseRawCoords(`C 0 0 0\nrandom text\nH 1 0 0`)
     expect(mol.atoms.length).toBe(2)
+  })
+
+  it('所有坐标均非法时抛错', () => {
+    expect(() => parseRawCoords('C x y z\nH NaN 0 0')).toThrow('未找到有效坐标行')
   })
 })
 

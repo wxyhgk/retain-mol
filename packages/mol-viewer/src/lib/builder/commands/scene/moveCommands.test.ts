@@ -138,6 +138,7 @@ describe('AtomDragCommandSession', () => {
       },
       startEditSession: () => calls.push('beginTransaction'),
       endEditSession: () => calls.push('endTransaction'),
+      cancelEditSession: () => calls.push('cancelTransaction'),
     })
 
     session.start(a1.id)
@@ -162,6 +163,7 @@ describe('AtomDragCommandSession', () => {
       setAtomPositions: () => calls.push('setAtomPositions'),
       startEditSession: () => calls.push('beginTransaction'),
       endEditSession: () => calls.push('endTransaction'),
+      cancelEditSession: () => calls.push('cancelTransaction'),
     })
 
     expect(session.move('a1', { x: 0, y: 0, z: 0 })).toEqual({
@@ -179,6 +181,7 @@ describe('ObjectTransformCommandSession', () => {
     const session = new ObjectTransformCommandSession({
       startEditSession: () => calls.push('beginTransaction'),
       endEditSession: () => calls.push('endTransaction'),
+      cancelEditSession: () => calls.push('cancelTransaction'),
     })
 
     session.end()
@@ -200,6 +203,7 @@ describe('ObjectPositionWriteSession', () => {
     const session = new ObjectPositionWriteSession('obj-1', {
       startEditSession: () => calls.push('beginTransaction'),
       endEditSession: () => calls.push('endTransaction'),
+      cancelEditSession: () => calls.push('cancelTransaction'),
       setObjectAtomPositions: (objectId, nextPositions) => {
         calls.push(`write:${objectId}:${nextPositions.get('a1')?.x}`)
       },

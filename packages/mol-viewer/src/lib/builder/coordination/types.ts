@@ -1,4 +1,4 @@
-import type { FragmentDef } from '../fragmentLibrary'
+import type { FragmentDef } from '../fragment/model'
 import type { CoordinationSite } from '../../types'
 
 export type CoordinationGeometryId =

@@ -72,7 +72,7 @@ function template(
     name,
     short,
     coordinationNumber,
-    pointGroup,
+    ...(pointGroup !== undefined ? { pointGroup } : {}),
     directions: sites.map(site => site.direction),
     sites,
   }

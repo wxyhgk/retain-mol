@@ -1,16 +1,16 @@
 import { useEffect, type RefObject } from 'react'
 import { toolCan } from '../../config/toolCapabilities.config'
 import { fitPlane } from '../../lib/builder/geometry/plane'
-import type { MolRenderer } from '../../lib/molRenderer'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import type { ThreeRendererPort } from '../../lib/molRenderer'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 
 /** Owns the keyboard-only sketch-plane workflow so MolViewer stays declarative. */
 export function useSketchPlaneShortcuts(
-  rendererRef: RefObject<MolRenderer | null>,
+  rendererRef: RefObject<ThreeRendererPort | null>,
   readOnly: boolean,
 ) {
-  const { editorStore, moleculeStore } = useViewerRuntime()
+  const { editorStore, moleculeStore } = useViewerRuntimeServices()
 
   useEffect(() => {
     if (readOnly) return

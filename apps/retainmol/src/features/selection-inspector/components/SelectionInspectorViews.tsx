@@ -6,13 +6,12 @@ import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { OptimizationControls } from '@/features/geometry-optimization'
 import { cn } from '@/lib/utils'
 import type { EditableGeometry, SelectionInspectorModel } from '../model/selectionInspectorModel'
+import { bondOrderLabel, formatCharge } from '../model/inspectorFormatters'
 import {
   ActionButton,
-  bondOrderLabel,
   CountTile,
   ElementSwatch,
   EndpointBadge,
-  formatCharge,
   InspectorLayout,
   InspectorSection,
   IntegerStepper,

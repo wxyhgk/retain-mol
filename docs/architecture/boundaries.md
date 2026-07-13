@@ -1,20 +1,23 @@
 # RetainMol Collaboration Boundaries
 
+中文多人协作审计、共享热点和推荐 owner 划分见
+[`collaboration-audit-2026-07-13.md`](./collaboration-audit-2026-07-13.md)。
+
 This document defines ownership boundaries for multi-person work. The goal is to keep UI, chemistry editing logic, state, and rendering from becoming coupled through ad hoc imports.
 
 ## Current State vs Target State
 
 Current state:
 
-- `@retainmol/mol-viewer` still exposes most stable consumer APIs through the root barrel at `packages/mol-viewer/src/index.ts`.
-- Package sub-entries exist in `packages/mol-viewer/package.json` for `./core`, `./io`, `./viewer`, `./styles`, `./fragments`, `./samples`, `./pubchem`, and `./optimize`.
-- App code imports viewer runtime state through `apps/retainmol/src/domain/viewerAdapter.ts`; other app files should not import `@retainmol/mol-viewer/viewer` directly.
+- `@retainmol/mol-viewer` exposes stable consumer APIs through explicit package sub-entries. The root barrel at `packages/mol-viewer/src/index.ts` is compatibility-only.
+- Package sub-entries separate `./core`, `./io`, `./viewer`, `./runtime`, `./state`, `./editing`, `./geometry`, `./graph`, `./styles`, `./three`, fragments/templates and optimization APIs.
+- App code imports viewer capabilities through focused files under `apps/retainmol/src/domain/viewer/`; feature/UI files do not import viewer state directly.
 - Theme JSON and style preset JSON can be added independently when they use existing schema values and existing render profiles.
 - Adding a new render profile id or a new renderer behavior still requires coordinated TypeScript changes in the style schema, render profile registry, and renderer consumers.
 
 Target state:
 
-- Consumer imports should move toward public sub-entries such as `@retainmol/mol-viewer/viewer`, `@retainmol/mol-viewer/io`, `@retainmol/mol-viewer/styles`, and `@retainmol/mol-viewer/fragments`.
+- Consumer imports use the smallest public sub-entry; mutable stores come only from `@retainmol/mol-viewer/state`.
 - The root barrel remains a compatibility facade during the migration, not the place to grow every new public API by default.
 - Software styles should be mostly data-driven: a style preset resolves representation, theme, render profile, and optional feature profiles without software-specific renderer branches.
 - Render profile additions should become narrow capability additions with schema, registry, renderer, tests, and docs updated together.
@@ -59,6 +62,29 @@ Compatibility policy:
 - Do not remove root exports in the same change that introduces a sub-entry. Deprecation should be documented first, then removed in a later breaking-change window.
 - Public sub-entries should never require consumers to deep import from `packages/mol-viewer/src/...`.
 
+### Public sub-entry contracts
+
+| Sub-entry | Contract | Collaboration rule |
+| --- | --- | --- |
+| `/core` | Molecule data and pure molecule helpers | Must not expose React, Zustand, or Three.js |
+| `/io` | File parsing, export, and geometry preparation | Keep format-specific logic out of App components |
+| `/viewer` | `MolViewer`, capture, and narrow viewport commands | Must not expose stores or renderer implementation types |
+| `/runtime` | Opaque viewer lifecycle handle | Consumers may only dispose the runtime; runtime services stay internal |
+| `/state` | Explicit mutable Zustand access | Opt-in boundary; do not re-export from unrelated entries |
+| `/editing` | Narrow position-write transaction | Does not expose `useBuilder` or internal edit-session factories |
+| `/geometry`, `/graph` | Pure geometry and topology queries | No store mutation or rendering concerns |
+| `/styles` | Theme, preset, and render-profile schemas/registries | Renderer-neutral; no Three.js material objects |
+| `/three` | Explicit Three.js material extension point | Three.js-dependent consumers must opt in here |
+| `/fragments`, `/templates`, `/coordination` | Stable catalog and authoring DTOs | Public DTOs must not expose internal `FragmentDef` shapes |
+| `/samples`, `/pubchem`, `/optimize` | Focused data/workflow capabilities | Keep each entry independently consumable |
+
+Internal-only contracts:
+
+- `useBuilder`, builder pointer handlers, and `ViewerRuntimeServices` are package implementation details.
+- `ThreeRendererPort`, renderer adapter registration, overlays, and gizmo controllers are package implementation details.
+- Store slices, command implementation files, and internal fragment model/registry files are not consumer APIs.
+- Renderer adapter registration stays internal until a renderer-neutral overlay and interaction contract exists; exporting it earlier would promise unsupported adapters.
+
 ### `packages/mol-viewer/src/lib/builder`
 
 Pure molecule editing and analysis logic.
@@ -74,6 +100,7 @@ Must not own:
 
 Rules:
 - Prefer pure functions.
+- Builder production files must not import Three.js. Vector, quaternion, preview and guide values cross boundaries as pure DTOs.
 - Keep browser/app concerns out.
 - Chemistry editing policy changes need focused tests in this layer.
 - New user-facing edit behavior should enter through a `lib/builder/commands/<domain>` facade, not through direct calls to `lib/builder/editing` from hooks/store/app code.
@@ -146,6 +173,16 @@ Rules:
 - Renderer should consume molecule data, selected ids, display mode, theme, and render style.
 - Renderer should not decide chemistry validity.
 - Visual changes should be controlled through config/theme where practical.
+- Public `RendererPort` is implementation-neutral. Internal overlays use `ThreeRendererPort`, which is not exported by `public/viewer.ts`.
+- Renderer must not import Builder; interaction/rendering consume prepared data and callbacks.
+
+### Fragment catalog ownership
+
+- `fragment/model.ts` owns the stable internal fragment shape.
+- `fragment/registry.ts` owns runtime registration and lookup.
+- `fragment/catalog.ts` only combines immutable catalogs.
+- `fragment/catalogs/organicStubs.ts`, `coordination.ts`, and `rings.ts` have separate owners; feature work should not edit the aggregator unless ordering changes.
+- `public/contracts/fragments.ts` owns the stable consumer DTO and must not import Builder internals.
 
 ## Feature Ownership Guide
 
@@ -177,6 +214,7 @@ Preferred public sub-entry imports for package consumers:
 
 ```ts
 import { MolViewer } from '@retainmol/mol-viewer/viewer'
+import { useMoleculeStore } from '@retainmol/mol-viewer/state'
 import { listStylePresets, resolveStylePreset } from '@retainmol/mol-viewer/styles'
 import { parseMol, exportMol } from '@retainmol/mol-viewer/io'
 ```
@@ -184,7 +222,8 @@ import { parseMol, exportMol } from '@retainmol/mol-viewer/io'
 Preferred app import for viewer runtime state:
 
 ```ts
-import { MolViewer, useMoleculeStore } from '@/domain/viewerAdapter'
+import { MolViewer } from '@/domain/viewer/viewport'
+import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 ```
 
 Avoid from `apps/retainmol`:
@@ -200,6 +239,7 @@ components/hooks -> store -> lib/builder
 components/hooks -> lib/molRenderer
 lib/builder -> lib/molecule/config
 lib/molRenderer -> lib/molecule/config/presets
+styles -> schema/config only
 ```
 
 Avoid:
@@ -209,6 +249,8 @@ lib/builder -> store
 lib/builder -> React
 lib/builder -> molRenderer
 lib/molRenderer -> store
+styles -> lib/molRenderer
+public/contracts -> lib/store/hooks/components
 ```
 
 ## Automated Boundary Check
@@ -216,7 +258,7 @@ lib/molRenderer -> store
 Run this before merging boundary-sensitive changes:
 
 ```bash
-npm run check:boundaries --workspace retainmol
+npm run verify
 ```
 
 The script currently enforces these rules:
@@ -236,6 +278,17 @@ The script currently enforces these rules:
 - `hooks/useCanvasPointerRouter.ts` must commit object transforms through `commitObjectPointerTransform` and box selection through `commitBoxSelect`; it should not call `runObjectPointerTransformCommand`, `applyObjectTransformResult`, or `resolveBoxSelectResult` directly.
 - Package code and tests must use builder commands or focused builder modules，不存在 `BuilderEngine` 聚合入口。
 - Direct `beginTransaction/endTransaction` calls are limited to `store/slices/editSlice.ts` and `hooks/editSessionFactory.ts`; other code must use edit sessions.
+- Builder and Renderer may not import each other; Builder also may not import Three.js.
+- Declarative `styles/` may not import renderer implementation.
+- Three.js material extensions live in `/three`; `/styles` stays renderer-neutral.
+- `public/viewer.ts` may not expose `ThreeRendererPort` implementation types.
+- API Extractor reports freeze every package sub-entry, and the pack consumer test installs the produced tarball in a clean project.
+
+## Strict TypeScript gate
+
+`packages/mol-viewer/tsconfig.strict.json` covers all production `.ts` and `.tsx` files under `src` with
+`strict + exactOptionalPropertyTypes + noUncheckedIndexedAccess`. Test files remain under the normal package
+typecheck and Vitest gates so production strictness cannot be bypassed by adding a new source directory.
 
 ## Review Checklist
 

@@ -2,7 +2,6 @@ import { CAMERA } from '../config/camera.config'
 import { LIGHTING } from '../config/render.config'
 import type { RenderStyle } from './schema'
 import { iboviewRendererProfile } from './profiles/iboview-renderer-profile'
-import { resolveMaterialFactory } from '../lib/molRenderer/materialFactories'
 
 export type MaterialModel = 'phong' | 'publication-shader' | 'iboview-shader' | (string & {})
 export type BondColorPolicy = 'element' | 'brighten-neutral' | 'fixed'
@@ -98,7 +97,7 @@ const defaultLighting: LightingProfile = {
   rim: LIGHTING.rimLight,
 }
 
-const RENDER_PROFILES = {
+const RENDER_PROFILES: Readonly<Record<string, ResolvedRenderProfile>> = {
   realistic: {
     id: 'realistic',
     name: '写实',
@@ -128,13 +127,12 @@ const RENDER_PROFILES = {
     lighting: defaultLighting,
   },
   iboview: iboviewRendererProfile,
-} satisfies Record<string, ResolvedRenderProfile>
+}
 
 const REGISTERED_RENDER_PROFILES: Record<string, ResolvedRenderProfile> = {}
 
 export function registerRenderProfile(profile: ResolvedRenderProfile): ResolvedRenderProfile {
   if (!profile.id) throw new Error('render profile id is required')
-  resolveMaterialFactory(profile.materialModel)
   REGISTERED_RENDER_PROFILES[profile.id] = profile
   return profile
 }

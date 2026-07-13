@@ -1,12 +1,12 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { toolCan } from '../config/toolCapabilities.config'
-import type { MolRenderer } from '../lib/molRenderer'
+import type { ThreeRendererPort } from '../lib/molRenderer'
 import type { Tool } from '../lib/types'
 import type { MoleculeStoreApi } from '../store/moleculeStore'
 import type { BuilderHandlers } from './useBuilder'
 
 interface Options {
-  readonly rendererRef: RefObject<MolRenderer | null>
+  readonly rendererRef: RefObject<ThreeRendererPort | null>
   readonly moleculeStore: MoleculeStoreApi
   readonly readOnly: boolean
   readonly activeTool: Tool
@@ -25,9 +25,10 @@ export function useRendererInteractionBinding({
   const interactionModeRef = useRef(`${readOnly}:${activeTool}:${brushArmed}`)
   const {
     onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
-    onAtomDragStart, onAtomDrag, onAtomDragEnd,
-    onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
-    onFragmentTorsionStart, getFragmentTorsionPreview, onFragmentTorsionEnd,
+    onAtomDragStart, onAtomDrag, onAtomDragEnd, onAtomDragCancel,
+    canStartBondDrag, onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
+    canStartFragmentTorsion, onFragmentTorsionStart,
+    getFragmentTorsionPreview, onFragmentTorsionEnd,
   } = handlers
 
   useEffect(() => {
@@ -44,10 +45,10 @@ export function useRendererInteractionBinding({
     if (readOnly) {
       renderer.idleCursor = ''
       renderer.onAtomClick = renderer.onAtomDoubleClick = renderer.onBondClick = renderer.onBackgroundClick = undefined
-      renderer.onAtomDrag = renderer.onAtomDragStart = renderer.onAtomDragEnd = renderer.canDragAtom = undefined
-      renderer.onBondDragStart = renderer.onBondDragEnd = renderer.onBondDragHover = undefined
+      renderer.onAtomDrag = renderer.onAtomDragStart = renderer.onAtomDragEnd = renderer.onAtomDragCancel = renderer.canDragAtom = undefined
+      renderer.canStartBondDrag = renderer.onBondDragStart = renderer.onBondDragEnd = renderer.onBondDragHover = undefined
       renderer.getGrowPreview = renderer.getGrowGuide = undefined
-      renderer.onFragmentTorsionStart = renderer.getFragmentTorsionPreview = renderer.onFragmentTorsionEnd = undefined
+      renderer.canStartFragmentTorsion = renderer.onFragmentTorsionStart = renderer.getFragmentTorsionPreview = renderer.onFragmentTorsionEnd = undefined
       return
     }
 
@@ -59,22 +60,26 @@ export function useRendererInteractionBinding({
     renderer.onAtomDrag = canEdit ? onAtomDrag : undefined
     renderer.onAtomDragStart = canEdit ? onAtomDragStart : undefined
     renderer.onAtomDragEnd = canEdit ? onAtomDragEnd : undefined
+    renderer.onAtomDragCancel = canEdit ? onAtomDragCancel : undefined
     renderer.canDragAtom = canEdit
       ? id => moleculeStore.getState().selectedAtomIds.has(id)
       : undefined
+    renderer.canStartBondDrag = canStartBondDrag
     renderer.onBondDragStart = onBondDragStart
     renderer.onBondDragEnd = onBondDragEnd
     renderer.onBondDragHover = id => renderer.setDragHoverAtom(id)
     renderer.getGrowPreview = getGrowPreview
     renderer.getGrowGuide = getGrowGuide
+    renderer.canStartFragmentTorsion = canStartFragmentTorsion
     renderer.onFragmentTorsionStart = onFragmentTorsionStart
     renderer.getFragmentTorsionPreview = getFragmentTorsionPreview
     renderer.onFragmentTorsionEnd = onFragmentTorsionEnd
   }, [
     readOnly, onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
-    onAtomDrag, onAtomDragStart, onAtomDragEnd,
-    onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
-    onFragmentTorsionStart, getFragmentTorsionPreview, onFragmentTorsionEnd,
+    onAtomDrag, onAtomDragStart, onAtomDragEnd, onAtomDragCancel,
+    canStartBondDrag, onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
+    canStartFragmentTorsion, onFragmentTorsionStart,
+    getFragmentTorsionPreview, onFragmentTorsionEnd,
     activeTool, brushArmed, rendererRef, moleculeStore,
   ])
 }

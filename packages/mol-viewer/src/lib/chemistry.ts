@@ -1,7 +1,7 @@
 import { getElementConfig } from '../config/elements.config'
 import type { Atom } from './types'
 
-type ElementLike = Pick<Atom, 'symbol'>
+export type ElementLike = Pick<Atom, 'symbol'>
 
 /** Hill system：含碳体系 C、H 优先；无碳体系全部元素按字母排序。 */
 export function getMolecularFormula(atoms: readonly ElementLike[]): string {

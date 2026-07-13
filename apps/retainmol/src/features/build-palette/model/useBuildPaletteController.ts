@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import {
-  activateWorkspaceTool as setWorkspaceTool,
-  closeWorkspacePanel,
-  useWorkspaceToolStore,
   deriveWorkspaceTool,
+  selectWorkspacePanel,
+  useWorkspaceToolStore,
   type WorkspaceTool,
-  type WorkspaceToolEffects,
 } from '@/domain/workspaceToolStore'
+import {
+  activateAppWorkspaceTool,
+  closeAppWorkspacePanel,
+  createWorkspaceToolEffects,
+} from '@/domain/workspaceToolController'
 import {
   beginCoordinationSitePick,
   selectAtomBuildMode,
@@ -32,21 +35,13 @@ export function useBuildPaletteController() {
     disarmBrush: state.disarmBrush,
     flashHint: state.flashHint,
   })))
-  const activePanel = useWorkspaceToolStore(state => state.activePanel)
+  const panel = useWorkspaceToolStore(selectWorkspacePanel)
+  const workspaceTool = deriveWorkspaceTool(panel, editor.activeTool)
   const bond = useBuildPaletteBondController()
   const [paletteElement, setPaletteElement] = useState(editor.activeElement)
 
-  const effects: WorkspaceToolEffects = {
-    setActiveTool: editor.setActiveTool,
-    setActiveElement: editor.setActiveElement,
-    setAtomClickMode: editor.setAtomClickMode,
-    setActiveFragment: editor.setActiveFragment,
-    armBrush: editor.armBrush,
-    disarmBrush: editor.disarmBrush,
-  }
-  const workspaceTool = deriveWorkspaceTool(editor.activeTool, editor.brushArmed, activePanel)
-  const panel = activePanel
-  const activateTool = (tool: WorkspaceTool) => setWorkspaceTool(tool, effects)
+  const effects = createWorkspaceToolEffects(editor)
+  const activateTool = (tool: WorkspaceTool) => activateAppWorkspaceTool(tool)
   const inspectElement = (symbol: string) => {
     setPaletteElement(symbol)
     selectAtomBuildMode(symbol, effects)
@@ -67,7 +62,7 @@ export function useBuildPaletteController() {
     selectedAtomCount: bond.selectedAtomCount,
     selectedBond: bond.selectedBond,
     activateTool,
-    closePanel: () => closeWorkspacePanel(effects),
+    closePanel: closeAppWorkspacePanel,
     inspectElement,
     pickAtom: (symbol: string) => selectAtomBuildMode(symbol, effects),
     pickHydrogenGrow: () => selectHydrogenGrowMode(effects),

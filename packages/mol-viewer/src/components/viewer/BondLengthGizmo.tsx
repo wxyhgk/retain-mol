@@ -1,16 +1,16 @@
-import type { MolRenderer } from '../../lib/molRenderer'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import type { ThreeRendererPort } from '../../lib/molRenderer'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { BondLengthGizmoView } from './BondLengthGizmoView'
 import { useBondLengthGizmoController } from './useBondLengthGizmoController'
 
 interface Props {
-  renderer: MolRenderer | null
+  renderer: ThreeRendererPort | null
   visible: boolean
   readOnly?: boolean
 }
 
 export default function BondLengthGizmo({ renderer, visible, readOnly = false }: Props) {
-  const { moleculeStore } = useViewerRuntime()
+  const { moleculeStore } = useViewerRuntimeServices()
   const selectedAtomIds = moleculeStore(state => state.selectedAtomIds)
   const atomIds = selectedAtomIds.size === 2
     ? [...selectedAtomIds] as [string, string]
@@ -22,7 +22,7 @@ export default function BondLengthGizmo({ renderer, visible, readOnly = false }:
     <BondLengthGizmoView
       ref={controller.viewRef}
       editable={controller.editable}
-      reason={controller.reason}
+      {...(controller.reason !== undefined ? { reason: controller.reason } : {})}
       onBeginDrag={controller.onBeginDrag}
       onPointerMove={controller.onPointerMove}
       onPointerUp={controller.onPointerUp}

@@ -76,7 +76,7 @@ export function applyBondClickForIntent(
         (mol) =>
           runBondClickCommand(mol, {
             bondId: input.bondId,
-            fragment: commandRoute.fragment,
+            ...(commandRoute.fragment !== undefined ? { fragment: commandRoute.fragment } : {}),
             cycleLength: commandRoute.cycleLength,
           }),
         effects.editEffects,

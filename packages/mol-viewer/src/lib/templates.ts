@@ -109,7 +109,7 @@ export function listMoleculeTemplateSummaries(): readonly MoleculeTemplateSummar
       name: template.name,
       formula: template.formula,
       category: template.category,
-      description: template.description,
+      ...(template.description === undefined ? {} : { description: template.description }),
       source: template.source,
       atomCount: molecule.atoms.length,
       bondCount: molecule.bonds.length,

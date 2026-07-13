@@ -50,7 +50,15 @@ export function targetValenceForSymbol(
   charge = 0,
   radical = 0,
 ): number {
-  return targetValence({ id: '', symbol, x: 0, y: 0, z: 0, charge: charge || undefined, radical: radical || undefined })
+  return targetValence({
+    id: '',
+    symbol,
+    x: 0,
+    y: 0,
+    z: 0,
+    ...(charge !== 0 ? { charge } : {}),
+    ...(radical !== 0 ? { radical } : {}),
+  })
 }
 
 export function availableValence(mol: Molecule, atom: Atom): number {

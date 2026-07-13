@@ -74,6 +74,10 @@ describe('parseMol', () => {
     expect(mol.bonds[0].atomId2).toBe(mol.atoms[1].id)
   })
 
+  it('截断的 MOL 以统一错误包装失败', () => {
+    expect(() => parseMol('broken\n  RetainMol\n')).toThrow('MOL 解析失败')
+  })
+
 })
 
 describe('parseMol V3000', () => {
@@ -208,5 +212,9 @@ describe('parseSdf', () => {
     const sdf = exportSdf(parseMol(METHANE)) + '\nbad block\n$$$$\n' + exportSdf(parseMol(ETHYLENE))
     const mols = parseSdf(sdf)
     expect(mols.length).toBe(2)
+  })
+
+  it('只有非法块时返回空集合', () => {
+    expect(parseSdf('invalid molecule block with enough text\n$$$$\n')).toEqual([])
   })
 })

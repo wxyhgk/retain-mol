@@ -42,4 +42,19 @@ describe('runtime fragment registration', () => {
     expect(listFragments().filter(fragment => fragment.id === valid.id)).toHaveLength(1)
     expect(getFragment(valid.id)?.name).toBe('Replacement')
   })
+
+  it('does not expose mutable registry entries to callers', () => {
+    const registered = registerFragment(valid)
+    registered.name = 'Mutated return value'
+    registered.atoms[0].symbol = 'N'
+
+    const firstRead = getFragment(valid.id)!
+    firstRead.name = 'Mutated read value'
+    firstRead.atoms[0].symbol = 'O'
+
+    expect(getFragment(valid.id)).toMatchObject({
+      name: valid.name,
+      atoms: [{ symbol: 'C' }, { symbol: 'H' }],
+    })
+  })
 })

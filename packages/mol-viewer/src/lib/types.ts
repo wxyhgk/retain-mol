@@ -3,9 +3,14 @@
  * config/ lib/ store/ 都可以依赖它；反向依赖不允许。
  */
 
-import type { Vector3 } from 'three'
-
 // ── 分子核心类型（叶子层）─────────────────────────────────────────────────────
+
+/** 跨 Builder/Renderer 边界使用的只读三维向量 DTO。 */
+export interface Vector3Data {
+  readonly x: number
+  readonly y: number
+  readonly z: number
+}
 
 export type CoordinationBondOrder = 1 | 2 | 3
 
@@ -61,8 +66,8 @@ export interface Molecule {
 
 /** 拖出生长时的候选槽位参考几何（化学层计算，渲染层消费），含幽灵原子外观 */
 export type GrowGuideSpec =
-  | { kind: 'ring'; center: Vector3; axis: Vector3; radius: number; ghostRadius: number; ghostColor: number }
-  | { kind: 'points'; positions: Vector3[]; ghostRadius: number; ghostColor: number }
+  | { kind: 'ring'; center: Vector3Data; axis: Vector3Data; radius: number; ghostRadius: number; ghostColor: number }
+  | { kind: 'points'; positions: readonly Vector3Data[]; ghostRadius: number; ghostColor: number }
   | null
 
 export interface FragmentTorsionPreview {

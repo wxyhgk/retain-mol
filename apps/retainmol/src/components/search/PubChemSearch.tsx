@@ -7,13 +7,12 @@ import { placeMoleculeInViewer } from '@/features/molecule-placement'
 import { cn } from '@/lib/utils'
 
 interface Props {
-  open: boolean
   onClose: () => void
 }
 
 type Status = 'idle' | 'loading' | 'error' | 'ready'
 
-export default function PubChemSearch({ open, onClose }: Props) {
+export default function PubChemSearch({ onClose }: Props) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -22,20 +21,12 @@ export default function PubChemSearch({ open, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (open) {
-      setQuery(''); setStatus('idle'); setErrorMsg(''); setIs2DWarning(false); setFetchedMol(null)
-      setTimeout(() => inputRef.current?.focus(), 50)
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [onClose, open])
+  }, [onClose])
 
   const handleSearch = async () => {
     if (!query.trim() || status === 'loading') return
@@ -67,8 +58,6 @@ export default function PubChemSearch({ open, onClose }: Props) {
     onClose()
   }
 
-  if (!open) return null
-
   return (
     <>
       {/* 遮罩 */}
@@ -89,6 +78,7 @@ export default function PubChemSearch({ open, onClose }: Props) {
             }
             <input
               ref={inputRef}
+              autoFocus
               value={query}
               onChange={e => { setQuery(e.target.value); setStatus('idle'); setErrorMsg('') }}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}

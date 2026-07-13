@@ -5,6 +5,17 @@ import {
   type PublicFragmentDef,
 } from './fragments'
 
+export type {
+  PublicCoordinationSite,
+  PublicFragmentAtom,
+  PublicFragmentBond,
+  PublicFragmentBondOrder,
+  PublicFragmentCoordination,
+  PublicFragmentDef,
+  PublicFragmentDirection,
+  PublicFragmentGroup,
+} from './fragments'
+
 export interface CoordinationSiteModel {
   readonly fragmentId: string
   readonly element: string
@@ -29,7 +40,9 @@ export function getCoordinationSiteModel(fragmentId: string): CoordinationSiteMo
     element: fragment.atoms[fragment.attachIndex]?.symbol ?? '',
     geometryId: fragment.coordination.geometryId,
     name: fragment.name,
-    pointGroup: fragment.coordination.pointGroup,
+    ...(fragment.coordination.pointGroup === undefined
+      ? {}
+      : { pointGroup: fragment.coordination.pointGroup }),
     sites: fragment.coordination.sites.map(site => ({
       ...site,
       direction: [...site.direction],

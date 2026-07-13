@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bondDepthStyle, projectCoordinationDirections } from './CoordinationGeometryGlyph'
+import { bondDepthStyle, projectCoordinationDirections } from './coordinationGeometryProjection'
 
 describe('coordination geometry glyph projection', () => {
   it('preserves every site and sorts back-to-front', () => {

@@ -1,3 +1,3 @@
 import { useMoleculeStore } from '../store/moleculeStore'
 
-export type MoleculeStoreApi = typeof useMoleculeStore
+export type BuilderMoleculeStoreApi = typeof useMoleculeStore

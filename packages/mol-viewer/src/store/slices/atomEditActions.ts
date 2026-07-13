@@ -45,7 +45,7 @@ export function createAtomEditActions({
 }: EditActionContext): AtomEditActions {
   return {
     addAtom: (symbol, x, y, z) => {
-      const result = applyActiveMoleculeEditWithMeta<{ atomId: string }>(
+      const result = applyActiveMoleculeEditWithMeta(
         get,
         set,
         (mol) => runAddAtomCommand(mol, symbol, x, y, z),

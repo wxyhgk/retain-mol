@@ -1,4 +1,4 @@
-import type { FragmentDef } from '../fragmentLibrary'
+import type { FragmentDef } from '../fragment/model'
 import { getElementConfig } from '../../../config/elements.config'
 import { COORDINATION_GEOMETRY_CATALOG } from './geometryCatalog'
 import type { TransitionMetalCoordinationSpec, TransitionMetalCoordinationSet } from './types'
@@ -21,6 +21,7 @@ export function defineTransitionMetalCoordinationSet(
       }
     })
     const directions = sites.map(site => [...site.direction] as [number, number, number])
+    const attachDirection: [number, number, number] = directions[0] ?? [1, 0, 0]
     const pointGroup = spec.pointGroup ?? base.pointGroup
     const short = spec.short ?? `${base.short}${pointGroup ? ` (${pointGroup})` : ''}`
     const slotBondLength = spec.slotBondLength
@@ -49,13 +50,13 @@ export function defineTransitionMetalCoordinationSet(
       bonds,
       attachIndex: 0,
       attachHIndex: 1,
-      attachDirection: [...directions[0]],
+      attachDirection: [...attachDirection],
       attachOrder: sites[0]?.bondOrder ?? 1,
       group: 'coordination',
       coordination: {
         geometryId: spec.geometryId,
         coordinationNumber: base.coordinationNumber,
-        pointGroup,
+        ...(pointGroup !== undefined ? { pointGroup } : {}),
         directions,
         sites,
       },

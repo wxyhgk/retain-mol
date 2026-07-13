@@ -22,6 +22,18 @@ import type {
 import type { SelectionCommandResult } from '../../lib/builder/commands/selection'
 import type { MoleculeState } from './types'
 
+function isSuccessfulCommandResult<TResult extends { readonly ok: boolean }>(
+  result: TResult,
+): result is TResult & { readonly ok: true } {
+  return result.ok
+}
+
+function isChangedCommandResult(
+  result: EditCommandResultWithMeta<object>,
+): result is { readonly ok: true; readonly changed: true; readonly molecule: Molecule } {
+  return result.ok && result.changed
+}
+
 // ── Selectors ─────────────────────────────────────────────────────────────────
 
 const EMPTY_MOLECULE: Molecule = { atoms: [], bonds: [], name: 'New Molecule' }
@@ -177,18 +189,21 @@ export function applyActiveMoleculeEdit(
   }
 }
 
-export function applyActiveMoleculeEditWithMeta<TMeta extends object>(
+export function applyActiveMoleculeEditWithMeta<
+  TMeta extends object,
+  TResult extends EditCommandResultWithMeta<object> = EditCommandResultWithMeta<TMeta>,
+>(
   get: () => MoleculeState,
   set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
-  edit: (mol: Molecule) => EditCommandResultWithMeta<TMeta>,
-  readMeta: (result: Extract<EditCommandResultWithMeta<TMeta>, { ok: true }>) => TMeta,
+  edit: (mol: Molecule) => TResult,
+  readMeta: (result: TResult & { readonly ok: true }) => TMeta,
 ): ({ ok: true } & TMeta) | { ok: false; reason?: string } {
   const mol = getActiveMol(get())
   if (!mol) return { ok: false, reason: '没有活跃分子' }
   const result = edit(mol)
-  if (!result.ok) return result
+  if (!isSuccessfulCommandResult(result)) return result
   const meta = readMeta(result)
-  if (!result.changed) return { ok: true, ...meta }
+  if (!isChangedCommandResult(result)) return { ok: true, ...meta }
   set((s) => {
     const m = getActiveMol(s)
     if (!m) return {}
@@ -267,18 +282,21 @@ export type GeomCommandResultWithMeta<TMeta extends object> =
   | ({ ok: true; changed: false } & Partial<TMeta>)
   | { ok: false; reason: string }
 
-export function applyGeomEditWithMeta<TMeta extends object>(
+export function applyGeomEditWithMeta<
+  TMeta extends object,
+  TResult extends GeomCommandResultWithMeta<object> = GeomCommandResultWithMeta<TMeta>,
+>(
   get: () => MoleculeState,
   set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
-  edit: (mol: Molecule) => GeomCommandResultWithMeta<TMeta>,
-  readMeta: (result: Extract<GeomCommandResultWithMeta<TMeta>, { ok: true }>) => TMeta,
+  edit: (mol: Molecule) => TResult,
+  readMeta: (result: TResult & { readonly ok: true }) => TMeta,
 ): ({ ok: true } & TMeta) | { ok: false; reason?: string } {
   const mol = getActiveMol(get())
   if (!mol) return { ok: false, reason: '没有活跃分子' }
   const result = edit(mol)
-  if (!result.ok) return result
+  if (!isSuccessfulCommandResult(result)) return result
   const meta = readMeta(result)
-  if (!result.changed) return { ok: true, ...meta }
+  if (!isChangedCommandResult(result)) return { ok: true, ...meta }
   set((s) => {
     const m = getActiveMol(s)
     if (!m) return {}

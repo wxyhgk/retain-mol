@@ -73,15 +73,15 @@ export function resolveStylePreset(id: string): ResolvedStylePreset {
     cur = preset.extends
   }
 
-  const merged = chain.reduce<Partial<ResolvedStylePreset> | null>((acc, preset) => ({
+  const merged = chain.reduce<Partial<ResolvedStylePreset>>((acc, preset) => ({
+    ...acc,
     metadata: preset.metadata,
-    displayMode: preset.displayMode ?? acc?.displayMode,
-    themeId: preset.themeId ?? acc?.themeId,
-    renderStyle: preset.renderStyle ?? acc?.renderStyle,
-    showAtomLabels: preset.showAtomLabels ?? acc?.showAtomLabels,
-  }), null)
+    ...(preset.displayMode !== undefined ? { displayMode: preset.displayMode } : {}),
+    ...(preset.themeId !== undefined ? { themeId: preset.themeId } : {}),
+    ...(preset.renderStyle !== undefined ? { renderStyle: preset.renderStyle } : {}),
+    ...(preset.showAtomLabels !== undefined ? { showAtomLabels: preset.showAtomLabels } : {}),
+  }), {})
 
-  if (!merged) throw new Error(`未找到 style preset: ${id}`)
   if (!merged.metadata || !merged.displayMode || !merged.themeId || !merged.renderStyle) {
     throw new Error(`style preset 解析后缺少必需字段: ${id}`)
   }
@@ -90,7 +90,7 @@ export function resolveStylePreset(id: string): ResolvedStylePreset {
     displayMode: merged.displayMode,
     themeId: merged.themeId,
     renderStyle: merged.renderStyle,
-    showAtomLabels: merged.showAtomLabels,
+    ...(merged.showAtomLabels !== undefined ? { showAtomLabels: merged.showAtomLabels } : {}),
   }
 }
 

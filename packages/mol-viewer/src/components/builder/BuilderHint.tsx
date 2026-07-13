@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { getElementConfig } from '../../config/elements.config'
 import { getFragment } from '../../lib/builder/fragmentLibrary'
 import { toolCan } from '../../config/toolCapabilities.config'
@@ -17,7 +17,7 @@ const HINTS: Record<string, string> = {
 }
 
 export default function BuilderHint() {
-  const { editorStore } = useViewerRuntime()
+  const { editorStore } = useViewerRuntimeServices()
   const activeTool       = editorStore(s => s.activeTool)
   const activeElement    = editorStore(s => s.activeElement)
   const activeFragmentId = editorStore(s => s.activeFragmentId)

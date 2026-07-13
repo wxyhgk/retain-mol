@@ -1,0 +1,21 @@
+# Replace the default owner with real team handles as the contributor group grows.
+# Recommended roles are documented in docs/architecture/collaboration-audit-2026-07-13.md:
+# API, Builder, State, Renderer, App workspace, and feature owners.
+# Until those GitHub teams exist, @wxyhgk is the integration owner for shared hotspots.
+* @wxyhgk
+
+/apps/retainmol/src/components/ui/ @wxyhgk
+/apps/retainmol/src/components/layout/ @wxyhgk
+/apps/retainmol/src/domain/viewer/ @wxyhgk
+/apps/retainmol/src/features/build-palette/ @wxyhgk
+/apps/retainmol/src/features/geometry/ @wxyhgk
+/apps/retainmol/src/features/geometry-optimization/ @wxyhgk
+/apps/retainmol/src/features/molecular-computation/ @wxyhgk
+/apps/retainmol/src/features/template-library/ @wxyhgk
+/apps/retainmol/src/features/template-studio/ @wxyhgk
+
+/packages/mol-viewer/src/public/ @wxyhgk
+/packages/mol-viewer/src/lib/builder/ @wxyhgk
+/packages/mol-viewer/src/lib/molRenderer/ @wxyhgk
+/packages/mol-viewer/src/store/ @wxyhgk
+/packages/mol-viewer/package.json @wxyhgk

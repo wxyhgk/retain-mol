@@ -18,13 +18,11 @@ export function createClipboardEditActions({
 }: EditActionContext): ClipboardEditActions {
   return {
     pasteAtoms: (clipboard) => {
-      const result = applyActiveMoleculeEditWithMeta<{
-        newAtomIds: string[]
-      }>(
+      const result = applyActiveMoleculeEditWithMeta(
         get,
         set,
         (mol) => runPasteAtomsCommand(mol, clipboard, PLACEMENT.pasteOffsetX),
-        (commandResult) => ({ newAtomIds: commandResult.newAtomIds ?? [] }),
+        (commandResult) => ({ newAtomIds: commandResult.newAtomIds }),
       )
       return result.ok ? result.newAtomIds : []
     },

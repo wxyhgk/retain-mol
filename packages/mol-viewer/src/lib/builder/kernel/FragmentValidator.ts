@@ -1,4 +1,5 @@
-import type { FragmentDef } from '../fragmentLibrary'
+import type { FragmentDef } from '../fragment/model'
+import { getElementConfig } from '../../../config/elements.config'
 
 export interface FragmentValidationIssue {
   readonly fragmentId: string
@@ -30,6 +31,8 @@ export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIs
   })
 
   const bondPairs = new Set<string>()
+  const bondCounts = Array.from({ length: atomCount }, () => 0)
+  const bondOrders = Array.from({ length: atomCount }, () => 0)
   fragment.bonds.forEach((bond, index) => {
     if (bond.a < 0 || bond.a >= atomCount || bond.b < 0 || bond.b >= atomCount) {
       issues.push(issue(fragment, 'bond.index.invalid', `bond[${index}] 引用了不存在的原子`))
@@ -38,11 +41,31 @@ export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIs
     if (bond.a === bond.b) {
       issues.push(issue(fragment, 'bond.self', `bond[${index}] 是自环`))
     }
+    if (bond.order !== 1 && bond.order !== 2 && bond.order !== 3) {
+      issues.push(issue(fragment, 'bond.order.invalid', `bond[${index}] 键级无效`))
+    }
     const key = bond.a < bond.b ? `${bond.a}:${bond.b}` : `${bond.b}:${bond.a}`
     if (bondPairs.has(key)) {
       issues.push(issue(fragment, 'bond.duplicate', `bond[${index}] 与已有键重复`))
     }
     bondPairs.add(key)
+    if (bond.a !== bond.b) {
+      bondCounts[bond.a] = (bondCounts[bond.a] ?? 0) + 1
+      bondCounts[bond.b] = (bondCounts[bond.b] ?? 0) + 1
+      bondOrders[bond.a] = (bondOrders[bond.a] ?? 0) + bond.order
+      bondOrders[bond.b] = (bondOrders[bond.b] ?? 0) + bond.order
+    }
+  })
+
+  fragment.atoms.forEach((atom, index) => {
+    const maxBonds = getElementConfig(atom.symbol).maxBonds
+    if ((bondCounts[index] ?? 0) > maxBonds || (bondOrders[index] ?? 0) > maxBonds) {
+      issues.push(issue(
+        fragment,
+        'atom.valence.exceeded',
+        `atom[${index}] ${atom.symbol} 的模板价态超过上限`,
+      ))
+    }
   })
 
   if (fragment.attachIndex < 0 || fragment.attachIndex >= atomCount) {

@@ -75,7 +75,7 @@ describe('handleEditorShortcut workspace tools', () => {
 
     const workspace = useWorkspaceToolStore.getState()
     const editor = useEditorStore.getState()
-    expect(deriveWorkspaceTool(editor.activeTool, editor.brushArmed, workspace.activePanel)).toBe(workspaceTool)
+    expect(deriveWorkspaceTool(workspace.activePanel, editor.activeTool)).toBe(workspaceTool)
     expect(selectWorkspacePanel(workspace)).toBe(panel)
     expect(useEditorStore.getState()).toMatchObject({ activeTool: coreTool, brushArmed })
   })

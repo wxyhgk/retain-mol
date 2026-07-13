@@ -21,7 +21,9 @@ export type GeomEditResult =
 
 const NO_BOND = '__no_bond__'
 
-function getAtoms(mol: Molecule, ids: string[]): Atom[] | null {
+type AtomTuple<T extends readonly string[]> = { readonly [K in keyof T]: Atom }
+
+function getAtoms<const T extends readonly string[]>(mol: Molecule, ids: T): AtomTuple<T> | null {
   if (new Set(ids).size !== ids.length) return null
   const out: Atom[] = []
   for (const id of ids) {
@@ -29,7 +31,7 @@ function getAtoms(mol: Molecule, ids: string[]): Atom[] | null {
     if (!a) return null
     out.push(a)
   }
-  return out
+  return out as AtomTuple<T>
 }
 
 /** 平移 moving 集合内的原子 */
@@ -135,7 +137,8 @@ export function setBondAngle(mol: Molecule, aId: string, bId: string, cId: strin
   let result = rotate(mol, side, b, axis, delta)
 
   // 数值/方向保险：结果偏离目标则反向旋转
-  const check = getAtoms(result, [aId, bId, cId])!
+  const check = getAtoms(result, [aId, bId, cId])
+  if (!check) return { ok: false, reason: '几何调整后无法读取目标原子' }
   if (Math.abs(calcAngle(check[0], check[1], check[2]) - targetDeg) > 0.1) {
     result = rotate(mol, side, b, axis, -delta)
   }
@@ -173,7 +176,8 @@ export function setDihedralAngle(
   let result = rotate(mol, side, b, axis, delta)
 
   // 符号约定保险：偏差大则反向
-  const check = getAtoms(result, [aId, bId, cId, dId])!
+  const check = getAtoms(result, [aId, bId, cId, dId])
+  if (!check) return { ok: false, reason: '几何调整后无法读取目标原子' }
   const diff = Math.abs(((calcDihedral(check[0], check[1], check[2], check[3]) - targetDeg + 540) % 360) - 180)
   if (diff > 0.1) {
     result = rotate(mol, side, b, axis, -delta)

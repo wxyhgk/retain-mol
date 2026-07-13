@@ -8,3 +8,8 @@ export {
 } from './lib/io/molFormat'
 export type { OptimizeResult } from './lib/io/molFormat'
 export type { Molecule, Atom, Bond } from './lib/types'
+export type {
+  CoordinationBondOrder,
+  CoordinationSite,
+  CoordinationSiteAssignment,
+} from './lib/types'

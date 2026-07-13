@@ -1,7 +1,80 @@
-import type { Molecule } from '../../../molecule'
+import type { Atom, Bond, Molecule } from '../../../molecule'
 import { newAtom, newBond } from '../../../molecule'
-import type { MolClipboard } from '../../../types'
+import type { ClipboardAtom, ClipboardBond, MolClipboard } from '../../../types'
 import type { ClipboardCommandResult, PasteAtomsCommandResult } from '../shared'
+
+function copyAtomToClipboard(atom: Atom): ClipboardAtom {
+  return {
+    symbol: atom.symbol,
+    x: atom.x,
+    y: atom.y,
+    z: atom.z,
+    ...(atom.charge === undefined ? {} : { charge: atom.charge }),
+    ...(atom.radical === undefined ? {} : { radical: atom.radical }),
+    ...(atom.coordinationGeometry === undefined
+      ? {}
+      : { coordinationGeometry: atom.coordinationGeometry }),
+    ...(atom.coordinationDirections === undefined
+      ? {}
+      : { coordinationDirections: atom.coordinationDirections.map(direction => [...direction] as const) }),
+    ...(atom.coordinationSites === undefined
+      ? {}
+      : {
+          coordinationSites: atom.coordinationSites.map(site => ({
+            ...site,
+            direction: [...site.direction] as const,
+          })),
+        }),
+    ...(atom.coordinationNumber === undefined
+      ? {}
+      : { coordinationNumber: atom.coordinationNumber }),
+  }
+}
+
+function pasteClipboardAtom(clipAtom: ClipboardAtom, offsetX: number): Atom {
+  return {
+    ...newAtom(clipAtom.symbol, clipAtom.x + offsetX, clipAtom.y, clipAtom.z),
+    ...(clipAtom.charge === undefined ? {} : { charge: clipAtom.charge }),
+    ...(clipAtom.radical === undefined ? {} : { radical: clipAtom.radical }),
+    ...(clipAtom.coordinationGeometry === undefined
+      ? {}
+      : { coordinationGeometry: clipAtom.coordinationGeometry }),
+    ...(clipAtom.coordinationDirections === undefined
+      ? {}
+      : { coordinationDirections: clipAtom.coordinationDirections.map(direction => [...direction] as const) }),
+    ...(clipAtom.coordinationSites === undefined
+      ? {}
+      : {
+          coordinationSites: clipAtom.coordinationSites.map(site => ({
+            ...site,
+            direction: [...site.direction] as const,
+          })),
+        }),
+    ...(clipAtom.coordinationNumber === undefined
+      ? {}
+      : { coordinationNumber: clipAtom.coordinationNumber }),
+  }
+}
+
+function copyBondToClipboard(
+  bond: Bond,
+  indexByAtomId: ReadonlyMap<string, number>,
+): ClipboardBond | null {
+  const a = indexByAtomId.get(bond.atomId1)
+  const b = indexByAtomId.get(bond.atomId2)
+  if (a === undefined || b === undefined) return null
+  const coordinationSites = bond.coordinationSites?.flatMap(assignment => {
+    const atom = indexByAtomId.get(assignment.atomId)
+    return atom === undefined ? [] : [{ atom, siteId: assignment.siteId }]
+  })
+  return {
+    a,
+    b,
+    order: bond.order,
+    ...(bond.aromatic === undefined ? {} : { aromatic: bond.aromatic }),
+    ...(coordinationSites?.length ? { coordinationSites } : {}),
+  }
+}
 
 export function runCopySelectionCommand(
   molecule: Molecule,
@@ -15,31 +88,11 @@ export function runCopySelectionCommand(
   )
   return {
     clipboard: {
-      atoms: selectedAtoms.map(atom => ({
-        symbol: atom.symbol,
-        x: atom.x,
-        y: atom.y,
-        z: atom.z,
-        charge: atom.charge,
-        radical: atom.radical,
-        coordinationGeometry: atom.coordinationGeometry,
-        coordinationDirections: atom.coordinationDirections?.map(direction => [...direction] as const),
-        coordinationSites: atom.coordinationSites?.map(site => ({
-          ...site,
-          direction: [...site.direction] as const,
-        })),
-        coordinationNumber: atom.coordinationNumber,
-      })),
-      bonds: selectedBonds.map(bond => ({
-        a: indexByAtomId.get(bond.atomId1)!,
-        b: indexByAtomId.get(bond.atomId2)!,
-        order: bond.order,
-        aromatic: bond.aromatic,
-        coordinationSites: bond.coordinationSites?.flatMap(assignment => {
-          const atom = indexByAtomId.get(assignment.atomId)
-          return atom === undefined ? [] : [{ atom, siteId: assignment.siteId }]
-        }),
-      })),
+      atoms: selectedAtoms.map(copyAtomToClipboard),
+      bonds: selectedBonds.flatMap(bond => {
+        const copied = copyBondToClipboard(bond, indexByAtomId)
+        return copied ? [copied] : []
+      }),
     },
   }
 }
@@ -56,29 +109,23 @@ export function runPasteAtomsCommand(
   const clipMinX = clipboard.atoms.reduce((min, atom) => Math.min(min, atom.x), Infinity)
   const offsetX = isFinite(clipMinX) ? maxX + pasteOffsetX - clipMinX : pasteOffsetX
 
-  const newAtoms = clipboard.atoms.map(clipAtom => ({
-    ...newAtom(clipAtom.symbol, clipAtom.x + offsetX, clipAtom.y, clipAtom.z),
-    charge: clipAtom.charge,
-    radical: clipAtom.radical,
-    coordinationGeometry: clipAtom.coordinationGeometry,
-    coordinationDirections: clipAtom.coordinationDirections?.map(direction => [...direction] as const),
-    coordinationSites: clipAtom.coordinationSites?.map(site => ({
-      ...site,
-      direction: [...site.direction] as const,
-    })),
-    coordinationNumber: clipAtom.coordinationNumber,
-  }))
-  const newBonds = clipboard.bonds.map(clipBond => {
-    const atomId1 = newAtoms[clipBond.a].id
-    const atomId2 = newAtoms[clipBond.b].id
+  const newAtoms = clipboard.atoms.map(clipAtom => pasteClipboardAtom(clipAtom, offsetX))
+  const newBonds = clipboard.bonds.flatMap(clipBond => {
+    const atom1 = newAtoms[clipBond.a]
+    const atom2 = newAtoms[clipBond.b]
+    if (!atom1 || !atom2) return []
+    const atomId1 = atom1.id
+    const atomId2 = atom2.id
     const baseBond = newBond(atomId1, atomId2, clipBond.order)
     const coordinationSites = clipBond.coordinationSites?.flatMap(assignment => {
       const atom = newAtoms[assignment.atom]
       return atom ? [{ atomId: atom.id, siteId: assignment.siteId }] : []
     })
-    return coordinationSites?.length
-      ? { ...baseBond, aromatic: clipBond.aromatic, coordinationSites }
-      : { ...baseBond, aromatic: clipBond.aromatic }
+    return [{
+      ...baseBond,
+      ...(clipBond.aromatic === undefined ? {} : { aromatic: clipBond.aromatic }),
+      ...(coordinationSites?.length ? { coordinationSites } : {}),
+    }]
   })
 
   return {

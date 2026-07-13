@@ -1,1 +1,1 @@
-export { createObjectPositionWriteEditSession } from '@retainmol/mol-viewer/viewer'
+export { createObjectPositionWriteEditSession } from '@retainmol/mol-viewer/editing'

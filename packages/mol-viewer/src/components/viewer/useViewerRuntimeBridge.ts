@@ -1,26 +1,26 @@
 import { useEffect } from 'react'
 import { createViewportController } from '../../viewport'
-import type { MolRenderer } from '../../lib/molRenderer'
-import { useViewerRuntime } from '../../runtime/ViewerRuntime'
+import type { RendererPort } from '../../lib/molRenderer'
+import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 
 /** Registers the narrow app-facing capture and viewport command surfaces. */
 export function useViewerRuntimeBridge(
-  renderer: MolRenderer | null,
+  renderer: RendererPort | null,
   gridVisible: boolean | undefined,
 ) {
-  const runtime = useViewerRuntime()
+  const { capture, viewport, moleculeStore } = useViewerRuntimeServices()
 
   useEffect(() => {
     if (!renderer) return
-    return runtime.capture.register(scale => renderer.captureImage(scale))
-  }, [renderer, runtime])
+    return capture.register(scale => renderer.captureImage(scale))
+  }, [renderer, capture])
 
   useEffect(() => {
     if (!renderer) return
-    return runtime.viewport.register(
-      createViewportController(renderer, runtime.moleculeStore.getState),
+    return viewport.register(
+      createViewportController(renderer, moleculeStore.getState),
     )
-  }, [renderer, runtime])
+  }, [renderer, viewport, moleculeStore])
 
   useEffect(() => {
     if (!renderer || gridVisible === undefined) return

@@ -3,63 +3,83 @@ import {
   listFragments as listInternalFragments,
   registerFragment as registerInternalFragment,
   unregisterFragment as unregisterInternalFragment,
-  type FragmentAtom,
-  type FragmentBond,
   type FragmentDef,
 } from '../lib/builder/fragmentLibrary'
+import type {
+  FragmentAttachmentSite,
+  FragmentSummary,
+  PublicFragmentBond,
+  PublicFragmentCoordination,
+  PublicFragmentDef,
+} from './contracts/fragments'
 
-export type PublicFragmentDef =
-  Readonly<Omit<FragmentDef, 'atoms' | 'bonds' | 'attachBond' | 'coordination'>> & {
-    readonly atoms: readonly Readonly<FragmentAtom>[]
-    readonly bonds: readonly Readonly<FragmentBond>[]
-    readonly attachBond?: readonly [number, number]
-    readonly coordination?: Readonly<Omit<NonNullable<FragmentDef['coordination']>, 'directions'>> & {
-      readonly directions: readonly (readonly [number, number, number])[]
-      readonly sites: readonly NonNullable<FragmentDef['coordination']>['sites'][number][]
-    }
+export type {
+  FragmentAttachmentSite,
+  FragmentSummary,
+  PublicCoordinationSite,
+  PublicFragmentAtom,
+  PublicFragmentBond,
+  PublicFragmentBondOrder,
+  PublicFragmentCoordination,
+  PublicFragmentDef,
+  PublicFragmentDirection,
+  PublicFragmentGroup,
+} from './contracts/fragments'
+
+function clonePublicBond(bond: PublicFragmentBond): PublicFragmentBond {
+  const { coordinationSiteId, ...required } = bond
+  return {
+    ...required,
+    ...(coordinationSiteId === undefined ? {} : { coordinationSiteId }),
   }
-
-export interface FragmentSummary {
-  readonly id: string
-  readonly name: string
-  readonly short: string
-  readonly formula: string
-  readonly group?: FragmentDef['group']
-  readonly attachOrder?: FragmentDef['attachOrder']
-  readonly atomCount: number
-  readonly bondCount: number
 }
 
-export interface FragmentAttachmentSite {
-  readonly id: string
-  readonly label: string
-  readonly direction: readonly [number, number, number]
-  readonly bondOrder: 1 | 2 | 3
-  readonly equivalenceGroup: string
+function clonePublicCoordination(
+  coordination: PublicFragmentCoordination,
+): PublicFragmentCoordination {
+  const { pointGroup, ...required } = coordination
+  return {
+    ...required,
+    ...(pointGroup === undefined ? {} : { pointGroup }),
+    directions: coordination.directions.map(direction => [...direction]),
+    sites: coordination.sites.map(site => ({ ...site, direction: [...site.direction] })),
+  }
+}
+
+function clonePublicFragment(fragment: PublicFragmentDef): PublicFragmentDef {
+  const {
+    attachDirection,
+    attachBond,
+    attachOrder,
+    group,
+    coordination,
+    ...required
+  } = fragment
+  return {
+    ...required,
+    atoms: fragment.atoms.map(atom => ({ ...atom })),
+    bonds: fragment.bonds.map(clonePublicBond),
+    ...(attachDirection === undefined ? {} : { attachDirection: [...attachDirection] }),
+    ...(attachBond === undefined ? {} : { attachBond: [...attachBond] as [number, number] }),
+    ...(attachOrder === undefined ? {} : { attachOrder }),
+    ...(group === undefined ? {} : { group }),
+    ...(coordination === undefined ? {} : { coordination: clonePublicCoordination(coordination) }),
+  }
 }
 
 function toPublicFragment(fragment: FragmentDef): PublicFragmentDef {
-  return {
-    ...fragment,
-    atoms: fragment.atoms.map(atom => ({ ...atom })),
-    bonds: fragment.bonds.map(bond => ({ ...bond })),
-    attachBond: fragment.attachBond ? [...fragment.attachBond] : undefined,
-    coordination: fragment.coordination ? {
-      ...fragment.coordination,
-      directions: fragment.coordination.directions.map(direction => [...direction]),
-      sites: fragment.coordination.sites.map(site => ({ ...site, direction: [...site.direction] })),
-    } : undefined,
-  }
+  return clonePublicFragment(fragment)
 }
 
 function toFragmentSummary(fragment: FragmentDef): FragmentSummary {
+  const { group, attachOrder } = fragment
   return {
     id: fragment.id,
     name: fragment.name,
     short: fragment.short,
     formula: fragment.formula,
-    group: fragment.group,
-    attachOrder: fragment.attachOrder,
+    ...(group === undefined ? {} : { group }),
+    ...(attachOrder === undefined ? {} : { attachOrder }),
     atomCount: fragment.atoms.length,
     bondCount: fragment.bonds.length,
   }
@@ -148,39 +168,59 @@ export function createFragmentForAttachmentSite(
   const preparedFragment = shouldMaterializeCarbonMultipleBondPartner(fragment, site)
     ? materializeCarbonMultipleBondPartner(fragment)
     : fragment
+  const clonedFragment = clonePublicFragment(preparedFragment)
 
   return {
-    ...preparedFragment,
+    ...clonedFragment,
     id: `${fragment.id}--site--${site.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
     name: `${fragment.name} · ${site.label}`,
     attachHIndex,
     attachDirection: [...site.direction],
     attachOrder: site.bondOrder,
-    atoms: preparedFragment.atoms.map(atom => ({ ...atom })),
-    bonds: preparedFragment.bonds.map(bond => ({ ...bond })),
-    coordination: preparedFragment.coordination ? {
-      ...preparedFragment.coordination,
-      directions: preparedFragment.coordination.directions.map(direction => [...direction]),
-      sites: preparedFragment.coordination.sites.map(candidate => ({
-        ...candidate,
-        direction: [...candidate.direction],
-      })),
-    } : undefined,
   }
 }
 
 export function registerFragment(fragment: PublicFragmentDef): PublicFragmentDef {
-  return toPublicFragment(registerInternalFragment({
-    ...fragment,
+  const {
+    attachDirection,
+    attachBond,
+    attachOrder,
+    group,
+    coordination,
+    ...required
+  } = fragment
+  const internalFragment: FragmentDef = {
+    ...required,
     atoms: fragment.atoms.map(atom => ({ ...atom })),
-    bonds: fragment.bonds.map(bond => ({ ...bond })),
-    attachBond: fragment.attachBond ? [...fragment.attachBond] : undefined,
-    coordination: fragment.coordination ? {
-      ...fragment.coordination,
-      directions: fragment.coordination.directions.map(direction => [...direction]) as [number, number, number][],
-      sites: fragment.coordination.sites.map(site => ({ ...site, direction: [...site.direction] as [number, number, number] })),
-    } : undefined,
-  }))
+    bonds: fragment.bonds.map(bond => {
+      const { coordinationSiteId, ...requiredBond } = bond
+      return {
+        ...requiredBond,
+        ...(coordinationSiteId === undefined ? {} : { coordinationSiteId }),
+      }
+    }),
+    ...(attachDirection === undefined
+      ? {}
+      : { attachDirection: [...attachDirection] as [number, number, number] }),
+    ...(attachBond === undefined ? {} : { attachBond: [...attachBond] as [number, number] }),
+    ...(attachOrder === undefined ? {} : { attachOrder }),
+    ...(group === undefined ? {} : { group }),
+    ...(coordination === undefined
+      ? {}
+      : {
+          coordination: {
+            geometryId: coordination.geometryId,
+            coordinationNumber: coordination.coordinationNumber,
+            ...(coordination.pointGroup === undefined ? {} : { pointGroup: coordination.pointGroup }),
+            directions: coordination.directions.map(direction => [...direction] as [number, number, number]),
+            sites: coordination.sites.map(site => ({
+              ...site,
+              direction: [...site.direction] as [number, number, number],
+            })),
+          },
+        }),
+  }
+  return toPublicFragment(registerInternalFragment(internalFragment))
 }
 
 export function unregisterFragment(id: string): boolean {
@@ -222,7 +262,7 @@ function materializeCarbonMultipleBondPartner(fragment: PublicFragmentDef): Publ
   }
   const atoms = fragment.atoms.map(atom => ({ ...atom }))
   atoms[fragment.attachHIndex] = partner
-  const bonds: FragmentBond[] = fragment.bonds.map(bond => {
+  const bonds: PublicFragmentBond[] = fragment.bonds.map(bond => {
     const isPrimaryBond =
       (bond.a === fragment.attachIndex && bond.b === fragment.attachHIndex) ||
       (bond.b === fragment.attachIndex && bond.a === fragment.attachHIndex)

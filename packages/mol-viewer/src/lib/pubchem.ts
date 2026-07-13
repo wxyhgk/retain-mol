@@ -41,7 +41,8 @@ export async function fetchCompoundSdf(query: string): Promise<PubChemResult> {
 
   // 从 SDF 中提取 CID 和名称
   const cidMatch = sdf.match(/> <PUBCHEM_COMPOUND_CID>\n(\d+)/)
-  const cid = cidMatch ? parseInt(cidMatch[1]) : 0
+  const cidText = cidMatch?.[1]
+  const cid = cidText ? Number.parseInt(cidText, 10) : 0
 
   return { sdf, name: query, cid }
 }

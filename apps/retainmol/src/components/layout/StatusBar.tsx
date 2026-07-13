@@ -1,11 +1,15 @@
 import { getFragment } from '@retainmol/mol-viewer/fragments'
 import { useEditorStore } from '@/domain/viewer/editorState'
-import { deriveWorkspaceTool, useWorkspaceToolStore } from '@/domain/workspaceToolStore'
+import {
+  deriveWorkspaceTool,
+  selectWorkspacePanel,
+  useWorkspaceToolStore,
+} from '@/domain/workspaceToolStore'
 
 export function StatusBar() {
   const { activeTool, activeElement, activeFragmentId, atomClickMode, brushArmed } = useEditorStore()
-  const activePanel = useWorkspaceToolStore(state => state.activePanel)
-  const workspaceTool = deriveWorkspaceTool(activeTool, brushArmed, activePanel)
+  const panel = useWorkspaceToolStore(selectWorkspacePanel)
+  const workspaceTool = deriveWorkspaceTool(panel, activeTool)
   const fragment = activeFragmentId ? getFragment(activeFragmentId) : undefined
 
   const toolLabel = {

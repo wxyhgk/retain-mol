@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { newAtom } from '../lib/molecule'
 import { createSceneObject } from '../lib/sceneObject'
 import type { MoleculeState } from '../store/slices/types'
-import type { MoleculeStoreApi } from './builderPointerTypes'
+import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import {
   createAtomDragEditSession,
   createBondLengthEditSession,
@@ -10,10 +10,10 @@ import {
   createObjectTransformEditSession,
 } from './editSessionFactory'
 
-function makeStore(state: MoleculeState): MoleculeStoreApi {
+function makeStore(state: MoleculeState): BuilderMoleculeStoreApi {
   return {
     getState: () => state,
-  } as MoleculeStoreApi
+  } as BuilderMoleculeStoreApi
 }
 
 describe('edit session factories', () => {
@@ -85,5 +85,39 @@ describe('edit session factories', () => {
     cancelled.cancel()
 
     expect(calls).toEqual(['commit', 'cancel'])
+  })
+
+  it('rolls atom and object edits back through their transaction handles', () => {
+    const atom = newAtom('C', 0, 0, 0)
+    const object = createSceneObject({ atoms: [atom], bonds: [], name: 'mol' }, 'mol')
+    const calls: string[] = []
+    const store = makeStore({
+      activeObjectId: object.id,
+      objectsById: { [object.id]: object },
+      objectOrder: [object.id],
+      selectedAtomIds: new Set([atom.id]),
+      selectedBondIds: new Set(),
+      setAtomPositions: () => calls.push('move'),
+      beginTransaction: owner => ({
+        owner,
+        active: true,
+        commit: () => calls.push(`commit:${owner}`),
+        cancel: () => calls.push(`cancel:${owner}`),
+      }),
+      endTransaction: () => calls.push('legacy-end'),
+    } as unknown as MoleculeState)
+
+    const atomDrag = createAtomDragEditSession(store)
+    atomDrag.start(atom.id)
+    atomDrag.move(atom.id, { x: 2, y: 0, z: 0 })
+    atomDrag.cancel()
+    atomDrag.cancel()
+
+    const transform = createObjectTransformEditSession(store)
+    transform.start()
+    transform.cancel()
+    transform.cancel()
+
+    expect(calls).toEqual(['move', 'cancel:atom-drag', 'cancel:object-transform'])
   })
 })
