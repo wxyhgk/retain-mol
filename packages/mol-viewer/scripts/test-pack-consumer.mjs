@@ -48,6 +48,7 @@ import { calcDistance } from '@retainmol/mol-viewer/geometry'
 import { splitConnectedComponents } from '@retainmol/mol-viewer/graph'
 import { createViewerRuntime } from '@retainmol/mol-viewer/runtime'
 import { createObjectPositionWriteEditSession } from '@retainmol/mol-viewer/editing'
+import { createHeadlessModelingContext, parseEditPlan, replayEditPlan } from '@retainmol/mol-viewer/modeling'
 import { useMoleculeStore } from '@retainmol/mol-viewer/state'
 
 if (newAtom('C', 0, 0, 0).symbol !== 'C') throw new Error('core runtime import failed')
@@ -60,6 +61,10 @@ const disconnected = { atoms: [newAtom('C', 0, 0, 0), newAtom('H', 10, 0, 0)], b
 if (splitConnectedComponents(disconnected).length !== 2) throw new Error('graph runtime import failed')
 if (!createViewerRuntime()) throw new Error('runtime entry import failed')
 if (typeof createObjectPositionWriteEditSession !== 'function') throw new Error('editing entry import failed')
+if (typeof parseEditPlan !== 'function') throw new Error('modeling entry import failed')
+const headlessMolecule = { atoms: [newAtom('C', 0, 0, 0)], bonds: [] }
+if (createHeadlessModelingContext(headlessMolecule).objects.length !== 1) throw new Error('headless modeling context failed')
+if (typeof replayEditPlan !== 'function') throw new Error('headless modeling replay failed')
 if (typeof useMoleculeStore !== 'function') throw new Error('state entry import failed')
 `)
 
@@ -71,6 +76,7 @@ import type { MoleculeTemplateDef } from '@retainmol/mol-viewer/templates'
 import type { ViewerRuntime } from '@retainmol/mol-viewer/runtime'
 import type { RendererPort } from '@retainmol/mol-viewer/viewer'
 import type { ObjectPositionWriteEditSession } from '@retainmol/mol-viewer/editing'
+import type { EditPlan, HeadlessModelingOptions, ModelingConstraints } from '@retainmol/mol-viewer/modeling'
 
 declare const molecule: Molecule
 declare const fragment: PublicFragmentDef
@@ -79,7 +85,10 @@ declare const template: MoleculeTemplateDef
 declare const runtime: ViewerRuntime
 declare const renderer: RendererPort
 declare const editSession: ObjectPositionWriteEditSession
-void [molecule, fragment, style, template, runtime, renderer, editSession]
+declare const editPlan: EditPlan
+declare const modelingConstraints: ModelingConstraints
+declare const headlessOptions: HeadlessModelingOptions
+void [molecule, fragment, style, template, runtime, renderer, editSession, editPlan, modelingConstraints, headlessOptions]
 `)
 
   run('node', ['consumer.mjs'])

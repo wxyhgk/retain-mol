@@ -104,6 +104,7 @@ export type {
   PublicFragmentAtom,
   PublicFragmentBond,
   PublicFragmentBondOrder,
+  PublicFragmentBridgeAttachment,
   PublicFragmentCoordination,
   PublicFragmentDef,
   PublicFragmentDirection,

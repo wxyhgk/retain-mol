@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "caseId": "GDG1223",
+  "stages": [
+    {
+      "stage": 1,
+      "name": "Preserve anchor frame",
+      "operations": [
+        "Retain the three N atoms and one B atom in task order.",
+        "Fix all four anchor coordinates exactly as supplied."
+      ]
+    },
+    {
+      "stage": 2,
+      "name": "Build fused MR-TADF core",
+      "operations": [
+        "Add the central and flanking six-membered aromatic rings.",
+        "Close the N-containing five/six-membered rings and the three-coordinate B ring system."
+      ]
+    },
+    {
+      "stage": 3,
+      "name": "Add peripheral fragments",
+      "operations": [
+        "Attach two phenyl substituents to the left-center donor.",
+        "Attach four tert-butyl substituents at the image-indicated aryl positions.",
+        "Close the right lower acridane ring through a tetrahedral carbon and add the spiro fluorene."
+      ]
+    },
+    {
+      "stage": 4,
+      "name": "Generate 3D candidate",
+      "operations": [
+        "Add all hydrogens explicitly.",
+        "Initialize from image geometry with orthogonal spiro planes.",
+        "Run UFF relaxation with all B/N anchors fixed and restore exact anchor decimals."
+      ]
+    }
+  ],
+  "notes": "The edit schema has no atom-level command vocabulary, so this plan records structured high-level stages. Aromatic bond placement follows the visible Kekule rings."
+}

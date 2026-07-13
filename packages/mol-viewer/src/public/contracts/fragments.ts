@@ -32,6 +32,14 @@ export interface PublicFragmentCoordination {
   readonly sites: readonly PublicCoordinationSite[]
 }
 
+export interface PublicFragmentBridgeAttachment {
+  readonly centerIndex: number
+  readonly sites: readonly [
+    { readonly leavingHydrogenIndex: number; readonly order: PublicFragmentBondOrder },
+    { readonly leavingHydrogenIndex: number; readonly order: PublicFragmentBondOrder },
+  ]
+}
+
 export interface PublicFragmentDef {
   readonly id: string
   readonly name: string
@@ -44,6 +52,7 @@ export interface PublicFragmentDef {
   readonly attachDirection?: PublicFragmentDirection
   readonly attachBond?: readonly [number, number]
   readonly attachOrder?: PublicFragmentBondOrder
+  readonly bridgeAttachment?: PublicFragmentBridgeAttachment
   readonly group?: PublicFragmentGroup
   readonly coordination?: PublicFragmentCoordination
 }

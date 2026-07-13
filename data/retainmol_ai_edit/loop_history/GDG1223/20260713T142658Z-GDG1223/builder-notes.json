@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "caseId": "GDG1223",
+  "recognizedStructure": {
+    "molecularFormula": "C79H66BN3",
+    "charge": 0,
+    "multiplicity": 1,
+    "heavyAtomCount": 83,
+    "addedCarbonCount": 79,
+    "retainedAnchors": [
+      {
+        "id": "core-n-1",
+        "symbol": "N",
+        "position": {
+          "x": -0.9703,
+          "y": -0.691,
+          "z": 0
+        }
+      },
+      {
+        "id": "core-n-2",
+        "symbol": "N",
+        "position": {
+          "x": -1.777,
+          "y": 2.1176,
+          "z": 0
+        }
+      },
+      {
+        "id": "core-b-1",
+        "symbol": "B",
+        "position": {
+          "x": 0.5834,
+          "y": -0.1528,
+          "z": 0
+        }
+      },
+      {
+        "id": "core-n-3",
+        "symbol": "N",
+        "position": {
+          "x": 1.8263,
+          "y": -1.2292,
+          "z": 0
+        }
+      }
+    ],
+    "independentRingCount": 18,
+    "ringInventory": {
+      "benzeneRings": 10,
+      "additionalFiveMemberedRings": 5,
+      "additionalSixMemberedRings": 3,
+      "spiroCenters": 1
+    },
+    "substituentInventory": {
+      "tertButylGroups": 4,
+      "pendantPhenylGroups": 2,
+      "spiroFluoreneGroups": 1
+    }
+  },
+  "atomNumbering": {
+    "upperLeftBenzene": [
+      "ul-a1",
+      "ul-a2",
+      "ul-a3",
+      "ul-a4",
+      "ul-a5",
+      "ul-a6"
+    ],
+    "upperRightBenzene": [
+      "ur-b1",
+      "ur-b2",
+      "ur-b3",
+      "ur-b4",
+      "ur-b5",
+      "ur-b6"
+    ],
+    "centralTopBenzene": [
+      "ct-c1",
+      "ct-c2",
+      "ct-c3",
+      "ct-c4",
+      "ct-c5",
+      "ct-c6"
+    ],
+    "leftLinker": [
+      "link-l0",
+      "link-l1"
+    ],
+    "pendantPhenylP": [
+      "phenyl-p1",
+      "phenyl-p2",
+      "phenyl-p3",
+      "phenyl-p4",
+      "phenyl-p5",
+      "phenyl-p6"
+    ],
+    "pendantPhenylQ": [
+      "phenyl-q1",
+      "phenyl-q2",
+      "phenyl-q3",
+      "phenyl-q4",
+      "phenyl-q5",
+      "phenyl-q6"
+    ],
+    "centralLowerLeftBenzene": [
+      "cl-e1",
+      "cl-e2",
+      "cl-e3",
+      "cl-e4",
+      "cl-e5",
+      "cl-e6"
+    ],
+    "rightTopBenzene": [
+      "rt-f1",
+      "rt-f2",
+      "rt-f3",
+      "rt-f4",
+      "rt-f5",
+      "rt-f6"
+    ],
+    "rightBottomBenzene": [
+      "rb-g1",
+      "rb-g2",
+      "rb-g3",
+      "rb-g4",
+      "rb-g5",
+      "rb-g6"
+    ],
+    "spiroCarbon": "spiro-s",
+    "fluoreneLeftBenzene": [
+      "fluor-h1",
+      "fluor-h2",
+      "fluor-h3",
+      "fluor-h4",
+      "fluor-h5",
+      "fluor-h6"
+    ],
+    "fluoreneRightBenzene": [
+      "fluor-i1",
+      "fluor-i2",
+      "fluor-i3",
+      "fluor-i4",
+      "fluor-i5",
+      "fluor-i6"
+    ],
+    "tertButylA": [
+      "tbu-a0",
+      "tbu-a1",
+      "tbu-a2",
+      "tbu-a3"
+    ],
+    "tertButylB": [
+      "tbu-b0",
+      "tbu-b1",
+      "tbu-b2",
+      "tbu-b3"
+    ],
+    "tertButylC": [
+      "tbu-c0",
+      "tbu-c1",
+      "tbu-c2",
+      "tbu-c3"
+    ],
+    "tertButylD": [
+      "tbu-d0",
+      "tbu-d1",
+      "tbu-d2",
+      "tbu-d3"
+    ]
+  },
+  "coordinateConstruction": {
+    "mapping": "Image skeleton mapped with x=(pixelX-420)*0.0138 and y=(420-pixelY)*0.0138; anchor coordinates themselves are retained exactly.",
+    "zInitialization": "Fused core starts near z=0. Pendant phenyls use opposite small tilts, tert-butyl methyls use tetrahedral offsets, and the fluorene plane is tilted away from the host plane at the spiro carbon."
+  },
+  "bondAssignment": {
+    "heavyAtomBondCount": 100,
+    "doubleBondCount": 31,
+    "method": "Alternating explicit single/double Kekule form; all anchor bonds, inter-ring closures, spiro bonds, and substituent bonds are single."
+  },
+  "uncertainties": [
+    "The source is a 2D line drawing with no stereochemical wedges; nonplanar z coordinates are an initialization heuristic rather than assigned stereochemistry.",
+    "Equivalent aromatic Kekule forms are possible. The selected form follows the visible alternating strokes and gives neutral valence at every atom.",
+    "The formula assumes standard implicit hydrogens after execution; no explicit hydrogen commands are included."
+  ],
+  "validation": {
+    "commandCount": 179,
+    "atomAddCommands": 79,
+    "bondAddCommands": 100,
+    "inferredImplicitHydrogenCount": 66,
+    "anchorBondOrderSums": {
+      "core-n-1": 3,
+      "core-n-2": 3,
+      "core-b-1": 3,
+      "core-n-3": 3
+    }
+  }
+}

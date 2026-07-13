@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "builder": "retainmol-edit-plan",
+  "planId": "GDG1223-round-001-planner",
+  "targetObjectId": "benchmark:GDG1223",
+  "anchorAtomIndices": {
+    "core-n-1": 1,
+    "core-n-2": 2,
+    "core-b-1": 3,
+    "core-n-3": 4
+  },
+  "commandCount": 179,
+  "executorReceipt": "execution.json"
+}

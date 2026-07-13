@@ -10,6 +10,17 @@ function cloneFragment(fragment: FragmentDef): FragmentDef {
     atoms: fragment.atoms.map(atom => ({ ...atom })),
     bonds: fragment.bonds.map(bond => ({ ...bond })),
     ...(fragment.attachBond ? { attachBond: [...fragment.attachBond] } : {}),
+    ...(fragment.bridgeAttachment
+      ? {
+          bridgeAttachment: {
+            centerIndex: fragment.bridgeAttachment.centerIndex,
+            sites: fragment.bridgeAttachment.sites.map(site => ({ ...site })) as [
+              typeof fragment.bridgeAttachment.sites[0],
+              typeof fragment.bridgeAttachment.sites[1],
+            ],
+          },
+        }
+      : {}),
     ...(fragment.coordination
       ? {
           coordination: {

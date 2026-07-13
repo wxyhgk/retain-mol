@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260713T105327Z-GDG1223",
+  "createdAt": "2026-07-13T10:59:42.097704+00:00",
+  "gitCommit": "f42f5122e3a1a3edcbc3278dbc75592a6e62303e",
+  "gitDirty": true,
+  "candidateSha256": "c667648e51e760c618a2b98c488c9997c11d3c6d6b3f42bb149d61defece19c0",
+  "rawCandidateSha256": "f2e972822dde18a8cd0b2e7fa073b4519935ed41baef4588c630ca6bcf9b170e",
+  "referenceSha256": "ac606901c9dfa791ae5a27403a32f40cb1eb274e4a3a47de484b45e61f15e85a",
+  "rawEvaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 80.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 0.0,
+    "core_rmsd": 1.9202136093372193,
+    "heavy_atom_rmsd": 3.550712565563849,
+    "severe_clashes": 0,
+    "disconnected_components": 1,
+    "failures": [
+      "core-geometry",
+      "peripheral-placement"
+    ],
+    "diagnostics": [
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。"
+    ]
+  },
+  "refinement": {
+    "method": "GFN2-xTB",
+    "status": "not-converged",
+    "energyEh": -211.166364983132,
+    "returnCode": 0,
+    "anchorRmsdBeforeProjection": 1.643961507467228,
+    "logTail": "        1.0862541\n    82   6 C      144   1 H                                       1.0876438\n    82   6 C      145   1 H                                       1.0895310\n    82   6 C      146   1 H                                       1.0871576\n    83   6 C      147   1 H                                       1.0859303\n    83   6 C      148   1 H                                       1.0877376\n    83   6 C      149   1 H                                       1.0876584\n\n * 5 distinct bonds (by element types)\n\n   Z      Z             #   av. dist./Å        max./Å        min./Å\n   1 H    1 H           4     0.7798739     0.7810629     0.7786715\n   1 H    6 C          56     1.0846656     1.1007060     1.0637312\n   5 B    6 C           2     1.4622257     1.5068436     1.4176077\n   6 C    6 C          84     1.4840751     1.5830848     1.1949370\n   6 C    7 N           5     1.3562094     1.4315105     1.2684173\n\n\noptimized geometry written to: xtbopt.xyz\n\n\n           -------------------------------------------------\n          | TOTAL ENERGY             -211.166364983132 Eh   |\n          | GRADIENT NORM               0.006301979269 Eh/α |\n          | HOMO-LUMO GAP               0.057878305110 eV   |\n           -------------------------------------------------\n\n------------------------------------------------------------------------\n * finished run on 2026/07/13 at 18:59:38.366     \n------------------------------------------------------------------------\n total:\n * wall-time:     0 d,  0 h,  5 min, 47.544 sec\n *  cpu-time:     0 d,  0 h,  5 min, 43.590 sec\n * ratio c/w:     0.989 speedup\n SCF:\n * wall-time:     0 d,  0 h,  0 min,  1.420 sec\n *  cpu-time:     0 d,  0 h,  0 min,  1.416 sec\n * ratio c/w:     0.997 speedup\n ANC optimizer:\n * wall-time:     0 d,  0 h,  5 min, 46.084 sec\n *  cpu-time:     0 d,  0 h,  5 min, 42.135 sec\n * ratio c/w:     0.989 speedup\n\n\nnormal termination of xtb\nNote: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG\n\n",
+    "stages": [
+      {
+        "method": "GFN2-xTB",
+        "status": "failed",
+        "error": "RuntimeError: xTB did not produce optimized coordinates:\n            -0.3746036             -10.1935\n       205                         -0.3607813              -9.8174\n       ...                                ...                  ...\n       398                         25.4297771             691.9795\n      -------------------------------------------------------------\n                  HL-Gap            0.0026601 Eh            0.0724 eV\n             Fermi-level           -0.4117358 Eh          -11.2039 eV\n\n SCC (total)                   0 d,  0 h,  0 min,  6.563 sec\n SCC setup                      ...        0 min,  0.001 sec (  0.018%)\n Dispersion                     ...        0 min,  0.003 sec (  0.044%)\n classical contributions        ...        0 min,  0.001 sec (  0.016%)\n integral evaluation            ...        0 min,  0.042 sec (  0.643%)\n iterations                     ...        0 min,  6.261 sec ( 95.408%)\n molecular gradient             ...        0 min,  0.251 sec (  3.823%)\n printout                       ...        0 min,  0.003 sec (  0.048%)\n\n########################################################################\n[ERROR] Program stopped due to fatal error\n-3- Single point calculation terminated\n-2- xtb_calculator_singlepoint: Electronic structure method terminated\n-1- scf: Self consistent charge iterator did not converge\n########################################################################\n\nabnormal termination of xtb\nNote: The following floating-point exceptions are signalling: IEEE_INVALID_FLAG IEEE_OVERFLOW_FLAG IEEE_UNDERFLOW_FLAG\nERROR STOP \n\nError termination. Backtrace:\n#0  0x101d80983\n#1  0x101d81557\n#2  0x101d82793\n#3  0x100cb2e63\n#4  0x100ba5df3\n#5  0x100e7dc57\n\nERROR conda.cli.main_run:execute(127): `conda run xtb /var/folders/59/nlw8jr4n6dggwwmfw3mjzcjh0000gn/T/retainmol_loop_xtb_t7hdos1x/input.xyz --opt normal --gfn 2 --chrg 0 --uhf 0 --cycles 500 --parallel 1 --input /var/folders/59/nlw8jr4n6dggwwmfw3mjzcjh0000gn/T/retainmol_loop_xtb_t7hdos1x/xcontrol.inp` failed. (See above for error)\n"
+      },
+      {
+        "method": "GFN-FF",
+        "status": "not-converged",
+        "energyEh": -26.017719096315,
+        "returnCode": 0,
+        "anchorRmsdBeforeProjection": 0.5371679991805264,
+        "logTail": "8\n    82   6 C      146   1 H                                       1.0894740\n    83   6 C      147   1 H                                       1.0917631\n    83   6 C      148   1 H                                       1.0921102\n    83   6 C      149   1 H                                       1.0930646\n\n * 5 distinct bonds (by element types)\n\n   Z      Z             #   av. dist./Å        max./Å        min./Å\n   1 H    6 C          56     1.1288361     1.3510008     1.0708624\n   5 B    6 C           3     1.6736506     1.7622463     1.5664418\n   6 C    6 C          44     1.6532927     1.9005089     1.5227055\n   5 B    7 N           1     1.0792974     1.0792974     1.0792974\n   6 C    7 N           4     1.7163769     1.7587343     1.6921309\n\n\noptimized geometry written to: xtbopt.xyz\n\n\n           -------------------------------------------------\n          | TOTAL ENERGY              -26.017719096315 Eh   |\n          | GRADIENT NORM               0.249255115642 Eh/α |\n           -------------------------------------------------\n########################################################################\n[WARNING] Runtime exception occurred\n-1- gfnff_setup: Could not read topology file.\n########################################################################\n\n------------------------------------------------------------------------\n * finished run on 2026/07/13 at 18:53:48.025     \n------------------------------------------------------------------------\n total:\n * wall-time:     0 d,  0 h,  0 min,  4.295 sec\n *  cpu-time:     0 d,  0 h,  0 min,  4.285 sec\n * ratio c/w:     0.998 speedup\n SCF:\n * wall-time:     0 d,  0 h,  0 min,  0.010 sec\n *  cpu-time:     0 d,  0 h,  0 min,  0.009 sec\n * ratio c/w:     0.921 speedup\n ANC optimizer:\n * wall-time:     0 d,  0 h,  0 min,  3.960 sec\n *  cpu-time:     0 d,  0 h,  0 min,  3.952 sec\n * ratio c/w:     0.998 speedup\n\n\nnormal termination of xtb\nNote: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG\n\n"
+      },
+      {
+        "method": "GFN2-xTB(etemp=1000K)",
+        "status": "not-converged",
+        "energyEh": -211.166364983132,
+        "returnCode": 0,
+        "anchorRmsdBeforeProjection": 1.643961507467228,
+        "logTail": "        1.0862541\n    82   6 C      144   1 H                                       1.0876438\n    82   6 C      145   1 H                                       1.0895310\n    82   6 C      146   1 H                                       1.0871576\n    83   6 C      147   1 H                                       1.0859303\n    83   6 C      148   1 H                                       1.0877376\n    83   6 C      149   1 H                                       1.0876584\n\n * 5 distinct bonds (by element types)\n\n   Z      Z             #   av. dist./Å        max./Å        min./Å\n   1 H    1 H           4     0.7798739     0.7810629     0.7786715\n   1 H    6 C          56     1.0846656     1.1007060     1.0637312\n   5 B    6 C           2     1.4622257     1.5068436     1.4176077\n   6 C    6 C          84     1.4840751     1.5830848     1.1949370\n   6 C    7 N           5     1.3562094     1.4315105     1.2684173\n\n\noptimized geometry written to: xtbopt.xyz\n\n\n           -------------------------------------------------\n          | TOTAL ENERGY             -211.166364983132 Eh   |\n          | GRADIENT NORM               0.006301979269 Eh/α |\n          | HOMO-LUMO GAP               0.057878305110 eV   |\n           -------------------------------------------------\n\n------------------------------------------------------------------------\n * finished run on 2026/07/13 at 18:59:38.366     \n------------------------------------------------------------------------\n total:\n * wall-time:     0 d,  0 h,  5 min, 47.544 sec\n *  cpu-time:     0 d,  0 h,  5 min, 43.590 sec\n * ratio c/w:     0.989 speedup\n SCF:\n * wall-time:     0 d,  0 h,  0 min,  1.420 sec\n *  cpu-time:     0 d,  0 h,  0 min,  1.416 sec\n * ratio c/w:     0.997 speedup\n ANC optimizer:\n * wall-time:     0 d,  0 h,  5 min, 46.084 sec\n *  cpu-time:     0 d,  0 h,  5 min, 42.135 sec\n * ratio c/w:     0.989 speedup\n\n\nnormal termination of xtb\nNote: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG\n\n"
+      }
+    ]
+  },
+  "evaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 80.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 0.0,
+    "core_rmsd": 4.198911900565393,
+    "heavy_atom_rmsd": 6.6777360401507115,
+    "severe_clashes": 0,
+    "disconnected_components": 1,
+    "failures": [
+      "core-geometry",
+      "peripheral-placement",
+      "xtb-not-converged"
+    ],
+    "diagnostics": [
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。",
+      "GFN2-xTB 返回结构，但优化未收敛。"
+    ]
+  },
+  "archiveRelativePath": "GDG1223/20260713T105327Z-GDG1223"
+}

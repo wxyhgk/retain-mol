@@ -113,6 +113,68 @@ export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIs
     }
   }
 
+  if (fragment.bridgeAttachment) {
+    const { centerIndex, sites } = fragment.bridgeAttachment
+    const center = fragment.atoms[centerIndex]
+    if (!center) {
+      issues.push(issue(fragment, 'bridge.center.invalid', 'bridgeAttachment.centerIndex 引用了不存在的原子'))
+    } else if (center.symbol === 'H') {
+      issues.push(issue(fragment, 'bridge.center.hydrogen', 'bridgeAttachment 中心不能是 H'))
+    }
+    if (sites.length !== 2) {
+      issues.push(issue(fragment, 'bridge.sites.count', 'bridgeAttachment 必须声明两个有序位点'))
+    }
+    if (sites[0]?.leavingHydrogenIndex === sites[1]?.leavingHydrogenIndex) {
+      issues.push(issue(fragment, 'bridge.sites.duplicate', 'bridgeAttachment 的两个离去 H 不能相同'))
+    }
+
+    const directions: [number, number, number][] = []
+    let finalCenterValence = bondOrders[centerIndex] ?? 0
+    sites.forEach((site, index) => {
+      const leaving = fragment.atoms[site.leavingHydrogenIndex]
+      if (!leaving) {
+        issues.push(issue(fragment, 'bridge.site.index.invalid', `bridge site[${index}] 引用了不存在的原子`))
+        return
+      }
+      if (leaving.symbol !== 'H') {
+        issues.push(issue(fragment, 'bridge.site.not_hydrogen', `bridge site[${index}] 必须指向 H`))
+      }
+      const leavingBond = fragment.bonds.find(bond => (
+        (bond.a === centerIndex && bond.b === site.leavingHydrogenIndex)
+        || (bond.b === centerIndex && bond.a === site.leavingHydrogenIndex)
+      ))
+      if (!leavingBond) {
+        issues.push(issue(fragment, 'bridge.site.missing_bond', `bridge site[${index}] 与中心没有模板键`))
+        return
+      }
+      if (site.order !== 1 && site.order !== 2 && site.order !== 3) {
+        issues.push(issue(fragment, 'bridge.site.order.invalid', `bridge site[${index}] 键级无效`))
+      }
+      finalCenterValence += site.order - leavingBond.order
+      if (center) directions.push([
+        leaving.x - center.x,
+        leaving.y - center.y,
+        leaving.z - center.z,
+      ])
+    })
+    if (center && finalCenterValence > getElementConfig(center.symbol).maxBonds) {
+      issues.push(issue(fragment, 'bridge.center.valence.exceeded', 'bridgeAttachment 应用后中心价态超过上限'))
+    }
+    if (directions.length === 2) {
+      const [a, b] = directions
+      if (a && b) {
+        const crossLength = Math.hypot(
+          a[1] * b[2] - a[2] * b[1],
+          a[2] * b[0] - a[0] * b[2],
+          a[0] * b[1] - a[1] * b[0],
+        )
+        if (crossLength < 1e-8) {
+          issues.push(issue(fragment, 'bridge.sites.collinear', 'bridgeAttachment 的两个位点方向不能共线'))
+        }
+      }
+    }
+  }
+
   if (fragment.coordination) {
     if (fragment.group !== 'coordination') {
       issues.push(issue(fragment, 'coordination.group.invalid', '配位构型片段必须使用 coordination 分组'))

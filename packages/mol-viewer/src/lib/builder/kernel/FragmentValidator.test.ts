@@ -54,4 +54,21 @@ describe('FragmentValidator', () => {
 
     expect(validateFragmentDef(invalid).map(issue => issue.code)).toContain('atom.valence.exceeded')
   })
+
+  it('rejects ambiguous bridge metadata instead of inferring a second site', () => {
+    const fluorene = getFragment('fluorene-9h-site-a')!
+    const invalid: FragmentDef = {
+      ...fluorene,
+      id: 'bad-bridge-sites',
+      bridgeAttachment: {
+        centerIndex: 6,
+        sites: [
+          { leavingHydrogenIndex: 17, order: 1 },
+          { leavingHydrogenIndex: 17, order: 1 },
+        ],
+      },
+    }
+
+    expect(validateFragmentDef(invalid).map(issue => issue.code)).toContain('bridge.sites.duplicate')
+  })
 })

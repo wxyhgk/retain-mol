@@ -35,6 +35,10 @@
       "types": "./dist/public/editing.d.ts",
       "import": "./dist/public/editing.js"
     },
+    "./modeling": {
+      "types": "./dist/public/modeling.d.ts",
+      "import": "./dist/public/modeling.js"
+    },
     "./geometry": {
       "types": "./dist/public/geometry.d.ts",
       "import": "./dist/public/geometry.js"

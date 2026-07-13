@@ -10,7 +10,7 @@ This document defines ownership boundaries for multi-person work. The goal is to
 Current state:
 
 - `@retainmol/mol-viewer` exposes stable consumer APIs through explicit package sub-entries. The root barrel at `packages/mol-viewer/src/index.ts` is compatibility-only.
-- Package sub-entries separate `./core`, `./io`, `./viewer`, `./runtime`, `./state`, `./editing`, `./geometry`, `./graph`, `./styles`, `./three`, fragments/templates and optimization APIs.
+- Package sub-entries separate `./core`, `./io`, `./viewer`, `./runtime`, `./state`, `./editing`, `./modeling`, `./geometry`, `./graph`, `./styles`, `./three`, fragments/templates and optimization APIs.
 - App code imports viewer capabilities through focused files under `apps/retainmol/src/domain/viewer/`; feature/UI files do not import viewer state directly.
 - Theme JSON and style preset JSON can be added independently when they use existing schema values and existing render profiles.
 - Adding a new render profile id or a new renderer behavior still requires coordinated TypeScript changes in the style schema, render profile registry, and renderer consumers.
@@ -72,6 +72,7 @@ Compatibility policy:
 | `/runtime` | Opaque viewer lifecycle handle | Consumers may only dispose the runtime; runtime services stay internal |
 | `/state` | Explicit mutable Zustand access | Opt-in boundary; do not re-export from unrelated entries |
 | `/editing` | Narrow position-write transaction | Does not expose `useBuilder` or internal edit-session factories |
+| `/modeling` | Serializable context, strict edit plans, dry-run and atomic commit | AI/providers must not mutate stores or simulate pointer input |
 | `/geometry`, `/graph` | Pure geometry and topology queries | No store mutation or rendering concerns |
 | `/styles` | Theme, preset, and render-profile schemas/registries | Renderer-neutral; no Three.js material objects |
 | `/three` | Explicit Three.js material extension point | Three.js-dependent consumers must opt in here |
@@ -108,6 +109,24 @@ Rules:
 Current policy:
 - Atom replacement is pure element replacement: keep id, coordinates, bonds, and explicit hydrogens.
 - Hydrogen addition, bond inference, aromaticity detection, and geometry cleanup are explicit operations, not implicit side effects of replacement.
+
+### `packages/mol-viewer/src/lib/modeling`
+
+面向 AI、远程协作客户端和批量编辑器的中立协议层。
+
+负责：
+- 生成可序列化、只读的 `ModelingContext`。
+- 用严格 schema 校验不可信的 `EditPlan`。
+- 将计划逐条映射到现有 builder command，并在副本上 dry-run。
+- 返回明确的结构差异、警告和失败命令位置。
+
+禁止：
+- 导入 React、App 组件或 Three.js。
+- 复制一套价态、成键或几何规则。
+- 直接持有或修改 Zustand store。
+- 让模型输出任意 JavaScript、内部 action 名称或鼠标事件。
+
+运行时提交只允许通过 `public/modeling.ts`，并必须执行 revision 二次检查和单事务提交。模型 provider、图片识别和提示词编排属于 App/服务层，不进入核心协议层。
 
 ### `packages/mol-viewer/src/store`
 

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260713T142539Z-GDG1223",
+  "createdAt": "2026-07-13T14:25:43.387689+00:00",
+  "gitCommit": "f42f5122e3a1a3edcbc3278dbc75592a6e62303e",
+  "gitDirty": true,
+  "executor": "@retainmol/mol-viewer/modeling",
+  "executorReturnCode": 0,
+  "executorStderr": null,
+  "editPlanSha256": "b80e1e7387fa2a92fef600931102a63405832b2795697a0bdd486911c0674bbc",
+  "executionReceiptSha256": "88f343a3bd368c6338d0f8079a364529f035f8feeadefde02d55217058bab149",
+  "candidateSha256": "1be65ae50fcd63696a841335baa1a246d63313f30834a1042439d2b40c3d8666",
+  "rawCandidateSha256": "1be65ae50fcd63696a841335baa1a246d63313f30834a1042439d2b40c3d8666",
+  "referenceSdfSha256": "9a01182a7deb1dc603cfe5c726d2bb7d4277bf52af86fdc6128dc8cc943c89f6",
+  "rawEvaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 69.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 2.0691522442778347,
+    "core_rmsd": 2.416130269800277,
+    "heavy_atom_rmsd": 3.96054387010016,
+    "severe_clashes": 1,
+    "disconnected_components": 1,
+    "failures": [
+      "anchor-drift",
+      "core-geometry",
+      "peripheral-placement",
+      "steric-clash"
+    ],
+    "diagnostics": [
+      "B/N 母核锚点发生移动；检查 fixedAtomIds 和几何命令约束。",
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。",
+      "发现 1 个严重非键碰撞；改进初始放置或扭转角搜索。"
+    ]
+  },
+  "refinement": null,
+  "evaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 69.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 2.0691522442778347,
+    "core_rmsd": 2.416130269800277,
+    "heavy_atom_rmsd": 3.96054387010016,
+    "severe_clashes": 1,
+    "disconnected_components": 1,
+    "failures": [
+      "anchor-drift",
+      "core-geometry",
+      "peripheral-placement",
+      "steric-clash"
+    ],
+    "diagnostics": [
+      "B/N 母核锚点发生移动；检查 fixedAtomIds 和几何命令约束。",
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。",
+      "发现 1 个严重非键碰撞；改进初始放置或扭转角搜索。"
+    ]
+  },
+  "archiveRelativePath": "GDG1223/20260713T142539Z-GDG1223"
+}

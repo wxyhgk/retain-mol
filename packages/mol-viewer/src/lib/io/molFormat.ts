@@ -81,6 +81,43 @@ function moleculeToOCL(mol: Molecule): OCLMol {
   return oclMol
 }
 
+function formatV2000Coordinate(value: number): string {
+  if (!Number.isFinite(value)) throw new Error('MOL 导出失败：坐标必须为有限数值')
+  const formatted = value.toFixed(4)
+  if (formatted.length > 10) throw new Error(`MOL V2000 坐标超出范围：${value}`)
+  return formatted.padStart(10, ' ')
+}
+
+/**
+ * OpenChemLib's V2000 writer normalizes short average bond lengths to its
+ * preferred drawing scale. That is useful for 2D depictions but corrupts 3D
+ * modeling coordinates and fixed-atom contracts. Keep OCL's atom/bond
+ * serialization, then restore the authored coordinates in the atom block.
+ */
+function restoreV2000Coordinates(molfile: string, mol: Molecule): string {
+  const lines = molfile.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
+  const countsIndex = lines.findIndex(line => /\bV2000\b/i.test(line))
+  if (countsIndex < 0) return molfile
+  const atomCount = Number.parseInt(lines[countsIndex]?.slice(0, 3).trim() ?? '', 10)
+  if (atomCount !== mol.atoms.length) {
+    throw new Error(`MOL 导出失败：原子数不一致（${atomCount} != ${mol.atoms.length}）`)
+  }
+  for (let index = 0; index < atomCount; index += 1) {
+    const lineIndex = countsIndex + 1 + index
+    const line = lines[lineIndex]
+    const atom = mol.atoms[index]
+    if (line === undefined || atom === undefined || line.length < 30) {
+      throw new Error(`MOL 导出失败：原子坐标行缺失（${index + 1}）`)
+    }
+    lines[lineIndex] =
+      formatV2000Coordinate(atom.x) +
+      formatV2000Coordinate(atom.y) +
+      formatV2000Coordinate(atom.z) +
+      line.slice(30)
+  }
+  return lines.join('\n')
+}
+
 // ─── 外部 API（保持与之前一致）─────────────────────────
 
 /**
@@ -129,7 +166,7 @@ export function parseSdf(text: string): Molecule[] {
 
 /** 导出为 MOL V2000 */
 export function exportMol(mol: Molecule): string {
-  return moleculeToOCL(mol).toMolfile()
+  return restoreV2000Coordinates(moleculeToOCL(mol).toMolfile(), mol)
 }
 
 /** 导出为 SDF（末尾附 $$$$） */

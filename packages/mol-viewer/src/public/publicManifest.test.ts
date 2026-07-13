@@ -11,6 +11,7 @@ describe('mol-viewer public manifest', () => {
     expect(root).not.toHaveProperty('canBond')
     expect(root).not.toHaveProperty('calcAddAtomOnExisting')
     expect(root).not.toHaveProperty('useBuilder')
+    expect(root).not.toHaveProperty('commitEditPlan')
     expect(root).not.toHaveProperty('cn')
   })
 

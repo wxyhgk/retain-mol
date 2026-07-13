@@ -14,6 +14,16 @@ export interface FragmentBond {
   coordinationSiteId?: string
 }
 
+export interface FragmentBridgeSite {
+  leavingHydrogenIndex: number
+  order: 1 | 2 | 3
+}
+
+export interface FragmentBridgeAttachment {
+  centerIndex: number
+  sites: [FragmentBridgeSite, FragmentBridgeSite]
+}
+
 export interface FragmentDef {
   id: string
   name: string
@@ -26,6 +36,7 @@ export interface FragmentDef {
   attachDirection?: [number, number, number]
   attachBond?: [number, number]
   attachOrder?: 1 | 2 | 3
+  bridgeAttachment?: FragmentBridgeAttachment
   group?: 'sp3' | 'sp2' | 'sp' | 'coordination' | 'ring' | 'group'
   coordination?: {
     geometryId: string

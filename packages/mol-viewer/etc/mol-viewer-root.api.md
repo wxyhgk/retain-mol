@@ -847,6 +847,23 @@ export interface PublicFragmentBond {
 export type PublicFragmentBondOrder = 1 | 2 | 3;
 
 // @public (undocumented)
+export interface PublicFragmentBridgeAttachment {
+    // (undocumented)
+    readonly centerIndex: number;
+    // (undocumented)
+    readonly sites: readonly [
+        {
+        readonly leavingHydrogenIndex: number;
+        readonly order: PublicFragmentBondOrder;
+    },
+        {
+        readonly leavingHydrogenIndex: number;
+        readonly order: PublicFragmentBondOrder;
+    }
+    ];
+}
+
+// @public (undocumented)
 export interface PublicFragmentCoordination {
     // (undocumented)
     readonly coordinationNumber: number;
@@ -876,6 +893,8 @@ export interface PublicFragmentDef {
     readonly attachOrder?: PublicFragmentBondOrder;
     // (undocumented)
     readonly bonds: readonly PublicFragmentBond[];
+    // (undocumented)
+    readonly bridgeAttachment?: PublicFragmentBridgeAttachment;
     // (undocumented)
     readonly coordination?: PublicFragmentCoordination;
     // (undocumented)

@@ -2,6 +2,7 @@ import type { Molecule } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import {
   attachFragmentToAtom,
+  bridgeFragmentBetweenAtoms,
   fuseFragmentOnBond,
 } from '../../editing/fragment'
 import { editChanged, editFailed, type EditCommandResult } from '../shared'
@@ -75,6 +76,31 @@ export function runFuseFragmentOnBondCommand(
   input: FuseFragmentOnBondCommandInput,
 ): EditCommandResult {
   const result = fuseFragmentOnBond(molecule, input.fragment, input.bondId)
+  return result.ok === false
+    ? editFailed(result.reason)
+    : editChanged(result.molecule)
+}
+
+export interface BridgeFragmentBetweenAtomsCommandInput {
+  readonly atomId1: string
+  readonly atomId2: string
+  readonly fragment: FragmentDef
+  readonly orientationDegrees?: number
+}
+
+export function runBridgeFragmentBetweenAtomsCommand(
+  molecule: Molecule,
+  input: BridgeFragmentBetweenAtomsCommandInput,
+): EditCommandResult {
+  const result = bridgeFragmentBetweenAtoms(
+    molecule,
+    input.fragment,
+    input.atomId1,
+    input.atomId2,
+    input.orientationDegrees === undefined
+      ? {}
+      : { orientationDegrees: input.orientationDegrees },
+  )
   return result.ok === false
     ? editFailed(result.reason)
     : editChanged(result.molecule)

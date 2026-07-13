@@ -14,6 +14,7 @@ packages/mol-viewer/src
 ├── config/         camera、render、bonding、geometry、tool 等共享配置
 ├── hooks/          把 React 事件连接到 builder command 和 store action 的 hooks
 ├── lib/            核心算法、分子工具、IO、renderer 内部实现
+│   └── modeling/   AI/协作客户端使用的建模协议、校验与 dry-run 执行器
 ├── presets/        theme schema、内置主题、运行时主题注册表
 ├── public/         推荐给外部使用的窄 API 子入口
 ├── store/          molecule scene state 和 editor state
@@ -30,6 +31,7 @@ App 层和外部集成优先使用这些子路径：
 ```ts
 import { MolViewer } from '@retainmol/mol-viewer/viewer'
 import { useMoleculeStore } from '@retainmol/mol-viewer/state'
+import { getModelingContext, commitEditPlan } from '@retainmol/mol-viewer/modeling'
 import { newAtom, centerMolecule } from '@retainmol/mol-viewer/core'
 import { parseMol, exportSdf } from '@retainmol/mol-viewer/io'
 import { listFragments } from '@retainmol/mol-viewer/fragments'
@@ -43,6 +45,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 - `src/public/runtime.ts`：不透明的 viewer 生命周期句柄和 provider；外部只能持有和释放，不能访问内部服务。
 - `src/public/state.ts`：显式的 molecule/editor mutable store 入口。
 - `src/public/editing.ts`：窄化的坐标写入事务，不导出 `useBuilder`。
+- `src/public/modeling.ts`：只读建模上下文、严格 `EditPlan` 协议、dry-run 和单事务提交入口。
 - `src/public/geometry.ts`：测量几何与当前兼容的图拓扑查询。
 - `src/public/graph.ts`：分子图连通片段和连通分量查询。
 - `src/public/io.ts`：MOL/SDF/XYZ/GJF 解析导出、几何松弛 API。
@@ -62,6 +65,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 | 展示分子、适配视口、截图 | `/viewer` | 从 `/viewer` 获取 mutable store 或 Three renderer |
 | 读取或修改全局 molecule/editor state | `/state` | 从其他子入口绕过显式可变边界 |
 | 执行动画或优化坐标写入 | `/editing` | 直接调用内部 transaction 或 `useBuilder` |
+| 让 AI 或协作客户端提出结构编辑 | `/modeling` | 模拟鼠标、直接改 Zustand、绕过 dry-run |
 | 开发纯化学和图算法 | `/core`、`/geometry`、`/graph` | 引入 React、Zustand 或 Three.js |
 | 添加主题、样式和 profile | `/styles` | 在 preset 中直接操作材质对象 |
 | 扩展 Three.js 材质 | `/three` | 把 Three.js 类型泄漏回 `/styles` 或 `/core` |
@@ -75,6 +79,9 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 - `lib/builder/fragment/*` 的内部 model、registry 和 catalog 组装细节。
 
 跨团队能力必须先在对应 `src/public/*.ts` 中形成窄接口，再由实现层接入。不要为了临时复用新增深路径导入。
+
+AI 建模的协议、调用示例和后续扩展顺序见
+[AI 建模框架](./ai-modeling/README.md)。
 
 ## Store 边界
 
@@ -264,6 +271,7 @@ registerRenderProfile(profile)
 App layer
   -> @retainmol/mol-viewer public subpaths
     -> components/hooks/store
+      -> lib/modeling -> lib/builder commands
       -> lib/builder and lib/molRenderer
         -> config and low-level utilities
 ```
@@ -276,6 +284,7 @@ App layer
 - store action 依赖 React 组件。
 - style preset 直接修改 renderer 内部对象。
 - App 从 `/viewer` 获取 mutable store；状态必须经 `/state` 和 App 的 `domain/viewer/*` adapter。
+- AI provider 直接调用 store action 或内部 builder 文件；必须先输出 `/modeling` 的 `EditPlan`。
 
 ## 当前薄弱点
 

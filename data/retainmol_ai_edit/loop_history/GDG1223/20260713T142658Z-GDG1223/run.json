@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260713T142658Z-GDG1223",
+  "createdAt": "2026-07-13T14:27:02.583689+00:00",
+  "gitCommit": "f42f5122e3a1a3edcbc3278dbc75592a6e62303e",
+  "gitDirty": true,
+  "executor": "@retainmol/mol-viewer/modeling",
+  "executorReturnCode": 0,
+  "executorStderr": null,
+  "editPlanSha256": "b80e1e7387fa2a92fef600931102a63405832b2795697a0bdd486911c0674bbc",
+  "executionReceiptSha256": "e4dac8e788a1f762fd22788693f10d09804c39307564988cf17d6b2f286f66f3",
+  "candidateSha256": "bcbe0448c41a145a67846ccecb8a4f68f9143fb2452fb0be83cd268a87cdb37b",
+  "rawCandidateSha256": "bcbe0448c41a145a67846ccecb8a4f68f9143fb2452fb0be83cd268a87cdb37b",
+  "referenceSdfSha256": "9a01182a7deb1dc603cfe5c726d2bb7d4277bf52af86fdc6128dc8cc943c89f6",
+  "rawEvaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 70.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 0.0,
+    "core_rmsd": 1.9260700402633335,
+    "heavy_atom_rmsd": 3.292156851802093,
+    "severe_clashes": 10,
+    "disconnected_components": 1,
+    "failures": [
+      "core-geometry",
+      "peripheral-placement",
+      "steric-clash"
+    ],
+    "diagnostics": [
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。",
+      "发现 10 个严重非键碰撞；改进初始放置或扭转角搜索。"
+    ]
+  },
+  "refinement": null,
+  "evaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 70.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 0.0,
+    "core_rmsd": 1.9260700402633335,
+    "heavy_atom_rmsd": 3.292156851802093,
+    "severe_clashes": 10,
+    "disconnected_components": 1,
+    "failures": [
+      "core-geometry",
+      "peripheral-placement",
+      "steric-clash"
+    ],
+    "diagnostics": [
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。",
+      "发现 10 个严重非键碰撞；改进初始放置或扭转角搜索。"
+    ]
+  },
+  "archiveRelativePath": "GDG1223/20260713T142658Z-GDG1223"
+}

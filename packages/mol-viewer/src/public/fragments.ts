@@ -9,6 +9,7 @@ import type {
   FragmentAttachmentSite,
   FragmentSummary,
   PublicFragmentBond,
+  PublicFragmentBridgeAttachment,
   PublicFragmentCoordination,
   PublicFragmentDef,
 } from './contracts/fragments'
@@ -20,6 +21,7 @@ export type {
   PublicFragmentAtom,
   PublicFragmentBond,
   PublicFragmentBondOrder,
+  PublicFragmentBridgeAttachment,
   PublicFragmentCoordination,
   PublicFragmentDef,
   PublicFragmentDirection,
@@ -46,11 +48,21 @@ function clonePublicCoordination(
   }
 }
 
+function clonePublicBridgeAttachment(
+  attachment: PublicFragmentBridgeAttachment,
+): PublicFragmentBridgeAttachment {
+  return {
+    centerIndex: attachment.centerIndex,
+    sites: [{ ...attachment.sites[0] }, { ...attachment.sites[1] }],
+  }
+}
+
 function clonePublicFragment(fragment: PublicFragmentDef): PublicFragmentDef {
   const {
     attachDirection,
     attachBond,
     attachOrder,
+    bridgeAttachment,
     group,
     coordination,
     ...required
@@ -62,6 +74,9 @@ function clonePublicFragment(fragment: PublicFragmentDef): PublicFragmentDef {
     ...(attachDirection === undefined ? {} : { attachDirection: [...attachDirection] }),
     ...(attachBond === undefined ? {} : { attachBond: [...attachBond] as [number, number] }),
     ...(attachOrder === undefined ? {} : { attachOrder }),
+    ...(bridgeAttachment === undefined
+      ? {}
+      : { bridgeAttachment: clonePublicBridgeAttachment(bridgeAttachment) }),
     ...(group === undefined ? {} : { group }),
     ...(coordination === undefined ? {} : { coordination: clonePublicCoordination(coordination) }),
   }
@@ -185,6 +200,7 @@ export function registerFragment(fragment: PublicFragmentDef): PublicFragmentDef
     attachDirection,
     attachBond,
     attachOrder,
+    bridgeAttachment,
     group,
     coordination,
     ...required
@@ -204,6 +220,14 @@ export function registerFragment(fragment: PublicFragmentDef): PublicFragmentDef
       : { attachDirection: [...attachDirection] as [number, number, number] }),
     ...(attachBond === undefined ? {} : { attachBond: [...attachBond] as [number, number] }),
     ...(attachOrder === undefined ? {} : { attachOrder }),
+    ...(bridgeAttachment === undefined
+      ? {}
+      : {
+          bridgeAttachment: {
+            centerIndex: bridgeAttachment.centerIndex,
+            sites: [{ ...bridgeAttachment.sites[0] }, { ...bridgeAttachment.sites[1] }],
+          },
+        }),
     ...(group === undefined ? {} : { group }),
     ...(coordination === undefined
       ? {}

@@ -190,6 +190,26 @@ describe('exportMol', () => {
     })
   })
 
+  it('不按绘图平均键长缩放建模坐标', () => {
+    const molecule = parseMol(`short triangle
+  RetainMol
+
+  3  3  0  0  0  0  0  0  0  0999 V2000
+    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.8000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.4000    0.7000    0.2000 C   0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  2  0  0  0  0
+  2  3  1  0  0  0  0
+  3  1  1  0  0  0  0
+M  END`)
+
+    const reimported = parseMol(exportMol(molecule))
+
+    expect(reimported.atoms[1]?.x).toBeCloseTo(0.8, 4)
+    expect(reimported.atoms[2]?.y).toBeCloseTo(0.7, 4)
+    expect(reimported.atoms[2]?.z).toBeCloseTo(0.2, 4)
+  })
+
   it('round-trip 保留键级', () => {
     const mol = parseMol(ETHYLENE)
     const reimported = parseMol(exportMol(mol))

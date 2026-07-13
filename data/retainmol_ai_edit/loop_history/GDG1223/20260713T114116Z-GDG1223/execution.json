@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "executor": "@retainmol/mol-viewer/modeling",
+  "status": "completed",
+  "inputSha256": "f298786c6dfd036fdca750eb83c514c8ade7c5a093c2c038432bc8c201274cdd",
+  "submittedPlanSha256": "fae9e35ab342a41bd5595a352c5f8cbd4a7ca3e8e32c533c49f0449bd4239daf",
+  "enforcedPlanSha256": "e0ed90d1db1df2437310511af49ee1753cbe5799ea8b5ad2311f71b6ede35dc3",
+  "targetObjectId": "benchmark:GDG1223",
+  "baseRevision": "mol-v1-4-0-b9f6b01b",
+  "commandCount": 2,
+  "capabilities": [
+    "atom.add",
+    "atom.replace",
+    "atom.remove",
+    "atom.move",
+    "atom.setCharge",
+    "atom.setRadical",
+    "atom.addHydrogen",
+    "bond.add",
+    "bond.remove",
+    "bond.setOrder",
+    "fragment.attach",
+    "fragment.fuse",
+    "geometry.setBondLength",
+    "geometry.setBondAngle",
+    "geometry.setDihedral",
+    "geometry.rotateGroup"
+  ],
+  "issues": [],
+  "changed": true,
+  "nextRevision": "mol-v1-5-1-12e390d5",
+  "changes": {
+    "addedAtomIds": [
+      "candidate:c-1"
+    ],
+    "removedAtomIds": [],
+    "updatedAtomIds": [],
+    "addedBondIds": [
+      "candidate:bond-b-c"
+    ],
+    "removedBondIds": [],
+    "updatedBondIds": []
+  },
+  "outputSha256": "e073079d6ae784abfe20f6331820cee52ce5f512c91510af82a07e32884462f9",
+  "atomCount": 5,
+  "bondCount": 1
+}

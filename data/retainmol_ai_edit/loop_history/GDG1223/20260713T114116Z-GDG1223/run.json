@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260713T114116Z-GDG1223",
+  "createdAt": "2026-07-13T11:41:16.951694+00:00",
+  "gitCommit": "f42f5122e3a1a3edcbc3278dbc75592a6e62303e",
+  "gitDirty": true,
+  "executor": "@retainmol/mol-viewer/modeling",
+  "executorReturnCode": 0,
+  "executorStderr": null,
+  "editPlanSha256": "fae9e35ab342a41bd5595a352c5f8cbd4a7ca3e8e32c533c49f0449bd4239daf",
+  "executionReceiptSha256": "89c400f7ed68bfdb7cce0e02cc27f5c296168f2aceff2e9a61eaab21dcd15184",
+  "candidateSha256": "e073079d6ae784abfe20f6331820cee52ce5f512c91510af82a07e32884462f9",
+  "rawCandidateSha256": "e073079d6ae784abfe20f6331820cee52ce5f512c91510af82a07e32884462f9",
+  "referenceXyzSha256": "cdcac9e62038476ec91cc34269e69d58db8609facf413fa3aade29ef834e9dd4",
+  "referenceGraphSha256": "747e039755fbf0d7f74854dc70c534686de16966258a986ed259dc49d3eeab26",
+  "rawEvaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 10.0,
+    "formula_match": false,
+    "topology_match": false,
+    "anchor_max_displacement": null,
+    "core_rmsd": null,
+    "heavy_atom_rmsd": null,
+    "severe_clashes": 0,
+    "disconnected_components": 4,
+    "failures": [
+      "formula-mismatch",
+      "topology-mismatch",
+      "disconnected-structure"
+    ],
+    "diagnostics": [
+      "元素/氢数与隐藏参考不一致，先修正图像识别或补氢策略。",
+      "键连接、键级或锚点映射不一致，属于拓扑规划失败。",
+      "候选结构包含未连接片段。"
+    ]
+  },
+  "refinement": null,
+  "evaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 10.0,
+    "formula_match": false,
+    "topology_match": false,
+    "anchor_max_displacement": null,
+    "core_rmsd": null,
+    "heavy_atom_rmsd": null,
+    "severe_clashes": 0,
+    "disconnected_components": 4,
+    "failures": [
+      "formula-mismatch",
+      "topology-mismatch",
+      "disconnected-structure"
+    ],
+    "diagnostics": [
+      "元素/氢数与隐藏参考不一致，先修正图像识别或补氢策略。",
+      "键连接、键级或锚点映射不一致，属于拓扑规划失败。",
+      "候选结构包含未连接片段。"
+    ]
+  },
+  "archiveRelativePath": "GDG1223/20260713T114116Z-GDG1223"
+}

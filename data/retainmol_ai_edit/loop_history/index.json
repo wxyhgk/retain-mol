@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "runs": [
+    {
+      "runId": "20260713T104020Z-GDG1223",
+      "caseId": "GDG1223",
+      "createdAt": "2026-07-13T10:40:24.027022+00:00",
+      "score": 72.0,
+      "passed": false,
+      "failures": [
+        "core-geometry",
+        "peripheral-placement",
+        "steric-clash"
+      ],
+      "path": "GDG1223/20260713T104020Z-GDG1223"
+    },
+    {
+      "runId": "20260713T104618Z-GDG1223",
+      "caseId": "GDG1223",
+      "createdAt": "2026-07-13T10:46:31.457516+00:00",
+      "score": 80.0,
+      "passed": false,
+      "failures": [
+        "core-geometry",
+        "peripheral-placement",
+        "xtb-failed"
+      ],
+      "path": "GDG1223/20260713T104618Z-GDG1223"
+    },
+    {
+      "runId": "20260713T105327Z-GDG1223",
+      "caseId": "GDG1223",
+      "createdAt": "2026-07-13T10:59:42.097704+00:00",
+      "score": 80.0,
+      "passed": false,
+      "failures": [
+        "core-geometry",
+        "peripheral-placement",
+        "xtb-not-converged"
+      ],
+      "path": "GDG1223/20260713T105327Z-GDG1223"
+    },
+    {
+      "runId": "20260713T114116Z-GDG1223",
+      "caseId": "GDG1223",
+      "createdAt": "2026-07-13T11:41:16.951694+00:00",
+      "score": 10.0,
+      "passed": false,
+      "failures": [
+        "formula-mismatch",
+        "topology-mismatch",
+        "disconnected-structure"
+      ],
+      "path": "GDG1223/20260713T114116Z-GDG1223"
+    },
+    {
+      "runId": "20260713T140241Z-GDG1223",
+      "caseId": "GDG1223",
+      "createdAt": "2026-07-13T14:02:41.308667+00:00",
+      "score": 35.0,
+      "passed": false,
+      "failures": [
+        "topology-mismatch"
+      ],
+      "path": "GDG1223/20260713T140241Z-GDG1223"
+    },
+    {
+      "runId": "20260713T141240Z-GDG1223",
+      "caseId": "GDG1223",
+      "createdAt": "2026-07-13T14:12:44.866360+00:00",
+      "score": 69.0,
+      "passed": false,
+      "failures": [
+        "anchor-drift",
+        "core-geometry",
+        "peripheral-placement",
+        "steric-clash"
+      ],
+      "path": "GDG1223/20260713T141240Z-GDG1223"
+    },
+    {
+      "runId": "20260713T142539Z-GDG1223",
+      "caseId": "GDG1223",
+      "createdAt": "2026-07-13T14:25:43.387689+00:00",
+      "score": 69.0,
+      "passed": false,
+      "failures": [
+        "anchor-drift",
+        "core-geometry",
+        "peripheral-placement",
+        "steric-clash"
+      ],
+      "path": "GDG1223/20260713T142539Z-GDG1223"
+    },
+    {
+      "runId": "20260713T142658Z-GDG1223",
+      "caseId": "GDG1223",
+      "createdAt": "2026-07-13T14:27:02.583689+00:00",
+      "score": 70.0,
+      "passed": false,
+      "failures": [
+        "core-geometry",
+        "peripheral-placement",
+        "steric-clash"
+      ],
+      "path": "GDG1223/20260713T142658Z-GDG1223"
+    },
+    {
+      "runId": "20260713T104020Z-GDG1476",
+      "caseId": "GDG1476",
+      "createdAt": "2026-07-13T10:40:20.434535+00:00",
+      "score": 80.0,
+      "passed": false,
+      "failures": [
+        "core-geometry",
+        "peripheral-placement"
+      ],
+      "path": "GDG1476/20260713T104020Z-GDG1476"
+    },
+    {
+      "runId": "20260713T104618Z-GDG1476",
+      "caseId": "GDG1476",
+      "createdAt": "2026-07-13T10:48:08.329112+00:00",
+      "score": 80.0,
+      "passed": false,
+      "failures": [
+        "core-geometry",
+        "peripheral-placement"
+      ],
+      "path": "GDG1476/20260713T104618Z-GDG1476"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "caseId": "GDG1476",
+  "source": "anchor-seed.sdf",
+  "target": "candidate.sdf",
+  "stages": [
+    {
+      "stage": 1,
+      "name": "Preserve fixed heteroatom frame",
+      "operations": [
+        "Keep core-n-1, core-n-2, and core-b-1 as atoms 1, 2, and 3.",
+        "Retain their supplied elements and Cartesian coordinates without displacement."
+      ]
+    },
+    {
+      "stage": 2,
+      "name": "Build the BN MR core",
+      "operations": [
+        "Attach B to the two upper core aryl rings and the top carbon of the central aryl ring.",
+        "Attach each tertiary N to its upper aryl, lateral aryl, and central aryl positions.",
+        "Place F on the bottom carbon of the fully substituted central aryl ring."
+      ]
+    },
+    {
+      "stage": 3,
+      "name": "Add upper and lateral aryl framework",
+      "operations": [
+        "Add the upper-left biphenyl fragment and both lateral phenyl-substituted aryl rings.",
+        "Build the upper-right spirobifluorene using the upper-right core aryl as one fluorene ring."
+      ]
+    },
+    {
+      "stage": 4,
+      "name": "Close lower bridged fluorene units",
+      "operations": [
+        "Add left and right tetrahedral 9-position carbons joining central and lateral aryl carbons.",
+        "Attach a fluorene framework and one peripheral phenyl substituent to each lower bridge carbon."
+      ]
+    },
+    {
+      "stage": 5,
+      "name": "Complete and relax geometry",
+      "operations": [
+        "Add all hydrogens explicitly for neutral singlet C105H58BN2F.",
+        "Generate ETKDGv3 conformers, fix all three anchors, UFF-relax, and select by clashes then energy.",
+        "Verify one connected component and exact anchor coordinates in the written SDF."
+      ]
+    }
+  ],
+  "notes": "The edit-plan schema supplied by the task does not define atom-level commands, so this file records structured high-level construction stages and the principal ring-closure decisions."
+}

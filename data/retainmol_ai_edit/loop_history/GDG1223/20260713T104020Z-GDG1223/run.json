@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260713T104020Z-GDG1223",
+  "createdAt": "2026-07-13T10:40:24.027022+00:00",
+  "gitCommit": "f42f5122e3a1a3edcbc3278dbc75592a6e62303e",
+  "gitDirty": true,
+  "candidateSha256": "a0ac4a373440d36887bfc4bb32d496535cda00ab253bbb625375354f3c426001",
+  "referenceSha256": "ac606901c9dfa791ae5a27403a32f40cb1eb274e4a3a47de484b45e61f15e85a",
+  "evaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 72.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 0.0,
+    "core_rmsd": 1.9202136093372193,
+    "heavy_atom_rmsd": 3.4746029087500023,
+    "severe_clashes": 8,
+    "disconnected_components": 1,
+    "failures": [
+      "core-geometry",
+      "peripheral-placement",
+      "steric-clash"
+    ],
+    "diagnostics": [
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。",
+      "发现 8 个严重非键碰撞；改进初始放置或扭转角搜索。"
+    ]
+  },
+  "archiveRelativePath": "GDG1223/20260713T104020Z-GDG1223"
+}

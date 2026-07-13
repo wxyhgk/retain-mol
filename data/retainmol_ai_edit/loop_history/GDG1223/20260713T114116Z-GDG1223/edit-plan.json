@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "planId": "executor-smoke",
+  "source": "ai",
+  "targetObjectId": "benchmark:GDG1223",
+  "commands": [
+    {
+      "commandId": "add-c",
+      "kind": "atom.add",
+      "atomId": "candidate:c-1",
+      "symbol": "C",
+      "position": { "x": 0.6, "y": 1.35, "z": 0.4 }
+    },
+    {
+      "commandId": "bond-b-c",
+      "kind": "bond.add",
+      "bondId": "candidate:bond-b-c",
+      "atomId1": "core-b-1",
+      "atomId2": "candidate:c-1",
+      "order": 1
+    }
+  ]
+}

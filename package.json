@@ -8,6 +8,11 @@
     "typecheck": "npm run typecheck --workspace @retainmol/mol-viewer && npm run typecheck:strict --workspace @retainmol/mol-viewer && npm run build --workspace @retainmol/mol-viewer && npm run typecheck --workspace retainmol",
     "test": "npm run test --workspace @retainmol/mol-viewer && npm test --workspace retainmol -- --run",
     "build": "npm run build --workspace retainmol",
+    "ai-loop:doctor": "python3 -m tools.ai_modeling_loop doctor",
+    "ai-loop:tasks": "python3 -m tools.ai_modeling_loop prepare-tasks",
+    "ai-loop:references": "python3 -m tools.ai_modeling_loop prepare-references",
+    "ai-loop:scoreboard": "python3 -m tools.ai_modeling_loop scoreboard",
+    "ai-loop:archive": "python3 -m tools.ai_modeling_loop archive-runs",
     "verify": "npm run check:secrets && npm run check:boundaries && npm run lint && npm run typecheck && npm test && npm run build && npm run api:check --workspace @retainmol/mol-viewer && npm run test:pack --workspace @retainmol/mol-viewer"
   },
   "workspaces": [

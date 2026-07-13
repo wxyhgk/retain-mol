@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "caseId": "GDG1476",
+  "description": "以固定 B/N MR-TADF 母核为坐标基准，从分子图片重建完整结构。",
+  "inputs": {
+    "image": "data/retainmol_ai_edit/GDG1476.png"
+  },
+  "hiddenReference": {
+    "sdf": "data/retainmol_ai_edit/GDG1476.sdf"
+  },
+  "charge": 0,
+  "multiplicity": 1,
+  "anchors": [
+    { "id": "core-n-1", "referenceAtomIndex": 7, "symbol": "N", "position": { "x": -1.4277, "y": 1.0775, "z": 0.0 } },
+    { "id": "core-n-2", "referenceAtomIndex": 12, "symbol": "N", "position": { "x": 1.4203, "y": 1.0775, "z": 0.0 } },
+    { "id": "core-b-1", "referenceAtomIndex": 25, "symbol": "B", "position": { "x": -0.0037, "y": 1.8997, "z": 0.0 } }
+  ]
+}
+

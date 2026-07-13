@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "caseId": "GDG1223",
+  "builder": "manual image-topology reconstruction + RDKit UFF constrained relaxation",
+  "seed": 1223,
+  "anchorAtomIndices": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "notes": "Blind reconstruction from target.png. Candidate contains four tert-butyl groups, two phenyl substituents, the B/N fused MR core, and a spiro-fused fluorene. RDKit formula: C79H66BN3. All hydrogens are explicit; the four task anchors are exact."
+}

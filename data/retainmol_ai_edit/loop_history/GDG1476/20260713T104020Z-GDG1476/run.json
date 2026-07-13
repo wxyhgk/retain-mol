@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260713T104020Z-GDG1476",
+  "createdAt": "2026-07-13T10:40:20.434535+00:00",
+  "gitCommit": "f42f5122e3a1a3edcbc3278dbc75592a6e62303e",
+  "gitDirty": true,
+  "candidateSha256": "495b3a0907e411a94d6fae7e8f97f00d626063a177116b8f8ac41dc68c2895fc",
+  "referenceSha256": "fdd89eb53f6862e94c41d7b86dbcb451b8ad3a008c3c7db03aa4eb37df4d2db5",
+  "evaluation": {
+    "case_id": "GDG1476",
+    "passed": false,
+    "score": 80.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 0.0,
+    "core_rmsd": 1.5123441778486562,
+    "heavy_atom_rmsd": 4.6994736432767885,
+    "severe_clashes": 0,
+    "disconnected_components": 1,
+    "failures": [
+      "core-geometry",
+      "peripheral-placement"
+    ],
+    "diagnostics": [
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。"
+    ]
+  },
+  "archiveRelativePath": "GDG1476/20260713T104020Z-GDG1476"
+}

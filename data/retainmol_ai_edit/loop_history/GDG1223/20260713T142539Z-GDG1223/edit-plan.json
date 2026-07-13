@@ -1,0 +1,1692 @@
+{
+  "schemaVersion": 1,
+  "planId": "GDG1223-round-001-planner",
+  "source": "ai",
+  "targetObjectId": "benchmark:GDG1223",
+  "description": "Blind reconstruction from the permitted target image using explicit heavy atoms and Kekule bond orders.",
+  "constraints": {
+    "fixedAtomPositions": [
+      "core-n-1",
+      "core-n-2",
+      "core-b-1",
+      "core-n-3"
+    ],
+    "protectedAtomIds": [
+      "core-n-1",
+      "core-n-2",
+      "core-b-1",
+      "core-n-3"
+    ]
+  },
+  "commands": [
+    {
+      "commandId": "add-001",
+      "kind": "atom.add",
+      "atomId": "ul-a1",
+      "symbol": "C",
+      "position": {
+        "x": -3.657,
+        "y": 3.6156,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-002",
+      "kind": "atom.add",
+      "atomId": "ul-a2",
+      "symbol": "C",
+      "position": {
+        "x": -2.8842,
+        "y": 3.8916,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-003",
+      "kind": "atom.add",
+      "atomId": "ul-a3",
+      "symbol": "C",
+      "position": {
+        "x": -2.277,
+        "y": 3.3534,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-004",
+      "kind": "atom.add",
+      "atomId": "ul-a4",
+      "symbol": "C",
+      "position": {
+        "x": -2.4012,
+        "y": 2.5254,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-005",
+      "kind": "atom.add",
+      "atomId": "ul-a5",
+      "symbol": "C",
+      "position": {
+        "x": -3.2016,
+        "y": 2.2908,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-006",
+      "kind": "atom.add",
+      "atomId": "ul-a6",
+      "symbol": "C",
+      "position": {
+        "x": -3.8088,
+        "y": 2.8428,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-007",
+      "kind": "atom.add",
+      "atomId": "ur-b1",
+      "symbol": "C",
+      "position": {
+        "x": -1.4904,
+        "y": 3.5604,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-008",
+      "kind": "atom.add",
+      "atomId": "ur-b2",
+      "symbol": "C",
+      "position": {
+        "x": -0.8832,
+        "y": 4.1262,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-009",
+      "kind": "atom.add",
+      "atomId": "ur-b3",
+      "symbol": "C",
+      "position": {
+        "x": -0.138,
+        "y": 3.9054,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-010",
+      "kind": "atom.add",
+      "atomId": "ur-b4",
+      "symbol": "C",
+      "position": {
+        "x": 0.0828,
+        "y": 3.0912,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-011",
+      "kind": "atom.add",
+      "atomId": "ur-b5",
+      "symbol": "C",
+      "position": {
+        "x": -0.5244,
+        "y": 2.5254,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-012",
+      "kind": "atom.add",
+      "atomId": "ur-b6",
+      "symbol": "C",
+      "position": {
+        "x": -1.3386,
+        "y": 2.7324,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-013",
+      "kind": "atom.add",
+      "atomId": "ct-c1",
+      "symbol": "C",
+      "position": {
+        "x": -1.2558,
+        "y": 1.4628,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-014",
+      "kind": "atom.add",
+      "atomId": "ct-c2",
+      "symbol": "C",
+      "position": {
+        "x": -0.5106,
+        "y": 1.6974,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-015",
+      "kind": "atom.add",
+      "atomId": "ct-c3",
+      "symbol": "C",
+      "position": {
+        "x": 0.1104,
+        "y": 1.1592,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-016",
+      "kind": "atom.add",
+      "atomId": "ct-c4",
+      "symbol": "C",
+      "position": {
+        "x": -0.0414,
+        "y": 0.3588,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-017",
+      "kind": "atom.add",
+      "atomId": "ct-c5",
+      "symbol": "C",
+      "position": {
+        "x": -0.8004,
+        "y": 0.0966,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-018",
+      "kind": "atom.add",
+      "atomId": "ct-c6",
+      "symbol": "C",
+      "position": {
+        "x": -1.3938,
+        "y": 0.6762,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-019",
+      "kind": "atom.add",
+      "atomId": "link-l0",
+      "symbol": "C",
+      "position": {
+        "x": -2.0424,
+        "y": 0.138,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-020",
+      "kind": "atom.add",
+      "atomId": "link-l1",
+      "symbol": "C",
+      "position": {
+        "x": -1.863,
+        "y": -0.6762,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-021",
+      "kind": "atom.add",
+      "atomId": "phenyl-p1",
+      "symbol": "C",
+      "position": {
+        "x": -2.8566,
+        "y": 0.4002,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-022",
+      "kind": "atom.add",
+      "atomId": "phenyl-p2",
+      "symbol": "C",
+      "position": {
+        "x": -3.0498,
+        "y": 1.1316,
+        "z": 0.25
+      }
+    },
+    {
+      "commandId": "add-023",
+      "kind": "atom.add",
+      "atomId": "phenyl-p3",
+      "symbol": "C",
+      "position": {
+        "x": -3.8226,
+        "y": 1.3248,
+        "z": 0.45
+      }
+    },
+    {
+      "commandId": "add-024",
+      "kind": "atom.add",
+      "atomId": "phenyl-p4",
+      "symbol": "C",
+      "position": {
+        "x": -4.4022,
+        "y": 0.759,
+        "z": 0.55
+      }
+    },
+    {
+      "commandId": "add-025",
+      "kind": "atom.add",
+      "atomId": "phenyl-p5",
+      "symbol": "C",
+      "position": {
+        "x": -4.209,
+        "y": -0.0138,
+        "z": 0.35
+      }
+    },
+    {
+      "commandId": "add-026",
+      "kind": "atom.add",
+      "atomId": "phenyl-p6",
+      "symbol": "C",
+      "position": {
+        "x": -3.4362,
+        "y": -0.2484,
+        "z": 0.1
+      }
+    },
+    {
+      "commandId": "add-027",
+      "kind": "atom.add",
+      "atomId": "phenyl-q1",
+      "symbol": "C",
+      "position": {
+        "x": -2.2494,
+        "y": -1.2558,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-028",
+      "kind": "atom.add",
+      "atomId": "phenyl-q2",
+      "symbol": "C",
+      "position": {
+        "x": -3.0636,
+        "y": -1.2006,
+        "z": -0.25
+      }
+    },
+    {
+      "commandId": "add-029",
+      "kind": "atom.add",
+      "atomId": "phenyl-q3",
+      "symbol": "C",
+      "position": {
+        "x": -3.5604,
+        "y": -1.8492,
+        "z": -0.45
+      }
+    },
+    {
+      "commandId": "add-030",
+      "kind": "atom.add",
+      "atomId": "phenyl-q4",
+      "symbol": "C",
+      "position": {
+        "x": -3.2568,
+        "y": -2.622,
+        "z": -0.55
+      }
+    },
+    {
+      "commandId": "add-031",
+      "kind": "atom.add",
+      "atomId": "phenyl-q5",
+      "symbol": "C",
+      "position": {
+        "x": -2.4426,
+        "y": -2.7048,
+        "z": -0.35
+      }
+    },
+    {
+      "commandId": "add-032",
+      "kind": "atom.add",
+      "atomId": "phenyl-q6",
+      "symbol": "C",
+      "position": {
+        "x": -1.9458,
+        "y": -2.07,
+        "z": -0.1
+      }
+    },
+    {
+      "commandId": "add-033",
+      "kind": "atom.add",
+      "atomId": "cl-e1",
+      "symbol": "C",
+      "position": {
+        "x": -0.345,
+        "y": -1.2282,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-034",
+      "kind": "atom.add",
+      "atomId": "cl-e2",
+      "symbol": "C",
+      "position": {
+        "x": 0.4554,
+        "y": -0.9108,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-035",
+      "kind": "atom.add",
+      "atomId": "cl-e3",
+      "symbol": "C",
+      "position": {
+        "x": 1.0626,
+        "y": -1.4628,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-036",
+      "kind": "atom.add",
+      "atomId": "cl-e4",
+      "symbol": "C",
+      "position": {
+        "x": 0.9108,
+        "y": -2.2632,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-037",
+      "kind": "atom.add",
+      "atomId": "cl-e5",
+      "symbol": "C",
+      "position": {
+        "x": 0.1104,
+        "y": -2.553,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-038",
+      "kind": "atom.add",
+      "atomId": "cl-e6",
+      "symbol": "C",
+      "position": {
+        "x": -0.4968,
+        "y": -2.0286,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-039",
+      "kind": "atom.add",
+      "atomId": "rt-f1",
+      "symbol": "C",
+      "position": {
+        "x": 1.3524,
+        "y": 0.1242,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-040",
+      "kind": "atom.add",
+      "atomId": "rt-f2",
+      "symbol": "C",
+      "position": {
+        "x": 1.4766,
+        "y": 0.9384,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-041",
+      "kind": "atom.add",
+      "atomId": "rt-f3",
+      "symbol": "C",
+      "position": {
+        "x": 2.2356,
+        "y": 1.173,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-042",
+      "kind": "atom.add",
+      "atomId": "rt-f4",
+      "symbol": "C",
+      "position": {
+        "x": 2.8842,
+        "y": 0.6624,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-043",
+      "kind": "atom.add",
+      "atomId": "rt-f5",
+      "symbol": "C",
+      "position": {
+        "x": 2.76,
+        "y": -0.1518,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-044",
+      "kind": "atom.add",
+      "atomId": "rt-f6",
+      "symbol": "C",
+      "position": {
+        "x": 1.9458,
+        "y": -0.414,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-045",
+      "kind": "atom.add",
+      "atomId": "rb-g1",
+      "symbol": "C",
+      "position": {
+        "x": 2.4012,
+        "y": -1.7526,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-046",
+      "kind": "atom.add",
+      "atomId": "rb-g2",
+      "symbol": "C",
+      "position": {
+        "x": 3.1188,
+        "y": -1.4766,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-047",
+      "kind": "atom.add",
+      "atomId": "rb-g3",
+      "symbol": "C",
+      "position": {
+        "x": 3.8226,
+        "y": -2.0286,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-048",
+      "kind": "atom.add",
+      "atomId": "rb-g4",
+      "symbol": "C",
+      "position": {
+        "x": 3.6708,
+        "y": -2.8152,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-049",
+      "kind": "atom.add",
+      "atomId": "rb-g5",
+      "symbol": "C",
+      "position": {
+        "x": 2.898,
+        "y": -3.0912,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-050",
+      "kind": "atom.add",
+      "atomId": "rb-g6",
+      "symbol": "C",
+      "position": {
+        "x": 2.277,
+        "y": -2.5668,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-051",
+      "kind": "atom.add",
+      "atomId": "spiro-s",
+      "symbol": "C",
+      "position": {
+        "x": 1.4628,
+        "y": -3.0222,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-052",
+      "kind": "atom.add",
+      "atomId": "fluor-h1",
+      "symbol": "C",
+      "position": {
+        "x": 0.69,
+        "y": -3.5604,
+        "z": 0.39
+      }
+    },
+    {
+      "commandId": "add-053",
+      "kind": "atom.add",
+      "atomId": "fluor-h2",
+      "symbol": "C",
+      "position": {
+        "x": -0.0414,
+        "y": -3.243,
+        "z": 0.16
+      }
+    },
+    {
+      "commandId": "add-054",
+      "kind": "atom.add",
+      "atomId": "fluor-h3",
+      "symbol": "C",
+      "position": {
+        "x": -0.7176,
+        "y": -3.6984,
+        "z": 0.49
+      }
+    },
+    {
+      "commandId": "add-055",
+      "kind": "atom.add",
+      "atomId": "fluor-h4",
+      "symbol": "C",
+      "position": {
+        "x": -0.6486,
+        "y": -4.554,
+        "z": 1.11
+      }
+    },
+    {
+      "commandId": "add-056",
+      "kind": "atom.add",
+      "atomId": "fluor-h5",
+      "symbol": "C",
+      "position": {
+        "x": 0.1104,
+        "y": -4.8576,
+        "z": 1.33
+      }
+    },
+    {
+      "commandId": "add-057",
+      "kind": "atom.add",
+      "atomId": "fluor-h6",
+      "symbol": "C",
+      "position": {
+        "x": 0.7866,
+        "y": -4.3884,
+        "z": 0.99
+      }
+    },
+    {
+      "commandId": "add-058",
+      "kind": "atom.add",
+      "atomId": "fluor-i1",
+      "symbol": "C",
+      "position": {
+        "x": 1.9734,
+        "y": -3.795,
+        "z": 0.56
+      }
+    },
+    {
+      "commandId": "add-059",
+      "kind": "atom.add",
+      "atomId": "fluor-i2",
+      "symbol": "C",
+      "position": {
+        "x": 2.8014,
+        "y": -3.7812,
+        "z": 0.55
+      }
+    },
+    {
+      "commandId": "add-060",
+      "kind": "atom.add",
+      "atomId": "fluor-i3",
+      "symbol": "C",
+      "position": {
+        "x": 3.2154,
+        "y": -4.485,
+        "z": 1.06
+      }
+    },
+    {
+      "commandId": "add-061",
+      "kind": "atom.add",
+      "atomId": "fluor-i4",
+      "symbol": "C",
+      "position": {
+        "x": 2.7876,
+        "y": -5.2164,
+        "z": 1.59
+      }
+    },
+    {
+      "commandId": "add-062",
+      "kind": "atom.add",
+      "atomId": "fluor-i5",
+      "symbol": "C",
+      "position": {
+        "x": 1.932,
+        "y": -5.2164,
+        "z": 1.59
+      }
+    },
+    {
+      "commandId": "add-063",
+      "kind": "atom.add",
+      "atomId": "fluor-i6",
+      "symbol": "C",
+      "position": {
+        "x": 1.587,
+        "y": -4.4988,
+        "z": 1.07
+      }
+    },
+    {
+      "commandId": "add-064",
+      "kind": "atom.add",
+      "atomId": "tbu-a0",
+      "symbol": "C",
+      "position": {
+        "x": -4.2642,
+        "y": 4.1814,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-065",
+      "kind": "atom.add",
+      "atomId": "tbu-a1",
+      "symbol": "C",
+      "position": {
+        "x": -4.8714,
+        "y": 4.7058,
+        "z": 0.55
+      }
+    },
+    {
+      "commandId": "add-066",
+      "kind": "atom.add",
+      "atomId": "tbu-a2",
+      "symbol": "C",
+      "position": {
+        "x": -4.1124,
+        "y": 4.968,
+        "z": -0.55
+      }
+    },
+    {
+      "commandId": "add-067",
+      "kind": "atom.add",
+      "atomId": "tbu-a3",
+      "symbol": "C",
+      "position": {
+        "x": -5.037,
+        "y": 3.8916,
+        "z": 0.2
+      }
+    },
+    {
+      "commandId": "add-068",
+      "kind": "atom.add",
+      "atomId": "tbu-b0",
+      "symbol": "C",
+      "position": {
+        "x": 0.4554,
+        "y": 4.416,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-069",
+      "kind": "atom.add",
+      "atomId": "tbu-b1",
+      "symbol": "C",
+      "position": {
+        "x": 0.2898,
+        "y": 5.2026,
+        "z": -0.55
+      }
+    },
+    {
+      "commandId": "add-070",
+      "kind": "atom.add",
+      "atomId": "tbu-b2",
+      "symbol": "C",
+      "position": {
+        "x": 1.0626,
+        "y": 5.0094,
+        "z": 0.55
+      }
+    },
+    {
+      "commandId": "add-071",
+      "kind": "atom.add",
+      "atomId": "tbu-b3",
+      "symbol": "C",
+      "position": {
+        "x": 1.2558,
+        "y": 4.1952,
+        "z": -0.2
+      }
+    },
+    {
+      "commandId": "add-072",
+      "kind": "atom.add",
+      "atomId": "tbu-c0",
+      "symbol": "C",
+      "position": {
+        "x": 2.415,
+        "y": 1.9872,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-073",
+      "kind": "atom.add",
+      "atomId": "tbu-c1",
+      "symbol": "C",
+      "position": {
+        "x": 1.8078,
+        "y": 2.4978,
+        "z": 0.55
+      }
+    },
+    {
+      "commandId": "add-074",
+      "kind": "atom.add",
+      "atomId": "tbu-c2",
+      "symbol": "C",
+      "position": {
+        "x": 2.5668,
+        "y": 2.7738,
+        "z": -0.55
+      }
+    },
+    {
+      "commandId": "add-075",
+      "kind": "atom.add",
+      "atomId": "tbu-c3",
+      "symbol": "C",
+      "position": {
+        "x": 3.174,
+        "y": 2.2356,
+        "z": 0.2
+      }
+    },
+    {
+      "commandId": "add-076",
+      "kind": "atom.add",
+      "atomId": "tbu-d0",
+      "symbol": "C",
+      "position": {
+        "x": 4.3056,
+        "y": -3.3396,
+        "z": 0
+      }
+    },
+    {
+      "commandId": "add-077",
+      "kind": "atom.add",
+      "atomId": "tbu-d1",
+      "symbol": "C",
+      "position": {
+        "x": 5.037,
+        "y": -3.0912,
+        "z": -0.55
+      }
+    },
+    {
+      "commandId": "add-078",
+      "kind": "atom.add",
+      "atomId": "tbu-d2",
+      "symbol": "C",
+      "position": {
+        "x": 4.8714,
+        "y": -3.8502,
+        "z": 0.55
+      }
+    },
+    {
+      "commandId": "add-079",
+      "kind": "atom.add",
+      "atomId": "tbu-d3",
+      "symbol": "C",
+      "position": {
+        "x": 4.1124,
+        "y": -4.1676,
+        "z": -0.2
+      }
+    },
+    {
+      "commandId": "bond-001",
+      "kind": "bond.add",
+      "bondId": "b-001",
+      "atomId1": "ul-a1",
+      "atomId2": "ul-a2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-002",
+      "kind": "bond.add",
+      "bondId": "b-002",
+      "atomId1": "ul-a2",
+      "atomId2": "ul-a3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-003",
+      "kind": "bond.add",
+      "bondId": "b-003",
+      "atomId1": "ul-a3",
+      "atomId2": "ul-a4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-004",
+      "kind": "bond.add",
+      "bondId": "b-004",
+      "atomId1": "ul-a4",
+      "atomId2": "ul-a5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-005",
+      "kind": "bond.add",
+      "bondId": "b-005",
+      "atomId1": "ul-a5",
+      "atomId2": "ul-a6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-006",
+      "kind": "bond.add",
+      "bondId": "b-006",
+      "atomId1": "ul-a6",
+      "atomId2": "ul-a1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-007",
+      "kind": "bond.add",
+      "bondId": "b-007",
+      "atomId1": "ur-b1",
+      "atomId2": "ur-b2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-008",
+      "kind": "bond.add",
+      "bondId": "b-008",
+      "atomId1": "ur-b2",
+      "atomId2": "ur-b3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-009",
+      "kind": "bond.add",
+      "bondId": "b-009",
+      "atomId1": "ur-b3",
+      "atomId2": "ur-b4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-010",
+      "kind": "bond.add",
+      "bondId": "b-010",
+      "atomId1": "ur-b4",
+      "atomId2": "ur-b5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-011",
+      "kind": "bond.add",
+      "bondId": "b-011",
+      "atomId1": "ur-b5",
+      "atomId2": "ur-b6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-012",
+      "kind": "bond.add",
+      "bondId": "b-012",
+      "atomId1": "ur-b6",
+      "atomId2": "ur-b1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-013",
+      "kind": "bond.add",
+      "bondId": "b-013",
+      "atomId1": "ct-c1",
+      "atomId2": "ct-c2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-014",
+      "kind": "bond.add",
+      "bondId": "b-014",
+      "atomId1": "ct-c2",
+      "atomId2": "ct-c3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-015",
+      "kind": "bond.add",
+      "bondId": "b-015",
+      "atomId1": "ct-c3",
+      "atomId2": "ct-c4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-016",
+      "kind": "bond.add",
+      "bondId": "b-016",
+      "atomId1": "ct-c4",
+      "atomId2": "ct-c5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-017",
+      "kind": "bond.add",
+      "bondId": "b-017",
+      "atomId1": "ct-c5",
+      "atomId2": "ct-c6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-018",
+      "kind": "bond.add",
+      "bondId": "b-018",
+      "atomId1": "ct-c6",
+      "atomId2": "ct-c1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-019",
+      "kind": "bond.add",
+      "bondId": "b-019",
+      "atomId1": "phenyl-p1",
+      "atomId2": "phenyl-p2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-020",
+      "kind": "bond.add",
+      "bondId": "b-020",
+      "atomId1": "phenyl-p2",
+      "atomId2": "phenyl-p3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-021",
+      "kind": "bond.add",
+      "bondId": "b-021",
+      "atomId1": "phenyl-p3",
+      "atomId2": "phenyl-p4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-022",
+      "kind": "bond.add",
+      "bondId": "b-022",
+      "atomId1": "phenyl-p4",
+      "atomId2": "phenyl-p5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-023",
+      "kind": "bond.add",
+      "bondId": "b-023",
+      "atomId1": "phenyl-p5",
+      "atomId2": "phenyl-p6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-024",
+      "kind": "bond.add",
+      "bondId": "b-024",
+      "atomId1": "phenyl-p6",
+      "atomId2": "phenyl-p1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-025",
+      "kind": "bond.add",
+      "bondId": "b-025",
+      "atomId1": "phenyl-q1",
+      "atomId2": "phenyl-q2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-026",
+      "kind": "bond.add",
+      "bondId": "b-026",
+      "atomId1": "phenyl-q2",
+      "atomId2": "phenyl-q3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-027",
+      "kind": "bond.add",
+      "bondId": "b-027",
+      "atomId1": "phenyl-q3",
+      "atomId2": "phenyl-q4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-028",
+      "kind": "bond.add",
+      "bondId": "b-028",
+      "atomId1": "phenyl-q4",
+      "atomId2": "phenyl-q5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-029",
+      "kind": "bond.add",
+      "bondId": "b-029",
+      "atomId1": "phenyl-q5",
+      "atomId2": "phenyl-q6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-030",
+      "kind": "bond.add",
+      "bondId": "b-030",
+      "atomId1": "phenyl-q6",
+      "atomId2": "phenyl-q1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-031",
+      "kind": "bond.add",
+      "bondId": "b-031",
+      "atomId1": "cl-e1",
+      "atomId2": "cl-e2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-032",
+      "kind": "bond.add",
+      "bondId": "b-032",
+      "atomId1": "cl-e2",
+      "atomId2": "cl-e3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-033",
+      "kind": "bond.add",
+      "bondId": "b-033",
+      "atomId1": "cl-e3",
+      "atomId2": "cl-e4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-034",
+      "kind": "bond.add",
+      "bondId": "b-034",
+      "atomId1": "cl-e4",
+      "atomId2": "cl-e5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-035",
+      "kind": "bond.add",
+      "bondId": "b-035",
+      "atomId1": "cl-e5",
+      "atomId2": "cl-e6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-036",
+      "kind": "bond.add",
+      "bondId": "b-036",
+      "atomId1": "cl-e6",
+      "atomId2": "cl-e1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-037",
+      "kind": "bond.add",
+      "bondId": "b-037",
+      "atomId1": "rt-f1",
+      "atomId2": "rt-f2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-038",
+      "kind": "bond.add",
+      "bondId": "b-038",
+      "atomId1": "rt-f2",
+      "atomId2": "rt-f3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-039",
+      "kind": "bond.add",
+      "bondId": "b-039",
+      "atomId1": "rt-f3",
+      "atomId2": "rt-f4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-040",
+      "kind": "bond.add",
+      "bondId": "b-040",
+      "atomId1": "rt-f4",
+      "atomId2": "rt-f5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-041",
+      "kind": "bond.add",
+      "bondId": "b-041",
+      "atomId1": "rt-f5",
+      "atomId2": "rt-f6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-042",
+      "kind": "bond.add",
+      "bondId": "b-042",
+      "atomId1": "rt-f6",
+      "atomId2": "rt-f1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-043",
+      "kind": "bond.add",
+      "bondId": "b-043",
+      "atomId1": "rb-g1",
+      "atomId2": "rb-g2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-044",
+      "kind": "bond.add",
+      "bondId": "b-044",
+      "atomId1": "rb-g2",
+      "atomId2": "rb-g3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-045",
+      "kind": "bond.add",
+      "bondId": "b-045",
+      "atomId1": "rb-g3",
+      "atomId2": "rb-g4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-046",
+      "kind": "bond.add",
+      "bondId": "b-046",
+      "atomId1": "rb-g4",
+      "atomId2": "rb-g5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-047",
+      "kind": "bond.add",
+      "bondId": "b-047",
+      "atomId1": "rb-g5",
+      "atomId2": "rb-g6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-048",
+      "kind": "bond.add",
+      "bondId": "b-048",
+      "atomId1": "rb-g6",
+      "atomId2": "rb-g1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-049",
+      "kind": "bond.add",
+      "bondId": "b-049",
+      "atomId1": "fluor-h1",
+      "atomId2": "fluor-h2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-050",
+      "kind": "bond.add",
+      "bondId": "b-050",
+      "atomId1": "fluor-h2",
+      "atomId2": "fluor-h3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-051",
+      "kind": "bond.add",
+      "bondId": "b-051",
+      "atomId1": "fluor-h3",
+      "atomId2": "fluor-h4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-052",
+      "kind": "bond.add",
+      "bondId": "b-052",
+      "atomId1": "fluor-h4",
+      "atomId2": "fluor-h5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-053",
+      "kind": "bond.add",
+      "bondId": "b-053",
+      "atomId1": "fluor-h5",
+      "atomId2": "fluor-h6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-054",
+      "kind": "bond.add",
+      "bondId": "b-054",
+      "atomId1": "fluor-h6",
+      "atomId2": "fluor-h1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-055",
+      "kind": "bond.add",
+      "bondId": "b-055",
+      "atomId1": "fluor-i1",
+      "atomId2": "fluor-i2",
+      "order": 2
+    },
+    {
+      "commandId": "bond-056",
+      "kind": "bond.add",
+      "bondId": "b-056",
+      "atomId1": "fluor-i2",
+      "atomId2": "fluor-i3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-057",
+      "kind": "bond.add",
+      "bondId": "b-057",
+      "atomId1": "fluor-i3",
+      "atomId2": "fluor-i4",
+      "order": 2
+    },
+    {
+      "commandId": "bond-058",
+      "kind": "bond.add",
+      "bondId": "b-058",
+      "atomId1": "fluor-i4",
+      "atomId2": "fluor-i5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-059",
+      "kind": "bond.add",
+      "bondId": "b-059",
+      "atomId1": "fluor-i5",
+      "atomId2": "fluor-i6",
+      "order": 2
+    },
+    {
+      "commandId": "bond-060",
+      "kind": "bond.add",
+      "bondId": "b-060",
+      "atomId1": "fluor-i6",
+      "atomId2": "fluor-i1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-061",
+      "kind": "bond.add",
+      "bondId": "b-061",
+      "atomId1": "ul-a3",
+      "atomId2": "ur-b1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-062",
+      "kind": "bond.add",
+      "bondId": "b-062",
+      "atomId1": "core-n-2",
+      "atomId2": "ul-a4",
+      "order": 1
+    },
+    {
+      "commandId": "bond-063",
+      "kind": "bond.add",
+      "bondId": "b-063",
+      "atomId1": "core-n-2",
+      "atomId2": "ur-b6",
+      "order": 1
+    },
+    {
+      "commandId": "bond-064",
+      "kind": "bond.add",
+      "bondId": "b-064",
+      "atomId1": "core-n-2",
+      "atomId2": "ct-c1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-065",
+      "kind": "bond.add",
+      "bondId": "b-065",
+      "atomId1": "ur-b5",
+      "atomId2": "ct-c2",
+      "order": 1
+    },
+    {
+      "commandId": "bond-066",
+      "kind": "bond.add",
+      "bondId": "b-066",
+      "atomId1": "ct-c6",
+      "atomId2": "link-l0",
+      "order": 1
+    },
+    {
+      "commandId": "bond-067",
+      "kind": "bond.add",
+      "bondId": "b-067",
+      "atomId1": "link-l0",
+      "atomId2": "link-l1",
+      "order": 2
+    },
+    {
+      "commandId": "bond-068",
+      "kind": "bond.add",
+      "bondId": "b-068",
+      "atomId1": "link-l1",
+      "atomId2": "core-n-1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-069",
+      "kind": "bond.add",
+      "bondId": "b-069",
+      "atomId1": "core-n-1",
+      "atomId2": "ct-c5",
+      "order": 1
+    },
+    {
+      "commandId": "bond-070",
+      "kind": "bond.add",
+      "bondId": "b-070",
+      "atomId1": "link-l0",
+      "atomId2": "phenyl-p1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-071",
+      "kind": "bond.add",
+      "bondId": "b-071",
+      "atomId1": "link-l1",
+      "atomId2": "phenyl-q1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-072",
+      "kind": "bond.add",
+      "bondId": "b-072",
+      "atomId1": "core-n-1",
+      "atomId2": "cl-e1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-073",
+      "kind": "bond.add",
+      "bondId": "b-073",
+      "atomId1": "ct-c4",
+      "atomId2": "core-b-1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-074",
+      "kind": "bond.add",
+      "bondId": "b-074",
+      "atomId1": "core-b-1",
+      "atomId2": "cl-e2",
+      "order": 1
+    },
+    {
+      "commandId": "bond-075",
+      "kind": "bond.add",
+      "bondId": "b-075",
+      "atomId1": "core-b-1",
+      "atomId2": "rt-f1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-076",
+      "kind": "bond.add",
+      "bondId": "b-076",
+      "atomId1": "rt-f6",
+      "atomId2": "core-n-3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-077",
+      "kind": "bond.add",
+      "bondId": "b-077",
+      "atomId1": "core-n-3",
+      "atomId2": "cl-e3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-078",
+      "kind": "bond.add",
+      "bondId": "b-078",
+      "atomId1": "core-n-3",
+      "atomId2": "rb-g1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-079",
+      "kind": "bond.add",
+      "bondId": "b-079",
+      "atomId1": "rt-f5",
+      "atomId2": "rb-g2",
+      "order": 1
+    },
+    {
+      "commandId": "bond-080",
+      "kind": "bond.add",
+      "bondId": "b-080",
+      "atomId1": "cl-e4",
+      "atomId2": "spiro-s",
+      "order": 1
+    },
+    {
+      "commandId": "bond-081",
+      "kind": "bond.add",
+      "bondId": "b-081",
+      "atomId1": "spiro-s",
+      "atomId2": "rb-g6",
+      "order": 1
+    },
+    {
+      "commandId": "bond-082",
+      "kind": "bond.add",
+      "bondId": "b-082",
+      "atomId1": "spiro-s",
+      "atomId2": "fluor-h1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-083",
+      "kind": "bond.add",
+      "bondId": "b-083",
+      "atomId1": "spiro-s",
+      "atomId2": "fluor-i1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-084",
+      "kind": "bond.add",
+      "bondId": "b-084",
+      "atomId1": "fluor-h6",
+      "atomId2": "fluor-i6",
+      "order": 1
+    },
+    {
+      "commandId": "bond-085",
+      "kind": "bond.add",
+      "bondId": "b-085",
+      "atomId1": "ul-a1",
+      "atomId2": "tbu-a0",
+      "order": 1
+    },
+    {
+      "commandId": "bond-086",
+      "kind": "bond.add",
+      "bondId": "b-086",
+      "atomId1": "tbu-a0",
+      "atomId2": "tbu-a1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-087",
+      "kind": "bond.add",
+      "bondId": "b-087",
+      "atomId1": "tbu-a0",
+      "atomId2": "tbu-a2",
+      "order": 1
+    },
+    {
+      "commandId": "bond-088",
+      "kind": "bond.add",
+      "bondId": "b-088",
+      "atomId1": "tbu-a0",
+      "atomId2": "tbu-a3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-089",
+      "kind": "bond.add",
+      "bondId": "b-089",
+      "atomId1": "ur-b3",
+      "atomId2": "tbu-b0",
+      "order": 1
+    },
+    {
+      "commandId": "bond-090",
+      "kind": "bond.add",
+      "bondId": "b-090",
+      "atomId1": "tbu-b0",
+      "atomId2": "tbu-b1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-091",
+      "kind": "bond.add",
+      "bondId": "b-091",
+      "atomId1": "tbu-b0",
+      "atomId2": "tbu-b2",
+      "order": 1
+    },
+    {
+      "commandId": "bond-092",
+      "kind": "bond.add",
+      "bondId": "b-092",
+      "atomId1": "tbu-b0",
+      "atomId2": "tbu-b3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-093",
+      "kind": "bond.add",
+      "bondId": "b-093",
+      "atomId1": "rt-f3",
+      "atomId2": "tbu-c0",
+      "order": 1
+    },
+    {
+      "commandId": "bond-094",
+      "kind": "bond.add",
+      "bondId": "b-094",
+      "atomId1": "tbu-c0",
+      "atomId2": "tbu-c1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-095",
+      "kind": "bond.add",
+      "bondId": "b-095",
+      "atomId1": "tbu-c0",
+      "atomId2": "tbu-c2",
+      "order": 1
+    },
+    {
+      "commandId": "bond-096",
+      "kind": "bond.add",
+      "bondId": "b-096",
+      "atomId1": "tbu-c0",
+      "atomId2": "tbu-c3",
+      "order": 1
+    },
+    {
+      "commandId": "bond-097",
+      "kind": "bond.add",
+      "bondId": "b-097",
+      "atomId1": "rb-g4",
+      "atomId2": "tbu-d0",
+      "order": 1
+    },
+    {
+      "commandId": "bond-098",
+      "kind": "bond.add",
+      "bondId": "b-098",
+      "atomId1": "tbu-d0",
+      "atomId2": "tbu-d1",
+      "order": 1
+    },
+    {
+      "commandId": "bond-099",
+      "kind": "bond.add",
+      "bondId": "b-099",
+      "atomId1": "tbu-d0",
+      "atomId2": "tbu-d2",
+      "order": 1
+    },
+    {
+      "commandId": "bond-100",
+      "kind": "bond.add",
+      "bondId": "b-100",
+      "atomId1": "tbu-d0",
+      "atomId2": "tbu-d3",
+      "order": 1
+    }
+  ]
+}

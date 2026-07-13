@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260713T104618Z-GDG1223",
+  "createdAt": "2026-07-13T10:46:31.457516+00:00",
+  "gitCommit": "f42f5122e3a1a3edcbc3278dbc75592a6e62303e",
+  "gitDirty": true,
+  "candidateSha256": "f2e972822dde18a8cd0b2e7fa073b4519935ed41baef4588c630ca6bcf9b170e",
+  "rawCandidateSha256": "f2e972822dde18a8cd0b2e7fa073b4519935ed41baef4588c630ca6bcf9b170e",
+  "referenceSha256": "ac606901c9dfa791ae5a27403a32f40cb1eb274e4a3a47de484b45e61f15e85a",
+  "rawEvaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 80.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 0.0,
+    "core_rmsd": 1.9202136093372193,
+    "heavy_atom_rmsd": 3.550712565563849,
+    "severe_clashes": 0,
+    "disconnected_components": 1,
+    "failures": [
+      "core-geometry",
+      "peripheral-placement"
+    ],
+    "diagnostics": [
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。"
+    ]
+  },
+  "refinement": {
+    "method": "GFN2-xTB",
+    "status": "failed",
+    "error": "RuntimeError: xTB did not produce optimized coordinates:\n            -0.3746036             -10.1935\n       205                         -0.3607813              -9.8174\n       ...                                ...                  ...\n       398                         25.4297771             691.9795\n      -------------------------------------------------------------\n                  HL-Gap            0.0026601 Eh            0.0724 eV\n             Fermi-level           -0.4117358 Eh          -11.2039 eV\n\n SCC (total)                   0 d,  0 h,  0 min,  6.636 sec\n SCC setup                      ...        0 min,  0.001 sec (  0.018%)\n Dispersion                     ...        0 min,  0.003 sec (  0.045%)\n classical contributions        ...        0 min,  0.001 sec (  0.017%)\n integral evaluation            ...        0 min,  0.043 sec (  0.646%)\n iterations                     ...        0 min,  6.333 sec ( 95.425%)\n molecular gradient             ...        0 min,  0.252 sec (  3.798%)\n printout                       ...        0 min,  0.003 sec (  0.051%)\n\n########################################################################\n[ERROR] Program stopped due to fatal error\n-3- Single point calculation terminated\n-2- xtb_calculator_singlepoint: Electronic structure method terminated\n-1- scf: Self consistent charge iterator did not converge\n########################################################################\n\nabnormal termination of xtb\nNote: The following floating-point exceptions are signalling: IEEE_INVALID_FLAG IEEE_OVERFLOW_FLAG IEEE_UNDERFLOW_FLAG\nERROR STOP \n\nError termination. Backtrace:\n#0  0x105708983\n#1  0x105709557\n#2  0x10570a793\n#3  0x1046fae63\n#4  0x1045eddf3\n#5  0x1048c5c57\n\nERROR conda.cli.main_run:execute(127): `conda run xtb /var/folders/59/nlw8jr4n6dggwwmfw3mjzcjh0000gn/T/retainmol_loop_xtb_vit_vwsa/input.xyz --opt normal --gfn 2 --chrg 0 --uhf 0 --cycles 500 --parallel 1 --input /var/folders/59/nlw8jr4n6dggwwmfw3mjzcjh0000gn/T/retainmol_loop_xtb_vit_vwsa/xcontrol.inp` failed. (See above for error)\n"
+  },
+  "evaluation": {
+    "case_id": "GDG1223",
+    "passed": false,
+    "score": 80.0,
+    "formula_match": true,
+    "topology_match": true,
+    "anchor_max_displacement": 0.0,
+    "core_rmsd": 1.9202136093372193,
+    "heavy_atom_rmsd": 3.550712565563849,
+    "severe_clashes": 0,
+    "disconnected_components": 1,
+    "failures": [
+      "core-geometry",
+      "peripheral-placement",
+      "xtb-failed"
+    ],
+    "diagnostics": [
+      "母核附近几何偏差较大；检查并环、键级和初始构象。",
+      "外围片段位置偏差较大；优先调整片段模板、连接方向和二面角。",
+      "GFN2-xTB 精修失败：xTB did not produce optimized coordinates:\n            -0.3746036             -10.1935\n       205                         -0.3607813              -9.8174\n       ...                                ...                  ...\n       398                         25.4297771             691.9795\n      -------------------------------------------------------------\n                  HL-Gap            0.0026601 Eh            0.0724 eV\n             Fermi-level           -0.4117358 Eh          -11.2039 eV\n\n SCC (total)                   0 d,  0 h,  0 min,  6.636 sec\n SCC setup                      ...        0 min,  0.001 sec (  0.018%)\n Dispersion                     ...        0 min,  0.003 sec (  0.045%)\n classical contributions        ...        0 min,  0.001 sec (  0.017%)\n integral evaluation            ...        0 min,  0.043 sec (  0.646%)\n iterations                     ...        0 min,  6.333 sec ( 95.425%)\n molecular gradient             ...        0 min,  0.252 sec (  3.798%)\n printout                       ...        0 min,  0.003 sec (  0.051%)\n\n########################################################################\n[ERROR] Program stopped due to fatal error\n-3- Single point calculation terminated\n-2- xtb_calculator_singlepoint: Electronic structure method terminated\n-1- scf: Self consistent charge iterator did not converge\n########################################################################\n\nabnormal termination of xtb\nNote: The following floating-point exceptions are signalling: IEEE_INVALID_FLAG IEEE_OVERFLOW_FLAG IEEE_UNDERFLOW_FLAG\nERROR STOP \n\nError termination. Backtrace:\n#0  0x105708983\n#1  0x105709557\n#2  0x10570a793\n#3  0x1046fae63\n#4  0x1045eddf3\n#5  0x1048c5c57\n\nERROR conda.cli.main_run:execute(127): `conda run xtb /var/folders/59/nlw8jr4n6dggwwmfw3mjzcjh0000gn/T/retainmol_loop_xtb_vit_vwsa/input.xyz --opt normal --gfn 2 --chrg 0 --uhf 0 --cycles 500 --parallel 1 --input /var/folders/59/nlw8jr4n6dggwwmfw3mjzcjh0000gn/T/retainmol_loop_xtb_vit_vwsa/xcontrol.inp` failed. (See above for error)\n"
+    ]
+  },
+  "archiveRelativePath": "GDG1223/20260713T104618Z-GDG1223"
+}

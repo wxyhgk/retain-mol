@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "caseId": "GDG1476",
+  "builder": "Codex blind image-topology reconstruction with RDKit ETKDGv3/UFF",
+  "seed": 1476,
+  "anchorAtomIndices": [
+    1,
+    2,
+    3
+  ],
+  "anchorMap": {
+    "core-n-1": 1,
+    "core-n-2": 2,
+    "core-b-1": 3
+  },
+  "formula": "C105H58BFN2",
+  "formalCharge": 0,
+  "multiplicity": 1,
+  "explicitAtomCount": 167,
+  "connectedComponents": 1,
+  "geometryChecks": {
+    "conformersGenerated": 10,
+    "uffEnergy": 7120.625759,
+    "minimumNonbondedDistance": 1.64432,
+    "nonbondedPairsBelow0.75A": 0
+  },
+  "notes": "Topology was inferred only from target.png. The candidate models 17 aromatic six-membered rings, an upper spirobifluorene, two lower substituted fluorene units, a trigonal B center, two tertiary N centers, and one aryl F. Fixed anchor coordinates are retained exactly."
+}

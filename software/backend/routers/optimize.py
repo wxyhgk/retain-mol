@@ -14,11 +14,12 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import AsyncGenerator, Literal
+from typing import AsyncGenerator, Literal, Self
 
+import numpy as np
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 router = APIRouter(prefix="/optimize", tags=["optimize"])
 
@@ -34,11 +35,30 @@ class Atom(BaseModel):
 
 class OptimizeRequest(BaseModel):
     atoms: list[Atom]
+    fixed_atom_ids: list[str] = Field(default_factory=list)
     charge: int = 0
     multiplicity: int = 1
     method: Literal["gfn2", "gfn1", "gfnff"] = "gfn2"
     max_steps: int = Field(default=200, ge=1, le=1000)
     optlevel: Literal["crude", "sloppy", "loose", "lax", "normal", "tight", "vtight", "extreme"] = "normal"
+
+    @model_validator(mode="after")
+    def validate_atom_ids(self) -> Self:
+        atom_ids = [atom.id for atom in self.atoms]
+        duplicate_atom_ids = _duplicate_ids(atom_ids)
+        if duplicate_atom_ids:
+            raise ValueError(f"atoms 中的 ID 不得重复: {', '.join(duplicate_atom_ids)}")
+
+        duplicate_fixed_ids = _duplicate_ids(self.fixed_atom_ids)
+        if duplicate_fixed_ids:
+            raise ValueError(f"fixed_atom_ids 不得重复: {', '.join(duplicate_fixed_ids)}")
+
+        atom_id_set = set(atom_ids)
+        unknown_ids = [atom_id for atom_id in self.fixed_atom_ids if atom_id not in atom_id_set]
+        if unknown_ids:
+            raise ValueError(f"fixed_atom_ids 包含不存在的原子 ID: {', '.join(unknown_ids)}")
+
+        return self
 
 class AtomResult(BaseModel):
     id: str
@@ -56,6 +76,15 @@ class OptimizeResponse(BaseModel):
 
 
 # ── XYZ 读写 ──────────────────────────────────────────────────────────────────
+
+def _duplicate_ids(ids: list[str]) -> list[str]:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for item_id in ids:
+        if item_id in seen and item_id not in duplicates:
+            duplicates.append(item_id)
+        seen.add(item_id)
+    return duplicates
 
 def _write_xyz(path: Path, atoms: list[Atom]) -> None:
     lines = [str(len(atoms)), ""]
@@ -91,6 +120,71 @@ def _attach_atom_ids(atoms: list[dict], source: list[Atom]) -> list[dict]:
             raise ValueError(f"xTB 原子顺序发生变化：期望 {original.symbol}，得到 {atom['symbol']}")
         result.append({"id": original.id, **atom})
     return result
+
+
+def _prepare_output_atoms(atoms: list[dict], req: OptimizeRequest) -> list[dict]:
+    """Align xTB output to fixed request coordinates and restore stable atom ids."""
+    result = _attach_atom_ids(atoms, req.atoms)
+    if not req.fixed_atom_ids:
+        return result
+
+    fixed_ids = set(req.fixed_atom_ids)
+    fixed_indices = [index for index, atom in enumerate(req.atoms) if atom.id in fixed_ids]
+    coordinates = np.array(
+        [[atom["x"], atom["y"], atom["z"]] for atom in result],
+        dtype=float,
+    )
+    fixed_output = coordinates[fixed_indices]
+    fixed_target = np.array(
+        [[req.atoms[index].x, req.atoms[index].y, req.atoms[index].z] for index in fixed_indices],
+        dtype=float,
+    )
+
+    output_centroid = fixed_output.mean(axis=0)
+    target_centroid = fixed_target.mean(axis=0)
+    rotation = np.eye(3)
+    if len(fixed_indices) > 1:
+        covariance = (fixed_output - output_centroid).T @ (fixed_target - target_centroid)
+        left, _, right_transpose = np.linalg.svd(covariance)
+        rotation = left @ right_transpose
+        if np.linalg.det(rotation) < 0:
+            left[:, -1] *= -1
+            rotation = left @ right_transpose
+
+    coordinates = (coordinates - output_centroid) @ rotation + target_centroid
+
+    # xTB may report constrained atoms with residual drift; the API contract is exact.
+    coordinates[fixed_indices] = fixed_target
+    for atom, coordinate in zip(result, coordinates):
+        atom["x"], atom["y"], atom["z"] = map(float, coordinate)
+
+    return result
+
+
+def _build_xtb_command(req: OptimizeRequest, xyz_in: Path, work: Path) -> list[str]:
+    method_flag = {"gfn2": "2", "gfn1": "1", "gfnff": "ff"}.get(req.method.lower(), "2")
+    cmd = [
+        "xtb", str(xyz_in),
+        "--opt", req.optlevel,
+        f"--gfn{method_flag}",
+        "--chrg", str(req.charge),
+        "--uhf", str(req.multiplicity - 1),
+        "--cycles", str(req.max_steps),
+        "--parallel", "1",
+    ]
+
+    if req.fixed_atom_ids:
+        fixed_ids = set(req.fixed_atom_ids)
+        fixed_indices = [index for index, atom in enumerate(req.atoms, start=1) if atom.id in fixed_ids]
+        xcontrol = work / "xcontrol"
+        xcontrol.write_text(
+            "$fix\n"
+            f"  atoms: {','.join(str(index) for index in fixed_indices)}\n"
+            "$end\n"
+        )
+        cmd.extend(["--input", str(xcontrol)])
+
+    return cmd
 
 
 _ENERGY_RE = re.compile(r"TOTAL ENERGY\s+([-\d.]+)\s+Eh")
@@ -200,23 +294,13 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
         yield f"data: {json.dumps({'type': 'error', 'message': '至少需要 2 个原子'})}\n\n"
         return
 
-    method_flag = {"gfn2": "2", "gfn1": "1", "gfnff": "ff"}.get(req.method.lower(), "2")
-
     tmpdir_obj = tempfile.TemporaryDirectory(prefix="retainmol_xtb_stream_")
     try:
         work = Path(tmpdir_obj.name)
         xyz_in = work / "input.xyz"
         _write_xyz(xyz_in, req.atoms)
 
-        cmd = [
-            "xtb", str(xyz_in),
-            "--opt", req.optlevel,
-            f"--gfn{method_flag}",
-            "--chrg", str(req.charge),
-            "--uhf", str(req.multiplicity - 1),
-            "--cycles", str(req.max_steps),
-            "--parallel", "1",
-        ]
+        cmd = _build_xtb_command(req, xyz_in, work)
 
         yield f"data: {json.dumps({'type': 'status', 'message': 'xTB 已启动，等待优化轨迹...'})}\n\n"
 
@@ -263,7 +347,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
                         "step": idx + 1,
                         "energy": frame["energy"],
                         "gnorm": frame["gnorm"],
-                        "atoms": _attach_atom_ids(frame["atoms"], req.atoms),
+                        "atoms": _prepare_output_atoms(frame["atoms"], req),
                     }
                     yield f"data: {json.dumps(event)}\n\n"
 
@@ -287,7 +371,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
                     "step": idx + 1,
                     "energy": frame["energy"],
                     "gnorm": frame["gnorm"],
-                    "atoms": _attach_atom_ids(frame["atoms"], req.atoms),
+                    "atoms": _prepare_output_atoms(frame["atoms"], req),
                 }
                 yield f"data: {json.dumps(event)}\n\n"
 
@@ -336,7 +420,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
                     "step": frames_sent,
                     "energy": energy,
                     "gnorm": 0.0,
-                    "atoms": _attach_atom_ids(final_atoms, req.atoms),
+                    "atoms": _prepare_output_atoms(final_atoms, req),
                 }
                 yield f"data: {json.dumps(final_frame_event)}\n\n"
 
@@ -345,7 +429,7 @@ async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None
             "converged": converged and proc.returncode == 0,
             "steps": steps if steps > 0 else frames_sent,
             "energy": energy,
-            "atoms": _attach_atom_ids(final_atoms, req.atoms) if final_atoms else None,
+            "atoms": _prepare_output_atoms(final_atoms, req) if final_atoms else None,
             "warning": log[-1200:] if proc.returncode not in (0, None) else None,
         }
         yield f"data: {json.dumps(done_event)}\n\n"
@@ -363,22 +447,12 @@ async def optimize(req: OptimizeRequest) -> OptimizeResponse:
     if len(req.atoms) < 2:
         raise HTTPException(status_code=400, detail="至少需要 2 个原子")
 
-    method_flag = {"gfn2": "2", "gfn1": "1", "gfnff": "ff"}.get(req.method.lower(), "2")
-
     with tempfile.TemporaryDirectory(prefix="retainmol_xtb_") as tmpdir:
         work = Path(tmpdir)
         xyz_in = work / "input.xyz"
         _write_xyz(xyz_in, req.atoms)
 
-        cmd = [
-            "xtb", str(xyz_in),
-            "--opt", req.optlevel,
-            f"--gfn{method_flag}",
-            "--chrg", str(req.charge),
-            "--uhf", str(req.multiplicity - 1),
-            "--cycles", str(req.max_steps),
-            "--parallel", "1",
-        ]
+        cmd = _build_xtb_command(req, xyz_in, work)
 
         try:
             proc = subprocess.run(
@@ -411,9 +485,10 @@ async def optimize(req: OptimizeRequest) -> OptimizeResponse:
         opt_atoms = _read_xyz(opt_xyz)
         energy, steps, converged = _parse_energy_steps(log)
 
+    prepared_atoms = _prepare_output_atoms(opt_atoms, req)
     result_atoms = [
-        AtomResult(id=req.atoms[i].id, symbol=req.atoms[i].symbol, x=a["x"], y=a["y"], z=a["z"])
-        for i, a in enumerate(opt_atoms)
+        AtomResult(id=a["id"], symbol=req.atoms[i].symbol, x=a["x"], y=a["y"], z=a["z"])
+        for i, a in enumerate(prepared_atoms)
     ]
 
     return OptimizeResponse(

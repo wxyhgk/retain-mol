@@ -6,12 +6,13 @@ import { normalize, sub, type Vec3 } from '../../math'
 export function instantiate(
   frag: FragmentDef,
   transform: (p: Vec3) => Vec3,
-  skipIndex = -1,
+  skip: number | ReadonlySet<number> = -1,
 ) {
+  const skipIndices = typeof skip === 'number' ? new Set([skip]) : skip
   const idByIndex = new Map<number, string>()
   const atoms: Atom[] = []
   for (const [i, fa] of frag.atoms.entries()) {
-    if (i === skipIndex) continue
+    if (skipIndices.has(i)) continue
     const p = transform([fa.x, fa.y, fa.z])
     const baseAtom = newAtom(fa.symbol, p[0], p[1], p[2])
     const coordination = i === frag.attachIndex ? frag.coordination : undefined
@@ -46,7 +47,7 @@ export function instantiate(
   }
   const bonds: Bond[] = []
   for (const fragmentBond of frag.bonds) {
-    if (fragmentBond.a === skipIndex || fragmentBond.b === skipIndex) continue
+    if (skipIndices.has(fragmentBond.a) || skipIndices.has(fragmentBond.b)) continue
     const atomId1 = idByIndex.get(fragmentBond.a)
     const atomId2 = idByIndex.get(fragmentBond.b)
     if (atomId1 === undefined || atomId2 === undefined) {
