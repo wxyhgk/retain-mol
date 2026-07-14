@@ -15,7 +15,7 @@ import subprocess
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import optimize, prepare
+from routers import jobs, optimize, prepare
 
 app = FastAPI(
     title="RetainMol Backend",
@@ -34,6 +34,7 @@ app.add_middleware(
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 app.include_router(optimize.router)
 app.include_router(prepare.router)
+app.include_router(jobs.router)
 
 
 @app.get("/health")

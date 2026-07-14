@@ -4,6 +4,7 @@ import { registerForceFieldFromUrl } from '@retainmol/mol-viewer/io'
 import './index.css'
 import App from './App.tsx'
 import ApiTestPage from './dev/ApiTestPage.tsx'
+import { AppProviders } from './app/AppProviders.tsx'
 
 // 后台预加载 MMFF94 力场参数表（几何清理用）；失败不影响其他功能
 registerForceFieldFromUrl(`${import.meta.env.BASE_URL}ocl/resources.json`).catch(() => {})
@@ -13,6 +14,8 @@ const isTest = new URLSearchParams(location.search).has('test')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isTest ? <ApiTestPage /> : <App />}
+    <AppProviders>
+      {isTest ? <ApiTestPage /> : <App />}
+    </AppProviders>
   </StrictMode>,
 )

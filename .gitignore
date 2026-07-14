@@ -36,3 +36,6 @@ software/backend/xtbtopo.mol
 software/backend/xtbopt.log
 software/backend/xtbopt.xyz
 software/backend/xtb.out
+
+# Persistent local job workspace (SQLite records and calculation artifacts)
+software/backend/data/

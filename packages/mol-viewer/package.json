@@ -78,6 +78,10 @@
     "./optimize": {
       "types": "./dist/optimize.d.ts",
       "import": "./dist/optimize.js"
+    },
+    "./picking": {
+      "types": "./dist/public/picking.d.ts",
+      "import": "./dist/public/picking.js"
     }
   },
   "files": [
@@ -93,7 +97,8 @@
     "test:pack": "npm run build && node scripts/test-pack-consumer.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:strict": "tsc -p tsconfig.strict.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bench:picking": "vitest bench src/lib/molRenderer/picking/PickingAcceleration.bench.ts"
   },
   "peerDependencies": {
     "react": ">=18",

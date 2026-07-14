@@ -2,7 +2,26 @@ import type { Molecule } from '@retainmol/mol-viewer/core'
 
 // HTTP/SSE transport only. Store writes and task state belong to the application layer.
 
-const XTB_API_BASE = (import.meta.env.VITE_RETAINMOL_BACKEND_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '')
+interface BrowserLocation {
+  protocol: string
+  hostname: string
+}
+
+export function resolveXtbApiBase(
+  configuredUrl: string | undefined = import.meta.env.VITE_RETAINMOL_BACKEND_URL,
+  browserLocation: BrowserLocation | undefined = typeof window === 'undefined'
+    ? undefined
+    : window.location,
+): string {
+  const configured = configuredUrl?.trim()
+  if (configured) return configured.replace(/\/$/, '')
+  if (browserLocation?.hostname) {
+    return `${browserLocation.protocol}//${browserLocation.hostname}:8000`
+  }
+  return 'http://127.0.0.1:8000'
+}
+
+const XTB_API_BASE = resolveXtbApiBase()
 const XTB_TIMEOUT_MS = 5 * 60_000
 
 interface XtbAtomResult {

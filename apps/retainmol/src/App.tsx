@@ -7,10 +7,13 @@ import {
 } from '@/features/template-studio'
 import { useUiThemeStore } from '@/domain/uiThemeStore'
 
+export type WorkspaceMode = 'build' | 'analyze' | 'simulate'
+
 export default function App() {
   const uiTheme = useUiThemeStore(state => state.theme)
   const [showInspector, setShowInspector] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('build')
   const [pathname, setPathname] = useState(() => window.location.pathname)
   const openSearch = useCallback(() => setSearchOpen(true), [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
@@ -42,7 +45,9 @@ export default function App() {
     <AppShell
       showInspector={showInspector}
       searchOpen={searchOpen}
+      workspaceMode={workspaceMode}
       onToggleInspector={toggleInspector}
+      onWorkspaceModeChange={setWorkspaceMode}
       onOpenTemplateStudio={() => navigate('/templates/new')}
       onOpenSearch={openSearch}
       onCloseSearch={closeSearch}

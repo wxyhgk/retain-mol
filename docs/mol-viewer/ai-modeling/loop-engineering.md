@@ -48,6 +48,8 @@ tools/ai_modeling_loop/
   chemistry.py     # ETKDG 和 xTB adapter
   workspace.py     # 公开任务与隐藏参考
   retainmol_executor.mjs # 只通过 mol-viewer 重放计划并导出 SDF
+  region_proposal.py # 动态化学区域提案与外部校验
+  region_tree.py     # 递归裁剪、端口继承与叶图编译
   evaluator.py     # 图同构和几何指标
   runner.py        # 不可变运行记录
 .retainmol-loop/   # 生成产物，Git 忽略
@@ -71,6 +73,94 @@ python3 -m tools.ai_modeling_loop record-run \
 
 npm run ai-loop:scoreboard
 ```
+
+### 分阶段视觉拓扑审计
+
+复杂图片不能直接一次性生成数百条 `atom.add` / `bond.add`。先运行独立的视觉拓扑
+审计，让外部程序核算元素总数、片段所有权、分子式和图论环秩：
+
+```bash
+export OPENAI_BASE_URL="http://provider.example"
+export OPENAI_API_KEY="..."
+export OPENAI_MODEL="vision-model-id"
+
+npm run ai-loop:audit-image -- \
+  --image /absolute/path/to/target.png \
+  --run-id experiment-001 \
+  --max-attempts 3
+```
+
+运行记录保存到 `.retainmol-loop/audits/<run-id>/`，每次尝试分别包含提示词、原始
+provider 响应、拓扑审计和外部校验结果。程序不接受模型自行声明的 `checkSums`，而是
+独立验证以下约束：
+
+- 元素计数之和等于重原子数；
+- 每个片段独占的重原子数之和等于总重原子数；
+- 片段环秩贡献之和等于总环秩；
+- `cycle rank = edge count - vertex count + component count`；
+- 分子式与元素计数、隐式氢计数一致。
+
+校验失败时，错误会反馈给模型重新看图；连续两次返回完全相同的错误结果会标记为
+`planner-stagnated` 并提前停止。网络和 provider 错误同样归档，不会留下只有堆栈的
+半成品。只有审计通过后，后续图提案与分片 EditPlan 编译阶段才应该启动。
+
+### 动态化学区域图
+
+拓扑审计通过后，可以让视觉模型按当前图片生成动态 `RegionGraph`：
+
+```bash
+npm run ai-loop:propose-regions -- \
+  --image /absolute/path/to/target.png \
+  --run-id experiment-regions-001 \
+  --max-attempts 3
+```
+
+区域数量和名称不由调用方指定，也不存在固定的“中心母核、左右臂、两个螺芴”角色。
+规划器只使用以下通用类型：`ring-system`、`branch`、`linker`、
+`functional-group`、`coordination-core` 和 `unresolved`。它优先在环外可旋转单键处分割，
+螺环用 `shared-atom`，普通连接用 `new-bond`；稠合环默认作为完整区域保留，仅当区域过大
+时才沿完整共享边用 `shared-edge` 递归细分。
+
+每个区域带有估计重原子数、环秩和 `needsSubdivision`。不同分子或离子使用不同
+`componentId`，同一组分内的区域必须通过互为引用的端口形成连通图。外部校验器还会检查：
+
+- 区域数量在约束范围内，区域 id 和端口 id 全局唯一；
+- 区域类型、端口类型和复杂度字段符合 schema；
+- 端口位于所属区域矩形内，双向端口类型一致且互相引用；
+- 对称组只引用真实区域；
+- 同一 `componentId` 内的区域图连通。
+
+若模型只写错了端口的单向引用，系统只在存在唯一反向引用且端口类型一致时做确定性修复；
+原始提案保存为 `proposal.raw.json`，修复动作保存为 `repairs.json`。存在多个候选或涉及化学
+类型变化时不会自动猜测，仍交回模型或拒绝该提案。
+
+运行记录保存在 `.retainmol-loop/regions/<run-id>/`。其中包含每次提示词、模型提案、
+校验结果，以及总览图、逐区域高亮图和裁剪图。后续 region worker 只处理这些动态区域，
+不能依赖某个 benchmark 分子的专用命名。
+
+对于标记为 `needsSubdivision` 的区域，使用递归 worker 自动继续拆分：
+
+```bash
+npm run ai-loop:plan-region-tree -- \
+  --image /absolute/path/to/target.png \
+  --run-id experiment-tree-001 \
+  --max-depth 2 \
+  --max-children 8 \
+  --max-attempts 3
+```
+
+worker 始终从原始图片按全局坐标裁剪，因此多层裁剪不会累计缩放误差。每层局部提案会：
+
+1. 将局部矩形和端口坐标变换回原图坐标；
+2. 用父节点路径为区域和端口加命名空间；
+3. 检查子区域确实缩小了搜索范围，并核对重原子数量级；
+4. 根据端口位置把父区域的外部连接继承给正确子区域；
+5. 将所有层的连接编译为只引用最终叶区域的 `leafGraph`。
+
+完整记录位于 `.retainmol-loop/region-trees/<run-id>/region-tree.json`，同时保留原图、
+每个递归节点的裁剪图及各自的 planner 尝试。子规划失败、无法继承端口或达到最大深度时，
+父区域会保留为可用叶节点，但整棵树标记为 `complete=false`；CLI 返回非零状态，避免把
+不完整结果误交给 EditPlan 编译器。
 
 当单一初始构象仍落入错误局部极小值时，可以增加受控搜索：
 

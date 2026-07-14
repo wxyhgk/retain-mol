@@ -12,6 +12,9 @@
     "ai-loop:tasks": "python3 -m tools.ai_modeling_loop prepare-tasks",
     "ai-loop:references": "python3 -m tools.ai_modeling_loop prepare-references",
     "ai-loop:scoreboard": "python3 -m tools.ai_modeling_loop scoreboard",
+    "ai-loop:audit-image": "python3 -m tools.ai_modeling_loop audit-image",
+    "ai-loop:propose-regions": "python3 -m tools.ai_modeling_loop propose-regions",
+    "ai-loop:plan-region-tree": "python3 -m tools.ai_modeling_loop plan-region-tree",
     "ai-loop:archive": "python3 -m tools.ai_modeling_loop archive-runs",
     "verify": "npm run check:secrets && npm run check:boundaries && npm run lint && npm run typecheck && npm test && npm run build && npm run api:check --workspace @retainmol/mol-viewer && npm run test:pack --workspace @retainmol/mol-viewer"
   },

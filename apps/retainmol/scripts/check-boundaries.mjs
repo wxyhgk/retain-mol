@@ -21,6 +21,8 @@ const allowedMolViewerImports = new Set([
   '@retainmol/mol-viewer/editing',
   '@retainmol/mol-viewer/geometry',
   '@retainmol/mol-viewer/graph',
+  '@retainmol/mol-viewer/modeling',
+  '@retainmol/mol-viewer/picking',
 ])
 
 function walk(dir) {
@@ -65,6 +67,53 @@ function resolveRelativeSpecifier(file, specifier) {
 }
 
 const violations = []
+
+// Shared UI/data primitives must remain business-agnostic and may never depend on features.
+for (const sharedRoot of ['components/ui', 'components/data']) {
+  for (const file of walk(join(SRC_DIR, sharedRoot))) {
+    const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+    for (const specifier of collectModuleSpecifiers(readFileSync(file, 'utf8'))) {
+      if (specifier.startsWith('@/features/') || specifier.startsWith('../../features/')) {
+        violations.push(`${rel}: shared components must not depend on feature implementations`)
+      }
+    }
+  }
+}
+
+// Heavy component libraries are isolated behind one adapter component per capability.
+const thirdPartyComponentAdapters = new Map([
+  ['@tanstack/react-table', 'components/data/DataTable.tsx'],
+  ['react-virtuoso', 'components/data/VirtualList.tsx'],
+  ['react-dropzone', 'components/data/FileDropzone.tsx'],
+  ['echarts', 'features/analysis/infrastructure/echartsAdapter.ts'],
+  ['@xyflow/react', 'features/workflows/components/WorkflowCanvas.tsx'],
+])
+for (const file of walk(SRC_DIR)) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  for (const specifier of collectModuleSpecifiers(readFileSync(file, 'utf8'))) {
+    for (const [packageName, allowedFile] of thirdPartyComponentAdapters) {
+      if ((specifier === packageName || specifier.startsWith(`${packageName}/`)) && rel !== allowedFile) {
+        violations.push(`${rel}: import ${specifier} through ${allowedFile}`)
+      }
+    }
+  }
+}
+
+// Server cache belongs to Query/infrastructure. Zustand models contain UI state only.
+for (const file of walk(join(SRC_DIR, 'features'))) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  const source = readFileSync(file, 'utf8')
+  if (
+    rel.includes('/model/')
+    && /\bfrom\s+['"]zustand['"]/.test(source)
+    && collectModuleSpecifiers(source).some(specifier => specifier.includes('/infrastructure/'))
+  ) {
+    violations.push(`${rel}: feature models must not copy server data from infrastructure into Zustand`)
+  }
+  if ((rel.endsWith('Page.tsx') || rel.includes('/components/')) && /\bfetch\s*\(/.test(source)) {
+    violations.push(`${rel}: pages and components must call feature infrastructure instead of fetch`)
+  }
+}
 
 for (const rel of [
   'components/toolbar/BuildPanel.tsx',

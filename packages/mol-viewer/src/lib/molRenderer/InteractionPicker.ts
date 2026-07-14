@@ -1,4 +1,9 @@
 import * as THREE from 'three'
+import {
+  nonePickingAcceleration,
+  type PickTargetKind,
+  type PickingAcceleration,
+} from './picking/PickingAcceleration'
 
 type MeshMap = () => Map<string, THREE.Mesh>
 type BondMap = () => Map<string, THREE.Group>
@@ -41,6 +46,7 @@ export class InteractionPicker {
     private readonly camera: THREE.PerspectiveCamera,
     private readonly getAtomMeshes: MeshMap,
     private readonly getBondMeshes: BondMap,
+    private readonly pickingAcceleration: PickingAcceleration = nonePickingAcceleration,
   ) {}
 
   raycasterAt(clientX: number, clientY: number): THREE.Raycaster {
@@ -55,7 +61,8 @@ export class InteractionPicker {
   }
 
   atomHitAt(clientX: number, clientY: number): THREE.Intersection<THREE.Object3D> | null {
-    return this.raycasterAt(clientX, clientY).intersectObjects(this.pickableAtoms())[0] ?? null
+    const raycaster = this.raycasterAt(clientX, clientY)
+    return this.firstIntersection('atom', raycaster, this.pickableAtoms())
   }
 
   atomIdAt(clientX: number, clientY: number): string | null {
@@ -63,8 +70,18 @@ export class InteractionPicker {
   }
 
   bondIdAt(clientX: number, clientY: number): string | null {
-    const hit = this.raycasterAt(clientX, clientY).intersectObjects(this.pickableBonds())[0]
+    const raycaster = this.raycasterAt(clientX, clientY)
+    const hit = this.firstIntersection('bond', raycaster, this.pickableBonds())
     return hit?.object.userData.id ?? null
+  }
+
+  private firstIntersection(
+    target: PickTargetKind,
+    raycaster: THREE.Raycaster,
+    candidates: THREE.Object3D[],
+  ): THREE.Intersection<THREE.Object3D> | null {
+    const selected = this.pickingAcceleration.selectCandidates({ target, raycaster, candidates })
+    return raycaster.intersectObjects(selected)[0] ?? null
   }
 
   private pickableAtoms(): THREE.Object3D[] {

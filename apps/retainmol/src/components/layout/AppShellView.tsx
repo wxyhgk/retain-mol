@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import type { AppShellProps } from './AppShell'
 import type { AppShellModel } from './useAppShellModel'
 import Toolbar from '@/components/toolbar/Toolbar'
@@ -9,6 +10,12 @@ import { BusyOverlay } from './BusyOverlay'
 import { SelectionHud } from './SelectionHud'
 import { StatusBar } from './StatusBar'
 import { ViewportToolbar } from './ViewportToolbar'
+import { SimulationWorkspace, resolveOptimizedJobStructure } from '@/features/jobs'
+import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { useEditorStore } from '@/domain/viewer/editorState'
+import type { JobArtifact, JobDetail } from '@/features/jobs'
+
+const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
 
 type AppShellViewProps = AppShellProps & AppShellModel
 
@@ -16,20 +23,45 @@ export function AppShellView({
   showInspector,
   searchOpen,
   onToggleInspector,
+  onWorkspaceModeChange,
   onOpenTemplateStudio,
   onOpenSearch,
   onCloseSearch,
   canvasFocus,
   uiTheme,
+  workspaceMode,
 }: AppShellViewProps) {
+  const activeMolecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
+  const jobStructure = {
+    name: activeMolecule.name,
+    atoms: activeMolecule.atoms.map(atom => ({
+      id: atom.id,
+      symbol: atom.symbol,
+      x: atom.x,
+      y: atom.y,
+      z: atom.z,
+    })),
+  }
+  const loadOptimizedStructure = (artifact: JobArtifact, job: JobDetail) => {
+    const store = useMoleculeStore.getState()
+    const result = resolveOptimizedJobStructure(artifact, job, selectActiveMoleculeOrEmpty(store))
+    if (result.ok === false) {
+      useEditorStore.getState().flashHint(result.message)
+      return
+    }
+    store.setMolecule(result.molecule)
+    useEditorStore.getState().flashHint(result.restoredSnapshot ? '已载入任务分子与 xTB 优化坐标' : '已载入 xTB 优化坐标')
+  }
   return (
     <div
       className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground"
       data-canvas-interacting={canvasFocus.interacting ? 'true' : 'false'}
     >
-      <Toolbar
-        showInspector={showInspector}
-        onToggleInspector={onToggleInspector}
+        <Toolbar
+          showInspector={showInspector}
+          workspaceMode={workspaceMode}
+          onToggleInspector={onToggleInspector}
+          onWorkspaceModeChange={onWorkspaceModeChange}
         onOpenTemplateStudio={onOpenTemplateStudio}
         onSearchOpen={onOpenSearch}
       />
@@ -51,6 +83,30 @@ export function AppShellView({
           <BusyOverlay />
           <ViewportToolbar />
           <StatusBar />
+
+          {workspaceMode === 'simulate' && (
+            <aside
+              data-workspace-floating="true"
+              className="absolute bottom-3 left-3 top-3 z-30 w-[min(980px,calc(100%-24px))] min-w-0 overflow-hidden rounded-lg border border-border bg-card/95 text-card-foreground shadow-[0_14px_34px_rgba(0,0,0,0.14)] backdrop-blur-md"
+            >
+              <SimulationWorkspace
+                structure={jobStructure}
+                molecule={activeMolecule}
+                onLoadOptimizedStructure={loadOptimizedStructure}
+              />
+            </aside>
+          )}
+
+          {workspaceMode === 'analyze' && (
+            <aside
+              data-workspace-floating="true"
+              className="absolute bottom-3 left-3 top-3 z-30 w-[min(760px,calc(100%-24px))] min-w-0 overflow-hidden rounded-lg border border-border bg-card/95 text-card-foreground shadow-[0_14px_34px_rgba(0,0,0,0.14)] backdrop-blur-md"
+            >
+              <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载分析模块</div>}>
+                <AnalysisWorkspace />
+              </Suspense>
+            </aside>
+          )}
 
           {showInspector && (
             <aside

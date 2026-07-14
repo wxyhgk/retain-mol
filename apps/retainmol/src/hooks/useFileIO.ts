@@ -6,9 +6,9 @@
 import { useCallback } from 'react'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { captureViewportImage } from '@/domain/viewer/viewport'
-import { parseXYZ, exportXYZ } from '@retainmol/mol-viewer/core'
-import { exportGJF, parseMol, parseSdf, exportMol, exportSdf } from '@retainmol/mol-viewer/io'
-import { placeMoleculeInViewer } from '@/features/molecule-placement'
+import { exportXYZ } from '@retainmol/mol-viewer/core'
+import { exportGJF, exportMol, exportSdf } from '@retainmol/mol-viewer/io'
+import { parseMoleculeFile, placeMoleculeInViewer } from '@/features/molecule-placement'
 
 function download(text: string, filename: string, mime = 'text/plain') {
   const blob = new Blob([text], { type: mime })
@@ -33,67 +33,34 @@ export function useFileIO() {
 
   // ── 导入（替换当前） ──────────────────────────────────────
 
-  const importXYZ = useCallback(() => {
-    pickFile('.xyz', (text) => {
-      try {
-        void placeMoleculeInViewer(parseXYZ(text), { mode: 'replace', animate2DTo3D: false })
-      } catch {
-        alert('XYZ 文件解析失败，请检查格式')
-      }
+  const importFiles = useCallback(async (files: readonly File[], mode: 'replace' | 'add-to-scene' = 'replace') => {
+    const file = files[0]
+    if (!file) return
+    const parsed = await parseMoleculeFile(file)
+    if (parsed.moleculeCount > 1) alert(`SDF 包含 ${parsed.moleculeCount} 个分子，已导入第一个`)
+    await placeMoleculeInViewer(parsed.molecule, {
+      mode,
+      animate2DTo3D: !file.name.toLowerCase().endsWith('.xyz'),
     })
   }, [])
 
+  const importXYZ = useCallback(() => {
+    pickFiles('.xyz', files => importFiles(files, 'replace'))
+  }, [importFiles])
+
   const importMolSdf = useCallback(() => {
-    pickFile('.mol,.sdf', async (text, filename) => {
-      try {
-        const isSdf = filename.toLowerCase().endsWith('.sdf')
-        let mol
-        if (isSdf) {
-          const mols = parseSdf(text)
-          if (mols.length === 0) { alert('SDF 文件中未找到有效分子'); return }
-          if (mols.length > 1) alert(`SDF 包含 ${mols.length} 个分子，已导入第一个`)
-          mol = mols[0]
-        } else {
-          mol = parseMol(text)
-        }
-        await placeMoleculeInViewer(mol, { mode: 'replace' })
-      } catch (e) {
-        alert(`文件解析失败：${(e as Error).message}`)
-      }
-    })
-  }, [])
+    pickFiles('.mol,.sdf', files => importFiles(files, 'replace'))
+  }, [importFiles])
 
   // ── 导入（添加到场景） ──────────────────────────────────────
 
   const importXYZToScene = useCallback(() => {
-    pickFile('.xyz', (text) => {
-      try {
-        void placeMoleculeInViewer(parseXYZ(text), { mode: 'add-to-scene', animate2DTo3D: false })
-      } catch {
-        alert('XYZ 文件解析失败，请检查格式')
-      }
-    })
-  }, [])
+    pickFiles('.xyz', files => importFiles(files, 'add-to-scene'))
+  }, [importFiles])
 
   const importMolSdfToScene = useCallback(() => {
-    pickFile('.mol,.sdf', async (text, filename) => {
-      try {
-        const isSdf = filename.toLowerCase().endsWith('.sdf')
-        let mol
-        if (isSdf) {
-          const mols = parseSdf(text)
-          if (mols.length === 0) { alert('SDF 文件中未找到有效分子'); return }
-          if (mols.length > 1) alert(`SDF 包含 ${mols.length} 个分子，已导入第一个`)
-          mol = mols[0]
-        } else {
-          mol = parseMol(text)
-        }
-        await placeMoleculeInViewer(mol, { mode: 'add-to-scene' })
-      } catch (e) {
-        alert(`文件解析失败：${(e as Error).message}`)
-      }
-    })
-  }, [])
+    pickFiles('.mol,.sdf', files => importFiles(files, 'add-to-scene'))
+  }, [importFiles])
 
   // ── 导出 ──────────────────────────────────────
 
@@ -121,21 +88,19 @@ export function useFileIO() {
   }, [molecule, molName])
 
   return {
-    importXYZ, importMolSdf, importXYZToScene, importMolSdfToScene,
+    importFiles, importXYZ, importMolSdf, importXYZToScene, importMolSdfToScene,
     exportCurrentXYZ, exportCurrentMol, exportCurrentSdf, exportCurrentGJF, exportPNG,
   }
 }
 
-function pickFile(accept: string, onLoad: (text: string, filename: string) => void | Promise<void>) {
+function pickFiles(accept: string, onLoad: (files: File[]) => void | Promise<void>) {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = accept
   input.onchange = (e) => {
     const file = (e.target as HTMLInputElement).files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => onLoad(ev.target?.result as string, file.name)
-    reader.readAsText(file)
+    void Promise.resolve(onLoad([file])).catch(error => alert(`文件解析失败：${error instanceof Error ? error.message : '格式无效'}`))
   }
   input.click()
 }

@@ -1,8 +1,10 @@
-import { useRef } from 'react'
+import { useState } from 'react'
 import { ArrowLeft, Save, Upload } from 'lucide-react'
 import { getMolecularFormula } from '@retainmol/mol-viewer/core'
 import { cn } from '@/lib/utils'
 import type { TemplateStudioController } from '../model/useTemplateStudioController'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { MoleculeFileDropzone } from '@/features/molecule-placement'
 
 export function TemplateStudioHeader({
   controller,
@@ -11,7 +13,7 @@ export function TemplateStudioHeader({
   controller: TemplateStudioController
   onClose: () => void
 }) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importOpen, setImportOpen] = useState(false)
   const { molecule, issues, importStructure, save } = controller
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-3">
@@ -25,19 +27,21 @@ export function TemplateStudioHeader({
       </div>
       <div className="ml-auto flex items-center gap-2">
         {molecule && <span className="text-[11px] text-gray-400">{getMolecularFormula(molecule.atoms)} · {molecule.atoms.length} 原子 · {molecule.bonds.length} 键</span>}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xyz,.mol,.sdf,chemical/x-xyz,chemical/x-mdl-molfile,chemical/x-mdl-sdfile"
-          className="hidden"
-          onChange={event => {
-            const file = event.target.files?.[0]
-            if (file) void importStructure(file).finally(() => { event.target.value = '' })
-          }}
-        />
-        <button type="button" onClick={() => fileInputRef.current?.click()} className="flex h-8 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900">
+        <button type="button" onClick={() => setImportOpen(true)} className="flex h-8 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900">
           <Upload size={13} />导入结构
         </button>
+        <Dialog open={importOpen} onOpenChange={setImportOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>导入模板结构</DialogTitle><DialogDescription>导入后替换工作台当前分子；SDF 多分子文件使用第一个结构。</DialogDescription></DialogHeader>
+            <MoleculeFileDropzone
+              description="最大 20 MB"
+              onFiles={accepted => {
+                const file = accepted[0]
+                if (file) return importStructure(file).then(() => setImportOpen(false))
+              }}
+            />
+          </DialogContent>
+        </Dialog>
         <button
           type="button"
           onClick={save}

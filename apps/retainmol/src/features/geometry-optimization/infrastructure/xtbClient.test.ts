@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Molecule } from '@retainmol/mol-viewer/core'
-import { optimizeWithGfn2Xtb, optimizeWithGfn2XtbStream } from './xtbClient'
+import {
+  optimizeWithGfn2Xtb,
+  optimizeWithGfn2XtbStream,
+  resolveXtbApiBase,
+} from './xtbClient'
 
 const molecule: Molecule = {
   name: 'radical cation',
@@ -14,6 +18,20 @@ const molecule: Molecule = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('optimizeWithGfn2Xtb', () => {
+  it('uses the current page hostname when no backend URL is configured', () => {
+    expect(resolveXtbApiBase(undefined, {
+      protocol: 'http:',
+      hostname: '192.168.1.25',
+    })).toBe('http://192.168.1.25:8000')
+  })
+
+  it('prefers an explicitly configured backend URL', () => {
+    expect(resolveXtbApiBase('http://compute.local:9000/', {
+      protocol: 'http:',
+      hostname: '192.168.1.25',
+    })).toBe('http://compute.local:9000')
+  })
+
   it('sends stable atom ids, charge and multiplicity and maps coordinates by id', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       atoms: [

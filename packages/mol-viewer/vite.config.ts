@@ -49,6 +49,7 @@ export default defineConfig(({ command }) => {
             'public/samples': path.resolve(__dirname, './src/public/samples.ts'),
             'public/templates': path.resolve(__dirname, './src/public/templates.ts'),
             'public/pubchem': path.resolve(__dirname, './src/public/pubchem.ts'),
+            'public/picking': path.resolve(__dirname, './src/public/picking.ts'),
             // 无 DOM 的优化入口，供 Worker 导入（@retainmol/mol-viewer/optimize）
             optimize: path.resolve(__dirname, './src/optimize.ts'),
           },
