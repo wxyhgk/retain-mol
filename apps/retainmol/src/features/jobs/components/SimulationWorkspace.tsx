@@ -6,16 +6,23 @@ import { cn } from '@/lib/utils'
 import type { JobArtifact, JobDetail, XtbStructureInput } from '../domain/jobTypes'
 import { useJobsQuery } from '../application/jobQueries'
 import { JobWorkspacePanel } from './JobWorkspacePanel'
+import type { MoleculeDocumentBinding } from '@/features/molecule-assets'
 
 const WorkflowEditor = lazy(() => import('@/features/workflows').then(module => ({ default: module.WorkflowEditor })))
 
 export function SimulationWorkspace({
   structure,
   molecule,
+  objectId,
+  documentBinding,
+  revisionMetadata,
   onLoadOptimizedStructure,
 }: {
   structure?: XtbStructureInput
   molecule?: Molecule
+  objectId?: string | null
+  documentBinding?: MoleculeDocumentBinding | null
+  revisionMetadata?: Readonly<Record<string, unknown>>
   onLoadOptimizedStructure?: (artifact: JobArtifact, job: JobDetail) => void | Promise<void>
 }) {
   const [view, setView] = useState<'jobs' | 'workflow'>('jobs')
@@ -29,7 +36,14 @@ export function SimulationWorkspace({
       </div>
       <div className="min-h-0 flex-1">
         {view === 'jobs' ? (
-          <JobWorkspacePanel structure={structure} molecule={molecule} onLoadOptimizedStructure={onLoadOptimizedStructure} />
+          <JobWorkspacePanel
+            structure={structure}
+            molecule={molecule}
+            objectId={objectId}
+            documentBinding={documentBinding}
+            revisionMetadata={revisionMetadata}
+            onLoadOptimizedStructure={onLoadOptimizedStructure}
+          />
         ) : (
           <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground"><LoaderCircle className="animate-spin" />加载工作流</div>}>
             <WorkflowEditor jobs={(jobsQuery.data ?? []).map(job => ({ id: job.id, name: job.name, status: job.status }))} />

@@ -11,7 +11,9 @@ import {
 } from '../domain/xtbJobSchema'
 import type { JobDetail, XtbStructureInput } from '../domain/jobTypes'
 import { JobsApiError } from '../infrastructure/jobsApiClient'
-import { useCreateXtbJobMutation, useUploadJobThumbnailMutation } from '../application/jobQueries'
+import { useUploadJobThumbnailMutation } from '../application/jobQueries'
+import { useSubmitXtbJobFromEditor } from '../application/submitXtbJobFromEditor'
+import type { MoleculeDocumentBinding } from '@/features/molecule-assets'
 import { captureViewportImage } from '@/domain/viewer/viewport'
 
 const inputClass = 'h-8 w-full border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-foreground'
@@ -19,13 +21,19 @@ const inputClass = 'h-8 w-full border border-border bg-background px-2 text-xs t
 export function XtbJobForm({
   structure,
   molecule,
+  objectId,
+  documentBinding,
+  revisionMetadata,
   onCreated,
 }: {
   structure?: XtbStructureInput
   molecule?: Molecule
+  objectId?: string | null
+  documentBinding?: MoleculeDocumentBinding | null
+  revisionMetadata?: Readonly<Record<string, unknown>>
   onCreated?: (job: JobDetail) => void
 }) {
-  const createJob = useCreateXtbJobMutation()
+  const submitJob = useSubmitXtbJobFromEditor()
   const uploadThumbnail = useUploadJobThumbnailMutation()
   const form = useForm<XtbJobFormValues>({
     resolver: zodResolver(xtbJobFormSchema),
@@ -35,20 +43,24 @@ export function XtbJobForm({
   const hasStructure = atomCount >= 2
 
   const submit = form.handleSubmit(async values => {
-    if (!structure || !hasStructure) {
+    if (!structure || !molecule || !objectId || !hasStructure) {
       form.setError('root', { message: '当前结构至少需要两个原子。' })
       return
     }
     try {
-      const job = await createJob.mutateAsync({
-        name: values.name || undefined,
-        structure,
-        ...(molecule ? { molecule } : {}),
-        charge: values.charge,
-        multiplicity: values.multiplicity,
-        method: 'gfn2',
-        maxSteps: values.maxSteps,
-        optLevel: values.optLevel,
+      const { job } = await submitJob.submit({
+        objectId,
+        molecule,
+        binding: documentBinding ?? null,
+        revisionMetadata,
+        parameters: {
+          name: values.name || undefined,
+          charge: values.charge,
+          multiplicity: values.multiplicity,
+          method: 'gfn2',
+          maxSteps: values.maxSteps,
+          optLevel: values.optLevel,
+        },
       })
       form.reset(defaultXtbJobFormValues)
       onCreated?.(job)
@@ -99,16 +111,16 @@ export function XtbJobForm({
           <input type="number" min={1} max={1000} {...form.register('maxSteps', { valueAsNumber: true })} className={inputClass} />
         </Field>
       </div>
-      {(form.formState.errors.root?.message || createJob.error) && (
+      {(form.formState.errors.root?.message || submitJob.error) && (
         <p role="alert" className="mt-2 text-[11px] text-destructive">
-          {form.formState.errors.root?.message ?? createJob.error?.message}
+          {form.formState.errors.root?.message ?? submitJob.error?.message}
         </p>
       )}
       <div className="mt-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] text-muted-foreground">{hasStructure ? '提交当前可编辑分子图和坐标。' : '请先建立或导入分子结构。'}</p>
-        <Button type="submit" size="sm" className="h-8" disabled={!hasStructure || createJob.isPending}>
-          {createJob.isPending ? <LoaderCircle className="animate-spin" /> : <FlaskConical />}
-          创建
+        <p className="text-[11px] text-muted-foreground">{hasStructure ? '先保存不可变分子版本，再提交计算。' : '请先建立或导入分子结构。'}</p>
+        <Button type="submit" size="sm" className="h-8" disabled={!hasStructure || !objectId || submitJob.isPending}>
+          {submitJob.isPending ? <LoaderCircle className="animate-spin" /> : <FlaskConical />}
+          {submitJob.isPending ? '保存并创建' : '创建'}
         </Button>
       </div>
     </form>

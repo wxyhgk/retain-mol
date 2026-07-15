@@ -14,6 +14,7 @@ import { SimulationWorkspace, resolveOptimizedJobStructure } from '@/features/jo
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import type { JobArtifact, JobDetail } from '@/features/jobs'
+import { useMoleculeDocumentStore } from '@/features/molecule-assets'
 
 const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
 
@@ -32,6 +33,13 @@ export function AppShellView({
   workspaceMode,
 }: AppShellViewProps) {
   const activeMolecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
+  const activeObjectId = useMoleculeStore(state => state.activeObjectId)
+  const documentBinding = useMoleculeDocumentStore(state => (
+    activeObjectId ? state.bindingsByObjectId[activeObjectId] : undefined
+  ))
+  const pendingRevisionMetadata = useMoleculeDocumentStore(state => (
+    activeObjectId ? state.pendingRevisionMetadataByObjectId[activeObjectId] : undefined
+  ))
   const jobStructure = {
     name: activeMolecule.name,
     atoms: activeMolecule.atoms.map(atom => ({
@@ -44,12 +52,22 @@ export function AppShellView({
   }
   const loadOptimizedStructure = (artifact: JobArtifact, job: JobDetail) => {
     const store = useMoleculeStore.getState()
+    const targetObjectId = store.activeObjectId
     const result = resolveOptimizedJobStructure(artifact, job, selectActiveMoleculeOrEmpty(store))
     if (result.ok === false) {
       useEditorStore.getState().flashHint(result.message)
       return
     }
     store.setMolecule(result.molecule)
+    if (targetObjectId) {
+      useMoleculeDocumentStore.getState().setPendingRevisionMetadata(targetObjectId, {
+        derivedFromJobId: job.id,
+        derivedFromArtifactId: artifact.id,
+        ...(job.request && 'moleculeRevisionId' in job.request
+          ? { sourceRevisionId: job.request.moleculeRevisionId }
+          : {}),
+      })
+    }
     useEditorStore.getState().flashHint(result.restoredSnapshot ? '已载入任务分子与 xTB 优化坐标' : '已载入 xTB 优化坐标')
   }
   return (
@@ -92,6 +110,9 @@ export function AppShellView({
               <SimulationWorkspace
                 structure={jobStructure}
                 molecule={activeMolecule}
+                objectId={activeObjectId}
+                documentBinding={documentBinding ?? null}
+                revisionMetadata={pendingRevisionMetadata}
                 onLoadOptimizedStructure={loadOptimizedStructure}
               />
             </aside>

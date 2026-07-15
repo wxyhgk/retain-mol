@@ -19,7 +19,7 @@ export function resolveOptimizedJobStructure(
     return { ok: false, message: '该 artifact 不包含可加载的优化坐标' }
   }
 
-  const snapshot = artifact.metadata?.molecule ?? job.request.molecule
+  const snapshot = artifact.metadata?.molecule ?? job.request?.molecule
   if (isMoleculeSnapshot(snapshot)) {
     return { ok: true, molecule: withOptimizedPositions(snapshot, structure), restoredSnapshot: true }
   }

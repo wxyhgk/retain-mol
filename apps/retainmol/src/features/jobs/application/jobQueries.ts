@@ -25,7 +25,7 @@ export const jobQueryKeys = {
 }
 
 export function isTerminalJobStatus(status: string | undefined) {
-  return status === 'succeeded' || status === 'failed' || status === 'cancelled'
+  return status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'interrupted'
 }
 
 export function jobsListOptions(api: JobsApi = jobsApi) {

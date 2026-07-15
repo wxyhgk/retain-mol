@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { MoleculeFileDropzone } from '@/features/molecule-placement'
 import type { ToolbarModel } from './useToolbarModel'
 import type { WorkspaceMode } from '@/App'
+import { MoleculeDocumentControls } from '@/features/molecule-assets/components/MoleculeDocumentControls'
 
 export interface ToolbarProps {
   showInspector: boolean
@@ -70,6 +71,10 @@ export function ToolbarView({
             <RotateCcw size={14} className="scale-x-[-1]" />
           </Button>
         </Tip>
+
+        <div className="mx-1 h-5 w-px bg-border" />
+
+        <MoleculeDocumentControls />
 
         <div className="mx-1 h-5 w-px bg-border" />
 
@@ -176,7 +181,7 @@ function WorkspaceModeSwitch({
   return (
     <nav
       aria-label="工作模式"
-      className="absolute left-1/2 top-1/2 hidden h-9 w-[330px] -translate-x-1/2 -translate-y-1/2 items-center rounded-full border border-border bg-muted p-1 shadow-inner xl:flex"
+      className="absolute left-1/2 top-1/2 hidden h-9 w-[330px] -translate-x-1/2 -translate-y-1/2 items-center rounded-full border border-border bg-muted p-1 shadow-inner min-[1400px]:flex"
     >
       {modes.map(mode => (
         <button

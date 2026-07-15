@@ -13,10 +13,18 @@ import {
 } from '../application/jobQueries'
 import { useJobUiStore } from '../model/jobUiStore'
 import { XtbJobForm } from './XtbJobForm'
+import {
+  useMoleculeAssetQuery,
+  useMoleculeRevisionQuery,
+  type MoleculeDocumentBinding,
+} from '@/features/molecule-assets'
 
 export interface JobWorkspacePanelProps {
   structure?: XtbStructureInput
   molecule?: Molecule
+  objectId?: string | null
+  documentBinding?: MoleculeDocumentBinding | null
+  revisionMetadata?: Readonly<Record<string, unknown>>
   onExecuteJob?: (job: JobDetail) => void | Promise<void>
   onLoadOptimizedStructure?: (artifact: JobArtifact, job: JobDetail) => void | Promise<void>
   className?: string
@@ -25,6 +33,9 @@ export interface JobWorkspacePanelProps {
 export function JobWorkspacePanel({
   structure,
   molecule,
+  objectId,
+  documentBinding,
+  revisionMetadata,
   onExecuteJob,
   onLoadOptimizedStructure,
   className,
@@ -99,7 +110,13 @@ export function JobWorkspacePanel({
       </aside>
 
       <div className="min-h-0 overflow-y-auto">
-        <XtbJobForm structure={structure} molecule={molecule} />
+        <XtbJobForm
+          structure={structure}
+          molecule={molecule}
+          objectId={objectId}
+          documentBinding={documentBinding}
+          revisionMetadata={revisionMetadata}
+        />
         {(callbackError || detailQuery.error) && (
           <p role="alert" className="mx-3 mt-3 border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
             {callbackError ?? detailQuery.error?.message}
@@ -156,15 +173,67 @@ function JobDetailView({ job, onExecute, onLoad, isRunning }: {
         <div className="flex items-center gap-2"><StatusBadge status={job.status} /><Button variant="outline" size="sm" className="h-7" onClick={onExecute} disabled={isRunning || job.status !== 'queued'}>{isRunning ? <LoaderCircle className="animate-spin" /> : <Play />}{isRunning ? '运行中' : '运行'}</Button></div>
       </header>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-y border-border py-3 text-xs">
-        <DetailTerm label="方法" value="GFN2-xTB" /><DetailTerm label="原子" value={String(job.request.structure.atoms.length)} />
-        <DetailTerm label="电荷" value={String(job.request.charge)} /><DetailTerm label="多重度" value={String(job.request.multiplicity)} />
-        <DetailTerm label="级别" value={job.request.optLevel} /><DetailTerm label="最大步数" value={String(job.request.maxSteps)} />
+        <DetailTerm label="方法" value="GFN2-xTB" /><DetailTerm label="原子" value={literalAtomCount(job) ?? '版本快照'} />
+        <DetailTerm label="电荷" value={job.request ? String(job.request.charge) : '—'} /><DetailTerm label="多重度" value={job.request ? String(job.request.multiplicity) : '—'} />
+        <DetailTerm label="级别" value={job.request?.optLevel ?? '—'} /><DetailTerm label="最大步数" value={job.request ? String(job.request.maxSteps) : '—'} />
       </dl>
+      <JobInputSummary job={job} />
       {job.error && <p className="text-xs text-destructive">{job.error}</p>}
       <ArtifactSection title="输入产物" artifacts={artifacts.filter(item => item.role === 'input')} icon={FileInput} />
       <ArtifactSection title="输出产物" artifacts={artifacts.filter(item => item.role === 'output')} icon={FileOutput} onLoad={onLoad} />
     </div>
   )
+}
+
+function JobInputSummary({ job }: { job: JobDetail }) {
+  const revisionId = revisionIdFor(job)
+  const revisionQuery = useMoleculeRevisionQuery(revisionId)
+  const assetQuery = useMoleculeAssetQuery(revisionQuery.data?.assetId ?? null)
+
+  if (!revisionId) {
+    return (
+      <section className="border border-border bg-muted/30 p-2 text-[11px]">
+        <p className="font-medium">输入来源 · 旧版结构快照</p>
+        <p className="mt-1 text-muted-foreground">该任务创建于分子版本绑定启用之前。</p>
+      </section>
+    )
+  }
+  if (revisionQuery.isLoading) {
+    return <p className="text-[11px] text-muted-foreground">正在读取冻结的分子版本…</p>
+  }
+  if (!revisionQuery.data) {
+    return <p className="text-[11px] text-destructive">无法读取任务绑定的分子版本 {revisionId}</p>
+  }
+
+  const revision = revisionQuery.data
+  return (
+    <section className="border border-border bg-muted/30 p-2 text-[11px]">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-medium">输入来源 · {assetQuery.data?.name ?? revision.assetId}</p>
+        <span>{revision.molecule.atoms.length} atoms</span>
+      </div>
+      <dl className="mt-2 grid gap-1 font-mono text-[10px] text-muted-foreground">
+        <DetailTerm label="Revision" value={shortIdentifier(revision.id)} />
+        <DetailTerm label="SHA-256" value={revision.contentHash.slice(0, 16)} />
+      </dl>
+    </section>
+  )
+}
+
+function revisionIdFor(job: JobDetail): string | null {
+  const request = job.request
+  if (!request || !('moleculeRevisionId' in request)) return null
+  return typeof request.moleculeRevisionId === 'string' ? request.moleculeRevisionId : null
+}
+
+function literalAtomCount(job: JobDetail): string | null {
+  const request = job.request
+  if (!request || !('structure' in request) || !request.structure) return null
+  return String(request.structure.atoms.length)
+}
+
+function shortIdentifier(value: string): string {
+  return value.length <= 20 ? value : `${value.slice(0, 12)}…${value.slice(-6)}`
 }
 
 function DetailTerm({ label, value }: { label: string; value: string }) {

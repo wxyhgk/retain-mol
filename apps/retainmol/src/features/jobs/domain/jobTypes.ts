@@ -1,6 +1,7 @@
 import type { Molecule } from '@retainmol/mol-viewer/core'
 
-export type JobKind = 'xtb-optimization'
+/** Engine adapters own concrete values; the shared task center must accept future kinds. */
+export type JobKind = string
 
 export type JobStatus =
   | 'created'
@@ -9,7 +10,7 @@ export type JobStatus =
   | 'succeeded'
   | 'failed'
   | 'cancelled'
-  | (string & {})
+  | 'interrupted'
 
 export interface XtbAtomInput {
   id: string
@@ -24,17 +25,28 @@ export interface XtbStructureInput {
   atoms: XtbAtomInput[]
 }
 
-export interface CreateXtbOptimizationJobRequest {
+export interface CreateXtbOptimizationJobParameters {
   name?: string
-  structure: XtbStructureInput
-  /** Complete editable graph retained so an optimized job can restore its molecule. */
-  molecule?: Molecule
   charge: number
   multiplicity: number
   method: 'gfn2'
   maxSteps: number
   optLevel: 'normal' | 'tight' | 'vtight'
 }
+
+export type CreateXtbOptimizationJobRequest = CreateXtbOptimizationJobParameters & (
+  | {
+      structure: XtbStructureInput
+      /** Complete editable graph retained so an optimized job can restore its molecule. */
+      molecule?: Molecule
+      moleculeRevisionId?: never
+    }
+  | {
+      moleculeRevisionId: string
+      structure?: never
+      molecule?: never
+    }
+)
 
 export type JobArtifactRole = 'input' | 'output' | 'preview'
 
@@ -62,7 +74,7 @@ export interface JobSummary {
 }
 
 export interface JobDetail extends JobSummary {
-  request: CreateXtbOptimizationJobRequest
+  request?: CreateXtbOptimizationJobRequest
   message?: string
   error?: string
   artifacts?: JobArtifact[]

@@ -132,11 +132,9 @@ def test_non_queued_xtb_job_cannot_be_run_again(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = JobService(tmp_path / "data")
-    job = service.create_job(
-        "xtb-optimization",
-        status="succeeded",
-        metadata={"request": _request()},
-    )
+    job = service.create_job("xtb-optimization", metadata={"request": _request()})
+    assert service.claim_queued_job(job.job_id) is not None
+    service.update_status(job.job_id, "succeeded")
     run = Mock()
     monkeypatch.setattr(xtb_runner.subprocess, "run", run)
 
@@ -181,3 +179,125 @@ def test_successful_job_keeps_a_loadable_optimized_molecule_snapshot(
         ],
         "bonds": [{"id": "oh", "atomId1": "oxygen", "atomId2": "hydrogen", "order": 1}],
     }
+
+
+def test_missing_request_finishes_as_failed_instead_of_staying_running(tmp_path: Path) -> None:
+    service = JobService(tmp_path / "data")
+    job = service.create_job("xtb-optimization")
+
+    with pytest.raises(xtb_runner.JobExecutionError, match="no executable xTB request"):
+        xtb_runner.run_xtb_optimization_job(service, job.job_id)
+
+    failed = service.get_job(job.job_id)
+    assert failed.status == "failed"
+    assert failed.error_code == "execution_failed"
+
+
+def test_runner_composes_new_request_from_spec_and_frozen_literal(tmp_path: Path) -> None:
+    service = JobService(tmp_path / "data")
+    request = _request() | {"molecule": _molecule_snapshot()}
+    job = service.create_calculation_job(
+        "xtb-optimization",
+        "xtb",
+        request,
+        metadata={"name": request["name"], "request": request},
+    )
+
+    resolved = xtb_runner._resolve_xtb_request(service, job)
+
+    assert resolved is not None
+    assert resolved["method"] == "gfn2"
+    assert resolved["structure"] == request["structure"]
+    assert resolved["molecule"] == request["molecule"]
+    spec = service.get_calculation_spec(job.job_id)
+    assert spec is not None
+    assert "structure" not in spec.payload
+    assert "molecule" not in spec.payload
+
+
+def test_runner_reads_xyz_from_a_frozen_artifact_binding(tmp_path: Path) -> None:
+    service = JobService(tmp_path / "data")
+    source = service.create_job("producer")
+    assert service.claim_queued_job(source.job_id) is not None
+    output = service.task_directory(source.job_id) / "optimized.xyz"
+    output.write_text("2\nwater\nO 0 0 0\nH 0 0 1\n", encoding="utf-8")
+    artifact = service.add_artifact(
+        source.job_id,
+        "optimized.xyz",
+        "optimized.xyz",
+        metadata={"role": "output", "format": "xyz"},
+    )
+    service.update_status(source.job_id, "succeeded")
+    draft = service.create_calculation_draft(
+        "xtb-optimization",
+        "xtb",
+        {
+            "charge": 0,
+            "multiplicity": 1,
+            "method": "gfn2",
+            "maxSteps": 200,
+            "optLevel": "normal",
+        },
+    )
+    queued = service.queue_calculation_job(
+        draft.job_id,
+        {
+            "structure": {
+                "sourceKind": "artifact",
+                "artifactId": artifact.artifact_id,
+                "format": "xyz",
+                "contentSha256": artifact.sha256,
+            }
+        },
+    )
+
+    resolved = xtb_runner._resolve_xtb_request(service, queued)
+
+    assert resolved is not None
+    assert [atom["symbol"] for atom in resolved["structure"]["atoms"]] == ["O", "H"]
+
+
+def test_runner_composes_request_from_an_immutable_molecule_revision(
+    tmp_path: Path,
+) -> None:
+    service = JobService(tmp_path / "data")
+    asset = service.create_molecule_asset("Water")
+    molecule = _molecule_snapshot()
+    revision = service.save_molecule_revision(
+        asset.asset_id,
+        molecule,
+        parent_revision_id=None,
+        expected_head_revision_id=None,
+        expected_version=asset.version,
+    )
+    draft = service.create_calculation_draft(
+        "xtb-optimization",
+        "xtb",
+        {
+            "charge": 0,
+            "multiplicity": 1,
+            "method": "gfn2",
+            "maxSteps": 200,
+            "optLevel": "normal",
+        },
+    )
+    queued = service.queue_calculation_job(
+        draft.job_id,
+        {
+            "structure": {
+                "sourceKind": "molecule_revision",
+                "moleculeRevisionId": revision.revision_id,
+                "format": "molecule",
+                "contentSha256": revision.sha256,
+            }
+        },
+    )
+
+    resolved = xtb_runner._resolve_xtb_request(service, queued)
+
+    assert resolved is not None
+    assert resolved["molecule"] == molecule
+    assert resolved["structure"]["atoms"] == molecule["atoms"]
+    binding = service.get_input_bindings(queued.job_id)[0]
+    assert binding.molecule_revision_id == revision.revision_id
+    assert binding.content_sha256 == revision.sha256

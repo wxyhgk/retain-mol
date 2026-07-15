@@ -15,7 +15,7 @@ function apiStub(): JobsApi {
     listJobArtifacts: vi.fn(async () => [{ id: 'a1', jobId: job.id, role: 'output' as const, name: 'optimized.xyz', format: 'xyz' }]),
     createXtbOptimizationJob: vi.fn(async () => job),
     uploadJobThumbnail: vi.fn(),
-    runJob: vi.fn(async () => ({ ...job, status: 'succeeded' })),
+    runJob: vi.fn(async (): Promise<JobDetail> => ({ ...job, status: 'succeeded' })),
   }
 }
 
@@ -38,7 +38,7 @@ describe('job query options', () => {
   })
 
   it('recognizes every status that must stop polling', () => {
-    expect(['succeeded', 'failed', 'cancelled'].every(isTerminalJobStatus)).toBe(true)
+    expect(['succeeded', 'failed', 'cancelled', 'interrupted'].every(isTerminalJobStatus)).toBe(true)
     expect(isTerminalJobStatus('running')).toBe(false)
   })
 })

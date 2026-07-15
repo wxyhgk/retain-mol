@@ -89,3 +89,43 @@ def test_workflow_routes_create_read_and_reject_invalid_dag(monkeypatch, tmp_pat
     missing = client.get("/jobs/workflows/missing")
     assert missing.status_code == 404
     assert missing.json() == {"detail": "Workflow 'missing' was not found"}
+
+
+def test_workflow_artifact_reference_uses_stable_artifact_identity(tmp_path: Path) -> None:
+    service = JobService(tmp_path / "data")
+    source = service.create_job("optimize")
+    target = service.create_job("analyze")
+    artifact = service.add_artifact(
+        source.job_id,
+        "optimized.xyz",
+        "optimized.xyz",
+        metadata={"role": "output", "format": "xyz"},
+    )
+
+    workflow = service.create_workflow(
+        "artifact identity",
+        [source.job_id, target.job_id],
+        [{
+            "sourceJobId": source.job_id,
+            "sourceArtifactId": artifact.artifact_id,
+            "sourceKind": "artifact",
+            "sourceName": artifact.name,
+            "targetJobId": target.job_id,
+            "targetInputName": "structure",
+        }],
+    )
+
+    assert workflow.references[0].source_artifact_id == artifact.artifact_id
+    with pytest.raises(ValueError, match="does not belong"):
+        service.create_workflow(
+            "invalid artifact",
+            [source.job_id, target.job_id],
+            [{
+                "sourceJobId": source.job_id,
+                "sourceArtifactId": "artifact-missing",
+                "sourceKind": "artifact",
+                "sourceName": "optimized.xyz",
+                "targetJobId": target.job_id,
+                "targetInputName": "structure",
+            }],
+        )

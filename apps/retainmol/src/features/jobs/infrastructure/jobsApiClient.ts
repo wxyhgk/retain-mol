@@ -5,6 +5,12 @@ import type {
   JobSummary,
   JobsApi,
 } from '../domain/jobTypes'
+import {
+  projectJobArtifactListWire,
+  projectJobArtifactWire,
+  projectJobListWire,
+  projectJobWire,
+} from './jobWireProjector'
 
 interface BrowserLocation {
   protocol: string
@@ -76,35 +82,35 @@ export class JobsApiClient implements JobsApi {
   constructor(private readonly baseUrl = resolveJobsApiBase()) {}
 
   async listJobs(options: { signal?: AbortSignal } = {}): Promise<JobSummary[]> {
-    const payload = await this.get<JobSummary[] | { jobs: JobSummary[] }>('/jobs', options)
-    return Array.isArray(payload) ? payload : payload.jobs
+    return projectJobListWire(await this.get<unknown>('/jobs', options))
   }
 
   createXtbOptimizationJob(
     request: CreateXtbOptimizationJobRequest,
     options: { signal?: AbortSignal } = {},
   ): Promise<JobDetail> {
-    return this.post('/jobs/xtb/optimize', request, options)
+    return this.post('/jobs/xtb/optimize', request, options).then(projectJobWire)
   }
 
   async getJob(jobId: string, options: { signal?: AbortSignal } = {}): Promise<JobDetail> {
-    return this.get(`/jobs/${encodeSegment(jobId)}`, options)
+    return this.get(`/jobs/${encodeSegment(jobId)}`, options).then(projectJobWire)
   }
 
   runJob(jobId: string, options: { signal?: AbortSignal } = {}): Promise<JobDetail> {
-    return this.post(`/jobs/${encodeSegment(jobId)}/run`, undefined, options)
+    return this.post(`/jobs/${encodeSegment(jobId)}/run`, undefined, options).then(projectJobWire)
   }
 
   async listJobArtifacts(jobId: string, options: { signal?: AbortSignal } = {}): Promise<JobArtifact[]> {
-    const payload = await this.get<JobArtifact[] | { artifacts: JobArtifact[] }>(
+    const payload = await this.get<unknown>(
       `/jobs/${encodeSegment(jobId)}/artifacts`,
       options,
     )
-    return Array.isArray(payload) ? payload : payload.artifacts
+    return projectJobArtifactListWire(payload)
   }
 
   uploadJobThumbnail(jobId: string, dataUrl: string, options: { signal?: AbortSignal } = {}): Promise<JobArtifact> {
     return this.post(`/jobs/${encodeSegment(jobId)}/thumbnail`, { dataUrl }, options)
+      .then(projectJobArtifactWire)
   }
 
   private async get<T>(path: string, options: { signal?: AbortSignal }): Promise<T> {

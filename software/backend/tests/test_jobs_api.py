@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from pathlib import Path
 
 import software.backend.routers.jobs as jobs_router
+from software.backend.jobs import JobService
 
 
 class FakeJobService:
@@ -151,6 +152,53 @@ def test_xtb_optimization_job_uses_frontend_shape_on_create_and_reads(monkeypatc
 
     service = jobs_router._get_job_service()
     assert service.jobs["job-1"]["inputs"] == {"structure": payload["structure"]}
+
+
+def test_xtb_job_can_freeze_a_molecule_revision_as_its_structure(
+    monkeypatch, tmp_path
+) -> None:
+    service = JobService(tmp_path / "data")
+    asset = service.create_molecule_asset("Water")
+    revision = service.save_molecule_revision(
+        asset.asset_id,
+        {
+            "name": "Water",
+            "atoms": [
+                {"id": "o", "symbol": "O", "x": 0, "y": 0, "z": 0},
+                {"id": "h", "symbol": "H", "x": 0, "y": 0, "z": 1},
+            ],
+            "bonds": [
+                {"id": "oh", "atomId1": "o", "atomId2": "h", "order": 1}
+            ],
+        },
+        parent_revision_id=None,
+        expected_head_revision_id=None,
+        expected_version=1,
+    )
+    monkeypatch.setattr(jobs_router, "_load_get_job_service", lambda: lambda: service)
+    app = FastAPI()
+    app.include_router(jobs_router.router)
+    client = TestClient(app)
+
+    response = client.post(
+        "/jobs/xtb/optimize",
+        json={
+            "name": "Revision optimization",
+            "moleculeRevisionId": revision.revision_id,
+            "charge": 0,
+            "multiplicity": 1,
+            "method": "gfn2",
+            "maxSteps": 200,
+            "optLevel": "normal",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["request"]["moleculeRevisionId"] == revision.revision_id
+    binding = service.get_input_bindings(response.json()["id"])[0]
+    assert binding.source_kind == "molecule_revision"
+    assert binding.molecule_revision_id == revision.revision_id
+    assert binding.content_sha256 == revision.sha256
 
 
 def test_missing_job_run_returns_clear_404(monkeypatch, tmp_path) -> None:

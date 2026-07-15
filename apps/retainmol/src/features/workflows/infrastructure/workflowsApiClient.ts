@@ -1,4 +1,5 @@
-import type { WorkflowDefinition, WorkflowsApi, WorkflowSaveRequest } from '../domain/workflowTypes'
+import type { WorkflowsApi, WorkflowSaveRequest } from '../domain/workflowTypes'
+import { projectWorkflowListWire, projectWorkflowWire } from './workflowWireProjector'
 
 interface BrowserLocation {
   protocol: string
@@ -31,19 +32,19 @@ export class WorkflowsApiClient implements WorkflowsApi {
   constructor(private readonly baseUrl = resolveWorkflowsApiBase()) {}
 
   listWorkflows(options: { signal?: AbortSignal } = {}) {
-    return this.request<WorkflowDefinition[]>('/jobs/workflows', { signal: options.signal })
+    return this.request<unknown>('/jobs/workflows', { signal: options.signal }).then(projectWorkflowListWire)
   }
 
   getWorkflow(workflowId: string, options: { signal?: AbortSignal } = {}) {
-    return this.request<WorkflowDefinition>(`/jobs/workflows/${encodeURIComponent(workflowId)}`, { signal: options.signal })
+    return this.request<unknown>(`/jobs/workflows/${encodeURIComponent(workflowId)}`, { signal: options.signal }).then(projectWorkflowWire)
   }
 
   createWorkflow(request: WorkflowSaveRequest, options: { signal?: AbortSignal } = {}) {
-    return this.request<WorkflowDefinition>('/jobs/workflows', { method: 'POST', body: request, signal: options.signal })
+    return this.request<unknown>('/jobs/workflows', { method: 'POST', body: request, signal: options.signal }).then(projectWorkflowWire)
   }
 
   updateWorkflow(workflowId: string, request: WorkflowSaveRequest, options: { signal?: AbortSignal } = {}) {
-    return this.request<WorkflowDefinition>(`/jobs/workflows/${encodeURIComponent(workflowId)}`, { method: 'PUT', body: request, signal: options.signal })
+    return this.request<unknown>(`/jobs/workflows/${encodeURIComponent(workflowId)}`, { method: 'PUT', body: request, signal: options.signal }).then(projectWorkflowWire)
   }
 
   private async request<T>(path: string, options: { method?: 'POST' | 'PUT'; body?: unknown; signal?: AbortSignal }): Promise<T> {

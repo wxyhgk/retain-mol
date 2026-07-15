@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Path
 from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -47,7 +47,8 @@ class JobInputReferenceRequest(BaseModel):
     target_input_name: str = Field(alias="targetInputName", min_length=1)
     source_job_id: str = Field(alias="sourceJobId", min_length=1)
     source_kind: Literal["input", "artifact"] = Field(alias="sourceKind")
-    source_name: str = Field(alias="sourceName", min_length=1)
+    source_name: str | None = Field(default=None, alias="sourceName", min_length=1)
+    source_artifact_id: str | None = Field(default=None, alias="sourceArtifactId", min_length=1)
 
 
 class WorkflowRequest(BaseModel):
@@ -83,7 +84,10 @@ class XtbOptimizeJobRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     name: str | None = Field(default=None, min_length=1)
-    structure: XtbStructureRequest
+    structure: XtbStructureRequest | None = None
+    molecule_revision_id: str | None = Field(
+        default=None, alias="moleculeRevisionId", min_length=1
+    )
     # The runner only needs structure; retain the editable graph for Load.
     molecule: dict[str, Any] | None = None
     charge: int
@@ -93,6 +97,18 @@ class XtbOptimizeJobRequest(BaseModel):
     opt_level: Literal[
         "crude", "sloppy", "loose", "lax", "normal", "tight", "vtight", "extreme"
     ] = Field(alias="optLevel")
+
+    @model_validator(mode="after")
+    def validate_structure_source(self) -> "XtbOptimizeJobRequest":
+        has_structure = self.structure is not None
+        has_revision = self.molecule_revision_id is not None
+        if has_structure == has_revision:
+            raise ValueError(
+                "provide exactly one of structure or moleculeRevisionId"
+            )
+        if self.molecule is not None and not has_structure:
+            raise ValueError("molecule is only accepted with a literal structure")
+        return self
 
 
 class JobServiceUnavailableError(RuntimeError):
@@ -205,18 +221,51 @@ class _JobServiceAdapter:
             "name": request.name,
             "request": request_data,
         }
-        job = await self._call(
-            "create_job",
-            "xtb-optimization",
-            metadata=metadata,
-        )
+        create_calculation_job = getattr(self._service, "create_calculation_job", None)
+        if callable(create_calculation_job):
+            spec_payload = {
+                key: value
+                for key, value in request_data.items()
+                if key not in {"name", "structure", "molecule", "moleculeRevisionId"}
+            }
+            if request.molecule_revision_id is not None:
+                structure_input = {
+                    "sourceKind": "molecule_revision",
+                    "format": "molecule",
+                    "moleculeRevisionId": request.molecule_revision_id,
+                }
+            else:
+                structure_input = {
+                    "sourceKind": "literal",
+                    "format": "molecule",
+                    "value": {
+                        "format": "molecule",
+                        "structure": request_data["structure"],
+                    },
+                }
+                if "molecule" in request_data:
+                    structure_input["value"]["molecule"] = request_data["molecule"]
+            job = await _await_if_needed(
+                create_calculation_job(
+                    "xtb-optimization",
+                    "xtb",
+                    spec_payload,
+                    inputs={"structure": structure_input},
+                    metadata=metadata,
+                )
+            )
+        else:
+            job = await self._call("create_job", "xtb-optimization", metadata=metadata)
         job_id = _job_id(job)
         if not job_id:
             raise RuntimeError("The jobs persistence service returned a job without an id")
-        await self.add_inputs(
-            job_id,
-            {"structure": request.structure.model_dump(mode="json")},
-        )
+        if not callable(create_calculation_job):
+            legacy_input = (
+                request.structure.model_dump(mode="json")
+                if request.structure is not None
+                else {"moleculeRevisionId": request.molecule_revision_id}
+            )
+            await self.add_inputs(job_id, {"structure": legacy_input})
         return await self.get_job(job_id)
 
 
@@ -284,11 +333,11 @@ def _frontend_artifact(artifact: Any) -> dict[str, Any]:
     response = {
         "id": artifact_id,
         "jobId": job_id,
-        "role": metadata.get("role", "output"),
+        "role": payload.get("role") or metadata.get("role", "output"),
         "name": name,
-        "format": metadata.get("format", name.rsplit(".", 1)[-1] if "." in name else "file"),
+        "format": payload.get("format") or metadata.get("format", name.rsplit(".", 1)[-1] if "." in name else "file"),
         "mediaType": payload.get("mediaType", payload.get("media_type")),
-        "sizeBytes": metadata.get("sizeBytes"),
+        "sizeBytes": payload.get("byteSize", payload.get("byte_size", metadata.get("sizeBytes"))),
         "createdAt": payload.get("createdAt", payload.get("created_at")),
         "metadata": metadata,
     }
@@ -495,13 +544,19 @@ async def download_job_artifact(
         artifact = _find_job_artifact(job, artifact_id)
         if artifact is None:
             raise KeyError(artifact_id)
-        relative_path = artifact.get("path")
-        if not isinstance(relative_path, str) or not relative_path:
-            raise ValueError("artifact has no file path")
-        directory = service.task_directory(job_id).resolve()
-        file_path = (directory / relative_path).resolve()
-        if directory not in file_path.parents or not file_path.is_file():
-            raise ValueError("artifact file is unavailable")
+        storage_key = artifact.get("storageKey", artifact.get("storage_key"))
+        if isinstance(storage_key, str) and storage_key.startswith("sha256/"):
+            file_path = service.artifact_storage.resolve(storage_key)
+            if not file_path.is_file():
+                raise ValueError("artifact content is unavailable")
+        else:
+            relative_path = artifact.get("path")
+            if not isinstance(relative_path, str) or not relative_path:
+                raise ValueError("artifact has no file path")
+            directory = service.task_directory(job_id).resolve()
+            file_path = (directory / relative_path).resolve()
+            if directory not in file_path.parents or not file_path.is_file():
+                raise ValueError("artifact file is unavailable")
     except KeyError as exc:
         raise _not_found_error(job_id) from exc
     except JobServiceUnavailableError as exc:

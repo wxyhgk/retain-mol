@@ -12,6 +12,7 @@ export interface WorkflowReferenceDraft {
   sourceJobId: string
   sourceKind: WorkflowReferenceSourceKind
   sourceName: string
+  sourceArtifactId?: string
 }
 
 export interface WorkflowInputReference extends WorkflowReferenceDraft {
