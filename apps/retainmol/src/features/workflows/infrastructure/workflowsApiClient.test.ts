@@ -36,4 +36,35 @@ describe('WorkflowsApiClient', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('http://compute.test:8000/jobs/workflows')
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ jobIds: ['prepare', 'optimize'] })
   })
+
+  it('creates the fixed TS preparation workflow from explicit artifact ids', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      workflow: {
+        workflowId: 'workflow-ts',
+        name: 'SN2 TS',
+        createdAt: '2026-07-15T00:00:00Z',
+        updatedAt: '2026-07-15T00:00:00Z',
+        jobIds: ['reactant-job', 'product-job', 'ts-job'],
+        references: [],
+      },
+      targetJob: { jobId: 'ts-job', taskType: 'ts-initial-guess', status: 'created' },
+    }), { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new WorkflowsApiClient('http://compute.test:8000')
+
+    const workflow = await client.createTsPreparationWorkflow({
+      name: 'SN2 TS',
+      reactantJobId: 'reactant-job',
+      reactantArtifactId: 'reactant-xyz',
+      productJobId: 'product-job',
+      productArtifactId: 'product-xyz',
+    })
+
+    expect(workflow.workflowId).toBe('workflow-ts')
+    expect(fetchMock.mock.calls[0][0]).toBe('http://compute.test:8000/jobs/workflows/ts-preparation')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      reactantArtifactId: 'reactant-xyz',
+      productArtifactId: 'product-xyz',
+    })
+  })
 })

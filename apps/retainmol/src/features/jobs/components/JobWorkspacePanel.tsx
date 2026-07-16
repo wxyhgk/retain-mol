@@ -1,10 +1,17 @@
-import { useMemo, useState } from 'react'
-import { FileInput, FileOutput, LayoutGrid, List, LoaderCircle, Play, RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Atom, FileInput, FileOutput, FlaskConical, LayoutGrid, List, LoaderCircle, Play, RefreshCw } from 'lucide-react'
 import type { Molecule } from '@retainmol/mol-viewer/core'
 import { Button } from '@/components/ui/button'
 import { DataTable, VirtualList, type DataTableColumn } from '@/components/data'
 import { cn } from '@/lib/utils'
-import type { JobArtifact, JobDetail, JobSummary, XtbStructureInput } from '../domain/jobTypes'
+import type {
+  CreatePsi4JobRequest,
+  CreateXtbOptimizationJobRequest,
+  JobArtifact,
+  JobDetail,
+  JobSummary,
+  XtbStructureInput,
+} from '../domain/jobTypes'
 import { resolveJobArtifactUrl } from '../infrastructure/jobsApiClient'
 import {
   useJobDetailQuery,
@@ -13,6 +20,8 @@ import {
 } from '../application/jobQueries'
 import { useJobUiStore } from '../model/jobUiStore'
 import { XtbJobForm } from './XtbJobForm'
+import { Psi4JobForm } from './Psi4JobForm'
+import { JobManagementActions } from './JobManagementActions'
 import {
   useMoleculeAssetQuery,
   useMoleculeRevisionQuery,
@@ -27,6 +36,8 @@ export interface JobWorkspacePanelProps {
   revisionMetadata?: Readonly<Record<string, unknown>>
   onExecuteJob?: (job: JobDetail) => void | Promise<void>
   onLoadOptimizedStructure?: (artifact: JobArtifact, job: JobDetail) => void | Promise<void>
+  showCreateForm?: boolean
+  autoSelectFirst?: boolean
   className?: string
 }
 
@@ -38,6 +49,8 @@ export function JobWorkspacePanel({
   revisionMetadata,
   onExecuteJob,
   onLoadOptimizedStructure,
+  showCreateForm = true,
+  autoSelectFirst = false,
   className,
 }: JobWorkspacePanelProps) {
   const selectedJobId = useJobUiStore(state => state.selectedJobId)
@@ -48,8 +61,13 @@ export function JobWorkspacePanel({
   const detailQuery = useJobDetailQuery(selectedJobId)
   const runJob = useRunJobMutation()
   const [callbackError, setCallbackError] = useState<string | null>(null)
-  const jobs = jobsQuery.data ?? []
+  const [createEngine, setCreateEngine] = useState<'xtb' | 'psi4'>('xtb')
+  const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data])
   const visibleJob = detailQuery.data
+
+  useEffect(() => {
+    if (autoSelectFirst && !selectedJobId && jobs.length > 0) selectJob(jobs[0].id)
+  }, [autoSelectFirst, jobs, selectJob, selectedJobId])
 
   const columns = useMemo<DataTableColumn<JobSummary>[]>(() => [
     { accessorKey: 'name', header: '任务', cell: info => <span className="font-medium">{String(info.getValue())}</span> },
@@ -110,13 +128,31 @@ export function JobWorkspacePanel({
       </aside>
 
       <div className="min-h-0 overflow-y-auto">
-        <XtbJobForm
-          structure={structure}
-          molecule={molecule}
-          objectId={objectId}
-          documentBinding={documentBinding}
-          revisionMetadata={revisionMetadata}
-        />
+        {showCreateForm && (
+          <div>
+            <div className="flex gap-1 border-b border-border bg-muted/30 p-1.5" role="group" aria-label="计算引擎">
+              <Button size="sm" variant={createEngine === 'xtb' ? 'default' : 'ghost'} className="h-7 flex-1" onClick={() => setCreateEngine('xtb')}><FlaskConical />xTB</Button>
+              <Button size="sm" variant={createEngine === 'psi4' ? 'default' : 'ghost'} className="h-7 flex-1" onClick={() => setCreateEngine('psi4')}><Atom />Psi4</Button>
+            </div>
+            {createEngine === 'xtb' ? (
+              <XtbJobForm
+                structure={structure}
+                molecule={molecule}
+                objectId={objectId}
+                documentBinding={documentBinding}
+                revisionMetadata={revisionMetadata}
+              />
+            ) : (
+              <Psi4JobForm
+                structure={structure}
+                molecule={molecule}
+                objectId={objectId}
+                documentBinding={documentBinding}
+                revisionMetadata={revisionMetadata}
+              />
+            )}
+          </div>
+        )}
         {(callbackError || detailQuery.error) && (
           <p role="alert" className="mx-3 mt-3 border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
             {callbackError ?? detailQuery.error?.message}
@@ -150,7 +186,7 @@ function JobCard({ job, selected, onSelect }: { job: JobSummary; selected: boole
       <div className="flex items-center gap-2">
         <JobThumbnail job={job} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium">{job.name || 'xTB optimization'}</p>
+          <p className="truncate text-xs font-medium">{job.name || calculationLabel(job.kind)}</p>
           <p className="mt-1 text-[10px] text-muted-foreground">{formatDate(job.createdAt)}</p>
         </div>
         <StatusBadge status={job.status} />
@@ -166,16 +202,20 @@ function JobDetailView({ job, onExecute, onLoad, isRunning }: {
   isRunning: boolean
 }) {
   const artifacts = job.artifacts ?? []
+  const parameterRows = jobParameterRows(job)
   return (
     <div className="space-y-4">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{job.name}</h2><p className="mt-1 font-mono text-[10px] text-muted-foreground">{job.id}</p></div>
-        <div className="flex items-center gap-2"><StatusBadge status={job.status} /><Button variant="outline" size="sm" className="h-7" onClick={onExecute} disabled={isRunning || job.status !== 'queued'}>{isRunning ? <LoaderCircle className="animate-spin" /> : <Play />}{isRunning ? '运行中' : '运行'}</Button></div>
+        <div className="flex items-center gap-1">
+          <StatusBadge status={job.status} />
+          <JobManagementActions job={job} />
+          <Button variant="outline" size="sm" className="h-7" onClick={onExecute} disabled={isRunning || job.status !== 'queued'}>{isRunning ? <LoaderCircle className="animate-spin" /> : <Play />}{isRunning ? '运行中' : '运行'}</Button>
+        </div>
       </header>
+      {job.description && <p className="text-xs leading-5 text-muted-foreground">{job.description}</p>}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-y border-border py-3 text-xs">
-        <DetailTerm label="方法" value="GFN2-xTB" /><DetailTerm label="原子" value={literalAtomCount(job) ?? '版本快照'} />
-        <DetailTerm label="电荷" value={job.request ? String(job.request.charge) : '—'} /><DetailTerm label="多重度" value={job.request ? String(job.request.multiplicity) : '—'} />
-        <DetailTerm label="级别" value={job.request?.optLevel ?? '—'} /><DetailTerm label="最大步数" value={job.request ? String(job.request.maxSteps) : '—'} />
+        {parameterRows.map(([label, value]) => <DetailTerm key={label} label={label} value={value} />)}
       </dl>
       <JobInputSummary job={job} />
       {job.error && <p className="text-xs text-destructive">{job.error}</p>}
@@ -230,6 +270,43 @@ function literalAtomCount(job: JobDetail): string | null {
   const request = job.request
   if (!request || !('structure' in request) || !request.structure) return null
   return String(request.structure.atoms.length)
+}
+
+function jobParameterRows(job: JobDetail): Array<[string, string]> {
+  const request = job.request
+  const rows: Array<[string, string]> = [
+    ['任务类型', calculationLabel(job.kind)],
+    ['原子', literalAtomCount(job) ?? '版本快照'],
+    ['电荷', request ? String(request.charge) : '—'],
+    ['多重度', request ? String(request.multiplicity) : '—'],
+  ]
+  if (isXtbRequest(request)) {
+    rows.push(['方法', 'GFN2-xTB'], ['优化级别', request.optLevel], ['最大步数', String(request.maxSteps)])
+  } else if (isPsi4Request(request)) {
+    rows.push(['理论水平', `${request.method}/${request.basis}`], ['SCF', request.scfType.toUpperCase()])
+    if ('maxSteps' in request) rows.push(['最大步数', String(request.maxSteps)])
+    if ('direction' in request) rows.push(['IRC 方向', request.direction], ['IRC 点数', String(request.points)])
+    if ('convergence' in request) rows.push(['收敛标准', request.convergence])
+  }
+  return rows
+}
+
+function isXtbRequest(
+  request: JobDetail['request'],
+): request is CreateXtbOptimizationJobRequest {
+  return request?.method === 'gfn2' && 'optLevel' in request
+}
+
+function isPsi4Request(request: JobDetail['request']): request is CreatePsi4JobRequest {
+  return Boolean(request && 'basis' in request)
+}
+
+function calculationLabel(kind: string): string {
+  if (kind === 'xtb-optimization') return 'xTB 几何优化'
+  if (kind === 'psi4-frequency') return 'Psi4 频率分析'
+  if (kind === 'psi4-ts-refine') return 'Psi4 过渡态精修'
+  if (kind === 'psi4-irc') return 'Psi4 IRC'
+  return kind
 }
 
 function shortIdentifier(value: string): string {

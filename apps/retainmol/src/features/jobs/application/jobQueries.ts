@@ -6,11 +6,14 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import type {
+  Psi4CreateMutationInput,
   CreateXtbOptimizationJobRequest,
   JobArtifact,
   JobDetail,
   JobSummary,
   JobsApi,
+  UpdateJobRequest,
+  CloneJobRequest,
 } from '../domain/jobTypes'
 import { JobsApiClient } from '../infrastructure/jobsApiClient'
 import { useJobUiStore } from '../model/jobUiStore'
@@ -22,6 +25,8 @@ export const jobQueryKeys = {
   list: () => [...jobQueryKeys.all, 'list'] as const,
   detail: (jobId: string) => [...jobQueryKeys.all, 'detail', jobId] as const,
   artifacts: (jobId: string) => [...jobQueryKeys.all, 'artifacts', jobId] as const,
+  log: (jobId: string) => [...jobQueryKeys.all, 'log', jobId] as const,
+  artifactContent: (jobId: string, artifactId: string) => [...jobQueryKeys.artifacts(jobId), artifactId, 'content'] as const,
 }
 
 export function isTerminalJobStatus(status: string | undefined) {
@@ -85,6 +90,26 @@ export function useCreateXtbJobMutation() {
   })
 }
 
+export function useCreatePsi4JobMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Psi4CreateMutationInput) => {
+      switch (input.kind) {
+        case 'psi4-ts-refine':
+          return jobsApi.createPsi4TsRefineJob(input.request)
+        case 'psi4-frequency':
+          return jobsApi.createPsi4FrequencyJob(input.request)
+        case 'psi4-irc':
+          return jobsApi.createPsi4IrcJob(input.request)
+      }
+    },
+    onSuccess: job => {
+      commitJob(queryClient, job)
+      useJobUiStore.getState().selectJob(job.id)
+    },
+  })
+}
+
 export function useRunJobMutation() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -93,6 +118,82 @@ export function useRunJobMutation() {
       commitJob(queryClient, job)
       void queryClient.invalidateQueries({ queryKey: jobQueryKeys.detail(job.id) })
       void queryClient.invalidateQueries({ queryKey: jobQueryKeys.list() })
+    },
+  })
+}
+
+export function useCloneJobMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobId, request = {} }: { jobId: string; request?: CloneJobRequest }) =>
+      jobsApi.cloneJob(jobId, request),
+    onSuccess: job => commitJob(queryClient, job),
+  })
+}
+
+export function useRetryJobMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobId, request = {} }: { jobId: string; request?: CloneJobRequest }) =>
+      jobsApi.retryJob(jobId, request),
+    onSuccess: job => {
+      commitJob(queryClient, job)
+      useJobUiStore.getState().selectJob(job.id)
+    },
+  })
+}
+
+export function useCancelJobMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) => jobsApi.cancelJob(jobId),
+    onSuccess: job => {
+      commitJob(queryClient, job)
+      void queryClient.invalidateQueries({ queryKey: jobQueryKeys.log(job.id) })
+    },
+  })
+}
+
+export function useJobLogQuery(jobId: string, enabled = true) {
+  return useQuery({
+    queryKey: jobQueryKeys.log(jobId),
+    queryFn: ({ signal }) => jobsApi.getJobLog(jobId, 0, { signal }),
+    enabled: enabled && Boolean(jobId),
+    refetchInterval: query => query.state.data?.complete ? false : 1_000,
+  })
+}
+
+export function useJobArtifactTextQuery(jobId: string, artifactId: string, enabled = true) {
+  return useQuery({
+    queryKey: jobQueryKeys.artifactContent(jobId, artifactId),
+    queryFn: ({ signal }) => jobsApi.getJobArtifactText(jobId, artifactId, { signal }),
+    enabled: enabled && Boolean(jobId && artifactId),
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+export function useUpdateJobMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobId, request }: { jobId: string; request: UpdateJobRequest }) =>
+      jobsApi.updateJob(jobId, request),
+    onSuccess: job => commitJob(queryClient, job),
+  })
+}
+
+export function useDeleteJobMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) => jobsApi.deleteJob(jobId).then(() => jobId),
+    onSuccess: jobId => {
+      queryClient.setQueryData<JobSummary[]>(jobQueryKeys.list(), jobs =>
+        jobs?.filter(job => job.id !== jobId),
+      )
+      queryClient.removeQueries({ queryKey: jobQueryKeys.detail(jobId) })
+      queryClient.removeQueries({ queryKey: jobQueryKeys.artifacts(jobId) })
+      if (useJobUiStore.getState().selectedJobId === jobId) {
+        useJobUiStore.getState().selectJob(null)
+      }
     },
   })
 }

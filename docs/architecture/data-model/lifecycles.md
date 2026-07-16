@@ -37,20 +37,22 @@ stateDiagram-v2
 
 - 所有迁移都由后端服务层校验，并以 compare-and-set 或事务更新；通用 `status = ?` 写接口不属于 v1 公共能力。
 - 终态不可迁出。重试创建新 Job，并可设置 `supersedesJobId`，不能把失败 Job 改回 `queued`。
+- schema 9 已将 `supersedesJobId` 落为 `jobs.supersedes_job_id` 自引用外键。`failed`、`cancelled`、`interrupted` 可通过 `POST /jobs/{jobId}/retry` 创建新 Job；新 Job 复用不可变输入身份，但拥有独立日志、产物和状态历史。通用复制不进入重试链。
 - `running -> cancelled` 必须在进程真正停止后发生。取消请求已发送但未确认时仍返回 `running`，前端以 mutation pending 表示。
 - 能确认具体执行错误时进入 `failed`；无法取得 runner 结果、只能确认执行连续性丢失时进入 `interrupted`。两者重跑都创建新 Job。
 - `succeeded` 需要必需输出已经内容寻址并登记。文件只写到任务目录但未登记，不算成功。
 - 每次迁移用 `stateVersion + 1` 做并发保护，并追加 `JobStatusEvent`；事件与当前状态必须在同一事务提交。
 
-### 当前实现差异
+### 当前实现状态
 
 截至 2026-07-14：
 
 - `JobService.create_job` 默认直接创建 `queued`，尚未使用 `created` 草稿阶段。
 - `claim_queued_job` 已通过条件更新保证只有一个 runner 能执行 `queued -> running`。
 - xTB runner 已实现 `running -> succeeded/failed`，超时和命令缺失会失败。
-- 后端模型、wire projector 和 Query 终态判断均已识别 `interrupted`；schema 迁移会把遗留 `running` 映射为 `interrupted`，repository 初始化时会执行迁移器。
-- 前端既有领域类型已识别 `created` 和 `cancelled`，但后端尚无取消 API、lease 恢复器或统一迁移守卫。
+- 后端模型、wire projector 和 Query 终态判断均已识别 `interrupted`；无有效租约的遗留 `running` 会恢复为 `interrupted`。
+- 取消 API 已实现。活跃 runner 会轮询持久状态，确认子进程停止后结束；服务关停使用独立 stop signal 并记录 `interrupted`。
+- schema 7 已增加持久 `job_dispatches`、租约、心跳和过期恢复；API 可使用 `external` 模式，仅由独立 worker 执行计算。
 - `JobService.update_status` 已按状态图校验迁移并使用 CAS；旧值 `completed` 只在兼容输入和数据库迁移中归一为 `succeeded`。
 
 ## Workflow 引用解析与排队
@@ -90,6 +92,38 @@ sequenceDiagram
 4. 显式绑定与 Workflow 引用同时指向同一端口时拒绝请求，不使用隐式优先级。
 5. 解析结果保存 `resolvedFromReferenceId`；之后编辑 Workflow 不影响已冻结绑定。
 6. 所有端口校验通过后才整体提交，禁止部分绑定后进入 `queued`。
+
+### WorkflowExecution 状态
+
+Workflow 只有通过 `POST /jobs/workflows/{workflowId}/run` 显式激活后才会自动调度。激活记录持久化在 schema 8 的 `workflow_executions` 中，并与 Workflow 一对一：
+
+```mermaid
+stateDiagram-v2
+    [*] --> active: 显式 run
+    active --> succeeded: 所有节点 Job succeeded
+    active --> blocked: 无可运行节点且存在失败或阻断
+    active --> cancelled: 用户取消
+    succeeded --> [*]
+    blocked --> [*]
+    cancelled --> [*]
+```
+
+节点状态不另建可变记录，而是从 Job 七态和依赖边推导：
+
+| 节点视图 | 推导条件 |
+| --- | --- |
+| `waiting` | 上游尚未全部成功，当前 Job 尚不可运行。 |
+| `ready` | 上游全部成功、Job 为 `queued`，且尚无 durable dispatch。 |
+| `queued` | 已存在 `pending` 或 `leased` dispatch。 |
+| `running` | Job 为 `running`。 |
+| `succeeded` | Job 为 `succeeded`。 |
+| `failed` | Job 为 `failed / cancelled / interrupted`。 |
+| `cancelled` | Workflow 已取消，且该成员 Job 为 `cancelled`。 |
+| `blocked` | 任一上游失败/阻断，或输入解析、任务支持等调度前置条件失败。 |
+
+`blocked` 不能写入 `Job.status`。它表达的是“这个 Job 在当前 DAG 中无法继续”，而不是一次科学计算已经执行失败。上游 Artifact 只有在成功后才解析为稳定 ID 和摘要，因此 Workflow 引用不会在定义阶段提前绑定一个尚不存在的输出文件。
+
+`POST /jobs/workflows/{workflowId}/cancel` 是幂等操作。服务先关闭 execution 的调度资格，再取消未完成成员；runner 通过持久 Job 状态终止 xTB/Psi4 子进程。冻结 Workflow 输入与 `created -> queued` 的事务还会再次校验 execution 为 `active`，避免取消与多 worker 调度并发时漏入队。
 
 ## Molecule 保存流程
 

@@ -128,8 +128,10 @@ def test_runner_registers_trajectory_artifact_from_xtbopt_log(
         ],
     )
 
-    def run(*_args: object, cwd: Path, **_kwargs: object) -> object:
+    def run(*_args: object, cwd: Path, log_path: Path, **_kwargs: object) -> object:
         work = Path(cwd)
+        output = "GEOMETRY OPTIMIZATION CYCLE 4\nGEOMETRY OPTIMIZATION CYCLE 5\n"
+        log_path.write_text(output, encoding="utf-8")
         (work / "xtbopt.xyz").write_text(
             "2\noptimized\nO 0.01 0.0 0.0\nH 0.0 0.01 1.0\n",
             encoding="utf-8",
@@ -139,13 +141,13 @@ def test_runner_registers_trajectory_artifact_from_xtbopt_log(
             "CompletedProcess",
             (),
             {
-                "stdout": "GEOMETRY OPTIMIZATION CYCLE 4\nGEOMETRY OPTIMIZATION CYCLE 5\n",
+                "stdout": output,
                 "stderr": "",
                 "returncode": 0,
             },
         )()
 
-    monkeypatch.setattr(xtb_runner.subprocess, "run", run)
+    monkeypatch.setattr(xtb_runner, "run_live_process", run)
 
     completed = xtb_runner.run_xtb_optimization_job(service, job.job_id)
     artifact = next(item for item in completed.artifacts if item.name == "optimization-trajectory.json")

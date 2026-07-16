@@ -1,6 +1,7 @@
 import { AppShellView } from './AppShellView'
 import { useAppShellModel } from './useAppShellModel'
 import type { WorkspaceMode } from '@/App'
+import type { JobEditorRouteState, WorkflowEditRouteState } from '@/app/appRoute'
 
 export interface AppShellProps {
   showInspector: boolean
@@ -11,6 +12,10 @@ export interface AppShellProps {
   onOpenTemplateStudio: () => void
   onOpenSearch: () => void
   onCloseSearch: () => void
+  workflowEditSession: WorkflowEditRouteState | null
+  jobEditSession: JobEditorRouteState | null
+  onCloseWorkflowEdit: (workflowId: string) => void
+  onCloseJobEdit: (jobId: string) => void
 }
 
 export function AppShell({
@@ -22,6 +27,10 @@ export function AppShell({
   onOpenTemplateStudio,
   onOpenSearch,
   onCloseSearch,
+  workflowEditSession,
+  jobEditSession,
+  onCloseWorkflowEdit,
+  onCloseJobEdit,
 }: AppShellProps) {
   const model = useAppShellModel()
 
@@ -34,6 +43,10 @@ export function AppShell({
     onOpenTemplateStudio={onOpenTemplateStudio}
     onOpenSearch={onOpenSearch}
     onCloseSearch={onCloseSearch}
+    workflowEditSession={workflowEditSession}
+    jobEditSession={jobEditSession}
+    onCloseWorkflowEdit={onCloseWorkflowEdit}
+    onCloseJobEdit={onCloseJobEdit}
     {...model}
   />
 }

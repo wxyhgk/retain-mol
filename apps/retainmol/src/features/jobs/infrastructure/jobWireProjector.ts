@@ -1,4 +1,8 @@
 import type {
+  CreatePsi4FrequencyJobRequest,
+  CreatePsi4IrcJobRequest,
+  CreatePsi4JobRequest,
+  CreatePsi4TsRefineJobRequest,
   CreateXtbOptimizationJobRequest,
   JobArtifact,
   JobArtifactRole,
@@ -7,6 +11,9 @@ import type {
   JobSummary,
   XtbAtomInput,
   XtbStructureInput,
+  Psi4CalculationKind,
+  Psi4CommonJobParameters,
+  Psi4StructureSource,
 } from '../domain/jobTypes'
 
 export type NormalizedJobStatus =
@@ -78,9 +85,7 @@ export function projectJobWire(value: unknown): ProjectedJob {
   const kind = requiredString(value, 'job.kind', 'kind', 'taskType', 'task_type')
   const metadata = objectValue(value.metadata)
   const requestWire = objectValue(value.request) ?? objectValue(metadata?.request)
-  const request = kind === 'xtb-optimization' && requestWire
-    ? projectJobRequest(requestWire)
-    : undefined
+  const request = requestWire ? projectJobRequest(requestWire, kind) : undefined
   const artifactsWire = Array.isArray(value.artifacts) ? value.artifacts : undefined
   const artifacts = artifactsWire?.map(
     (artifact, index) => projectJobArtifactWire(artifact, `job.artifacts[${index}]`),
@@ -102,9 +107,17 @@ export function projectJobWire(value: unknown): ProjectedJob {
     createdAt,
   }
   const updatedAt = readNonEmptyString(value, 'updatedAt', 'updated_at')
+  const supersedesJobId = readNonEmptyString(
+    value,
+    'supersedesJobId',
+    'supersedes_job_id',
+  )
+  const description = readString(value, 'description') ?? readString(metadata, 'description')
   const message = readString(value, 'message') ?? readString(metadata, 'message')
   const error = readString(value, 'error')
   if (updatedAt !== undefined) projected.updatedAt = updatedAt
+  if (supersedesJobId !== undefined) projected.supersedesJobId = supersedesJobId
+  if (description !== undefined) projected.description = description
   if (artifacts !== undefined) projected.artifacts = artifacts
   if (request !== undefined) projected.request = request
   if (message !== undefined) projected.message = message
@@ -135,11 +148,13 @@ export function projectJobArtifactWire(value: unknown, path = 'artifact'): JobAr
     format,
   }
   const mediaType = readNonEmptyString(value, 'mediaType', 'media_type')
+  const sha256 = readNonEmptyString(value, 'sha256')
   const sizeBytes = readFiniteNonNegativeNumber(value, 'sizeBytes', 'size_bytes', 'byteSize', 'byte_size')
     ?? readFiniteNonNegativeNumber(metadata, 'sizeBytes', 'size_bytes', 'byteSize', 'byte_size')
   const createdAt = readNonEmptyString(value, 'createdAt', 'created_at')
   const downloadUrl = readNonEmptyString(value, 'downloadUrl', 'download_url')
   if (mediaType !== undefined) projected.mediaType = mediaType
+  if (sha256 !== undefined) projected.sha256 = sha256
   if (sizeBytes !== undefined) projected.sizeBytes = sizeBytes
   if (createdAt !== undefined) projected.createdAt = createdAt
   if (downloadUrl !== undefined) projected.downloadUrl = downloadUrl
@@ -153,7 +168,16 @@ export function projectJobArtifactListWire(value: unknown): JobArtifact[] {
   return artifacts.map((artifact, index) => projectJobArtifactWire(artifact, `artifacts[${index}]`))
 }
 
-function projectJobRequest(value: JsonObject): CreateXtbOptimizationJobRequest | undefined {
+function projectJobRequest(
+  value: JsonObject,
+  kind: string,
+): CreateXtbOptimizationJobRequest | CreatePsi4JobRequest | undefined {
+  if (kind === 'xtb-optimization') return projectXtbJobRequest(value)
+  if (isPsi4Kind(kind)) return projectPsi4JobRequest(value, kind)
+  return undefined
+}
+
+function projectXtbJobRequest(value: JsonObject): CreateXtbOptimizationJobRequest | undefined {
   const structureWire = objectValue(value.structure)
   const moleculeRevisionId = readNonEmptyString(
     value,
@@ -195,6 +219,107 @@ function projectJobRequest(value: JsonObject): CreateXtbOptimizationJobRequest |
     request.molecule = value.molecule as unknown as CreateXtbOptimizationJobRequest['molecule']
   }
   return request
+}
+
+function projectPsi4JobRequest(
+  value: JsonObject,
+  kind: Psi4CalculationKind,
+): CreatePsi4JobRequest | undefined {
+  const source = projectPsi4StructureSource(value)
+  if (!source) return undefined
+  const charge = finiteNumber(value.charge)
+  const multiplicity = finiteNumber(value.multiplicity)
+  const method = readNonEmptyString(value, 'method')
+  const basis = readNonEmptyString(value, 'basis')
+  const scfType = readValue(value, 'scfType', 'scf_type')
+  const threads = finiteNumber(value.threads)
+  const memoryMb = finiteNumber(readValue(value, 'memoryMb', 'memory_mb'))
+  const timeoutSeconds = finiteNumber(readValue(value, 'timeoutSeconds', 'timeout_seconds'))
+  if (
+    charge === undefined || multiplicity === undefined || !method || !basis
+    || (scfType !== 'df' && scfType !== 'pk')
+    || threads === undefined || memoryMb === undefined || timeoutSeconds === undefined
+  ) return undefined
+
+  const common: Psi4CommonJobParameters = {
+    charge,
+    multiplicity,
+    method,
+    basis,
+    scfType,
+    threads,
+    memoryMb,
+    timeoutSeconds,
+  }
+  const name = readNonEmptyString(value, 'name')
+  const reference = readValue(value, 'reference')
+  if (name !== undefined) common.name = name
+  if (reference === 'rhf' || reference === 'uhf' || reference === 'rohf') {
+    common.reference = reference
+  }
+
+  if (kind === 'psi4-frequency') {
+    return { ...common, ...source } satisfies CreatePsi4FrequencyJobRequest
+  }
+  const maxSteps = finiteNumber(readValue(value, 'maxSteps', 'max_steps'))
+  if (maxSteps === undefined) return undefined
+  if (kind === 'psi4-ts-refine') {
+    const fullHessianEvery = finiteNumber(readValue(value, 'fullHessianEvery', 'full_hessian_every'))
+    const convergence = readValue(value, 'convergence')
+    if (
+      fullHessianEvery === undefined
+      || (convergence !== 'gau_loose' && convergence !== 'gau'
+        && convergence !== 'gau_tight' && convergence !== 'gau_verytight')
+    ) return undefined
+    return {
+      ...common,
+      ...source,
+      maxSteps,
+      fullHessianEvery,
+      convergence,
+    } satisfies CreatePsi4TsRefineJobRequest
+  }
+  const direction = readValue(value, 'direction')
+  const points = finiteNumber(value.points)
+  const stepSize = finiteNumber(readValue(value, 'stepSize', 'step_size'))
+  if (
+    (direction !== 'forward' && direction !== 'backward' && direction !== 'both')
+    || points === undefined || stepSize === undefined
+  ) return undefined
+  return {
+    ...common,
+    ...source,
+    direction,
+    points,
+    stepSize,
+    maxSteps,
+  } satisfies CreatePsi4IrcJobRequest
+}
+
+function projectPsi4StructureSource(value: JsonObject): Psi4StructureSource | undefined {
+  const structureWire = objectValue(value.structure)
+  const moleculeRevisionId = readNonEmptyString(value, 'moleculeRevisionId', 'molecule_revision_id')
+  const artifactId = readNonEmptyString(value, 'artifactId', 'artifact_id')
+  const sourceCount = Number(Boolean(structureWire)) + Number(Boolean(moleculeRevisionId)) + Number(Boolean(artifactId))
+  if (sourceCount !== 1) return undefined
+  if (moleculeRevisionId) return { moleculeRevisionId }
+  if (artifactId) return { artifactId }
+  if (!structureWire || !Array.isArray(structureWire.atoms)) return undefined
+  const atoms: XtbAtomInput[] = []
+  for (const atomWire of structureWire.atoms) {
+    const atom = projectAtom(atomWire)
+    if (!atom) return undefined
+    atoms.push(atom)
+  }
+  const source: Psi4StructureSource = { structure: projectStructure(structureWire, atoms) }
+  if (isMoleculeWire(value.molecule) && 'structure' in source) {
+    source.molecule = value.molecule as unknown as CreatePsi4FrequencyJobRequest['molecule']
+  }
+  return source
+}
+
+function isPsi4Kind(value: string): value is Psi4CalculationKind {
+  return value === 'psi4-ts-refine' || value === 'psi4-frequency' || value === 'psi4-irc'
 }
 
 function projectStructure(value: JsonObject, atoms: XtbAtomInput[]): XtbStructureInput {

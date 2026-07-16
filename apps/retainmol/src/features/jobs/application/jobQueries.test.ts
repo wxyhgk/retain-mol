@@ -12,8 +12,22 @@ function apiStub(): JobsApi {
   return {
     listJobs: vi.fn(async () => [job]),
     getJob: vi.fn(async () => job),
+    updateJob: vi.fn(async () => job),
+    cloneJob: vi.fn(async (): Promise<JobDetail> => ({ ...job, id: 'job-copy' })),
+    retryJob: vi.fn(async (): Promise<JobDetail> => ({
+      ...job,
+      id: 'job-retry',
+      supersedesJobId: job.id,
+    })),
+    cancelJob: vi.fn(async (): Promise<JobDetail> => ({ ...job, status: 'cancelled' })),
+    deleteJob: vi.fn(async () => undefined),
     listJobArtifacts: vi.fn(async () => [{ id: 'a1', jobId: job.id, role: 'output' as const, name: 'optimized.xyz', format: 'xyz' }]),
+    getJobArtifactText: vi.fn(async () => 'artifact'),
+    getJobLog: vi.fn(async () => ({ content: 'log', cursor: 3, source: 'xtb.log', complete: true })),
     createXtbOptimizationJob: vi.fn(async () => job),
+    createPsi4TsRefineJob: vi.fn(async () => job),
+    createPsi4FrequencyJob: vi.fn(async () => job),
+    createPsi4IrcJob: vi.fn(async () => job),
     uploadJobThumbnail: vi.fn(),
     runJob: vi.fn(async (): Promise<JobDetail> => ({ ...job, status: 'succeeded' })),
   }

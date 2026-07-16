@@ -50,3 +50,17 @@ def validate_workflow_dag(
     if len(ordered) != len(nodes):
         raise WorkflowValidationError("workflow references contain a cycle")
     return ordered
+
+
+def workflow_predecessors(
+    job_ids: Iterable[str],
+    references: Iterable[JobInputReference],
+) -> dict[str, set[str]]:
+    """Return direct upstream jobs after applying the same DAG validation rules."""
+    nodes = list(job_ids)
+    validated_references = list(validate_job_input_references(references))
+    validate_workflow_dag(nodes, validated_references)
+    predecessors = {job_id: set() for job_id in nodes}
+    for reference in validated_references:
+        predecessors[reference.target_job_id].add(reference.source_job_id)
+    return predecessors

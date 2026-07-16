@@ -36,9 +36,30 @@ export interface WorkflowSaveRequest {
   references: WorkflowReferenceDraft[]
 }
 
+export interface CreateTsPreparationWorkflowRequest {
+  name: string
+  reactantJobId: string
+  reactantArtifactId: string
+  productJobId: string
+  productArtifactId: string
+}
+
+export interface TsPreparationSourceArtifact {
+  id: string
+  name: string
+  format: string
+}
+
+export interface TsPreparationSourceJob {
+  id: string
+  name: string
+  artifacts: TsPreparationSourceArtifact[]
+}
+
 export interface WorkflowsApi {
   listWorkflows(options?: { signal?: AbortSignal }): Promise<WorkflowDefinition[]>
   getWorkflow(workflowId: string, options?: { signal?: AbortSignal }): Promise<WorkflowDefinition>
   createWorkflow(request: WorkflowSaveRequest, options?: { signal?: AbortSignal }): Promise<WorkflowDefinition>
+  createTsPreparationWorkflow(request: CreateTsPreparationWorkflowRequest, options?: { signal?: AbortSignal }): Promise<WorkflowDefinition>
   updateWorkflow(workflowId: string, request: WorkflowSaveRequest, options?: { signal?: AbortSignal }): Promise<WorkflowDefinition>
 }

@@ -8,7 +8,7 @@ import sqlite3
 from collections.abc import Callable
 
 
-LATEST_SCHEMA_VERSION = 6
+LATEST_SCHEMA_VERSION = 9
 
 Migration = Callable[[sqlite3.Connection], None]
 
@@ -547,6 +547,82 @@ def _migration_6_add_molecule_revision_metadata(connection: sqlite3.Connection) 
     )
 
 
+def _migration_7_add_durable_job_dispatches(connection: sqlite3.Connection) -> None:
+    """Persist execution requests so queued work survives API restarts."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS job_dispatches (
+            dispatch_id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL UNIQUE REFERENCES jobs(job_id) ON DELETE CASCADE,
+            status TEXT NOT NULL
+                CHECK (status IN ('pending', 'leased', 'finished')),
+            requested_at TEXT NOT NULL,
+            available_at TEXT NOT NULL,
+            lease_owner TEXT,
+            lease_token TEXT,
+            lease_expires_at TEXT,
+            heartbeat_at TEXT,
+            finished_at TEXT,
+            last_error TEXT
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_job_dispatches_poll
+        ON job_dispatches(status, available_at, requested_at)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_job_dispatches_lease
+        ON job_dispatches(status, lease_expires_at)
+        """
+    )
+
+
+def _migration_8_add_workflow_executions(connection: sqlite3.Connection) -> None:
+    """Persist workflow activation independently from its immutable job runs."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS workflow_executions (
+            execution_id TEXT PRIMARY KEY,
+            workflow_id TEXT NOT NULL UNIQUE
+                REFERENCES workflows(workflow_id) ON DELETE CASCADE,
+            status TEXT NOT NULL
+                CHECK (status IN ('active', 'succeeded', 'blocked', 'cancelled')),
+            error_code TEXT,
+            error_message TEXT,
+            started_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            finished_at TEXT
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_workflow_executions_status
+        ON workflow_executions(status, updated_at)
+        """
+    )
+
+
+def _migration_9_add_job_retry_lineage(connection: sqlite3.Connection) -> None:
+    """Link every retried run to the immutable attempt it supersedes."""
+    _add_column_if_missing(
+        connection,
+        "jobs",
+        "supersedes_job_id",
+        "TEXT REFERENCES jobs(job_id) ON DELETE RESTRICT",
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_jobs_supersedes_job_id
+        ON jobs(supersedes_job_id, created_at)
+        """
+    )
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migration_1_create_legacy_schema,
     2: _migration_2_expand_durable_job_schema,
@@ -554,4 +630,7 @@ _MIGRATIONS: dict[int, Migration] = {
     4: _migration_4_add_job_input_bindings,
     5: _migration_5_finalize_molecule_revisions,
     6: _migration_6_add_molecule_revision_metadata,
+    7: _migration_7_add_durable_job_dispatches,
+    8: _migration_8_add_workflow_executions,
+    9: _migration_9_add_job_retry_lineage,
 }

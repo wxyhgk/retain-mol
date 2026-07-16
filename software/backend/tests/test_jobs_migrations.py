@@ -76,7 +76,34 @@ def test_migrate_initializes_an_empty_database() -> None:
         "job_status_events",
         "molecule_assets",
         "molecule_revisions",
+        "job_dispatches",
+        "workflow_executions",
     } <= _tables(connection)
+    assert "supersedes_job_id" in _columns(connection, "jobs")
+
+
+def test_migrate_v8_adds_nullable_retry_lineage_without_changing_jobs() -> None:
+    connection = sqlite3.connect(":memory:")
+    migrate(connection)
+    connection.execute(
+        """
+        INSERT INTO jobs
+        (job_id, task_type, status, metadata_json, attempt_count, state_version,
+         created_at, updated_at)
+        VALUES ('legacy-job', 'xtb-optimization', 'failed', '{}', 1, 2,
+                '2026-07-16T00:00:00Z', '2026-07-16T00:01:00Z')
+        """
+    )
+    connection.execute("PRAGMA user_version = 8")
+    connection.execute("DROP INDEX idx_jobs_supersedes_job_id")
+    connection.execute("ALTER TABLE jobs DROP COLUMN supersedes_job_id")
+
+    migrate(connection)
+
+    assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+    assert connection.execute(
+        "SELECT job_id, supersedes_job_id FROM jobs"
+    ).fetchone() == ("legacy-job", None)
 
 
 def test_migrate_preserves_legacy_data_and_normalizes_statuses() -> None:
@@ -161,6 +188,22 @@ def test_migrate_adds_all_requested_columns() -> None:
     assert {"schema_version", "topology_fingerprint", "metadata_json"} <= _columns(
         connection, "molecule_revisions"
     )
+    assert {
+        "dispatch_id",
+        "job_id",
+        "status",
+        "lease_owner",
+        "lease_token",
+        "lease_expires_at",
+        "heartbeat_at",
+    } <= _columns(connection, "job_dispatches")
+    assert {
+        "execution_id",
+        "workflow_id",
+        "status",
+        "error_code",
+        "finished_at",
+    } <= _columns(connection, "workflow_executions")
 
 
 def test_migrate_is_idempotent_for_repeated_and_partially_applied_runs() -> None:

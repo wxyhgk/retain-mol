@@ -59,17 +59,15 @@ def test_queued_xtb_job_persists_output_log_and_artifacts(
     def fake_write_xyz(path: Path, _atoms: object) -> None:
         path.write_text("input geometry\n", encoding="utf-8")
 
-    def fake_run(command: list[str], *, cwd: Path, **_: object) -> SimpleNamespace:
+    def fake_run(command: list[str], *, cwd: Path, log_path: Path, **_: object) -> SimpleNamespace:
         assert command == ["xtb", "input.xyz"]
         (Path(cwd) / "xtbopt.xyz").write_text(
             "2\noptimized by fake xTB\nO 0.1 0.0 0.0\nH 0.0 0.1 1.0\n",
             encoding="utf-8",
         )
-        return SimpleNamespace(
-            stdout="fake stdout\n",
-            stderr="fake stderr\n",
-            returncode=0,
-        )
+        output = "fake stdout\nfake stderr\n"
+        log_path.write_text(output, encoding="utf-8")
+        return SimpleNamespace(stdout=output, stderr="", returncode=0)
 
     monkeypatch.setattr(optimize_router, "_build_xtb_command", lambda *_: ["xtb", "input.xyz"])
     monkeypatch.setattr(optimize_router, "_write_xyz", fake_write_xyz)
@@ -87,7 +85,7 @@ def test_queued_xtb_job_persists_output_log_and_artifacts(
             {"id": "hydrogen", **atoms[1]},
         ],
     )
-    monkeypatch.setattr(xtb_runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(xtb_runner, "run_live_process", fake_run)
 
     completed = xtb_runner.run_xtb_optimization_job(service, job.job_id)
 
@@ -136,7 +134,7 @@ def test_non_queued_xtb_job_cannot_be_run_again(
     assert service.claim_queued_job(job.job_id) is not None
     service.update_status(job.job_id, "succeeded")
     run = Mock()
-    monkeypatch.setattr(xtb_runner.subprocess, "run", run)
+    monkeypatch.setattr(xtb_runner, "run_live_process", run)
 
     with pytest.raises(
         xtb_runner.JobExecutionError,
@@ -158,7 +156,7 @@ def test_successful_job_keeps_a_loadable_optimized_molecule_snapshot(
 
     monkeypatch.setattr(optimize_router, "_build_xtb_command", lambda *_: ["xtb", "input.xyz"])
     monkeypatch.setattr(optimize_router, "_write_xyz", lambda path, _atoms: path.write_text("input\n", encoding="utf-8"))
-    monkeypatch.setattr(xtb_runner.subprocess, "run", lambda *_args, **_kwargs: SimpleNamespace(stdout="", stderr="", returncode=0))
+    monkeypatch.setattr(xtb_runner, "run_live_process", lambda *_args, log_path, **_kwargs: (log_path.write_text("", encoding="utf-8"), SimpleNamespace(stdout="", stderr="", returncode=0))[1])
     monkeypatch.setattr(optimize_router, "_read_first_existing_xyz", lambda *_: [
         {"symbol": "O", "x": 2.0, "y": 3.0, "z": 4.0},
         {"symbol": "H", "x": 5.0, "y": 6.0, "z": 7.0},

@@ -69,6 +69,7 @@
 约束：
 
 - 重新运行必须创建新 Job，可用 `supersedesJobId` 说明来源。
+- `supersedesJobId` 是可分叉的来源边，不是假定为单链：同一失败 Job 可以产生多个独立重试。存在下游重试时，来源 Job 不允许物理删除。
 - `succeeded`、`failed`、`cancelled`、`interrupted` 是终态，不得回到 `queued`。
 - 每次成功状态迁移追加一个 `JobStatusEvent`，以 `(jobId, stateVersion)` 唯一；事件不能更新或删除。
 - 计算输出只在 `running` 中登记；终态后不得覆盖。额外派生结果应由新 Job 产生并引用原 Artifact。

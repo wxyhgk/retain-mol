@@ -15,6 +15,7 @@ describe('jobWireProjector', () => {
       status: 'completed',
       created_at: '2026-07-14T00:00:00Z',
       updated_at: '2026-07-14T00:01:00Z',
+      supersedes_job_id: 'job-original',
       metadata: {
         name: 'Water',
         request: {
@@ -31,6 +32,7 @@ describe('jobWireProjector', () => {
         job_id: 'job-1',
         name: 'optimized.xyz',
         media_type: 'chemical/x-xyz',
+        sha256: 'a'.repeat(64),
         created_at: '2026-07-14T00:01:00Z',
         metadata: { role: 'output', format: 'xyz', byteSize: 304 },
       }],
@@ -42,8 +44,9 @@ describe('jobWireProjector', () => {
       status: 'succeeded',
       name: 'Water',
       updatedAt: '2026-07-14T00:01:00Z',
+      supersedesJobId: 'job-original',
       request: { maxSteps: 120, optLevel: 'tight' },
-      artifacts: [{ id: 'artifact-1', jobId: 'job-1', sizeBytes: 304 }],
+      artifacts: [{ id: 'artifact-1', jobId: 'job-1', sha256: 'a'.repeat(64), sizeBytes: 304 }],
     })
   })
 
@@ -108,6 +111,34 @@ describe('jobWireProjector', () => {
       name: 'orca-single-point',
       createdAt: '2026-07-14T00:00:00Z',
     })
+  })
+
+  it('projects Psi4 requests without losing engine-specific controls', () => {
+    const common = {
+      molecule_revision_id: 'revision-psi4', charge: 0, multiplicity: 1,
+      method: 'b3lyp', basis: 'def2-svp', scf_type: 'df', threads: 2,
+      memory_mb: 2048, timeout_seconds: 7200,
+    }
+    const ts = projectJobWire({
+      id: 'psi4-ts-1', kind: 'psi4-ts-refine', status: 'queued',
+      createdAt: '2026-07-15T00:00:00Z', metadata: { request: {
+        ...common, max_steps: 80, full_hessian_every: 2, convergence: 'gau_tight',
+      } },
+    })
+    const frequency = projectJobWire({
+      id: 'psi4-freq-1', kind: 'psi4-frequency', status: 'queued',
+      createdAt: '2026-07-15T00:00:00Z', metadata: { request: common },
+    })
+    const irc = projectJobWire({
+      id: 'psi4-irc-1', kind: 'psi4-irc', status: 'queued',
+      createdAt: '2026-07-15T00:00:00Z', metadata: { request: {
+        ...common, direction: 'both', points: 12, step_size: 0.15, max_steps: 240,
+      } },
+    })
+
+    expect(ts.request).toMatchObject({ moleculeRevisionId: 'revision-psi4', maxSteps: 80, fullHessianEvery: 2 })
+    expect(frequency.request).toMatchObject({ method: 'b3lyp', basis: 'def2-svp', memoryMb: 2048 })
+    expect(irc.request).toMatchObject({ direction: 'both', points: 12, stepSize: 0.15 })
   })
 
   it('normalizes lifecycle aliases and safely fails unknown statuses', () => {

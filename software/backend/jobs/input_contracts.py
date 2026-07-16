@@ -211,8 +211,55 @@ XTB_OPTIMIZATION_INPUT_CONTRACT = CalculationInputContract(
     ),
 )
 
+TS_INITIAL_GUESS_INPUT_CONTRACT = CalculationInputContract(
+    calculation_kind="ts-initial-guess",
+    ports=(
+        InputPortContract(
+            name="reactant",
+            formats_by_source_kind={
+                "artifact": frozenset({"retainmol-json", "xyz", "sdf", "mol"}),
+            },
+        ),
+        InputPortContract(
+            name="product",
+            formats_by_source_kind={
+                "artifact": frozenset({"retainmol-json", "xyz", "sdf", "mol"}),
+            },
+        ),
+    ),
+)
 
-DEFAULT_INPUT_CONTRACTS = InputContractRegistry((XTB_OPTIMIZATION_INPUT_CONTRACT,))
+
+def _psi4_structure_contract(calculation_kind: str) -> CalculationInputContract:
+    return CalculationInputContract(
+        calculation_kind=calculation_kind,
+        ports=(
+            InputPortContract(
+                name="structure",
+                formats_by_source_kind={
+                    "literal": frozenset({"molecule", "structure"}),
+                    "molecule_revision": frozenset({"molecule"}),
+                    "artifact": frozenset({"retainmol-json", "xyz"}),
+                },
+            ),
+        ),
+    )
+
+
+PSI4_TS_REFINE_INPUT_CONTRACT = _psi4_structure_contract("psi4-ts-refine")
+PSI4_FREQUENCY_INPUT_CONTRACT = _psi4_structure_contract("psi4-frequency")
+PSI4_IRC_INPUT_CONTRACT = _psi4_structure_contract("psi4-irc")
+
+
+DEFAULT_INPUT_CONTRACTS = InputContractRegistry(
+    (
+        XTB_OPTIMIZATION_INPUT_CONTRACT,
+        TS_INITIAL_GUESS_INPUT_CONTRACT,
+        PSI4_TS_REFINE_INPUT_CONTRACT,
+        PSI4_FREQUENCY_INPUT_CONTRACT,
+        PSI4_IRC_INPUT_CONTRACT,
+    )
+)
 
 
 def validate_calculation_inputs(
@@ -232,6 +279,10 @@ __all__ = [
     "InputContractValidation",
     "InputPortContract",
     "UnknownCalculationKindError",
+    "PSI4_FREQUENCY_INPUT_CONTRACT",
+    "PSI4_IRC_INPUT_CONTRACT",
+    "PSI4_TS_REFINE_INPUT_CONTRACT",
+    "TS_INITIAL_GUESS_INPUT_CONTRACT",
     "XTB_OPTIMIZATION_INPUT_CONTRACT",
     "validate_calculation_inputs",
 ]

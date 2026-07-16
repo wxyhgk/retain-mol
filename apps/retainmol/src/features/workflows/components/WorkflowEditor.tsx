@@ -1,15 +1,19 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { CirclePlus, GitBranch, LoaderCircle, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { validateWorkflowGraph } from '../domain/workflowGraph'
-import type { WorkflowDefinition, WorkflowJobOption, WorkflowReferenceDraft, WorkflowSaveRequest } from '../domain/workflowTypes'
-import { useSaveWorkflowMutation, useWorkflowsQuery } from '../application/workflowQueries'
+import type { TsPreparationSourceJob, WorkflowDefinition, WorkflowJobOption, WorkflowReferenceDraft, WorkflowSaveRequest } from '../domain/workflowTypes'
+import { useSaveWorkflowMutation, useWorkflowsQuery, workflowsApi } from '../application/workflowQueries'
+import { TsPreparationWorkflowDialog } from './TsPreparationWorkflowDialog'
 
 const WorkflowCanvas = lazy(() => import('./WorkflowCanvas'))
 
 export interface WorkflowEditorProps {
   jobs: WorkflowJobOption[]
+  tsPreparationSources?: TsPreparationSourceJob[]
+  initialWorkflowId?: string | null
+  onEditJobStructure?: (workflowId: string, jobId: string) => void
   onWorkflowSaved?: (workflow: WorkflowDefinition) => void | Promise<void>
   className?: string
 }
@@ -40,7 +44,7 @@ function asDraft(workflow: WorkflowDefinition) {
   }
 }
 
-export function WorkflowEditor({ jobs, onWorkflowSaved, className }: WorkflowEditorProps) {
+export function WorkflowEditor({ jobs, tsPreparationSources = [], initialWorkflowId, onEditJobStructure, onWorkflowSaved, className }: WorkflowEditorProps) {
   const workflowsQuery = useWorkflowsQuery()
   const saveWorkflow = useSaveWorkflowMutation()
   const workflows = workflowsQuery.data ?? []
@@ -53,6 +57,7 @@ export function WorkflowEditor({ jobs, onWorkflowSaved, className }: WorkflowEdi
   const [references, setReferences] = useState<WorkflowReferenceDraft[]>([])
   const [reference, setReference] = useState(emptyReference)
   const [editorError, setEditorError] = useState<string | null>(null)
+  const appliedInitialWorkflowId = useRef<string | null>(null)
 
   const jobsById = useMemo(() => new Map(jobs.map(job => [job.id, job])), [jobs])
   const graph = useMemo(() => validateWorkflowGraph(jobIds, references), [jobIds, references])
@@ -67,9 +72,7 @@ export function WorkflowEditor({ jobs, onWorkflowSaved, className }: WorkflowEdi
     setEditorError(null)
   }
 
-  function selectWorkflow(nextId: string) {
-    const workflow = workflows.find(current => current.workflowId === nextId)
-    if (!workflow) return
+  function applyWorkflow(workflow: WorkflowDefinition) {
     const draft = asDraft(workflow)
     setWorkflowId(workflow.workflowId)
     setName(draft.name)
@@ -78,6 +81,25 @@ export function WorkflowEditor({ jobs, onWorkflowSaved, className }: WorkflowEdi
     setReference(emptyReference())
     setEditorError(null)
   }
+
+  function selectWorkflow(nextId: string) {
+    const workflow = workflows.find(current => current.workflowId === nextId)
+    if (!workflow) return
+    applyWorkflow(workflow)
+  }
+
+  useEffect(() => {
+    if (!initialWorkflowId || appliedInitialWorkflowId.current === initialWorkflowId) return
+    appliedInitialWorkflowId.current = initialWorkflowId
+    let cancelled = false
+    void workflowsApi.getWorkflow(initialWorkflowId).then(workflow => {
+      if (cancelled) return
+      applyWorkflow(workflow)
+    }).catch(caught => {
+      if (!cancelled) setEditorError(caught instanceof Error ? caught.message : '无法载入工作流。')
+    })
+    return () => { cancelled = true }
+  }, [initialWorkflowId])
 
   function toggleJob(jobId: string) {
     const selected = jobIds.includes(jobId)
@@ -139,6 +161,13 @@ export function WorkflowEditor({ jobs, onWorkflowSaved, className }: WorkflowEdi
           <GitBranch className="size-4 text-sky-700" />
           <input value={name} onChange={event => setName(event.target.value)} aria-label="Workflow name" className="h-8 min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold outline-none focus:ring-0" />
           <span className={cn('shrink-0 border px-1.5 py-0.5 text-[10px] font-medium', graph.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800')}>{graph.ok ? 'DAG valid' : 'Graph invalid'}</span>
+          <TsPreparationWorkflowDialog
+            sources={tsPreparationSources}
+            onCreated={async workflow => {
+              applyWorkflow(workflow)
+              if (onWorkflowSaved) await onWorkflowSaved(workflow)
+            }}
+          />
           <Button size="sm" className="h-8" disabled={isSaving} onClick={() => void save()}>{isSaving ? <LoaderCircle className="animate-spin" /> : <Save />}Save</Button>
         </header>
         {(error || editorError) && <div className="mx-3 mt-3 flex items-start justify-between gap-3 border border-rose-200 bg-rose-50 px-2.5 py-2 text-xs text-rose-800"><span>{editorError ?? error}</span><button type="button" className="font-medium" onClick={() => setEditorError(null)}>Close</button></div>}
@@ -146,6 +175,9 @@ export function WorkflowEditor({ jobs, onWorkflowSaved, className }: WorkflowEdi
           <WorkflowCanvas
             jobs={selectedJobs}
             references={references}
+            onEditJobStructure={workflowId && onEditJobStructure
+              ? jobId => onEditJobStructure(workflowId, jobId)
+              : undefined}
             onConnectJobs={(sourceJobId, targetJobId) => setReference({
               sourceJobId,
               sourceKind: 'artifact',

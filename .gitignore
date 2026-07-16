@@ -37,5 +37,8 @@ software/backend/xtbopt.log
 software/backend/xtbopt.xyz
 software/backend/xtb.out
 
+# Psi4 runtime scratch generated when imported outside the isolated worker
+timer.dat
+
 # Persistent local job workspace (SQLite records and calculation artifacts)
 software/backend/data/

@@ -65,6 +65,11 @@ export function projectWorkflowListWire(value: unknown): WorkflowDefinition[] {
   })
 }
 
+export function projectTsPreparationWorkflowWire(value: unknown): WorkflowDefinition {
+  if (!isObject(value)) throw wireError('TS preparation workflow')
+  return projectWorkflowWire(value.workflow)
+}
+
 export function projectWorkflowReferenceWire(
   value: unknown,
   path = 'workflow reference',

@@ -1,9 +1,15 @@
 import type {
+  CreatePsi4FrequencyJobRequest,
+  CreatePsi4IrcJobRequest,
+  CreatePsi4TsRefineJobRequest,
   CreateXtbOptimizationJobRequest,
   JobArtifact,
   JobDetail,
+  JobLogSnapshot,
   JobSummary,
   JobsApi,
+  UpdateJobRequest,
+  CloneJobRequest,
 } from '../domain/jobTypes'
 import {
   projectJobArtifactListWire,
@@ -92,8 +98,53 @@ export class JobsApiClient implements JobsApi {
     return this.post('/jobs/xtb/optimize', request, options).then(projectJobWire)
   }
 
+  createPsi4TsRefineJob(
+    request: CreatePsi4TsRefineJobRequest,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<JobDetail> {
+    return this.post('/jobs/psi4/ts-refine', request, options).then(projectJobWire)
+  }
+
+  createPsi4FrequencyJob(
+    request: CreatePsi4FrequencyJobRequest,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<JobDetail> {
+    return this.post('/jobs/psi4/frequency', request, options).then(projectJobWire)
+  }
+
+  createPsi4IrcJob(
+    request: CreatePsi4IrcJobRequest,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<JobDetail> {
+    return this.post('/jobs/psi4/irc', request, options).then(projectJobWire)
+  }
+
   async getJob(jobId: string, options: { signal?: AbortSignal } = {}): Promise<JobDetail> {
     return this.get(`/jobs/${encodeSegment(jobId)}`, options).then(projectJobWire)
+  }
+
+  updateJob(jobId: string, request: UpdateJobRequest, options: { signal?: AbortSignal } = {}): Promise<JobDetail> {
+    return this.patch(`/jobs/${encodeSegment(jobId)}`, request, options).then(projectJobWire)
+  }
+
+  cloneJob(jobId: string, request: CloneJobRequest = {}, options: { signal?: AbortSignal } = {}): Promise<JobDetail> {
+    return this.post(`/jobs/${encodeSegment(jobId)}/clone`, request, options).then(projectJobWire)
+  }
+
+  retryJob(jobId: string, request: CloneJobRequest = {}, options: { signal?: AbortSignal } = {}): Promise<JobDetail> {
+    return this.post(`/jobs/${encodeSegment(jobId)}/retry`, request, options).then(projectJobWire)
+  }
+
+  cancelJob(jobId: string, options: { signal?: AbortSignal } = {}): Promise<JobDetail> {
+    return this.post(`/jobs/${encodeSegment(jobId)}/cancel`, undefined, options).then(projectJobWire)
+  }
+
+  async deleteJob(jobId: string, options: { signal?: AbortSignal } = {}): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/jobs/${encodeSegment(jobId)}`, {
+      method: 'DELETE',
+      signal: options.signal,
+    })
+    if (!response.ok) throw await responseError(response)
   }
 
   runJob(jobId: string, options: { signal?: AbortSignal } = {}): Promise<JobDetail> {
@@ -106,6 +157,22 @@ export class JobsApiClient implements JobsApi {
       options,
     )
     return projectJobArtifactListWire(payload)
+  }
+
+  async getJobArtifactText(jobId: string, artifactId: string, options: { signal?: AbortSignal } = {}): Promise<string> {
+    const response = await fetch(
+      `${this.baseUrl}/jobs/${encodeSegment(jobId)}/artifacts/${encodeSegment(artifactId)}/content`,
+      { signal: options.signal },
+    )
+    if (!response.ok) throw await responseError(response)
+    return response.text()
+  }
+
+  getJobLog(jobId: string, cursor = 0, options: { signal?: AbortSignal } = {}): Promise<JobLogSnapshot> {
+    return this.get<JobLogSnapshot>(
+      `/jobs/${encodeSegment(jobId)}/log?cursor=${encodeURIComponent(String(cursor))}`,
+      options,
+    )
   }
 
   uploadJobThumbnail(jobId: string, dataUrl: string, options: { signal?: AbortSignal } = {}): Promise<JobArtifact> {
@@ -123,6 +190,17 @@ export class JobsApiClient implements JobsApi {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: options.signal,
+    })
+    return readJson<T>(response)
+  }
+
+
+  private async patch<T>(path: string, body: unknown, options: { signal?: AbortSignal }): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
       signal: options.signal,
     })
     return readJson<T>(response)

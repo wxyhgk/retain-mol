@@ -10,7 +10,9 @@ from pathlib import Path
 
 from software.backend.jobs import (
     InvalidJobInputError,
+    InvalidJobOperationError,
     InvalidJobTransitionError,
+    JobInUseError,
     JobNotFoundError,
     JobService,
 )
@@ -94,6 +96,184 @@ class JobServiceTests(unittest.TestCase):
 
         self.assertEqual([job.job_id for job in jobs], [newer.job_id, older.job_id])
         self.assertEqual(jobs[1].inputs[0].value, 1)
+
+    def test_job_management_updates_only_name_and_description(self) -> None:
+        job = self.service.create_job(
+            "geometry-optimization",
+            metadata={"name": "Original", "request": {"charge": 0}},
+        )
+
+        updated = self.service.update_job(
+            job.job_id,
+            {"name": "Renamed", "description": "Optimization for screening"},
+        )
+
+        self.assertEqual(updated.metadata["name"], "Renamed")
+        self.assertEqual(updated.metadata["description"], "Optimization for screening")
+        self.assertEqual(updated.metadata["request"], {"charge": 0})
+        self.assertEqual(self._snapshot(job.job_id)["metadata"], updated.metadata)
+        with self.assertRaises(ValueError):
+            self.service.update_job(job.job_id, {"status": "succeeded"})
+
+    def test_copy_uses_new_spec_and_preserves_frozen_input(self) -> None:
+        source = self.service.create_calculation_job(
+            "xtb-optimization",
+            "xtb",
+            {"method": "gfn2", "charge": 0, "multiplicity": 1, "maxSteps": 50, "optLevel": "normal"},
+            inputs={
+                "structure": {
+                    "sourceKind": "literal",
+                    "format": "molecule",
+                    "value": {"format": "molecule", "structure": {"atoms": [{"id": "h", "symbol": "H", "x": 0, "y": 0, "z": 0}]}},
+                }
+            },
+            metadata={"name": "Source", "request": {"name": "Source", "charge": 0}},
+        )
+
+        copied = self.service.clone_job(source.job_id, name="Copied")
+
+        self.assertNotEqual(copied.job_id, source.job_id)
+        self.assertNotEqual(copied.spec_id, source.spec_id)
+        self.assertEqual(copied.status, "queued")
+        self.assertEqual(copied.metadata["sourceJobId"], source.job_id)
+        self.assertEqual(copied.metadata["name"], "Copied")
+        self.assertEqual(copied.bindings[0].content_sha256, source.bindings[0].content_sha256)
+        self.assertNotEqual(copied.bindings[0].binding_id, source.bindings[0].binding_id)
+        with self.assertRaises(InvalidJobOperationError):
+            self.service.add_inputs(source.job_id, {"charge": 1})
+
+    def test_retry_creates_a_new_attempt_with_explicit_lineage(self) -> None:
+        source = self.service.create_calculation_job(
+            "xtb-optimization",
+            "xtb",
+            {
+                "method": "gfn2",
+                "charge": 0,
+                "multiplicity": 1,
+                "maxSteps": 50,
+                "optLevel": "normal",
+            },
+            inputs={
+                "structure": {
+                    "sourceKind": "literal",
+                    "format": "molecule",
+                    "value": {
+                        "format": "molecule",
+                        "structure": {
+                            "atoms": [
+                                {"id": "h", "symbol": "H", "x": 0, "y": 0, "z": 0}
+                            ]
+                        },
+                    },
+                }
+            },
+            metadata={"name": "Failed run", "request": {"name": "Failed run"}},
+        )
+        self.assertIsNotNone(self.service.claim_queued_job(source.job_id))
+        log = self.service.task_directory(source.job_id) / "xtb.log"
+        log.write_text("failed output", encoding="utf-8")
+        self.service.update_status(source.job_id, "failed", error="engine failed")
+
+        retried = self.service.retry_job(source.job_id, name="Second attempt")
+
+        self.assertNotEqual(retried.job_id, source.job_id)
+        self.assertNotEqual(retried.spec_id, source.spec_id)
+        self.assertEqual(retried.status, "queued")
+        self.assertEqual(retried.supersedes_job_id, source.job_id)
+        self.assertEqual(retried.metadata["name"], "Second attempt")
+        self.assertEqual(retried.metadata["request"]["name"], "Second attempt")
+        self.assertEqual(
+            retried.bindings[0].content_sha256,
+            self.service.get_job(source.job_id).bindings[0].content_sha256,
+        )
+        self.assertNotEqual(
+            retried.bindings[0].binding_id,
+            self.service.get_job(source.job_id).bindings[0].binding_id,
+        )
+        self.assertEqual(retried.artifacts, [])
+        self.assertFalse((self.data_root / "tasks" / retried.job_id / "xtb.log").exists())
+        with self.assertRaises(JobInUseError):
+            self.service.delete_job(source.job_id)
+
+    def test_retry_chain_is_branch_safe_and_rejects_non_retryable_states(self) -> None:
+        source = self.service.create_calculation_job(
+            "xtb-optimization",
+            "xtb",
+            {"method": "gfn2"},
+            inputs={
+                "structure": {
+                    "sourceKind": "literal",
+                    "format": "molecule",
+                    "value": {
+                        "format": "molecule",
+                        "structure": {
+                            "atoms": [
+                                {"id": "h", "symbol": "H", "x": 0, "y": 0, "z": 0}
+                            ]
+                        },
+                    },
+                }
+            },
+        )
+        with self.assertRaises(InvalidJobOperationError):
+            self.service.retry_job(source.job_id)
+
+        self.service.cancel_job(source.job_id)
+        first_retry = self.service.retry_job(source.job_id)
+        sibling_retry = self.service.retry_job(source.job_id)
+        self.assertEqual(first_retry.supersedes_job_id, source.job_id)
+        self.assertEqual(sibling_retry.supersedes_job_id, source.job_id)
+
+        self.assertIsNotNone(self.service.claim_queued_job(first_retry.job_id))
+        self.service.update_status(first_retry.job_id, "interrupted")
+        second_retry = self.service.retry_job(first_retry.job_id)
+        self.assertEqual(second_retry.supersedes_job_id, first_retry.job_id)
+
+    def test_cancel_is_idempotent_and_terminal_jobs_reject_it(self) -> None:
+        queued = self.service.create_job("geometry-optimization")
+        cancelled = self.service.cancel_job(queued.job_id)
+        self.assertEqual(cancelled.status, "cancelled")
+        self.assertEqual(self.service.cancel_job(queued.job_id).status, "cancelled")
+
+        completed = self.service.create_job("single-point")
+        self.assertIsNotNone(self.service.claim_queued_job(completed.job_id))
+        self.service.update_status(completed.job_id, "succeeded")
+        with self.assertRaises(InvalidJobOperationError):
+            self.service.cancel_job(completed.job_id)
+
+    def test_incremental_log_read_is_scoped_to_job_directory(self) -> None:
+        job = self.service.create_job("geometry-optimization")
+        log = self.service.task_directory(job.job_id) / "xtb.log"
+        log.write_text("line one\nline two\n", encoding="utf-8")
+
+        first = self.service.read_job_log(job.job_id, cursor=0, limit=9)
+        second = self.service.read_job_log(job.job_id, cursor=first["cursor"])
+
+        self.assertEqual(first["content"], "line one\n")
+        self.assertEqual(second["content"], "line two\n")
+        self.assertFalse(second["complete"])
+
+    def test_delete_job_removes_aggregate_and_private_directory(self) -> None:
+        job = self.service.create_job("geometry-optimization")
+        directory = self.service.task_directory(job.job_id)
+        (directory / "temporary.txt").write_text("temporary", encoding="utf-8")
+
+        self.service.delete_job(job.job_id)
+
+        with self.assertRaises(JobNotFoundError):
+            self.service.get_job(job.job_id)
+        self.assertFalse(directory.exists())
+
+    def test_delete_rejects_running_or_workflow_referenced_jobs(self) -> None:
+        running = self.service.create_job("geometry-optimization")
+        self.assertIsNotNone(self.service.claim_queued_job(running.job_id))
+        with self.assertRaises(InvalidJobOperationError):
+            self.service.delete_job(running.job_id)
+
+        referenced = self.service.create_job("single-point")
+        self.service.create_workflow("screening", [referenced.job_id], [])
+        with self.assertRaises(JobInUseError):
+            self.service.delete_job(referenced.job_id)
 
     def test_unknown_jobs_are_not_silently_mutated(self) -> None:
         with self.assertRaises(JobNotFoundError):

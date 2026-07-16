@@ -1,5 +1,5 @@
-import type { WorkflowsApi, WorkflowSaveRequest } from '../domain/workflowTypes'
-import { projectWorkflowListWire, projectWorkflowWire } from './workflowWireProjector'
+import type { CreateTsPreparationWorkflowRequest, WorkflowsApi, WorkflowSaveRequest } from '../domain/workflowTypes'
+import { projectTsPreparationWorkflowWire, projectWorkflowListWire, projectWorkflowWire } from './workflowWireProjector'
 
 interface BrowserLocation {
   protocol: string
@@ -41,6 +41,12 @@ export class WorkflowsApiClient implements WorkflowsApi {
 
   createWorkflow(request: WorkflowSaveRequest, options: { signal?: AbortSignal } = {}) {
     return this.request<unknown>('/jobs/workflows', { method: 'POST', body: request, signal: options.signal }).then(projectWorkflowWire)
+  }
+
+  createTsPreparationWorkflow(request: CreateTsPreparationWorkflowRequest, options: { signal?: AbortSignal } = {}) {
+    return this.request<unknown>('/jobs/workflows/ts-preparation', {
+      method: 'POST', body: request, signal: options.signal,
+    }).then(projectTsPreparationWorkflowWire)
   }
 
   updateWorkflow(workflowId: string, request: WorkflowSaveRequest, options: { signal?: AbortSignal } = {}) {

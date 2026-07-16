@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
+import shutil
 import sqlite3
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,7 @@ from .models import (
     Artifact,
     CalculationSpec,
     Job,
+    JobDispatch,
     JobInput,
     JobInputBinding,
     JobInputReference,
@@ -30,11 +33,19 @@ from .models import (
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
+    WorkflowExecution,
+    WorkflowNodeRuntime,
+    WorkflowSchedule,
 )
 from .repository import JobRepository
-from .workflows import validate_workflow_dag
+from .workflows import validate_workflow_dag, workflow_predecessors
 
-DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
+DEFAULT_DATA_ROOT = Path(
+    os.getenv(
+        "RETAINMOL_DATA_ROOT",
+        str(Path(__file__).resolve().parents[1] / "data"),
+    )
+)
 
 
 class JobNotFoundError(KeyError):
@@ -51,6 +62,14 @@ class InvalidJobTransitionError(ValueError):
 
 class InvalidJobInputError(ValueError):
     """Raised when calculation inputs cannot be frozen safely."""
+
+
+class InvalidJobOperationError(ValueError):
+    """Raised when a management operation conflicts with the job lifecycle."""
+
+
+class JobInUseError(ValueError):
+    """Raised when a workflow still references a job targeted for deletion."""
 
 
 class MoleculeAssetNotFoundError(KeyError):
@@ -229,6 +248,7 @@ class JobService:
         *,
         inputs: Mapping[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
+        supersedes_job_id: str | None = None,
     ) -> Job:
         """Atomically create, bind, and queue one immutable calculation run."""
         now = _now()
@@ -259,6 +279,7 @@ class JobService:
                 task_type=spec.kind,
                 status="created",
                 spec_id=spec.spec_id,
+                supersedes_job_id=supersedes_job_id,
                 metadata=metadata or {},
                 created_at=now,
                 updated_at=now,
@@ -318,6 +339,7 @@ class JobService:
         inputs: Mapping[str, Any] | None = None,
         *,
         workflow_id: str | None = None,
+        require_active_workflow: bool = False,
     ) -> Job:
         """Resolve explicit/workflow inputs, freeze them, then queue one draft."""
         job = self._require_job(job_id)
@@ -341,9 +363,18 @@ class JobService:
         now = _now()
         bindings = self._build_input_bindings(job_id, spec.kind, definitions, now)
         if not self.repository.freeze_job_input_bindings_and_queue(
-            job_id, bindings, now
+            job_id,
+            bindings,
+            now,
+            active_workflow_id=workflow_id if require_active_workflow else None,
         ):
             current = self._require_job(job_id)
+            if workflow_id is not None and require_active_workflow:
+                execution = self.repository.get_workflow_execution(workflow_id)
+                if execution is None or execution.status != "active":
+                    raise InvalidJobOperationError(
+                        f"Workflow '{workflow_id}' is no longer active"
+                    )
             raise InvalidJobTransitionError(
                 f"Job '{job_id}' cannot queue from '{current.status}'"
             )
@@ -372,11 +403,172 @@ class JobService:
         self._populate_relations(job)
         return job
 
+    def update_job(self, job_id: str, changes: Mapping[str, Any]) -> Job:
+        """Update mutable presentation metadata without changing frozen inputs."""
+        if not isinstance(changes, Mapping) or not changes:
+            raise ValueError("job update must contain at least one field")
+        unsupported = set(changes) - {"name", "description"}
+        if unsupported:
+            raise ValueError(
+                "unsupported mutable job fields: " + ", ".join(sorted(unsupported))
+            )
+
+        job = self.get_job(job_id)
+        metadata = dict(job.metadata)
+        if "name" in changes:
+            metadata["name"] = _required_text(changes["name"], "name")
+        if "description" in changes:
+            description = changes["description"]
+            if description is None or not str(description).strip():
+                metadata.pop("description", None)
+            else:
+                metadata["description"] = str(description).strip()
+
+        updated_at = _now()
+        if not self.repository.update_job_metadata(job_id, metadata, updated_at):
+            raise JobNotFoundError(job_id)
+        updated = self.get_job(job_id)
+        self._write_snapshot(updated)
+        return updated
+
+    def clone_job(self, job_id: str, *, name: str | None = None) -> Job:
+        """Create a fresh queued calculation from immutable spec and bindings."""
+        source = self.get_job(job_id)
+        spec = self.get_calculation_spec(job_id)
+        if spec is None:
+            raise InvalidJobOperationError(
+                "only jobs with an immutable calculation specification can be copied"
+            )
+
+        clone_name = (
+            _required_text(name, "name")
+            if name is not None
+            else f"{source.metadata.get('name') or source.task_type} 副本"
+        )
+        metadata = dict(source.metadata)
+        metadata["name"] = clone_name
+        metadata["sourceJobId"] = source.job_id
+        request = metadata.get("request")
+        if isinstance(request, Mapping):
+            metadata["request"] = {**dict(request), "name": clone_name}
+
+        return self.create_calculation_job(
+            spec.kind,
+            spec.engine,
+            spec.payload,
+            inputs=self._copy_input_definitions(source),
+            metadata=metadata,
+        )
+
+    def retry_job(self, job_id: str, *, name: str | None = None) -> Job:
+        """Create a new immutable run from a failed terminal attempt."""
+        source = self.get_job(job_id)
+        if source.status not in {"failed", "cancelled", "interrupted"}:
+            raise InvalidJobOperationError(
+                f"job in '{source.status}' state cannot be retried"
+            )
+        spec = self.get_calculation_spec(job_id)
+        if spec is None:
+            raise InvalidJobOperationError(
+                "only jobs with an immutable calculation specification can be retried"
+            )
+
+        retry_name = (
+            _required_text(name, "name")
+            if name is not None
+            else f"{source.metadata.get('name') or source.task_type} 重试"
+        )
+        metadata = dict(source.metadata)
+        metadata["name"] = retry_name
+        request = metadata.get("request")
+        if isinstance(request, Mapping):
+            metadata["request"] = {**dict(request), "name": retry_name}
+
+        return self.create_calculation_job(
+            spec.kind,
+            spec.engine,
+            spec.payload,
+            inputs=self._copy_input_definitions(source),
+            metadata=metadata,
+            supersedes_job_id=source.job_id,
+        )
+
+    def cancel_job(self, job_id: str) -> Job:
+        """Cancel a pending or active run through the persisted state machine."""
+        job = self.get_job(job_id)
+        if job.status == "cancelled":
+            return job
+        if job.status not in {"created", "queued", "running"}:
+            raise InvalidJobOperationError(
+                f"job in '{job.status}' state cannot be cancelled"
+            )
+        return self.update_status(job_id, "cancelled")
+
+    def read_job_log(
+        self,
+        job_id: str,
+        *,
+        cursor: int = 0,
+        limit: int = 128 * 1024,
+    ) -> dict[str, Any]:
+        """Read an incremental UTF-8 log chunk without exposing task paths."""
+        job = self.get_job(job_id)
+        cursor = max(0, int(cursor))
+        limit = min(max(1, int(limit)), 512 * 1024)
+        directory = self.tasks_root / job_id
+        candidates = [
+            directory / "xtb.log",
+            directory / "psi4.log",
+            directory / "psi4-process.log",
+            directory / "irc-forward" / "psi4.log",
+            directory / "irc-backward" / "psi4.log",
+        ]
+        path = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if path is None:
+            return {
+                "content": "",
+                "cursor": 0,
+                "source": None,
+                "complete": job.status in {"succeeded", "failed", "cancelled", "interrupted"},
+            }
+        size = path.stat().st_size
+        if cursor > size:
+            cursor = 0
+        with path.open("rb") as handle:
+            handle.seek(cursor)
+            chunk = handle.read(limit)
+        return {
+            "content": chunk.decode("utf-8", errors="replace"),
+            "cursor": cursor + len(chunk),
+            "source": path.name,
+            "complete": job.status in {"succeeded", "failed", "cancelled", "interrupted"},
+        }
+
+    def delete_job(self, job_id: str) -> None:
+        """Delete one non-running, unreferenced job and its private work directory."""
+        job = self.get_job(job_id)
+        if job.status == "running":
+            raise InvalidJobOperationError("running jobs cannot be deleted")
+        workflow_ids = self.repository.list_workflow_ids_for_job(job_id)
+        if workflow_ids:
+            raise JobInUseError(
+                f"job is referenced by workflow(s): {', '.join(workflow_ids)}"
+            )
+        superseding_job_ids = self.repository.list_superseding_job_ids(job_id)
+        if superseding_job_ids:
+            raise JobInUseError(
+                "job is superseded by retry job(s): "
+                + ", ".join(superseding_job_ids)
+            )
+        if not self.repository.delete_job(job_id):
+            raise JobNotFoundError(job_id)
+        shutil.rmtree(self.tasks_root / job_id, ignore_errors=True)
+
     def add_inputs(self, job_id: str, inputs: Mapping[str, Any]) -> Job:
         """Add a batch of named inputs, as submitted by the jobs HTTP route."""
         if not isinstance(inputs, Mapping):
             raise ValueError("inputs must be an object")
-        self._require_job(job_id)
+        self._assert_legacy_inputs_mutable(job_id)
         for name, value in inputs.items():
             self.add_input(job_id, name, value)
         return self.get_job(job_id)
@@ -404,6 +596,67 @@ class JobService:
         self.repository.create_workflow(workflow)
         return workflow
 
+    def create_ts_preparation_workflow(
+        self,
+        name: str,
+        reactant_job_id: str,
+        reactant_artifact_id: str,
+        product_job_id: str,
+        product_artifact_id: str,
+    ) -> tuple[Workflow, Job]:
+        """Create the first fixed workflow: two optimized endpoints into a TS draft."""
+        name = _required_text(name, "name")
+        if reactant_job_id == product_job_id:
+            raise InvalidJobInputError(
+                "Reactant and product must come from different jobs"
+            )
+
+        reactant_artifact = self._require_workflow_structure_artifact(
+            reactant_job_id, reactant_artifact_id, "reactant"
+        )
+        product_artifact = self._require_workflow_structure_artifact(
+            product_job_id, product_artifact_id, "product"
+        )
+        target = self.create_calculation_draft(
+            "ts-initial-guess",
+            "retainmol",
+            {"strategy": "double-ended", "schemaVersion": 1},
+            metadata={
+                "name": f"{name} · TS initial guess",
+                "description": "Created from explicit reactant and product artifacts",
+                "workflowRole": "ts-initial-guess",
+            },
+        )
+
+        references = [
+            {
+                "sourceJobId": reactant_job_id,
+                "sourceArtifactId": reactant_artifact.artifact_id,
+                "sourceKind": "artifact",
+                "sourceName": reactant_artifact.name,
+                "targetJobId": target.job_id,
+                "targetInputName": "reactant",
+            },
+            {
+                "sourceJobId": product_job_id,
+                "sourceArtifactId": product_artifact.artifact_id,
+                "sourceKind": "artifact",
+                "sourceName": product_artifact.name,
+                "targetJobId": target.job_id,
+                "targetInputName": "product",
+            },
+        ]
+        try:
+            workflow = self.create_workflow(
+                name,
+                [reactant_job_id, product_job_id, target.job_id],
+                references,
+            )
+        except Exception:
+            self.delete_job(target.job_id)
+            raise
+        return workflow, target
+
     def list_workflows(self) -> list[Workflow]:
         workflows = self.repository.list_workflows()
         for workflow in workflows:
@@ -424,6 +677,10 @@ class JobService:
         job_ids: list[str],
         references: list[dict[str, Any]],
     ) -> Workflow:
+        if self.repository.get_workflow_execution(workflow_id) is not None:
+            raise InvalidJobOperationError(
+                "an activated workflow is immutable; create a new workflow revision"
+            )
         current = self.get_workflow(workflow_id)
         workflow = self._build_workflow(
             workflow_id,
@@ -436,6 +693,283 @@ class JobService:
             raise WorkflowNotFoundError(workflow_id)
         return workflow
 
+    def start_workflow_execution(self, workflow_id: str) -> WorkflowSchedule:
+        """Idempotently activate a workflow and reconcile its first runnable nodes."""
+        self.get_workflow(workflow_id)
+        now = _now()
+        execution = WorkflowExecution(
+            executionId=f"execution-{secrets.token_hex(8)}",
+            workflowId=workflow_id,
+            status="active",
+            startedAt=now,
+            updatedAt=now,
+        )
+        persisted = self.repository.create_workflow_execution(execution)
+        if persisted.status == "cancelled":
+            raise InvalidJobOperationError("a cancelled workflow cannot be restarted")
+        return self.advance_workflow_execution(workflow_id)
+
+    def get_workflow_schedule(self, workflow_id: str) -> WorkflowSchedule:
+        self.get_workflow(workflow_id)
+        if self.repository.get_workflow_execution(workflow_id) is None:
+            raise InvalidJobOperationError("workflow has not been activated")
+        return self.advance_workflow_execution(workflow_id)
+
+    def list_active_workflow_ids(self) -> list[str]:
+        return [
+            execution.workflow_id
+            for execution in self.repository.list_active_workflow_executions()
+        ]
+
+    def active_workflow_ids_for_job(self, job_id: str) -> list[str]:
+        active = set(self.list_active_workflow_ids())
+        return [
+            workflow_id
+            for workflow_id in self.repository.list_workflow_ids_for_job(job_id)
+            if workflow_id in active
+        ]
+
+    def block_workflow_execution(
+        self, workflow_id: str, *, error_code: str, error_message: str
+    ) -> WorkflowSchedule:
+        """Record a scheduler-level failure that cannot be represented by a Job."""
+        self.get_workflow(workflow_id)
+        self.repository.transition_workflow_execution(
+            workflow_id,
+            expected_status="active",
+            next_status="blocked",
+            updated_at=_now(),
+            error_code=error_code,
+            error_message=error_message,
+        )
+        return self.advance_workflow_execution(workflow_id)
+
+    def cancel_workflow_execution(self, workflow_id: str) -> WorkflowSchedule:
+        """Cancel one active DAG without disrupting jobs shared by another active DAG."""
+        workflow = self.get_workflow(workflow_id)
+        execution = self.repository.get_workflow_execution(workflow_id)
+        if execution is None:
+            raise InvalidJobOperationError("workflow has not been activated")
+        if execution.status == "cancelled":
+            return self.advance_workflow_execution(workflow_id)
+        if execution.status != "active":
+            raise InvalidJobOperationError(
+                f"workflow in '{execution.status}' state cannot be cancelled"
+            )
+
+        transitioned = self.repository.transition_workflow_execution(
+            workflow_id,
+            expected_status="active",
+            next_status="cancelled",
+            updated_at=_now(),
+        )
+        if not transitioned:
+            refreshed = self.repository.get_workflow_execution(workflow_id)
+            if refreshed is None or refreshed.status != "cancelled":
+                status = refreshed.status if refreshed is not None else "missing"
+                raise InvalidJobOperationError(
+                    f"workflow in '{status}' state cannot be cancelled"
+                )
+
+        for job_id in workflow.job_ids:
+            job = self.get_job(job_id)
+            if job.status not in {"created", "queued", "running"}:
+                continue
+            other_active_workflows = [
+                active_id
+                for active_id in self.active_workflow_ids_for_job(job_id)
+                if active_id != workflow_id
+            ]
+            if other_active_workflows:
+                continue
+            try:
+                self.cancel_job(job_id)
+            except InvalidJobOperationError:
+                # A worker may have reached a terminal state after the status read.
+                pass
+        return self.advance_workflow_execution(workflow_id)
+
+    def advance_workflow_execution(self, workflow_id: str) -> WorkflowSchedule:
+        """Queue newly unblocked nodes and derive one durable DAG runtime snapshot."""
+        workflow = self.get_workflow(workflow_id)
+        execution = self.repository.get_workflow_execution(workflow_id)
+        if execution is None:
+            raise InvalidJobOperationError("workflow has not been activated")
+
+        ordered_job_ids = validate_workflow_dag(
+            workflow.job_ids, workflow.references
+        )
+        predecessors = workflow_predecessors(
+            workflow.job_ids, workflow.references
+        )
+        jobs = {job_id: self.get_job(job_id) for job_id in ordered_job_ids}
+        if execution.status == "cancelled":
+            cancelled_nodes: list[WorkflowNodeRuntime] = []
+            for job_id in ordered_job_ids:
+                job = jobs[job_id]
+                if job.status == "cancelled":
+                    state = "cancelled"
+                elif job.status == "succeeded":
+                    state = "succeeded"
+                elif job.status in {"failed", "interrupted"}:
+                    state = "failed"
+                elif job.status == "running":
+                    state = "running"
+                elif job.status == "queued":
+                    state = "queued"
+                else:
+                    state = "waiting"
+                cancelled_nodes.append(
+                    WorkflowNodeRuntime(
+                        jobId=job_id,
+                        jobStatus=job.status,
+                        state=state,
+                    )
+                )
+            return WorkflowSchedule(
+                execution=execution,
+                nodes=cancelled_nodes,
+                readyJobIds=[],
+            )
+        blocked_job_ids: set[str] = set()
+        nodes: list[WorkflowNodeRuntime] = []
+        ready_job_ids: list[str] = []
+        scheduler_error: tuple[str, str] | None = None
+
+        for job_id in ordered_job_ids:
+            job = jobs[job_id]
+            blocked_by = sorted(
+                predecessor
+                for predecessor in predecessors[job_id]
+                if jobs[predecessor].status
+                in {"failed", "cancelled", "interrupted"}
+                or predecessor in blocked_job_ids
+            )
+            if blocked_by:
+                blocked_job_ids.add(job_id)
+                nodes.append(
+                    WorkflowNodeRuntime(
+                        jobId=job_id,
+                        jobStatus=job.status,
+                        state="blocked",
+                        blockedBy=blocked_by,
+                    )
+                )
+                continue
+
+            upstream_succeeded = all(
+                jobs[predecessor].status == "succeeded"
+                for predecessor in predecessors[job_id]
+            )
+            if job.status == "created" and upstream_succeeded and execution.status == "active":
+                try:
+                    job = self.queue_calculation_job(
+                        job_id,
+                        workflow_id=workflow_id,
+                        require_active_workflow=True,
+                    )
+                    jobs[job_id] = job
+                except InvalidJobOperationError:
+                    refreshed_execution = self.repository.get_workflow_execution(
+                        workflow_id
+                    )
+                    if (
+                        refreshed_execution is None
+                        or refreshed_execution.status == "active"
+                    ):
+                        raise
+                    return self.advance_workflow_execution(workflow_id)
+                except (InvalidJobInputError, InvalidJobTransitionError) as exc:
+                    refreshed = self.get_job(job_id)
+                    jobs[job_id] = refreshed
+                    job = refreshed
+                    if job.status == "created":
+                        blocked_job_ids.add(job_id)
+                        scheduler_error = (
+                            "workflow_input_unresolved",
+                            f"Job '{job_id}' could not freeze workflow inputs: {exc}",
+                        )
+                        nodes.append(
+                            WorkflowNodeRuntime(
+                                jobId=job_id,
+                                jobStatus=job.status,
+                                state="blocked",
+                            )
+                        )
+                        continue
+
+            if job.status == "succeeded":
+                state = "succeeded"
+            elif job.status in {"failed", "cancelled", "interrupted"}:
+                state = "failed"
+            elif job.status == "running":
+                state = "running"
+            elif job.status == "queued" and upstream_succeeded:
+                dispatch = self.repository.get_job_dispatch(job_id)
+                if dispatch is None:
+                    state = "ready"
+                    if execution.status == "active":
+                        ready_job_ids.append(job_id)
+                elif dispatch.status in {"pending", "leased"}:
+                    state = "queued"
+                else:
+                    state = "blocked"
+                    blocked_job_ids.add(job_id)
+                    scheduler_error = (
+                        "workflow_dispatch_finished_early",
+                        f"Job '{job_id}' is queued but its dispatch is already finished",
+                    )
+            else:
+                state = "waiting"
+            nodes.append(
+                WorkflowNodeRuntime(
+                    jobId=job_id,
+                    jobStatus=job.status,
+                    state=state,
+                )
+            )
+
+        if execution.status == "active":
+            if all(node.state == "succeeded" for node in nodes):
+                self.repository.transition_workflow_execution(
+                    workflow_id,
+                    expected_status="active",
+                    next_status="succeeded",
+                    updated_at=_now(),
+                )
+            else:
+                has_viable_work = any(
+                    node.state in {"waiting", "ready", "queued", "running"}
+                    for node in nodes
+                )
+                has_failure = any(
+                    node.state in {"failed", "blocked"} for node in nodes
+                )
+                if has_failure and not has_viable_work:
+                    code, message = scheduler_error or (
+                        "workflow_dependency_failed",
+                        "One or more workflow dependencies failed",
+                    )
+                    self.repository.transition_workflow_execution(
+                        workflow_id,
+                        expected_status="active",
+                        next_status="blocked",
+                        updated_at=_now(),
+                        error_code=code,
+                        error_message=message,
+                    )
+
+        refreshed_execution = self.repository.get_workflow_execution(workflow_id)
+        if refreshed_execution is None:
+            raise RuntimeError("workflow execution disappeared during reconciliation")
+        if refreshed_execution.status != "active":
+            ready_job_ids = []
+        return WorkflowSchedule(
+            execution=refreshed_execution,
+            nodes=nodes,
+            readyJobIds=ready_job_ids,
+        )
+
     def add_input(
         self,
         job_id: str,
@@ -444,7 +978,7 @@ class JobService:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> JobInput:
-        self._require_job(job_id)
+        self._assert_legacy_inputs_mutable(job_id)
         job_input = JobInput(
             input_id=f"input-{secrets.token_hex(8)}",
             job_id=job_id,
@@ -457,6 +991,14 @@ class JobService:
         self._touch_job(job_id)
         self._write_snapshot(self._require_job(job_id))
         return job_input
+
+    def _assert_legacy_inputs_mutable(self, job_id: str) -> None:
+        """Keep the legacy input route away from frozen calculation bindings."""
+        job = self._require_job(job_id)
+        if job.spec_id is not None or job.bindings:
+            raise InvalidJobOperationError(
+                "calculation inputs are immutable; copy the job to change them"
+            )
 
     def add_artifact(
         self,
@@ -527,6 +1069,115 @@ class JobService:
         self._write_snapshot(job)
         return job
 
+    def request_job_dispatch(self, job_id: str, *, max_inflight: int) -> bool:
+        """Persist an idempotent execution request for one queued job."""
+        job = self._require_job(job_id)
+        if job.status != "queued":
+            raise InvalidJobOperationError(
+                f"Job '{job_id}' has status '{job.status}'; only queued jobs can run"
+            )
+        now = _now()
+        dispatch = JobDispatch(
+            dispatch_id=f"dispatch-{secrets.token_hex(8)}",
+            job_id=job_id,
+            status="pending",
+            requested_at=now,
+            available_at=now,
+        )
+        return self.repository.request_job_dispatch(
+            dispatch,
+            max_inflight=max_inflight,
+        )
+
+    def claim_next_dispatch(
+        self,
+        *,
+        worker_id: str,
+        lease_token: str,
+        lease_seconds: float,
+    ) -> JobDispatch | None:
+        """Recover stale work, then lease the next queued execution request."""
+        self.recover_stale_executions()
+        now = _now()
+        return self.repository.claim_next_dispatch(
+            lease_owner=worker_id,
+            lease_token=lease_token,
+            now=now,
+            lease_expires_at=now + timedelta(seconds=lease_seconds),
+        )
+
+    def recover_stale_executions(self) -> list[Job]:
+        """Interrupt expired or legacy running jobs without a live worker lease."""
+        now = _now()
+        self.repository.recover_expired_dispatches(now)
+        recovered_jobs: list[Job] = []
+        for job_id in self.repository.list_unleased_running_job_ids(now):
+            if not self.repository.transition_status(
+                job_id,
+                ("running",),
+                "interrupted",
+                now,
+                "worker_lease_expired",
+                "worker lease expired while the calculation was running",
+            ):
+                continue
+            recovered = self.get_job(job_id)
+            self._write_snapshot(recovered)
+            recovered_jobs.append(recovered)
+        return recovered_jobs
+
+    def renew_dispatch_lease(
+        self,
+        job_id: str,
+        lease_token: str,
+        *,
+        lease_seconds: float,
+    ) -> bool:
+        now = _now()
+        return self.repository.renew_dispatch_lease(
+            job_id,
+            lease_token,
+            heartbeat_at=now,
+            lease_expires_at=now + timedelta(seconds=lease_seconds),
+        )
+
+    def finish_job_dispatch(
+        self,
+        job_id: str,
+        lease_token: str,
+        *,
+        last_error: str | None = None,
+    ) -> bool:
+        return self.repository.finish_job_dispatch(
+            job_id,
+            lease_token,
+            finished_at=_now(),
+            last_error=last_error,
+        )
+
+    def dispatch_counts(self) -> dict[str, int]:
+        return self.repository.dispatch_counts()
+
+    def interrupt_running_jobs(self, reason: str) -> list[Job]:
+        """Mark runs left active by a previous backend process as interrupted."""
+        interrupted: list[Job] = []
+        for job in self.repository.list_jobs():
+            if job.status != "running":
+                continue
+            if not self.repository.transition_status(
+                job.job_id,
+                ("running",),
+                "interrupted",
+                _now(),
+                "backend_restart",
+                reason,
+            ):
+                continue
+            recovered = self.get_job(job.job_id)
+            self._write_snapshot(recovered)
+            interrupted.append(recovered)
+        return interrupted
+
     def _artifact_identity(self, job_id: str, path: str) -> dict[str, Any]:
         candidate = (self.tasks_root / job_id / path).resolve()
         task_root = (self.tasks_root / job_id).resolve()
@@ -557,6 +1208,29 @@ class JobService:
         job.inputs = self.repository.get_inputs(job.job_id)
         job.bindings = self.repository.list_job_input_bindings(job.job_id)
         job.artifacts = self.repository.get_artifacts(job.job_id)
+
+    def _copy_input_definitions(self, source: Job) -> dict[str, dict[str, Any]]:
+        """Rebind immutable input identities without copying private output files."""
+        inputs: dict[str, dict[str, Any]] = {}
+        for binding in source.bindings:
+            descriptor: dict[str, Any] = {"sourceKind": binding.source_kind}
+            if binding.content_sha256:
+                descriptor["contentSha256"] = binding.content_sha256
+            if binding.source_kind == "literal":
+                descriptor["value"] = binding.literal_value
+                if isinstance(binding.literal_value, Mapping):
+                    literal_format = binding.literal_value.get("format")
+                    if literal_format:
+                        descriptor["format"] = literal_format
+            elif binding.source_kind == "molecule_revision":
+                descriptor["format"] = "molecule"
+                descriptor["moleculeRevisionId"] = binding.molecule_revision_id
+            else:
+                artifact = self.get_artifact(binding.artifact_id or "")
+                descriptor["format"] = artifact.format
+                descriptor["artifactId"] = artifact.artifact_id
+            inputs[binding.input_name] = descriptor
+        return inputs
 
     def _build_input_bindings(
         self,
@@ -694,6 +1368,11 @@ class JobService:
         for reference in workflow.references:
             if reference.target_job_id != target_job_id:
                 continue
+            source_job = self.get_job(reference.source_job_id)
+            if source_job.status != "succeeded":
+                raise InvalidJobInputError(
+                    f"Workflow source job '{source_job.job_id}' must be succeeded"
+                )
             if reference.source_kind == "artifact":
                 artifacts = self.repository.get_artifacts(reference.source_job_id)
                 if reference.source_artifact_id is not None:
@@ -836,6 +1515,35 @@ class JobService:
                 f"Artifact '{reference.source_artifact_id}' does not belong to job "
                 f"'{reference.source_job_id}'"
             )
+
+    def _require_workflow_structure_artifact(
+        self, job_id: str, artifact_id: str, role: str
+    ) -> Artifact:
+        job = self.get_job(job_id)
+        if job.status != "succeeded":
+            raise InvalidJobInputError(
+                f"{role.capitalize()} job '{job_id}' must be succeeded"
+            )
+        artifact = next(
+            (item for item in job.artifacts if item.artifact_id == artifact_id), None
+        )
+        if artifact is None:
+            raise InvalidJobInputError(
+                f"{role.capitalize()} artifact '{artifact_id}' does not belong to job '{job_id}'"
+            )
+        if artifact.format.lower() not in {"retainmol-json", "xyz", "sdf", "mol"}:
+            raise InvalidJobInputError(
+                f"{role.capitalize()} artifact must be a molecular structure"
+            )
+        if artifact.role != "output":
+            raise InvalidJobInputError(
+                f"{role.capitalize()} artifact must be an output artifact"
+            )
+        if not artifact.sha256:
+            raise InvalidJobInputError(
+                f"{role.capitalize()} artifact has no immutable content digest"
+            )
+        return artifact
 
     def _touch_job(self, job_id: str) -> None:
         if not self.repository.touch_job(job_id, _now()):

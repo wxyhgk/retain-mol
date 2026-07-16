@@ -13,8 +13,7 @@ import importlib
 import inspect
 from typing import Any, Awaitable, Callable, Literal
 
-from fastapi import APIRouter, HTTPException, Path
-from fastapi.concurrency import run_in_threadpool
+from fastapi import APIRouter, HTTPException, Path, Query, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
@@ -28,6 +27,31 @@ class JobCreateRequest(RootModel[dict[str, Any]]):
 
 class JobInputsRequest(RootModel[dict[str, Any]]):
     """Opaque input payload validated and persisted by the jobs service."""
+
+
+class JobUpdateRequest(BaseModel):
+    """Mutable task-center fields; scientific inputs remain immutable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_patch(self) -> "JobUpdateRequest":
+        if not self.model_fields_set:
+            raise ValueError("provide at least one job field to update")
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("name cannot be null")
+        return self
+
+
+class JobCloneRequest(BaseModel):
+    """Optional presentation fields for a copied immutable calculation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=160)
 
 
 class JobThumbnailRequest(BaseModel):
@@ -59,6 +83,18 @@ class WorkflowRequest(BaseModel):
     name: str = Field(min_length=1)
     job_ids: list[str] = Field(alias="jobIds", min_length=1)
     references: list[JobInputReferenceRequest] = Field(default_factory=list)
+
+
+class TsPreparationWorkflowRequest(BaseModel):
+    """Two optimized endpoint structures used to create one TS workflow draft."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    name: str = Field(min_length=1, max_length=160)
+    reactant_job_id: str = Field(alias="reactantJobId", min_length=1)
+    reactant_artifact_id: str = Field(alias="reactantArtifactId", min_length=1)
+    product_job_id: str = Field(alias="productJobId", min_length=1)
+    product_artifact_id: str = Field(alias="productArtifactId", min_length=1)
 
 
 class XtbAtomRequest(BaseModel):
@@ -109,6 +145,66 @@ class XtbOptimizeJobRequest(BaseModel):
         if self.molecule is not None and not has_structure:
             raise ValueError("molecule is only accepted with a literal structure")
         return self
+
+
+class Psi4JobRequest(BaseModel):
+    """Shared immutable input and runtime controls for Psi4 jobs."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    structure: XtbStructureRequest | None = None
+    molecule_revision_id: str | None = Field(
+        default=None, alias="moleculeRevisionId", min_length=1
+    )
+    artifact_id: str | None = Field(default=None, alias="artifactId", min_length=1)
+    molecule: dict[str, Any] | None = None
+    charge: int = Field(default=0, ge=-20, le=20)
+    multiplicity: int = Field(default=1, ge=1, le=20)
+    method: str = Field(default="b3lyp", min_length=1, max_length=64)
+    basis: str = Field(default="def2-svp", min_length=1, max_length=64)
+    reference: Literal["rhf", "uhf", "rohf"] | None = None
+    scf_type: Literal["df", "pk"] = Field(default="df", alias="scfType")
+    threads: int = Field(default=1, ge=1, le=16)
+    memory_mb: int = Field(default=1024, ge=256, le=32768, alias="memoryMb")
+    timeout_seconds: int = Field(
+        default=3600, ge=5, le=86400, alias="timeoutSeconds"
+    )
+
+    @model_validator(mode="after")
+    def validate_structure_source(self) -> "Psi4JobRequest":
+        source_count = sum(
+            source is not None
+            for source in (self.structure, self.molecule_revision_id, self.artifact_id)
+        )
+        if source_count != 1:
+            raise ValueError(
+                "provide exactly one of structure, moleculeRevisionId, or artifactId"
+            )
+        if self.molecule is not None and self.structure is None:
+            raise ValueError("molecule is only accepted with a literal structure")
+        return self
+
+
+class Psi4TsRefineJobRequest(Psi4JobRequest):
+    max_steps: int = Field(default=100, alias="maxSteps", ge=1, le=1000)
+    full_hessian_every: int = Field(
+        default=1, alias="fullHessianEvery", ge=0, le=100
+    )
+    convergence: Literal["gau_loose", "gau", "gau_tight", "gau_verytight"] = (
+        "gau_tight"
+    )
+
+
+class Psi4FrequencyJobRequest(Psi4JobRequest):
+    pass
+
+
+class Psi4IrcJobRequest(Psi4JobRequest):
+    direction: Literal["forward", "backward", "both"] = "both"
+    points: int = Field(default=20, ge=1, le=200)
+    step_size: float = Field(default=0.2, alias="stepSize", gt=0, le=2)
+    max_steps: int = Field(default=300, alias="maxSteps", ge=1, le=3000)
 
 
 class JobServiceUnavailableError(RuntimeError):
@@ -186,6 +282,26 @@ class _JobServiceAdapter:
             raise KeyError(job_id)
         return job
 
+    async def update_job(self, job_id: str, changes: dict[str, Any]) -> Any:
+        return await self._call("update_job", job_id, changes)
+
+    async def delete_job(self, job_id: str) -> Any:
+        return await self._call("delete_job", job_id)
+
+    async def clone_job(self, job_id: str, request: JobCloneRequest) -> Any:
+        return await self._call("clone_job", job_id, name=request.name)
+
+    async def retry_job(self, job_id: str, request: JobCloneRequest) -> Any:
+        return await self._call("retry_job", job_id, name=request.name)
+
+    async def cancel_job(self, job_id: str) -> Any:
+        return await self._call("cancel_job", job_id)
+
+    async def read_job_log(self, job_id: str, cursor: int, limit: int) -> Any:
+        return await self._call(
+            "read_job_log", job_id, cursor=cursor, limit=limit
+        )
+
     async def add_inputs(self, job_id: str, inputs: dict[str, Any]) -> Any:
         return await self._call("add_inputs", job_id, inputs)
 
@@ -198,6 +314,18 @@ class _JobServiceAdapter:
             request.name,
             request.job_ids,
             [reference.model_dump(mode="json", by_alias=True) for reference in request.references],
+        )
+
+    async def create_ts_preparation_workflow(
+        self, request: TsPreparationWorkflowRequest
+    ) -> Any:
+        return await self._call(
+            "create_ts_preparation_workflow",
+            request.name,
+            request.reactant_job_id,
+            request.reactant_artifact_id,
+            request.product_job_id,
+            request.product_artifact_id,
         )
 
     async def list_workflows(self) -> Any:
@@ -214,6 +342,12 @@ class _JobServiceAdapter:
             request.job_ids,
             [reference.model_dump(mode="json", by_alias=True) for reference in request.references],
         )
+
+    async def get_workflow_schedule(self, workflow_id: str) -> Any:
+        return await self._call("get_workflow_schedule", workflow_id)
+
+    async def cancel_workflow_execution(self, workflow_id: str) -> Any:
+        return await self._call("cancel_workflow_execution", workflow_id)
 
     async def create_xtb_optimization(self, request: XtbOptimizeJobRequest) -> Any:
         request_data = request.model_dump(mode="json", by_alias=True, exclude_none=True)
@@ -268,6 +402,62 @@ class _JobServiceAdapter:
             await self.add_inputs(job_id, {"structure": legacy_input})
         return await self.get_job(job_id)
 
+    async def create_psi4_calculation(
+        self,
+        kind: Literal["psi4-ts-refine", "psi4-frequency", "psi4-irc"],
+        request: Psi4JobRequest,
+    ) -> Any:
+        request_data = request.model_dump(mode="json", by_alias=True, exclude_none=True)
+        metadata = {"name": request.name, "request": request_data}
+        spec_payload = {
+            key: value
+            for key, value in request_data.items()
+            if key
+            not in {
+                "name",
+                "structure",
+                "molecule",
+                "moleculeRevisionId",
+                "artifactId",
+            }
+        }
+        if request.molecule_revision_id is not None:
+            structure_input = {
+                "sourceKind": "molecule_revision",
+                "format": "molecule",
+                "moleculeRevisionId": request.molecule_revision_id,
+            }
+        elif request.artifact_id is not None:
+            artifact = await self._call("get_artifact", request.artifact_id)
+            structure_input = {
+                "sourceKind": "artifact",
+                "format": artifact.format,
+                "artifactId": request.artifact_id,
+            }
+        else:
+            structure_input = {
+                "sourceKind": "literal",
+                "format": "molecule",
+                "value": {
+                    "format": "molecule",
+                    "structure": request_data["structure"],
+                },
+            }
+            if "molecule" in request_data:
+                structure_input["value"]["molecule"] = request_data["molecule"]
+        job = await self._call(
+            "create_calculation_job",
+            kind,
+            "psi4",
+            spec_payload,
+            inputs={"structure": structure_input},
+            metadata=metadata,
+        )
+        job_id = _job_id(job)
+        if not job_id:
+            raise RuntimeError("The jobs persistence service returned a job without an id")
+        return await self.get_job(job_id)
+
 
 def _not_found_error(job_id: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"Job '{job_id}' was not found")
@@ -291,10 +481,23 @@ def _is_xtb_optimization(job: Any) -> bool:
     return job.get("taskType", job.get("task_type")) == "xtb-optimization"
 
 
+def _frontend_calculation_kind(job: Any) -> str | None:
+    if not isinstance(job, dict):
+        job = jsonable_encoder(job)
+    kind = job.get("taskType", job.get("task_type"))
+    return (
+        kind
+        if kind
+        in {"xtb-optimization", "psi4-ts-refine", "psi4-frequency", "psi4-irc"}
+        else None
+    )
+
+
 def _frontend_job(job: Any) -> Any:
-    """Project persisted xTB jobs into the frontend's job contract."""
+    """Project runnable calculations into the frontend's stable job contract."""
     payload = jsonable_encoder(job)
-    if not isinstance(payload, dict) or not _is_xtb_optimization(payload):
+    kind = _frontend_calculation_kind(payload) if isinstance(payload, dict) else None
+    if not isinstance(payload, dict) or kind is None:
         return payload
 
     metadata = payload.get("metadata")
@@ -307,18 +510,25 @@ def _frontend_job(job: Any) -> Any:
 
     response = {
         "id": payload.get("jobId", payload.get("job_id", payload.get("id"))),
-        "kind": "xtb-optimization",
+        "kind": kind,
         "status": payload.get("status"),
-        "name": name or "xTB optimization",
+        "name": name or kind,
         "createdAt": payload.get("createdAt", payload.get("created_at")),
         "artifacts": [_frontend_artifact(artifact) for artifact in payload.get("artifacts", [])],
     }
+    supersedes_job_id = payload.get(
+        "supersedesJobId", payload.get("supersedes_job_id")
+    )
+    if supersedes_job_id is not None:
+        response["supersedesJobId"] = supersedes_job_id
     if payload.get("updatedAt", payload.get("updated_at")) is not None:
         response["updatedAt"] = payload.get("updatedAt", payload.get("updated_at"))
     if request is not None:
         response["request"] = request
     if metadata.get("message") is not None:
         response["message"] = metadata["message"]
+    if metadata.get("description") is not None:
+        response["description"] = metadata["description"]
     if payload.get("error") is not None:
         response["error"] = payload["error"]
     return response
@@ -337,6 +547,7 @@ def _frontend_artifact(artifact: Any) -> dict[str, Any]:
         "name": name,
         "format": payload.get("format") or metadata.get("format", name.rsplit(".", 1)[-1] if "." in name else "file"),
         "mediaType": payload.get("mediaType", payload.get("media_type")),
+        "sha256": payload.get("sha256"),
         "sizeBytes": payload.get("byteSize", payload.get("byte_size", metadata.get("sizeBytes"))),
         "createdAt": payload.get("createdAt", payload.get("created_at")),
         "metadata": metadata,
@@ -376,7 +587,7 @@ def _find_job_artifact(job: Any, artifact_id: str) -> Any | None:
 
 async def _artifacts_response(service: _JobServiceAdapter, job_id: str) -> Any:
     job = await service.get_job(job_id)
-    if _is_xtb_optimization(job):
+    if _frontend_calculation_kind(job) is not None:
         return _frontend_job(job).get("artifacts", [])
     return await service.list_artifacts(job_id)
 
@@ -397,6 +608,8 @@ async def _run(operation: str, job_id: str | None, call: Awaitable[Any]) -> Any:
     except JobServiceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
+        if exc.__class__.__name__ in {"InvalidJobOperationError", "JobInUseError"}:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         if exc.__class__.__name__.lower() in {"jobnotfounderror", "notfounderror"}:
@@ -430,11 +643,58 @@ async def create_xtb_optimization_job(request: XtbOptimizeJobRequest) -> Any:
     return _frontend_job(job)
 
 
+@router.post("/psi4/ts-refine", status_code=201)
+async def create_psi4_ts_refine_job(request: Psi4TsRefineJobRequest) -> Any:
+    service = _service_adapter()
+    job = await _run(
+        "create Psi4 TS refinement job",
+        None,
+        service.create_psi4_calculation("psi4-ts-refine", request),
+    )
+    return _frontend_job(job)
+
+
+@router.post("/psi4/frequency", status_code=201)
+async def create_psi4_frequency_job(request: Psi4FrequencyJobRequest) -> Any:
+    service = _service_adapter()
+    job = await _run(
+        "create Psi4 frequency job",
+        None,
+        service.create_psi4_calculation("psi4-frequency", request),
+    )
+    return _frontend_job(job)
+
+
+@router.post("/psi4/irc", status_code=201)
+async def create_psi4_irc_job(request: Psi4IrcJobRequest) -> Any:
+    service = _service_adapter()
+    job = await _run(
+        "create Psi4 IRC job",
+        None,
+        service.create_psi4_calculation("psi4-irc", request),
+    )
+    return _frontend_job(job)
+
+
 @router.post("/workflows", status_code=201)
 async def create_workflow(request: WorkflowRequest) -> Any:
     """Persist a DAG that composes existing jobs without starting them."""
     service = _service_adapter()
     return await _run("create workflow", None, service.create_workflow(request))
+
+
+@router.post("/workflows/ts-preparation", status_code=201)
+async def create_ts_preparation_workflow(
+    request: TsPreparationWorkflowRequest,
+) -> Any:
+    """Create a fixed reactant/product optimization to TS-initial-guess workflow."""
+    service = _service_adapter()
+    workflow, target_job = await _run(
+        "create TS preparation workflow",
+        None,
+        service.create_ts_preparation_workflow(request),
+    )
+    return {"workflow": workflow, "targetJob": _frontend_job(target_job)}
 
 
 @router.get("/workflows")
@@ -458,28 +718,144 @@ async def update_workflow(
 ) -> Any:
     """Replace a workflow's members and dependency edges after DAG validation."""
     service = _service_adapter()
-    return await _run("update workflow", workflow_id, service.update_workflow(workflow_id, request))
+    return await _run(
+        "update workflow",
+        workflow_id,
+        service.update_workflow(workflow_id, request),
+    )
 
 
-@router.post("/{job_id}/run")
-async def run_job(job_id: str = Path(min_length=1)) -> Any:
-    """Execute one persisted xTB optimization inside its durable task directory."""
+@router.post("/workflows/{workflow_id}/run", status_code=202)
+async def run_workflow(workflow_id: str = Path(min_length=1)) -> Any:
+    """Activate a workflow and durably submit every currently ready node."""
     try:
-        from jobs.xtb_runner import JobExecutionError, run_xtb_optimization_job
+        from jobs.execution import JobExecutionError
+        from jobs.executor import JobNotRunnableError, JobQueueFullError
     except ModuleNotFoundError:
-        from software.backend.jobs.xtb_runner import JobExecutionError, run_xtb_optimization_job
+        from software.backend.jobs.execution import JobExecutionError
+        from software.backend.jobs.executor import (
+            JobNotRunnableError,
+            JobQueueFullError,
+        )
+
+    try:
+        service = _get_job_service()
+        executor = _get_job_executor()
+        schedule = executor.submit_workflow(service, workflow_id)
+    except KeyError as exc:
+        raise _workflow_not_found_error(workflow_id) from exc
+    except (JobExecutionError, JobNotRunnableError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except JobQueueFullError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return jsonable_encoder(schedule)
+
+
+@router.get("/workflows/{workflow_id}/execution")
+async def get_workflow_execution(workflow_id: str = Path(min_length=1)) -> Any:
+    """Return the persisted activation and derived state of every DAG node."""
+    service = _service_adapter()
+    return await _run(
+        "get workflow execution",
+        workflow_id,
+        service.get_workflow_schedule(workflow_id),
+    )
+
+
+@router.post("/workflows/{workflow_id}/cancel")
+async def cancel_workflow_execution(
+    workflow_id: str = Path(min_length=1),
+) -> Any:
+    """Persistently stop scheduling and cancel unshared unfinished member jobs."""
+    service = _service_adapter()
+    return await _run(
+        "cancel workflow execution",
+        workflow_id,
+        service.cancel_workflow_execution(workflow_id),
+    )
+
+
+def _get_job_executor() -> Any:
+    try:
+        from jobs.executor import get_job_executor
+    except ModuleNotFoundError:
+        from software.backend.jobs.executor import get_job_executor
+    return get_job_executor()
+
+
+@router.post("/{job_id}/run", status_code=202)
+async def run_job(job_id: str = Path(min_length=1)) -> Any:
+    """Submit one queued calculation and return without waiting for the engine."""
+    try:
+        from jobs.execution import JobExecutionError
+        from jobs.executor import JobNotRunnableError, JobQueueFullError
+    except ModuleNotFoundError:
+        from software.backend.jobs.execution import JobExecutionError
+        from software.backend.jobs.executor import (
+            JobNotRunnableError,
+            JobQueueFullError,
+        )
 
     try:
         service = _get_job_service()
     except JobServiceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     try:
-        job = await run_in_threadpool(run_xtb_optimization_job, service, job_id)
+        executor = _get_job_executor()
+        executor.submit(service, job_id)
+        job = service.get_job(job_id)
     except KeyError as exc:
         raise _not_found_error(job_id) from exc
-    except JobExecutionError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (JobExecutionError, JobNotRunnableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except JobQueueFullError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return _frontend_job(job)
+
+
+@router.post("/{job_id}/clone", status_code=201)
+async def clone_job(
+    request: JobCloneRequest,
+    job_id: str = Path(min_length=1),
+) -> Any:
+    """Create a new queued job from the source's frozen spec and bindings."""
+    service = _service_adapter()
+    job = await _run("clone job", job_id, service.clone_job(job_id, request))
+    return _frontend_job(job)
+
+
+@router.post("/{job_id}/retry", status_code=201)
+async def retry_job(
+    request: JobCloneRequest,
+    job_id: str = Path(min_length=1),
+) -> Any:
+    """Create a queued run that explicitly supersedes a failed attempt."""
+    service = _service_adapter()
+    job = await _run("retry job", job_id, service.retry_job(job_id, request))
+    return _frontend_job(job)
+
+
+@router.post("/{job_id}/cancel")
+async def cancel_job(job_id: str = Path(min_length=1)) -> Any:
+    """Cancel one created, queued, or actively running job."""
+    service = _service_adapter()
+    job = await _run("cancel job", job_id, service.cancel_job(job_id))
+    return _frontend_job(job)
+
+
+@router.get("/{job_id}/log")
+async def read_job_log(
+    job_id: str = Path(min_length=1),
+    cursor: int = Query(default=0, ge=0),
+    limit: int = Query(default=128 * 1024, ge=1, le=512 * 1024),
+) -> Any:
+    """Return the next available log chunk for lightweight polling."""
+    service = _service_adapter()
+    return await _run(
+        "read job log",
+        job_id,
+        service.read_job_log(job_id, cursor, limit),
+    )
 
 
 @router.post("/{job_id}/thumbnail", status_code=201)
@@ -530,6 +906,26 @@ async def get_job(job_id: str = Path(min_length=1)) -> Any:
     service = _service_adapter()
     job = await _run("get job", job_id, service.get_job(job_id))
     return _frontend_job(job)
+
+
+@router.patch("/{job_id}")
+async def update_job(
+    request: JobUpdateRequest,
+    job_id: str = Path(min_length=1),
+) -> Any:
+    """Rename or describe a task without mutating its frozen calculation input."""
+    service = _service_adapter()
+    changes = request.model_dump(mode="json", exclude_unset=True)
+    job = await _run("update job", job_id, service.update_job(job_id, changes))
+    return _frontend_job(job)
+
+
+@router.delete("/{job_id}", status_code=204)
+async def delete_job(job_id: str = Path(min_length=1)) -> Response:
+    """Delete a task only when no active run or workflow still depends on it."""
+    service = _service_adapter()
+    await _run("delete job", job_id, service.delete_job(job_id))
+    return Response(status_code=204)
 
 
 @router.get("/{job_id}/artifacts/{artifact_id}/content")

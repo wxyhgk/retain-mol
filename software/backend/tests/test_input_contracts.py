@@ -52,6 +52,43 @@ class InputContractsTests(unittest.TestCase):
         self.assertEqual(result.issues[0].code, "missing_required_port")
         self.assertEqual(result.issues[0].port, "structure")
 
+    def test_ts_initial_guess_requires_two_structure_artifacts(self) -> None:
+        valid = validate_calculation_inputs(
+            "ts-initial-guess",
+            {
+                "reactant": {"sourceKind": "artifact", "format": "xyz"},
+                "product": {"sourceKind": "artifact", "format": "sdf"},
+            },
+        )
+        missing_product = validate_calculation_inputs(
+            "ts-initial-guess",
+            {"reactant": {"sourceKind": "artifact", "format": "xyz"}},
+        )
+
+        self.assertTrue(valid.is_valid)
+        self.assertEqual(missing_product.issues[0].code, "missing_required_port")
+        self.assertEqual(missing_product.issues[0].port, "product")
+
+    def test_psi4_jobs_share_a_strict_structure_contract(self) -> None:
+        for kind in ("psi4-ts-refine", "psi4-frequency", "psi4-irc"):
+            with self.subTest(kind=kind):
+                literal = validate_calculation_inputs(
+                    kind,
+                    {"structure": {"sourceKind": "literal", "format": "molecule"}},
+                )
+                artifact = validate_calculation_inputs(
+                    kind,
+                    {"structure": {"sourceKind": "artifact", "format": "xyz"}},
+                )
+                unsupported = validate_calculation_inputs(
+                    kind,
+                    {"structure": {"sourceKind": "artifact", "format": "cube"}},
+                )
+
+                self.assertTrue(literal.is_valid)
+                self.assertTrue(artifact.is_valid)
+                self.assertEqual(unsupported.issues[0].code, "format_mismatch")
+
     def test_reports_format_mismatch_for_molecule_revision(self) -> None:
         result = validate_calculation_inputs(
             "xtb-optimization",

@@ -10,11 +10,12 @@ import { BusyOverlay } from './BusyOverlay'
 import { SelectionHud } from './SelectionHud'
 import { StatusBar } from './StatusBar'
 import { ViewportToolbar } from './ViewportToolbar'
-import { SimulationWorkspace, resolveOptimizedJobStructure } from '@/features/jobs'
+import { JobEditorLoadSession, SimulationWorkspace, resolveOptimizedJobStructure } from '@/features/jobs'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import type { JobArtifact, JobDetail } from '@/features/jobs'
 import { useMoleculeDocumentStore } from '@/features/molecule-assets'
+import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
 
 const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
 
@@ -31,6 +32,10 @@ export function AppShellView({
   canvasFocus,
   uiTheme,
   workspaceMode,
+  workflowEditSession,
+  jobEditSession,
+  onCloseWorkflowEdit,
+  onCloseJobEdit,
 }: AppShellViewProps) {
   const activeMolecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
   const activeObjectId = useMoleculeStore(state => state.activeObjectId)
@@ -101,6 +106,24 @@ export function AppShellView({
           <BusyOverlay />
           <ViewportToolbar />
           <StatusBar />
+
+          {workflowEditSession && (
+            <WorkflowJobEditSession
+              key={`${workflowEditSession.workflowId}:${workflowEditSession.jobId}`}
+              workflowId={workflowEditSession.workflowId}
+              jobId={workflowEditSession.jobId}
+              onClose={onCloseWorkflowEdit}
+            />
+          )}
+
+          {jobEditSession && !workflowEditSession && (
+            <JobEditorLoadSession
+              key={`${jobEditSession.jobId}:${jobEditSession.artifactId ?? 'input'}`}
+              jobId={jobEditSession.jobId}
+              artifactId={jobEditSession.artifactId}
+              onClose={onCloseJobEdit}
+            />
+          )}
 
           {workspaceMode === 'simulate' && (
             <aside

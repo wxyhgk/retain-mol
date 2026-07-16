@@ -181,7 +181,7 @@ function WorkspaceModeSwitch({
   return (
     <nav
       aria-label="工作模式"
-      className="absolute left-1/2 top-1/2 hidden h-9 w-[330px] -translate-x-1/2 -translate-y-1/2 items-center rounded-full border border-border bg-muted p-1 shadow-inner min-[1400px]:flex"
+      className="absolute left-1/2 top-1/2 hidden h-9 w-[300px] -translate-x-1/2 -translate-y-1/2 items-center rounded-full border border-border bg-muted p-1 shadow-inner min-[1100px]:flex min-[1400px]:w-[330px]"
     >
       {modes.map(mode => (
         <button

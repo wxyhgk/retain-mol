@@ -18,6 +18,71 @@ JobStatus = Literal[
     "interrupted",
 ]
 
+DispatchStatus = Literal["pending", "leased", "finished"]
+WorkflowExecutionStatus = Literal["active", "succeeded", "blocked", "cancelled"]
+WorkflowNodeState = Literal[
+    "waiting",
+    "ready",
+    "queued",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "blocked",
+]
+
+
+class JobDispatch(BaseModel):
+    """A durable request for one worker to execute a queued job."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    dispatch_id: str = Field(alias="dispatchId")
+    job_id: str = Field(alias="jobId")
+    status: DispatchStatus
+    requested_at: datetime = Field(alias="requestedAt")
+    available_at: datetime = Field(alias="availableAt")
+    lease_owner: str | None = Field(default=None, alias="leaseOwner")
+    lease_token: str | None = Field(default=None, alias="leaseToken")
+    lease_expires_at: datetime | None = Field(default=None, alias="leaseExpiresAt")
+    heartbeat_at: datetime | None = Field(default=None, alias="heartbeatAt")
+    finished_at: datetime | None = Field(default=None, alias="finishedAt")
+    last_error: str | None = Field(default=None, alias="lastError")
+
+
+class WorkflowExecution(BaseModel):
+    """Persisted activation and terminal outcome of one concrete workflow DAG."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    execution_id: str = Field(alias="executionId")
+    workflow_id: str = Field(alias="workflowId")
+    status: WorkflowExecutionStatus
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+    started_at: datetime = Field(alias="startedAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    finished_at: datetime | None = Field(default=None, alias="finishedAt")
+
+
+class WorkflowNodeRuntime(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    job_id: str = Field(alias="jobId")
+    job_status: JobStatus = Field(alias="jobStatus")
+    state: WorkflowNodeState
+    blocked_by: list[str] = Field(default_factory=list, alias="blockedBy")
+
+
+class WorkflowSchedule(BaseModel):
+    """Derived runtime view returned after one scheduler reconciliation."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    execution: WorkflowExecution
+    nodes: list[WorkflowNodeRuntime]
+    ready_job_ids: list[str] = Field(default_factory=list, alias="readyJobIds")
+
 
 class MoleculeAsset(BaseModel):
     """A stable identity whose head points at an immutable molecule revision."""
@@ -187,6 +252,7 @@ class Job(BaseModel):
     task_type: str = Field(alias="taskType")
     status: JobStatus
     spec_id: str | None = Field(default=None, alias="specId")
+    supersedes_job_id: str | None = Field(default=None, alias="supersedesJobId")
     metadata: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
     error_code: str | None = Field(default=None, alias="errorCode")

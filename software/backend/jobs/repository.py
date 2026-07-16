@@ -16,6 +16,7 @@ from .models import (
     Artifact,
     CalculationSpec,
     Job,
+    JobDispatch,
     JobInput,
     JobInputBinding,
     JobInputReference,
@@ -23,6 +24,7 @@ from .models import (
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
+    WorkflowExecution,
 )
 
 
@@ -36,9 +38,10 @@ class JobRepository:
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.database_path)
+        connection = sqlite3.connect(self.database_path, timeout=5)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 5000")
         try:
             yield connection
             connection.commit()
@@ -51,6 +54,7 @@ class JobRepository:
     def _initialize(self) -> None:
         with self._connection() as connection:
             migrate(connection)
+            connection.execute("PRAGMA journal_mode = WAL")
 
     def create_molecule_asset(self, asset: MoleculeAsset) -> None:
         if asset.head_revision_id is not None:
@@ -274,12 +278,21 @@ class JobRepository:
         job_id: str,
         bindings: list[JobInputBinding],
         queued_at: datetime,
+        *,
+        active_workflow_id: str | None = None,
     ) -> bool:
         """Replace draft bindings and queue the job as one all-or-nothing write."""
         if any(binding.job_id != job_id for binding in bindings):
             raise ValueError("all bindings must belong to the queued job")
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if active_workflow_id is not None:
+                execution = connection.execute(
+                    "SELECT status FROM workflow_executions WHERE workflow_id = ?",
+                    (active_workflow_id,),
+                ).fetchone()
+                if execution is None or execution["status"] != "active":
+                    return False
             row = connection.execute(
                 "SELECT status, state_version FROM jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
@@ -341,16 +354,17 @@ class JobRepository:
         connection.execute(
             """
             INSERT INTO jobs
-            (job_id, task_type, status, spec_id, metadata_json, error, error_code,
+            (job_id, task_type, status, spec_id, supersedes_job_id, metadata_json, error, error_code,
              error_message, queued_at, started_at, finished_at, attempt_count,
              state_version, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job.job_id,
                 job.task_type,
                 job.status,
                 job.spec_id,
+                job.supersedes_job_id,
                 _json_dump(job.metadata),
                 job.error,
                 job.error_code,
@@ -403,6 +417,307 @@ class JobRepository:
                 "SELECT * FROM jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
         return self._job_from_row(row) if row is not None else None
+
+    def request_job_dispatch(
+        self,
+        dispatch: JobDispatch,
+        *,
+        max_inflight: int,
+    ) -> bool:
+        """Persist one execution request with bounded, process-safe admission."""
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._finish_dispatches_for_terminal_jobs(connection, dispatch.requested_at)
+            row = connection.execute(
+                "SELECT status FROM job_dispatches WHERE job_id = ?",
+                (dispatch.job_id,),
+            ).fetchone()
+            if row is not None:
+                return False
+            job = connection.execute(
+                "SELECT status FROM jobs WHERE job_id = ?", (dispatch.job_id,)
+            ).fetchone()
+            if job is None:
+                raise KeyError(dispatch.job_id)
+            if job["status"] != "queued":
+                raise ValueError(
+                    f"Job '{dispatch.job_id}' has status '{job['status']}'; "
+                    "only queued jobs can run"
+                )
+            inflight = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM job_dispatches
+                    WHERE status IN ('pending', 'leased')
+                    """
+                ).fetchone()[0]
+            )
+            if inflight >= max_inflight:
+                raise OverflowError("The durable job execution queue is full")
+            connection.execute(
+                """
+                INSERT INTO job_dispatches
+                    (dispatch_id, job_id, status, requested_at, available_at)
+                VALUES (?, ?, 'pending', ?, ?)
+                """,
+                (
+                    dispatch.dispatch_id,
+                    dispatch.job_id,
+                    _timestamp(dispatch.requested_at),
+                    _timestamp(dispatch.available_at),
+                ),
+            )
+            return True
+
+    def recover_expired_dispatches(self, now: datetime) -> list[str]:
+        """Requeue unstarted leases and finish leases whose jobs were running."""
+        timestamp = _timestamp(now)
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            running_rows = connection.execute(
+                """
+                SELECT d.job_id
+                FROM job_dispatches d
+                JOIN jobs j ON j.job_id = d.job_id
+                WHERE d.status = 'leased'
+                  AND d.lease_expires_at <= ?
+                  AND j.status = 'running'
+                """,
+                (timestamp,),
+            ).fetchall()
+            running_job_ids = [str(row["job_id"]) for row in running_rows]
+            connection.execute(
+                """
+                UPDATE job_dispatches
+                SET status = 'pending', lease_owner = NULL, lease_token = NULL,
+                    lease_expires_at = NULL, heartbeat_at = NULL,
+                    available_at = ?
+                WHERE status = 'leased' AND lease_expires_at <= ?
+                  AND job_id IN (SELECT job_id FROM jobs WHERE status = 'queued')
+                """,
+                (timestamp, timestamp),
+            )
+            connection.execute(
+                """
+                UPDATE job_dispatches
+                SET status = 'finished', finished_at = ?,
+                    last_error = CASE
+                        WHEN last_error IS NULL THEN 'worker lease expired'
+                        ELSE last_error
+                    END
+                WHERE status = 'leased' AND lease_expires_at <= ?
+                  AND job_id IN (
+                      SELECT job_id FROM jobs WHERE status <> 'queued'
+                  )
+                """,
+                (timestamp, timestamp),
+            )
+            self._finish_dispatches_for_terminal_jobs(connection, now)
+            return running_job_ids
+
+    def list_unleased_running_job_ids(self, now: datetime) -> list[str]:
+        """Find legacy or abandoned running jobs not protected by a live lease."""
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT j.job_id
+                FROM jobs j
+                WHERE j.status = 'running'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM job_dispatches d
+                      WHERE d.job_id = j.job_id
+                        AND d.status = 'leased'
+                        AND d.lease_expires_at > ?
+                  )
+                ORDER BY j.job_id
+                """,
+                (_timestamp(now),),
+            ).fetchall()
+        return [str(row["job_id"]) for row in rows]
+
+    def claim_next_dispatch(
+        self,
+        *,
+        lease_owner: str,
+        lease_token: str,
+        now: datetime,
+        lease_expires_at: datetime,
+    ) -> JobDispatch | None:
+        """Lease the oldest runnable dispatch atomically across processes."""
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT d.*
+                FROM job_dispatches d
+                JOIN jobs j ON j.job_id = d.job_id
+                WHERE d.status = 'pending'
+                  AND d.available_at <= ?
+                  AND j.status = 'queued'
+                ORDER BY d.requested_at, d.dispatch_id
+                LIMIT 1
+                """,
+                (_timestamp(now),),
+            ).fetchone()
+            if row is None:
+                return None
+            cursor = connection.execute(
+                """
+                UPDATE job_dispatches
+                SET status = 'leased', lease_owner = ?, lease_token = ?,
+                    lease_expires_at = ?, heartbeat_at = ?
+                WHERE dispatch_id = ? AND status = 'pending'
+                """,
+                (
+                    lease_owner,
+                    lease_token,
+                    _timestamp(lease_expires_at),
+                    _timestamp(now),
+                    row["dispatch_id"],
+                ),
+            )
+            if cursor.rowcount != 1:
+                return None
+            leased = connection.execute(
+                "SELECT * FROM job_dispatches WHERE dispatch_id = ?",
+                (row["dispatch_id"],),
+            ).fetchone()
+            return self._dispatch_from_row(leased)
+
+    def renew_dispatch_lease(
+        self,
+        job_id: str,
+        lease_token: str,
+        *,
+        heartbeat_at: datetime,
+        lease_expires_at: datetime,
+    ) -> bool:
+        with self._connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE job_dispatches
+                SET heartbeat_at = ?, lease_expires_at = ?
+                WHERE job_id = ? AND status = 'leased' AND lease_token = ?
+                """,
+                (
+                    _timestamp(heartbeat_at),
+                    _timestamp(lease_expires_at),
+                    job_id,
+                    lease_token,
+                ),
+            )
+        return cursor.rowcount == 1
+
+    def finish_job_dispatch(
+        self,
+        job_id: str,
+        lease_token: str,
+        *,
+        finished_at: datetime,
+        last_error: str | None = None,
+    ) -> bool:
+        with self._connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE job_dispatches
+                SET status = 'finished', finished_at = ?, last_error = ?,
+                    lease_expires_at = NULL
+                WHERE job_id = ? AND status = 'leased' AND lease_token = ?
+                """,
+                (_timestamp(finished_at), last_error, job_id, lease_token),
+            )
+        return cursor.rowcount == 1
+
+    def dispatch_counts(self) -> dict[str, int]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT status, COUNT(*) AS total FROM job_dispatches GROUP BY status"
+            ).fetchall()
+        counts = {"pending": 0, "leased": 0, "finished": 0}
+        counts.update({str(row["status"]): int(row["total"]) for row in rows})
+        return counts
+
+    def get_job_dispatch(self, job_id: str) -> JobDispatch | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM job_dispatches WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        return self._dispatch_from_row(row) if row is not None else None
+
+    @staticmethod
+    def _finish_dispatches_for_terminal_jobs(
+        connection: sqlite3.Connection, now: datetime
+    ) -> None:
+        connection.execute(
+            """
+            UPDATE job_dispatches
+            SET status = 'finished', finished_at = COALESCE(finished_at, ?),
+                lease_expires_at = NULL
+            WHERE status IN ('pending', 'leased')
+              AND job_id IN (
+                  SELECT job_id FROM jobs
+                  WHERE status IN ('succeeded', 'failed', 'cancelled', 'interrupted')
+              )
+            """,
+            (_timestamp(now),),
+        )
+
+    def update_job_metadata(
+        self, job_id: str, metadata: dict[str, Any], updated_at: datetime
+    ) -> bool:
+        with self._connection() as connection:
+            cursor = connection.execute(
+                "UPDATE jobs SET metadata_json = ?, updated_at = ? WHERE job_id = ?",
+                (_json_dump(metadata), _timestamp(updated_at), job_id),
+            )
+        return cursor.rowcount == 1
+
+    def list_workflow_ids_for_job(self, job_id: str) -> list[str]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT workflow_id FROM workflow_jobs WHERE job_id = ?
+                UNION
+                SELECT workflow_id FROM job_input_references
+                WHERE source_job_id = ? OR target_job_id = ?
+                ORDER BY workflow_id
+                """,
+                (job_id, job_id, job_id),
+            ).fetchall()
+        return [str(row["workflow_id"]) for row in rows]
+
+    def list_superseding_job_ids(self, job_id: str) -> list[str]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT job_id FROM jobs
+                WHERE supersedes_job_id = ?
+                ORDER BY created_at, job_id
+                """,
+                (job_id,),
+            ).fetchall()
+        return [str(row["job_id"]) for row in rows]
+
+    def delete_job(self, job_id: str) -> bool:
+        """Delete one job aggregate and discard its now-unreferenced calculation spec."""
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT spec_id FROM jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            spec_id = row["spec_id"]
+            cursor = connection.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
+            if spec_id is not None:
+                connection.execute(
+                    """
+                    DELETE FROM calculation_specs
+                    WHERE spec_id = ?
+                      AND NOT EXISTS (SELECT 1 FROM jobs WHERE spec_id = ?)
+                    """,
+                    (spec_id, spec_id),
+                )
+        return cursor.rowcount == 1
 
     def add_input(self, job_input: JobInput) -> None:
         with self._connection() as connection:
@@ -583,6 +898,8 @@ class JobRepository:
                     _timestamp(updated_at),
                 ),
             )
+            if terminal:
+                self._finish_dispatches_for_terminal_jobs(connection, updated_at)
             return True
 
     def claim_job(
@@ -656,6 +973,90 @@ class JobRepository:
             row = connection.execute("SELECT * FROM workflows WHERE workflow_id = ?", (workflow_id,)).fetchone()
         return self._workflow_from_row(row) if row is not None else None
 
+    def create_workflow_execution(
+        self, execution: WorkflowExecution
+    ) -> WorkflowExecution:
+        """Activate one workflow once, returning the existing activation on races."""
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO workflow_executions
+                    (execution_id, workflow_id, status, error_code, error_message,
+                     started_at, updated_at, finished_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    execution.execution_id,
+                    execution.workflow_id,
+                    execution.status,
+                    execution.error_code,
+                    execution.error_message,
+                    _timestamp(execution.started_at),
+                    _timestamp(execution.updated_at),
+                    _optional_timestamp(execution.finished_at),
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM workflow_executions WHERE workflow_id = ?",
+                (execution.workflow_id,),
+            ).fetchone()
+        if row is None:
+            raise sqlite3.IntegrityError("workflow execution was not persisted")
+        return self._workflow_execution_from_row(row)
+
+    def get_workflow_execution(
+        self, workflow_id: str
+    ) -> WorkflowExecution | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM workflow_executions WHERE workflow_id = ?",
+                (workflow_id,),
+            ).fetchone()
+        return self._workflow_execution_from_row(row) if row is not None else None
+
+    def list_active_workflow_executions(self) -> list[WorkflowExecution]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM workflow_executions
+                WHERE status = 'active'
+                ORDER BY started_at, execution_id
+                """
+            ).fetchall()
+        return [self._workflow_execution_from_row(row) for row in rows]
+
+    def transition_workflow_execution(
+        self,
+        workflow_id: str,
+        *,
+        expected_status: str,
+        next_status: str,
+        updated_at: datetime,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> bool:
+        finished_at = updated_at if next_status != "active" else None
+        with self._connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE workflow_executions
+                SET status = ?, error_code = ?, error_message = ?, updated_at = ?,
+                    finished_at = ?
+                WHERE workflow_id = ? AND status = ?
+                """,
+                (
+                    next_status,
+                    error_code,
+                    error_message,
+                    _timestamp(updated_at),
+                    _optional_timestamp(finished_at),
+                    workflow_id,
+                    expected_status,
+                ),
+            )
+        return cursor.rowcount == 1
+
     def get_workflow_job_ids(self, workflow_id: str) -> list[str]:
         with self._connection() as connection:
             rows = connection.execute(
@@ -708,6 +1109,7 @@ class JobRepository:
             task_type=row["task_type"],
             status=row["status"],
             spec_id=row["spec_id"],
+            supersedes_job_id=row["supersedes_job_id"],
             metadata=_json_load(row["metadata_json"]),
             error=row["error"],
             error_code=row["error_code"],
@@ -719,6 +1121,22 @@ class JobRepository:
             state_version=row["state_version"],
             created_at=_parse_timestamp(row["created_at"]),
             updated_at=_parse_timestamp(row["updated_at"]),
+        )
+
+    @staticmethod
+    def _dispatch_from_row(row: sqlite3.Row) -> JobDispatch:
+        return JobDispatch(
+            dispatch_id=row["dispatch_id"],
+            job_id=row["job_id"],
+            status=row["status"],
+            requested_at=_parse_timestamp(row["requested_at"]),
+            available_at=_parse_timestamp(row["available_at"]),
+            lease_owner=row["lease_owner"],
+            lease_token=row["lease_token"],
+            lease_expires_at=_optional_parse_timestamp(row["lease_expires_at"]),
+            heartbeat_at=_optional_parse_timestamp(row["heartbeat_at"]),
+            finished_at=_optional_parse_timestamp(row["finished_at"]),
+            last_error=row["last_error"],
         )
 
     @staticmethod
@@ -774,6 +1192,19 @@ class JobRepository:
             name=row["name"],
             created_at=_parse_timestamp(row["created_at"]),
             updated_at=_parse_timestamp(row["updated_at"]),
+        )
+
+    @staticmethod
+    def _workflow_execution_from_row(row: sqlite3.Row) -> WorkflowExecution:
+        return WorkflowExecution(
+            execution_id=row["execution_id"],
+            workflow_id=row["workflow_id"],
+            status=row["status"],
+            error_code=row["error_code"],
+            error_message=row["error_message"],
+            started_at=_parse_timestamp(row["started_at"]),
+            updated_at=_parse_timestamp(row["updated_at"]),
+            finished_at=_optional_parse_timestamp(row["finished_at"]),
         )
 
     @staticmethod
