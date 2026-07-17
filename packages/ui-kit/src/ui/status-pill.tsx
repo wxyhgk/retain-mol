@@ -2,11 +2,13 @@ import { cn } from '../utils'
 
 export type StatusTone = 'neutral' | 'success' | 'danger' | 'info' | 'emphasis'
 
+// 黑白状态词汇（全站设计定论）：emphasis=唯一实心黑（活的），
+// success=白底浅发丝，danger=深发丝，neutral=浅灰，info=中发丝
 const TONE_CLASSES: Record<StatusTone, string> = {
   neutral: 'border-border text-muted-foreground',
-  success: 'border-emerald-300 text-emerald-700 dark:text-emerald-400',
-  danger: 'border-destructive/40 text-destructive',
-  info: 'border-sky-400/50 text-sky-600 dark:text-sky-400',
+  success: 'border-foreground/25 bg-background text-foreground',
+  danger: 'border-foreground/45 text-foreground',
+  info: 'border-foreground/35 text-foreground',
   emphasis: 'border-foreground bg-foreground text-background',
 }
 
