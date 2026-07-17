@@ -57,6 +57,8 @@ export function JobCard({
   className,
 }: JobCardProps) {
   const terminal = isTerminalJobStatus(job.status)
+  // 未开跑的任务（created/queued）不显示耗时——「创建至今」的墙钟时间会被误读为计算耗时
+  const showElapsed = terminal || job.status === 'running'
   return (
     <MoleculeCard
       variant={variant}
@@ -67,11 +69,13 @@ export function JobCard({
       meta={
         <>
           {showId && <MonoId value={job.id} />}
-          <ElapsedTime
-            since={job.createdAt}
-            {...(terminal && job.updatedAt !== undefined ? { until: job.updatedAt } : {})}
-            prefix="耗时 "
-          />
+          {showElapsed && (
+            <ElapsedTime
+              since={job.createdAt}
+              {...(terminal && job.updatedAt !== undefined ? { until: job.updatedAt } : {})}
+              prefix="耗时 "
+            />
+          )}
           {metaExtra}
         </>
       }
