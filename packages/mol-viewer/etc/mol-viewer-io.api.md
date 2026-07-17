@@ -66,6 +66,20 @@ export interface CoordinationSiteAssignment {
     readonly siteId: string;
 }
 
+// @public (undocumented)
+export function depictMolecule2D(mol: Molecule, options?: DepictMolecule2DOptions): string;
+
+// @public (undocumented)
+export interface DepictMolecule2DOptions {
+    // (undocumented)
+    height?: number;
+    id?: string;
+    suppressHydrogens?: boolean;
+    themeAware?: boolean;
+    // (undocumented)
+    width?: number;
+}
+
 // @public
 export function exportGJF(mol: Molecule, opts?: GJFOptions): string;
 
