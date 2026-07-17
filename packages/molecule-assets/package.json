@@ -24,7 +24,8 @@
   "peerDependencies": {
     "@retainmol/mol-viewer": ">=0.1.29",
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "three": ">=0.184.0 <0.185.0"
   },
   "dependencies": {
     "@retainmol/ui-kit": "file:../ui-kit",
@@ -40,6 +41,8 @@
     "react-dom": "^19.2.5",
     "typescript": "~6.0.2",
     "vite": "^8.0.10",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.5",
+    "@types/three": "^0.184.0",
+    "three": "^0.184.0"
   }
 }

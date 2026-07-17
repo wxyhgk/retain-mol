@@ -11,6 +11,8 @@ const externals = [
   '@tanstack/react-query',
   'zustand',
   'lucide-react',
+  // three 必须外置且全站单实例（peerDep），否则跨包 instanceof 失效
+  'three',
 ]
 
 const external = (id: string) => externals.some(dep => id === dep || id.startsWith(`${dep}/`))
