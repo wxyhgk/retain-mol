@@ -62,3 +62,5 @@ export {
   projectMoleculeRevisionWire,
 } from './infrastructure/moleculeAssetWireProjector'
 export { MoleculeDocumentControls } from './components/MoleculeDocumentControls'
+export { Molecule2D } from './components/Molecule2D'
+export type { Molecule2DProps } from './components/Molecule2D'
