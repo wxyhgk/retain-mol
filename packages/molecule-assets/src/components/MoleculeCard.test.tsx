@@ -33,10 +33,12 @@ describe('MoleculeCard', () => {
     expect(withVisual('plaque')).not.toContain('data-slot="visual"')
   })
 
-  it('becomes a button when onClick is provided', () => {
+  it('exposes button semantics via role when clickable (never a real <button> — slots may nest buttons)', () => {
     const clickable = renderToStaticMarkup(<MoleculeCard title="t" onClick={() => {}} />)
-    expect(clickable).toContain('<button')
+    expect(clickable).toContain('role="button"')
+    expect(clickable).toContain('tabindex="0"')
+    expect(clickable).not.toContain('<button')
     const static1 = renderToStaticMarkup(<MoleculeCard title="t" />)
-    expect(static1).not.toContain('<button')
+    expect(static1).not.toContain('role="button"')
   })
 })

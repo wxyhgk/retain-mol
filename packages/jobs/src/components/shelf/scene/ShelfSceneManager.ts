@@ -253,5 +253,7 @@ export class ShelfSceneManager {
     this.edgeDashTexture.dispose()
     disposeSharedShelfGeometries(this.shared)
     this.renderer.dispose()
+    // 立即归还 context：表格/展柜反复切换不等 GC（否则累积到浏览器上限后全站 3D 失效）
+    this.renderer.forceContextLoss()
   }
 }

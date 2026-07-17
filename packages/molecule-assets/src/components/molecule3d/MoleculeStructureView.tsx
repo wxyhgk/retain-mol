@@ -55,7 +55,11 @@ export function MoleculeStructureView({
   return (
     <div className={cn('relative h-full w-full overflow-hidden', className)}>
       {show3D ? (
-        <Molecule3D molecule={molecule} {...(themeId !== undefined ? { themeId } : {})} />
+        <Molecule3D
+          molecule={molecule}
+          {...(themeId !== undefined ? { themeId } : {})}
+          onUnavailable={() => toggle('2d')}
+        />
       ) : posterUrl ? (
         <img src={posterUrl} alt={label ?? molecule.name ?? '分子结构'} loading="lazy" className="h-full w-full object-cover" />
       ) : (

@@ -31,7 +31,11 @@ export function MonoId({ value, maxLength = 24, className }: {
     <button
       type="button"
       title={copied ? '已复制' : `${value}（点击复制）`}
-      onClick={() => void copy()}
+      onClick={event => {
+        // 常被嵌进可点击卡片：复制不应顺带触发卡片打开
+        event.stopPropagation()
+        void copy()
+      }}
       className={cn('inline-flex max-w-full items-center font-mono text-[10px] text-muted-foreground hover:text-foreground', className)}
     >
       <span className="truncate">{copied ? '已复制' : middleEllipsis(value, maxLength)}</span>

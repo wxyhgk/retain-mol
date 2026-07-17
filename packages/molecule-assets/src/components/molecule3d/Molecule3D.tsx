@@ -12,6 +12,8 @@ export interface Molecule3DProps {
   autoRotate?: boolean
   /** 拖拽旋转 */
   interactive?: boolean
+  /** WebGL context 创建失败时回调（context 预算耗尽时优雅降级，调用方应退回 2D） */
+  onUnavailable?: () => void
   className?: string
 }
 
@@ -51,16 +53,25 @@ function fitDistance(molecule: Molecule): number {
  * WebGL context 是稀缺资源——请勿直接在列表里批量使用，
  * 应经 MoleculeStructureView + molecule3dPool 控制同屏数量。
  */
-export function Molecule3D({ molecule, themeId = 'default', autoRotate = true, interactive = true, className }: Molecule3DProps) {
+export function Molecule3D({ molecule, themeId = 'default', autoRotate = true, interactive = true, onUnavailable, className }: Molecule3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const onUnavailableRef = useRef(onUnavailable)
+  onUnavailableRef.current = onUnavailable
 
   useEffect(() => {
     const container = containerRef.current
     const canvas = canvasRef.current
     if (!container || !canvas) return
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    // context 预算是全局稀缺资源：创建失败（返回 null context）必须降级而非崩树
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    } catch {
+      onUnavailableRef.current?.()
+      return
+    }
     renderer.setClearColor(0x000000, 0)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     const scene = new THREE.Scene()

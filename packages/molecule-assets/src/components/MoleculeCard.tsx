@@ -41,8 +41,23 @@ export function MoleculeCard({
   className,
 }: MoleculeCardProps) {
   const interactive = Boolean(onClick)
-  const Root = interactive ? 'button' : 'div'
-  const rootProps = interactive ? { type: 'button' as const, onClick } : {}
+  // 根节点用 div + role="button" 而非 <button>：卡片槽位里常有嵌套按钮
+  // （MonoId 复制、动作行），HTML 禁止 button 嵌 button
+  const Root = 'div' as const
+  const rootProps = interactive
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (event: React.KeyboardEvent) => {
+          if (event.target !== event.currentTarget) return
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onClick?.()
+          }
+        },
+      }
+    : {}
 
   const frame = cn(
     'border text-left transition-colors',
