@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useJobsQuery } from '@/features/jobs'
+import { useJobsQuery } from '@retainmol/jobs'
 import { WorkflowEditor } from '@/features/workflows'
 import { workflowEditorPath } from '@/app/appRoute'
 

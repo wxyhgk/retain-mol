@@ -85,7 +85,7 @@ export function FileDropzone({
         'outline-none transition-colors hover:border-foreground/40 hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring',
         isFocused && 'ring-2 ring-ring',
         isDragActive && 'border-foreground/50 bg-muted/50',
-        isDragAccept && 'border-emerald-600 bg-emerald-50 text-emerald-950',
+        isDragAccept && 'border-foreground bg-accent text-foreground',
         isDragReject && 'border-destructive bg-destructive/5 text-destructive',
         disabled && 'cursor-not-allowed opacity-50',
         className,

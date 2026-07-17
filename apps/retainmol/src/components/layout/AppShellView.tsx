@@ -10,14 +10,15 @@ import { BusyOverlay } from './BusyOverlay'
 import { SelectionHud } from './SelectionHud'
 import { StatusBar } from './StatusBar'
 import { ViewportToolbar } from './ViewportToolbar'
-import { JobEditorLoadSession, SimulationWorkspace, resolveOptimizedJobStructure } from '@/features/jobs'
+import { JobEditorLoadSession, SimulationWorkspace, resolveOptimizedJobStructure } from '@retainmol/jobs'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { useEditorStore } from '@/domain/viewer/editorState'
-import type { JobArtifact, JobDetail } from '@/features/jobs'
+import type { JobArtifact, JobDetail } from '@retainmol/jobs'
 import { useMoleculeDocumentStore } from '@/features/molecule-assets'
 import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
 
 const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
+const WorkflowEditor = lazy(() => import('@/features/workflows').then(module => ({ default: module.WorkflowEditor })))
 
 type AppShellViewProps = AppShellProps & AppShellModel
 
@@ -137,6 +138,7 @@ export function AppShellView({
                 documentBinding={documentBinding ?? null}
                 revisionMetadata={pendingRevisionMetadata}
                 onLoadOptimizedStructure={loadOptimizedStructure}
+                workflowEditor={WorkflowEditor}
               />
             </aside>
           )}

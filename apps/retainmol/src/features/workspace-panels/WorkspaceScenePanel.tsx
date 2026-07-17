@@ -22,18 +22,18 @@ export function WorkspaceScenePanel() {
   }
 
   return (
-    <div className="space-y-4 p-3 text-slate-800">
+    <div className="space-y-4 p-3 text-foreground">
       <div>
-        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">场景对象</div>
-        <p className="mt-1 text-[10px] leading-4 text-slate-500">管理对象的活跃状态、可见性与锁定状态。</p>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">场景对象</div>
+        <p className="mt-1 text-[10px] leading-4 text-muted-foreground">管理对象的活跃状态、可见性与锁定状态。</p>
       </div>
 
       {rows.length === 0 ? (
-        <div className="flex h-28 items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 text-center text-[11px] leading-5 text-slate-500">
+        <div className="flex h-28 items-center justify-center rounded-md border border-dashed border-border bg-muted text-center text-[11px] leading-5 text-muted-foreground">
           场景中没有对象<br />从导入或搜索添加分子
         </div>
       ) : (
-        <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+        <div className="overflow-hidden rounded-md border border-border bg-muted">
           {rows.map((row, index) => {
             const active = row.id === activeObjectId
             return (
@@ -45,7 +45,7 @@ export function WorkspaceScenePanel() {
                 onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setActiveObject(row.id) }}
                 className={cn(
                   'group flex min-h-12 min-w-0 items-center gap-2 px-2.5 py-2 outline-none transition-colors',
-                  index > 0 && 'border-t border-slate-200',
+                  index > 0 && 'border-t border-border',
                   active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-accent',
                 )}
               >
@@ -71,7 +71,7 @@ export function WorkspaceScenePanel() {
                     className="min-w-0 flex-1 text-left"
                   >
                     <span className="block truncate text-[11px] font-semibold">{row.name}</span>
-                    <span className="block text-[9px] text-slate-500">{row.componentCount > 1 ? `${row.componentCount} 个独立片段` : '单一连通结构'}</span>
+                    <span className="block text-[9px] text-muted-foreground">{row.componentCount > 1 ? `${row.componentCount} 个独立片段` : '单一连通结构'}</span>
                   </button>
                 )}
                 <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
@@ -89,7 +89,7 @@ export function WorkspaceScenePanel() {
           })}
         </div>
       )}
-      <div className="border-t border-slate-200 pt-3 font-mono text-[9px] text-slate-500">{rows.length} 个对象</div>
+      <div className="border-t border-border pt-3 font-mono text-[9px] text-muted-foreground">{rows.length} 个对象</div>
     </div>
   )
 }
@@ -102,7 +102,7 @@ function IconButton({ children, title, active, danger, onClick }: { children: Re
       aria-label={title}
       onClick={event => { event.stopPropagation(); onClick() }}
       className={cn(
-        'flex size-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900',
+        'flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
         active && 'bg-primary text-primary-foreground',
         danger && 'hover:bg-foreground hover:text-background',
       )}

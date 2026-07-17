@@ -43,6 +43,8 @@ SQLite 是索引和状态来源；任务目录保存可复现文件。二者每�
 | API | 职责 |
 | --- | --- |
 | `POST /jobs` | 创建通用持久化任务定义。 |
+| `GET /jobs/contracts` | 返回已注册 Task Contract 的参数 Schema 和输入端口。 |
+| `POST /jobs/calculations` | 通过 v1 分层契约校验、冻结输入并创建计算 Job。 |
 | `GET /jobs`、`GET /jobs/{jobId}` | 列出或读取任务。 |
 | `POST /jobs/{jobId}/inputs` | 追加或更新任务输入快照。 |
 | `GET /jobs/{jobId}/artifacts` | 读取已登记的工件。 |
@@ -78,12 +80,12 @@ SQLite 是索引和状态来源；任务目录保存可复现文件。二者每�
 
 Workflow 定义和一次执行是两个不同实体：
 
-- `Workflow` 保存 Job 成员和 `JobInputReference`，激活前允许编辑；
+- `Workflow` 保存 Job 成员和 `WorkflowInputLink`，激活前允许编辑；
 - `WorkflowExecution` 保存该 DAG 是否 `active / succeeded / blocked / cancelled`；
 - 激活后 Workflow 定义不可原地修改，需要创建新的 Workflow 版本；
 - 节点的 `waiting / ready / queued / running / succeeded / failed / cancelled / blocked` 是根据 Job 状态和 DAG 依赖实时推导的视图，不写回 Job 状态。
 
-调度器按拓扑顺序协调节点。上游全部成功后，目标草稿才解析引用、冻结为 `JobInputBinding` 并转为 `queued`；随后 executor 写入 durable dispatch。上游失败、取消或中断时，后代节点保持原 Job 状态，但在 Workflow 视图中标记为 `blocked`。独立分支可以继续运行，直到所有可运行分支结束后，Workflow 才进入 `blocked` 终态。
+调度器按拓扑顺序协调节点。上游全部成功后，目标草稿才解析输入链接、冻结为 `JobInputSnapshot` 并转为 `queued`；随后 executor 写入 durable dispatch。上游失败、取消或中断时，后代节点保持原 Job 状态，但在 Workflow 视图中标记为 `blocked`。独立分支可以继续运行，直到所有可运行分支结束后，Workflow 才进入 `blocked` 终态。
 
 worker 在两处推进 DAG：每个 Job 结束后立即协调相关 active workflow；空闲时周期扫描所有 active execution。后者覆盖“上游已成功、下游尚未入队”期间进程退出的恢复场景。
 
@@ -110,7 +112,7 @@ xTB Job 在创建时保存：
 过渡态、扫描或高层级精修不能只传文件路径。应新增显式输入引用：
 
 ```text
-JobInputReference
+WorkflowInputLink
   jobId
   inputName           reactant | product | initial-guess | geometry
   sourceJobId

@@ -1,4 +1,4 @@
-import { resolveJobArtifactUrl, type JobArtifact } from '@/features/jobs'
+import { resolveJobArtifactUrl, type JobArtifact } from '@retainmol/jobs'
 import { parseOptimizationTrajectory } from '../domain/optimizationTrajectory'
 
 export async function fetchOptimizationTrajectory(

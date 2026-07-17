@@ -10,6 +10,8 @@ export default defineConfig({
     alias: [
       { find: '@', replacement: path.resolve(__dirname, './src') },
     ],
+    // app 与 mol-viewer 各带一份 three（peerDep + external），不去重会产生双实例、跨边界 instanceof 失效
+    dedupe: ['three'],
   },
   test: {
     globals: true,

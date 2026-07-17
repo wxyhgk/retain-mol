@@ -279,10 +279,10 @@ def test_xtb_job_can_freeze_a_molecule_revision_as_its_structure(
 
     assert response.status_code == 201
     assert response.json()["request"]["moleculeRevisionId"] == revision.revision_id
-    binding = service.get_input_bindings(response.json()["id"])[0]
-    assert binding.source_kind == "molecule_revision"
-    assert binding.molecule_revision_id == revision.revision_id
-    assert binding.content_sha256 == revision.sha256
+    snapshot = service.get_input_snapshots(response.json()["id"])[0]
+    assert snapshot.source_kind == "molecule_revision"
+    assert snapshot.molecule_revision_id == revision.revision_id
+    assert snapshot.content_sha256 == revision.sha256
 
 
 def test_psi4_frequency_job_freezes_literal_structure(monkeypatch, tmp_path) -> None:
@@ -311,8 +311,8 @@ def test_psi4_frequency_job_freezes_literal_structure(monkeypatch, tmp_path) -> 
     assert response.status_code == 201
     assert response.json()["kind"] == "psi4-frequency"
     assert response.json()["request"]["structure"] == payload["structure"]
-    binding = service.get_input_bindings(response.json()["id"])[0]
-    assert binding.source_kind == "literal"
+    snapshot = service.get_input_snapshots(response.json()["id"])[0]
+    assert snapshot.source_kind == "literal"
     assert service.get_calculation_spec(response.json()["id"]).engine == "psi4"
 
 

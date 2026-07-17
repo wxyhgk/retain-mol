@@ -1,10 +1,14 @@
 @import "tailwindcss";
 
+/* workspace 包(ui-kit/molecule-assets/jobs/mol-viewer)的 Tailwind 类也要参与编译 */
+@source "../../../packages";
+
 @custom-variant dark (&:is(.dark *));
 
 @layer base {
   :root {
-    --background: 0 0% 96.1%;
+    /* 黑白为主:画布纯白,灰色只给次级文字、发丝线与轻微 hover 填充 */
+    --background: 0 0% 100%;
     --foreground: 0 0% 0%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 0%;
@@ -12,16 +16,16 @@
     --popover-foreground: 0 0% 0%;
     --primary: 0 0% 0%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 94%;
+    --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 0%;
-    --muted: 0 0% 94%;
-    --muted-foreground: 0 0% 38%;
-    --accent: 0 0% 90%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 0 0% 95%;
     --accent-foreground: 0 0% 0%;
     --destructive: 0 0% 0%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 84%;
-    --input: 0 0% 84%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
     --ring: 0 0% 0%;
     --radius: 0.5rem;
   }
@@ -51,6 +55,17 @@
 @layer base {
   * {
     border-color: hsl(var(--border));
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  /* 化学键边:运行中边的电子流动动画 */
+  @keyframes chem-edge-flow {
+    to {
+      stroke-dashoffset: -11;
+    }
   }
   body {
     background-color: hsl(var(--background));

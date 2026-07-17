@@ -4,8 +4,31 @@
     {
       "name": "retainmol",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace=apps/retainmol"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace=apps/retainmol"
+      ],
       "port": 5173
+    },
+    {
+      "name": "retainmol-backend",
+      "runtimeExecutable": "conda",
+      "runtimeArgs": [
+        "run",
+        "--no-capture-output",
+        "-n",
+        "retainmol-backend",
+        "uvicorn",
+        "main:app",
+        "--app-dir",
+        "software/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
     }
   ]
 }

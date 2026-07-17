@@ -4,7 +4,7 @@ import { GitBranch, LoaderCircle, Save, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { useEditorStore } from '@/domain/viewer/editorState'
-import { jobQueryKeys, jobsApi, type JobDetail } from '@/features/jobs'
+import { jobQueryKeys, jobsApi, type JobDetail } from '@retainmol/jobs'
 import {
   loadMoleculeRevisionForEditor,
   moleculeAssetsApi,

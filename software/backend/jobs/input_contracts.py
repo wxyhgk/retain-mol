@@ -115,8 +115,8 @@ class InputContractRegistry:
                 )
 
         for port in contract.ports:
-            binding = inputs.get(port.name)
-            if binding is None:
+            input_descriptor = inputs.get(port.name)
+            if input_descriptor is None:
                 if port.required:
                     issues.append(
                         InputContractIssue(
@@ -127,7 +127,9 @@ class InputContractRegistry:
                     )
                 continue
 
-            source_kind = _read_binding_value(binding, "sourceKind", "source_kind")
+            source_kind = _read_input_value(
+                input_descriptor, "sourceKind", "source_kind"
+            )
             normalized_source_kind = _normalize_optional_text(source_kind)
             if normalized_source_kind not in port.allowed_source_kinds:
                 allowed = tuple(sorted(port.allowed_source_kinds))
@@ -146,7 +148,7 @@ class InputContractRegistry:
                 continue
 
             value_format = _normalize_optional_text(
-                _read_binding_value(binding, "format")
+                _read_input_value(input_descriptor, "format")
             )
             allowed_formats = port.formats_by_source_kind[normalized_source_kind]
             if value_format not in allowed_formats:
@@ -171,15 +173,15 @@ class InputContractRegistry:
         )
 
 
-def _read_binding_value(binding: Any, *names: str) -> Any:
-    if isinstance(binding, Mapping):
+def _read_input_value(input_descriptor: Any, *names: str) -> Any:
+    if isinstance(input_descriptor, Mapping):
         for name in names:
-            if name in binding:
-                return binding[name]
+            if name in input_descriptor:
+                return input_descriptor[name]
         return None
     for name in names:
-        if hasattr(binding, name):
-            return getattr(binding, name)
+        if hasattr(input_descriptor, name):
+            return getattr(input_descriptor, name)
     return None
 
 

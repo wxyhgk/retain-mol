@@ -25,7 +25,7 @@ stateDiagram-v2
 
 | 状态 | 语义 | 进入条件 |
 | --- | --- | --- |
-| `created` | 尚不可被 runner 领取的预排队状态；schema 4 正式提交中仅在事务内存在 | Spec 已存在；正在写入并校验 Binding |
+| `created` | 尚不可被 runner 领取的预排队状态；schema 4 正式提交中仅在事务内存在 | Spec 已存在；正在写入并校验 Snapshot |
 | `queued` | 输入已冻结，等待执行 | 必需端口完整；引用已解析；输入实体和摘要有效 |
 | `running` | 一个 runner 已获得执行权 | `UPDATE ... WHERE status = 'queued'` 成功；记录 runner/lease 与 `startedAt` |
 | `succeeded` | 计算成功且必需 Artifact 已原子登记 | 进程成功、输出验证通过、Artifact 元数据提交完成 |
@@ -57,9 +57,9 @@ stateDiagram-v2
 
 ## Workflow 引用解析与排队
 
-Workflow 保存的 `JobInputReference` 是意图；Job 运行读取的是 `JobInputBinding`。两者必须在排队事务中完成解析，避免上游状态或文件在执行时漂移。
+Workflow 保存的 `WorkflowInputLink` 是设计时数据流；Job 运行读取的是 `JobInputSnapshot`。两者必须在排队事务中完成解析，避免上游状态或文件在执行时漂移。
 
-> **实施状态：schema 5 已启用。** xTB 的 literal/Revision/Artifact Binding、摘要校验和 Workflow 引用冻结已进入主路径。字段约束和示例见 [JobInputBinding 设计](./bindings.md)。
+> **实施状态：schema 5 已启用。** xTB 的 literal/Revision/Artifact 输入快照、摘要校验和 Workflow 链接冻结已进入主路径。字段约束和示例见 [JobInputSnapshot 设计](./input-snapshots.md)。
 
 ```mermaid
 sequenceDiagram
@@ -72,8 +72,8 @@ sequenceDiagram
     C->>S: submit(spec, explicit inputs, workflow context?)
     S->>DB: BEGIN IMMEDIATE
     S->>DB: 创建 Job(status = created)
-    S->>DB: 写入显式 Binding
-    S->>DB: 引用解析为具体 JobInputBinding
+    S->>DB: 写入显式 JobInputSnapshot
+    S->>DB: WorkflowInputLink 解析为具体 JobInputSnapshot
     S->>DB: 校验端口、来源与摘要
     S->>DB: created -> queued
     S->>DB: COMMIT
@@ -86,7 +86,7 @@ sequenceDiagram
 
 解析规则：
 
-1. 正式提交在同一事务中创建 `created` Job、写入 Binding 并转为 `queued`；失败时不保留半绑定 Job。
+1. 正式提交在同一事务中创建 `created` Job、写入 Snapshot 并转为 `queued`；失败时不保留半冻结 Job。
 2. `sourceKind = artifact` 时，来源 Job 必须为 `succeeded`。有 `sourceArtifactId` 时校验其归属；否则 `sourceName` 必须唯一命中一个 Artifact。两种方式都要校验 media type/format。
 3. `sourceKind = input` 时，复制来源 Job 已冻结绑定中的 literal、Revision ID 或 Artifact ID，不复制可变路径。
 4. 显式绑定与 Workflow 引用同时指向同一端口时拒绝请求，不使用隐式优先级。

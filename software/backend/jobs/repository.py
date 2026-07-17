@@ -18,12 +18,12 @@ from .models import (
     Job,
     JobDispatch,
     JobInput,
-    JobInputBinding,
-    JobInputReference,
+    JobInputSnapshot,
     JobStatus,
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
+    WorkflowInputLink,
     WorkflowExecution,
 )
 
@@ -254,36 +254,36 @@ class JobRepository:
             self._insert_calculation_spec(connection, spec)
             self._insert_job(connection, job)
 
-    def create_queued_job_with_spec_and_bindings(
+    def create_queued_job_with_spec_and_snapshots(
         self,
         job: Job,
         spec: CalculationSpec,
-        bindings: list[JobInputBinding],
+        input_snapshots: list[JobInputSnapshot],
         queued_at: datetime,
     ) -> None:
         """Create a draft run, freeze inputs, and queue it in one transaction."""
         if job.status != "created" or job.state_version != 0:
             raise ValueError("atomic submission must start from a new created job")
-        if any(binding.job_id != job.job_id for binding in bindings):
-            raise ValueError("all bindings must belong to the submitted job")
+        if any(snapshot.job_id != job.job_id for snapshot in input_snapshots):
+            raise ValueError("all input snapshots must belong to the submitted job")
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             self._insert_calculation_spec(connection, spec)
             self._insert_job(connection, job)
-            self._insert_job_input_bindings(connection, bindings)
+            self._insert_job_input_snapshots(connection, input_snapshots)
             self._queue_created_job(connection, job.job_id, queued_at)
 
-    def freeze_job_input_bindings_and_queue(
+    def freeze_job_input_snapshots_and_queue(
         self,
         job_id: str,
-        bindings: list[JobInputBinding],
+        input_snapshots: list[JobInputSnapshot],
         queued_at: datetime,
         *,
         active_workflow_id: str | None = None,
     ) -> bool:
-        """Replace draft bindings and queue the job as one all-or-nothing write."""
-        if any(binding.job_id != job_id for binding in bindings):
-            raise ValueError("all bindings must belong to the queued job")
+        """Freeze resolved input snapshots and queue the job atomically."""
+        if any(snapshot.job_id != job_id for snapshot in input_snapshots):
+            raise ValueError("all input snapshots must belong to the queued job")
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             if active_workflow_id is not None:
@@ -301,7 +301,7 @@ class JobRepository:
             connection.execute(
                 "DELETE FROM job_input_bindings WHERE job_id = ?", (job_id,)
             )
-            self._insert_job_input_bindings(connection, bindings)
+            self._insert_job_input_snapshots(connection, input_snapshots)
             self._queue_created_job(connection, job_id, queued_at)
             return True
 
@@ -736,26 +736,26 @@ class JobRepository:
                 ),
             )
 
-    def insert_job_input_bindings(
-        self, bindings: list[JobInputBinding]
+    def insert_job_input_snapshots(
+        self, input_snapshots: list[JobInputSnapshot]
     ) -> None:
-        """Insert a complete binding batch in one transaction."""
+        """Insert a complete input snapshot batch in one transaction."""
         with self._connection() as connection:
-            self._insert_job_input_bindings(connection, bindings)
+            self._insert_job_input_snapshots(connection, input_snapshots)
 
-    def replace_job_input_bindings(
-        self, job_id: str, bindings: list[JobInputBinding]
+    def replace_job_input_snapshots(
+        self, job_id: str, input_snapshots: list[JobInputSnapshot]
     ) -> None:
-        """Atomically replace all resolved bindings for one job."""
-        if any(binding.job_id != job_id for binding in bindings):
-            raise ValueError("all replacement bindings must belong to the requested job")
+        """Atomically replace all resolved input snapshots for one job."""
+        if any(snapshot.job_id != job_id for snapshot in input_snapshots):
+            raise ValueError("all replacement snapshots must belong to the requested job")
         with self._connection() as connection:
             connection.execute(
                 "DELETE FROM job_input_bindings WHERE job_id = ?", (job_id,)
             )
-            self._insert_job_input_bindings(connection, bindings)
+            self._insert_job_input_snapshots(connection, input_snapshots)
 
-    def list_job_input_bindings(self, job_id: str) -> list[JobInputBinding]:
+    def list_job_input_snapshots(self, job_id: str) -> list[JobInputSnapshot]:
         with self._connection() as connection:
             rows = connection.execute(
                 """
@@ -765,11 +765,11 @@ class JobRepository:
                 """,
                 (job_id,),
             ).fetchall()
-        return [self._job_input_binding_from_row(row) for row in rows]
+        return [self._job_input_snapshot_from_row(row) for row in rows]
 
     @staticmethod
-    def _insert_job_input_bindings(
-        connection: sqlite3.Connection, bindings: list[JobInputBinding]
+    def _insert_job_input_snapshots(
+        connection: sqlite3.Connection, input_snapshots: list[JobInputSnapshot]
     ) -> None:
         connection.executemany(
             """
@@ -781,20 +781,20 @@ class JobRepository:
             """,
             [
                 (
-                    binding.binding_id,
-                    binding.job_id,
-                    binding.input_name,
-                    binding.source_kind,
-                    _json_dump(binding.literal_value)
-                    if binding.source_kind == "literal"
+                    snapshot.snapshot_id,
+                    snapshot.job_id,
+                    snapshot.input_name,
+                    snapshot.source_kind,
+                    _json_dump(snapshot.literal_value)
+                    if snapshot.source_kind == "literal"
                     else None,
-                    binding.molecule_revision_id,
-                    binding.artifact_id,
-                    binding.content_sha256,
-                    binding.resolved_from_reference_id,
-                    _timestamp(binding.created_at),
+                    snapshot.molecule_revision_id,
+                    snapshot.artifact_id,
+                    snapshot.content_sha256,
+                    snapshot.resolved_from_link_id,
+                    _timestamp(snapshot.created_at),
                 )
-                for binding in bindings
+                for snapshot in input_snapshots
             ],
         )
 
@@ -1065,13 +1065,13 @@ class JobRepository:
             ).fetchall()
         return [str(row["job_id"]) for row in rows]
 
-    def get_job_input_references(self, workflow_id: str) -> list[JobInputReference]:
+    def get_workflow_input_links(self, workflow_id: str) -> list[WorkflowInputLink]:
         with self._connection() as connection:
             rows = connection.execute(
                 "SELECT * FROM job_input_references WHERE workflow_id = ? ORDER BY created_at, reference_id",
                 (workflow_id,),
             ).fetchall()
-        return [self._reference_from_row(row) for row in rows]
+        return [self._workflow_input_link_from_row(row) for row in rows]
 
     @staticmethod
     def _write_workflow_relations(connection: sqlite3.Connection, workflow: Workflow) -> None:
@@ -1088,17 +1088,17 @@ class JobRepository:
             """,
             [
                 (
-                    reference.reference_id,
-                    reference.workflow_id,
-                    reference.target_job_id,
-                    reference.target_input_name,
-                    reference.source_job_id,
-                    reference.source_artifact_id,
-                    reference.source_kind,
-                    reference.source_name,
-                    _timestamp(reference.created_at),
+                    link.link_id,
+                    link.workflow_id,
+                    link.target_job_id,
+                    link.target_input_name,
+                    link.source_job_id,
+                    link.source_artifact_id,
+                    link.source_kind,
+                    link.source_name,
+                    _timestamp(link.created_at),
                 )
-                for reference in workflow.references
+                for link in workflow.input_links
             ],
         )
 
@@ -1151,9 +1151,9 @@ class JobRepository:
         )
 
     @staticmethod
-    def _job_input_binding_from_row(row: sqlite3.Row) -> JobInputBinding:
-        return JobInputBinding(
-            binding_id=row["binding_id"],
+    def _job_input_snapshot_from_row(row: sqlite3.Row) -> JobInputSnapshot:
+        return JobInputSnapshot(
+            snapshot_id=row["binding_id"],
             job_id=row["job_id"],
             input_name=row["input_name"],
             source_kind=row["source_kind"],
@@ -1163,7 +1163,7 @@ class JobRepository:
             molecule_revision_id=row["molecule_revision_id"],
             artifact_id=row["artifact_id"],
             content_sha256=row["content_sha256"],
-            resolved_from_reference_id=row["resolved_from_reference_id"],
+            resolved_from_link_id=row["resolved_from_reference_id"],
             created_at=_parse_timestamp(row["created_at"]),
         )
 
@@ -1208,9 +1208,9 @@ class JobRepository:
         )
 
     @staticmethod
-    def _reference_from_row(row: sqlite3.Row) -> JobInputReference:
-        return JobInputReference(
-            reference_id=row["reference_id"],
+    def _workflow_input_link_from_row(row: sqlite3.Row) -> WorkflowInputLink:
+        return WorkflowInputLink(
+            link_id=row["reference_id"],
             workflow_id=row["workflow_id"],
             target_job_id=row["target_job_id"],
             target_input_name=row["target_input_name"],

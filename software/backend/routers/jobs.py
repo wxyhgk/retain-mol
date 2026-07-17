@@ -18,6 +18,27 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
+try:
+    from jobs.contracts import (
+        ArtifactInputSource,
+        CreateJobRequest,
+        InlineInputSource,
+        JobOutputSource,
+        MoleculeRevisionInputSource,
+        list_task_contracts,
+        resolve_task_contract,
+    )
+except ModuleNotFoundError:
+    from ..jobs.contracts import (
+        ArtifactInputSource,
+        CreateJobRequest,
+        InlineInputSource,
+        JobOutputSource,
+        MoleculeRevisionInputSource,
+        list_task_contracts,
+        resolve_task_contract,
+    )
+
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
@@ -62,7 +83,7 @@ class JobThumbnailRequest(BaseModel):
     data_url: str = Field(alias="dataUrl", min_length=1)
 
 
-class JobInputReferenceRequest(BaseModel):
+class WorkflowInputLinkRequest(BaseModel):
     """One data dependency from an upstream job to a downstream job input."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -76,13 +97,16 @@ class JobInputReferenceRequest(BaseModel):
 
 
 class WorkflowRequest(BaseModel):
-    """A durable DAG of persisted job ids and input references."""
+    """A durable DAG of persisted job ids and input links."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     name: str = Field(min_length=1)
     job_ids: list[str] = Field(alias="jobIds", min_length=1)
-    references: list[JobInputReferenceRequest] = Field(default_factory=list)
+    input_links: list[WorkflowInputLinkRequest] = Field(
+        default_factory=list,
+        alias="references",
+    )
 
 
 class TsPreparationWorkflowRequest(BaseModel):
@@ -273,6 +297,109 @@ class _JobServiceAdapter:
     async def create_job(self, definition: dict[str, Any]) -> Any:
         return await self._call("create_job", definition)
 
+    async def create_calculation(self, request: CreateJobRequest) -> Any:
+        """Adapt the stable layered request to the current execution service."""
+        task_contract = resolve_task_contract(
+            request.definition.contract.kind,
+            request.definition.contract.engine,
+            request.definition.contract.version,
+        )
+        execution = (
+            request.execution.model_dump(mode="json", by_alias=True, exclude_none=True)
+            if request.execution is not None
+            else None
+        )
+        payload = task_contract.runtime_payload(
+            request.definition.parameters,
+            charge=request.definition.system.charge,
+            multiplicity=request.definition.system.multiplicity,
+            execution=execution,
+        )
+        inputs = await self._resolve_create_inputs(request)
+        metadata = {
+            "name": request.profile.name,
+            "description": request.profile.description,
+            "tags": request.profile.tags,
+            "schemaVersion": request.schema_version,
+            "contract": request.definition.contract.model_dump(
+                mode="json", by_alias=True
+            ),
+            "requestedOutputs": [
+                output.model_dump(mode="json", by_alias=True)
+                for output in request.definition.outputs
+            ],
+            "execution": execution or {},
+        }
+        job = await self._call(
+            "create_calculation_job",
+            task_contract.runtime_kind,
+            request.definition.contract.engine,
+            payload,
+            inputs=inputs,
+            metadata=metadata,
+        )
+        job_id = _job_id(job)
+        if not job_id:
+            raise RuntimeError("The jobs service returned a calculation without an id")
+        return await self.get_job(job_id)
+
+    async def _resolve_create_inputs(
+        self, request: CreateJobRequest
+    ) -> dict[str, dict[str, Any]]:
+        inputs: dict[str, dict[str, Any]] = {}
+        for port, source in request.inputs.ports.items():
+            if isinstance(source, InlineInputSource):
+                inputs[port] = {
+                    "sourceKind": "literal",
+                    "format": source.format,
+                    "value": source.value,
+                }
+                continue
+            if isinstance(source, MoleculeRevisionInputSource):
+                revision = await self._call(
+                    "get_molecule_revision", source.revision_id
+                )
+                revision_asset_id = _read_field(revision, "assetId", "asset_id")
+                if (
+                    source.molecule_id is not None
+                    and revision_asset_id != source.molecule_id
+                ):
+                    raise ValueError(
+                        f"Revision '{source.revision_id}' does not belong to molecule "
+                        f"'{source.molecule_id}'"
+                    )
+                inputs[port] = {
+                    "sourceKind": "molecule_revision",
+                    "format": "molecule",
+                    "moleculeRevisionId": source.revision_id,
+                }
+                continue
+            if isinstance(source, ArtifactInputSource):
+                artifact = await self._call("get_artifact", source.artifact_id)
+                inputs[port] = _artifact_input_descriptor(artifact)
+                continue
+            if isinstance(source, JobOutputSource):
+                artifacts = await self.list_artifacts(source.job_id)
+                matches = [
+                    artifact
+                    for artifact in artifacts
+                    if source.output
+                    in {
+                        _read_field(artifact, "artifactId", "artifact_id"),
+                        _read_field(artifact, "name"),
+                        _read_field(artifact, "role"),
+                    }
+                ]
+                if len(matches) != 1:
+                    raise ValueError(
+                        f"Job output '{source.job_id}:{source.output}' must resolve "
+                        f"to exactly one artifact; found {len(matches)}"
+                    )
+                inputs[port] = _artifact_input_descriptor(matches[0])
+                continue
+            raise TypeError(f"Unsupported input source for port '{port}'")
+        return inputs
+
     async def list_jobs(self) -> Any:
         return await self._call("list_jobs")
 
@@ -313,7 +440,10 @@ class _JobServiceAdapter:
             "create_workflow",
             request.name,
             request.job_ids,
-            [reference.model_dump(mode="json", by_alias=True) for reference in request.references],
+            [
+                link.model_dump(mode="json", by_alias=True)
+                for link in request.input_links
+            ],
         )
 
     async def create_ts_preparation_workflow(
@@ -340,7 +470,10 @@ class _JobServiceAdapter:
             workflow_id,
             request.name,
             request.job_ids,
-            [reference.model_dump(mode="json", by_alias=True) for reference in request.references],
+            [
+                link.model_dump(mode="json", by_alias=True)
+                for link in request.input_links
+            ],
         )
 
     async def get_workflow_schedule(self, workflow_id: str) -> Any:
@@ -473,6 +606,32 @@ def _job_id(job: Any) -> str | None:
     else:
         value = getattr(job, "job_id", getattr(job, "id", None))
     return value if isinstance(value, str) and value else None
+
+
+def _read_field(value: Any, *names: str) -> Any:
+    if isinstance(value, dict):
+        for name in names:
+            if name in value:
+                return value[name]
+        return None
+    for name in names:
+        if hasattr(value, name):
+            return getattr(value, name)
+    return None
+
+
+def _artifact_input_descriptor(artifact: Any) -> dict[str, Any]:
+    artifact_id = _read_field(artifact, "artifactId", "artifact_id")
+    artifact_format = _read_field(artifact, "format")
+    if not isinstance(artifact_id, str) or not artifact_id:
+        raise ValueError("Resolved artifact has no id")
+    if not isinstance(artifact_format, str) or not artifact_format:
+        raise ValueError(f"Artifact '{artifact_id}' has no format")
+    return {
+        "sourceKind": "artifact",
+        "format": artifact_format,
+        "artifactId": artifact_id,
+    }
 
 
 def _is_xtb_optimization(job: Any) -> bool:
@@ -633,6 +792,22 @@ async def create_job(request: JobCreateRequest) -> Any:
     """Create and persist a job definition."""
     service = _service_adapter()
     return await _run("create job", None, service.create_job(request.root))
+
+
+@router.get("/contracts")
+async def get_job_contracts() -> Any:
+    """List task contracts used by forms, workflows, and AI clients."""
+    return {"schemaVersion": 1, "contracts": list_task_contracts()}
+
+
+@router.post("/calculations", status_code=201)
+async def create_calculation_job(request: CreateJobRequest) -> Any:
+    """Create a calculation through the stable layered Job contract."""
+    service = _service_adapter()
+    job = await _run(
+        "create calculation job", None, service.create_calculation(request)
+    )
+    return _frontend_job(job)
 
 
 @router.post("/xtb/optimize", status_code=201)

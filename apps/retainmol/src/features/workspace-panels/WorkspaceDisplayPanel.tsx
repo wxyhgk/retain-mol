@@ -37,13 +37,13 @@ export function WorkspaceDisplayPanel() {
   const themes = listThemes()
 
   return (
-    <div className="space-y-5 p-3 text-slate-800">
+    <div className="space-y-5 p-3 text-foreground">
       <WorkspaceSection title="软件风格">
         <div className="grid grid-cols-2 gap-2">
           {presets.map(preset => (
             <OptionButton key={preset.id} active={stylePresetId === preset.id} title={preset.description} onClick={() => setStylePreset(preset.id)}>
               <span className="block truncate text-[11px] font-semibold">{preset.name}</span>
-              <span className="mt-0.5 block truncate text-[9px] text-slate-500">完整 preset</span>
+              <span className="mt-0.5 block truncate text-[9px] text-muted-foreground">完整 preset</span>
             </OptionButton>
           ))}
         </div>
@@ -105,7 +105,7 @@ export function WorkspaceDisplayPanel() {
 }
 
 function WorkspaceSection({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="space-y-2"><h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{title}</h3>{children}</section>
+  return <section className="space-y-2"><h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h3>{children}</section>
 }
 
 function OptionButton({ active, title, className, onClick, children }: { active: boolean; title?: string; className?: string; onClick: () => void; children: ReactNode }) {

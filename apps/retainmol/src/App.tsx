@@ -11,6 +11,7 @@ import {
   resolveAppRoute,
   resolveJobEditorRoute,
   resolveJobId,
+  resolveJobsBucket,
   resolveWorkflowEditRoute,
   workflowPath,
 } from '@/app/appRoute'
@@ -20,6 +21,8 @@ import {
   PlatformShell,
   PlatformWorkflowsPage,
 } from '@/features/platform'
+import { ShelfWorkflowLab } from '@retainmol/jobs'
+import { ComponentGalleryPage } from '@/dev/components-gallery/ComponentGalleryPage'
 
 export type WorkspaceMode = 'build' | 'analyze' | 'simulate'
 
@@ -63,6 +66,21 @@ export default function App() {
     return <TemplateStudioPage onClose={() => navigate('/editor')} />
   }
 
+  if (route === 'lab') {
+    if (location.pathname.startsWith('/lab/components')) {
+      return (
+        <div className="h-screen overflow-y-auto bg-background text-foreground">
+          <ComponentGalleryPage onBack={() => navigate('/jobs')} />
+        </div>
+      )
+    }
+    return (
+      <div className="h-screen bg-background text-foreground">
+        <ShelfWorkflowLab onBack={() => navigate('/jobs')} />
+      </div>
+    )
+  }
+
   if (route === 'editor') {
     const workflowEditSession = resolveWorkflowEditRoute(location.search)
     const jobEditSession = resolveJobEditorRoute(location.search)
@@ -86,7 +104,7 @@ export default function App() {
 
   return <PlatformShell route={route} onNavigate={navigate}>
     {route === 'dashboard' && <PlatformDashboard onNavigate={navigate} />}
-    {route === 'jobs' && <PlatformJobsPage jobId={resolveJobId(location.pathname)} onNavigate={navigate} />}
+    {route === 'jobs' && <PlatformJobsPage jobId={resolveJobId(location.pathname)} initialBucket={resolveJobsBucket(location.search)} onNavigate={navigate} />}
     {route === 'workflows' && (
       <PlatformWorkflowsPage
         initialWorkflowId={new URLSearchParams(location.search).get('workflowId')}

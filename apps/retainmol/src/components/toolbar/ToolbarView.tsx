@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { MoleculeFileDropzone } from '@/features/molecule-placement'
 import type { ToolbarModel } from './useToolbarModel'
 import type { WorkspaceMode } from '@/App'
-import { MoleculeDocumentControls } from '@/features/molecule-assets/components/MoleculeDocumentControls'
+import { MoleculeDocumentControls } from '@/features/molecule-assets'
 
 export interface ToolbarProps {
   showInspector: boolean
@@ -130,7 +130,7 @@ export function ToolbarView({
           >
             <Search size={12} />
             <span className="hidden sm:inline">搜索分子…</span>
-            <kbd className="ml-1 hidden font-sans text-[10px] text-slate-500 md:inline">⌘K</kbd>
+            <kbd className="ml-1 hidden font-sans text-[10px] text-muted-foreground md:inline">⌘K</kbd>
           </button>
         </Tip>
 

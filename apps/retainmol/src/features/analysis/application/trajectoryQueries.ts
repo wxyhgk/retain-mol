@@ -1,5 +1,5 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import type { JobArtifact } from '@/features/jobs'
+import type { JobArtifact } from '@retainmol/jobs'
 import { fetchOptimizationTrajectory } from '../infrastructure/analysisApiClient'
 
 export const analysisQueryKeys = {

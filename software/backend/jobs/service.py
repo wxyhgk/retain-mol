@@ -27,13 +27,13 @@ from .models import (
     Job,
     JobDispatch,
     JobInput,
-    JobInputBinding,
-    JobInputReference,
+    JobInputSnapshot,
     JobStatus,
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
     WorkflowExecution,
+    WorkflowInputLink,
     WorkflowNodeRuntime,
     WorkflowSchedule,
 )
@@ -284,10 +284,12 @@ class JobService:
                 created_at=now,
                 updated_at=now,
             )
-            bindings = self._build_input_bindings(job.job_id, spec.kind, input_definitions, now)
+            input_snapshots = self._build_input_snapshots(
+                job.job_id, spec.kind, input_definitions, now
+            )
             try:
-                self.repository.create_queued_job_with_spec_and_bindings(
-                    job, spec, bindings, now
+                self.repository.create_queued_job_with_spec_and_snapshots(
+                    job, spec, input_snapshots, now
                 )
             except sqlite3.IntegrityError:
                 continue
@@ -361,10 +363,12 @@ class JobService:
                     )
                 definitions[name] = definition
         now = _now()
-        bindings = self._build_input_bindings(job_id, spec.kind, definitions, now)
-        if not self.repository.freeze_job_input_bindings_and_queue(
+        input_snapshots = self._build_input_snapshots(
+            job_id, spec.kind, definitions, now
+        )
+        if not self.repository.freeze_job_input_snapshots_and_queue(
             job_id,
-            bindings,
+            input_snapshots,
             now,
             active_workflow_id=workflow_id if require_active_workflow else None,
         ):
@@ -386,9 +390,9 @@ class JobService:
         job = self._require_job(job_id)
         return self.repository.get_calculation_spec(job.spec_id) if job.spec_id else None
 
-    def get_input_bindings(self, job_id: str) -> list[JobInputBinding]:
+    def get_input_snapshots(self, job_id: str) -> list[JobInputSnapshot]:
         self._require_job(job_id)
-        return self.repository.list_job_input_bindings(job_id)
+        return self.repository.list_job_input_snapshots(job_id)
 
     def list_jobs(self) -> list[Job]:
         jobs = self.repository.list_jobs()
@@ -432,7 +436,7 @@ class JobService:
         return updated
 
     def clone_job(self, job_id: str, *, name: str | None = None) -> Job:
-        """Create a fresh queued calculation from immutable spec and bindings."""
+        """Create a fresh queued calculation from an immutable spec and snapshots."""
         source = self.get_job(job_id)
         spec = self.get_calculation_spec(job_id)
         if spec is None:
@@ -587,12 +591,12 @@ class JobService:
         self,
         name: str,
         job_ids: list[str],
-        references: list[dict[str, Any]],
+        input_links: list[dict[str, Any]],
     ) -> Workflow:
         """Persist a dependency graph after validating every referenced job."""
         name = _required_text(name, "name")
         workflow_id = _new_workflow_id()
-        workflow = self._build_workflow(workflow_id, name, job_ids, references)
+        workflow = self._build_workflow(workflow_id, name, job_ids, input_links)
         self.repository.create_workflow(workflow)
         return workflow
 
@@ -628,7 +632,7 @@ class JobService:
             },
         )
 
-        references = [
+        input_links = [
             {
                 "sourceJobId": reactant_job_id,
                 "sourceArtifactId": reactant_artifact.artifact_id,
@@ -650,7 +654,7 @@ class JobService:
             workflow = self.create_workflow(
                 name,
                 [reactant_job_id, product_job_id, target.job_id],
-                references,
+                input_links,
             )
         except Exception:
             self.delete_job(target.job_id)
@@ -675,7 +679,7 @@ class JobService:
         workflow_id: str,
         name: str,
         job_ids: list[str],
-        references: list[dict[str, Any]],
+        input_links: list[dict[str, Any]],
     ) -> Workflow:
         if self.repository.get_workflow_execution(workflow_id) is not None:
             raise InvalidJobOperationError(
@@ -686,7 +690,7 @@ class JobService:
             workflow_id,
             _required_text(name, "name"),
             job_ids,
-            references,
+            input_links,
             created_at=current.created_at,
         )
         if not self.repository.update_workflow(workflow):
@@ -797,10 +801,10 @@ class JobService:
             raise InvalidJobOperationError("workflow has not been activated")
 
         ordered_job_ids = validate_workflow_dag(
-            workflow.job_ids, workflow.references
+            workflow.job_ids, workflow.input_links
         )
         predecessors = workflow_predecessors(
-            workflow.job_ids, workflow.references
+            workflow.job_ids, workflow.input_links
         )
         jobs = {job_id: self.get_job(job_id) for job_id in ordered_job_ids}
         if execution.status == "cancelled":
@@ -993,9 +997,9 @@ class JobService:
         return job_input
 
     def _assert_legacy_inputs_mutable(self, job_id: str) -> None:
-        """Keep the legacy input route away from frozen calculation bindings."""
+        """Keep the legacy input route away from frozen calculation snapshots."""
         job = self._require_job(job_id)
-        if job.spec_id is not None or job.bindings:
+        if job.spec_id is not None or job.input_snapshots:
             raise InvalidJobOperationError(
                 "calculation inputs are immutable; copy the job to change them"
             )
@@ -1206,41 +1210,41 @@ class JobService:
 
     def _populate_relations(self, job: Job) -> None:
         job.inputs = self.repository.get_inputs(job.job_id)
-        job.bindings = self.repository.list_job_input_bindings(job.job_id)
+        job.input_snapshots = self.repository.list_job_input_snapshots(job.job_id)
         job.artifacts = self.repository.get_artifacts(job.job_id)
 
     def _copy_input_definitions(self, source: Job) -> dict[str, dict[str, Any]]:
         """Rebind immutable input identities without copying private output files."""
         inputs: dict[str, dict[str, Any]] = {}
-        for binding in source.bindings:
-            descriptor: dict[str, Any] = {"sourceKind": binding.source_kind}
-            if binding.content_sha256:
-                descriptor["contentSha256"] = binding.content_sha256
-            if binding.source_kind == "literal":
-                descriptor["value"] = binding.literal_value
-                if isinstance(binding.literal_value, Mapping):
-                    literal_format = binding.literal_value.get("format")
+        for snapshot in source.input_snapshots:
+            descriptor: dict[str, Any] = {"sourceKind": snapshot.source_kind}
+            if snapshot.content_sha256:
+                descriptor["contentSha256"] = snapshot.content_sha256
+            if snapshot.source_kind == "literal":
+                descriptor["value"] = snapshot.literal_value
+                if isinstance(snapshot.literal_value, Mapping):
+                    literal_format = snapshot.literal_value.get("format")
                     if literal_format:
                         descriptor["format"] = literal_format
-            elif binding.source_kind == "molecule_revision":
+            elif snapshot.source_kind == "molecule_revision":
                 descriptor["format"] = "molecule"
-                descriptor["moleculeRevisionId"] = binding.molecule_revision_id
+                descriptor["moleculeRevisionId"] = snapshot.molecule_revision_id
             else:
-                artifact = self.get_artifact(binding.artifact_id or "")
+                artifact = self.get_artifact(snapshot.artifact_id or "")
                 descriptor["format"] = artifact.format
                 descriptor["artifactId"] = artifact.artifact_id
-            inputs[binding.input_name] = descriptor
+            inputs[snapshot.input_name] = descriptor
         return inputs
 
-    def _build_input_bindings(
+    def _build_input_snapshots(
         self,
         job_id: str,
         calculation_kind: str,
         definitions: Mapping[str, Any],
         created_at: datetime,
-    ) -> list[JobInputBinding]:
+    ) -> list[JobInputSnapshot]:
         descriptors: dict[str, dict[str, Any]] = {}
-        bindings: list[JobInputBinding] = []
+        input_snapshots: list[JobInputSnapshot] = []
         for input_name, definition in definitions.items():
             if not isinstance(definition, Mapping):
                 definition = {
@@ -1265,15 +1269,15 @@ class JobService:
                     raise InvalidJobInputError(f"Literal input '{input_name}' has no value")
                 if isinstance(literal_value, Mapping) and "format" not in literal_value:
                     literal_value = {"format": value_format, **dict(literal_value)}
-                bindings.append(
-                    JobInputBinding(
-                        bindingId=f"binding-{secrets.token_hex(8)}",
+                input_snapshots.append(
+                    JobInputSnapshot(
+                        snapshot_id=f"binding-{secrets.token_hex(8)}",
                         jobId=job_id,
                         inputName=_required_text(input_name, "input name"),
                         sourceKind="literal",
                         literalValue=literal_value,
                         contentSha256=_canonical_json_sha256(literal_value),
-                        resolvedFromReferenceId=descriptor.get("resolvedFromReferenceId"),
+                        resolved_from_link_id=descriptor.get("resolvedFromReferenceId"),
                         createdAt=created_at,
                     )
                 )
@@ -1295,17 +1299,17 @@ class JobService:
                 expected_digest = descriptor.get("contentSha256")
                 if expected_digest is not None and expected_digest != revision.sha256:
                     raise InvalidJobInputError(
-                        f"Molecule revision '{revision.revision_id}' digest does not match the binding"
+                        f"Molecule revision '{revision.revision_id}' digest does not match the snapshot"
                     )
-                bindings.append(
-                    JobInputBinding(
-                        bindingId=f"binding-{secrets.token_hex(8)}",
+                input_snapshots.append(
+                    JobInputSnapshot(
+                        snapshot_id=f"binding-{secrets.token_hex(8)}",
                         jobId=job_id,
                         inputName=_required_text(input_name, "input name"),
                         sourceKind="molecule_revision",
                         moleculeRevisionId=revision.revision_id,
                         contentSha256=revision.sha256,
-                        resolvedFromReferenceId=descriptor.get(
+                        resolved_from_link_id=descriptor.get(
                             "resolvedFromReferenceId"
                         ),
                         createdAt=created_at,
@@ -1335,17 +1339,17 @@ class JobService:
             expected_digest = descriptor.get("contentSha256")
             if expected_digest is not None and expected_digest != artifact.sha256:
                 raise InvalidJobInputError(
-                    f"Artifact '{artifact.artifact_id}' digest does not match the binding"
+                    f"Artifact '{artifact.artifact_id}' digest does not match the snapshot"
                 )
-            bindings.append(
-                JobInputBinding(
-                    bindingId=f"binding-{secrets.token_hex(8)}",
+            input_snapshots.append(
+                JobInputSnapshot(
+                    snapshot_id=f"binding-{secrets.token_hex(8)}",
                     jobId=job_id,
                     inputName=_required_text(input_name, "input name"),
                     sourceKind="artifact",
                     artifactId=artifact.artifact_id,
                     contentSha256=artifact.sha256,
-                    resolvedFromReferenceId=descriptor.get("resolvedFromReferenceId"),
+                    resolved_from_link_id=descriptor.get("resolvedFromReferenceId"),
                     createdAt=created_at,
                 )
             )
@@ -1354,7 +1358,7 @@ class JobService:
         if not validation.is_valid:
             details = "; ".join(issue.message for issue in validation.issues)
             raise InvalidJobInputError(details)
-        return bindings
+        return input_snapshots
 
     def _resolve_workflow_input_definitions(
         self, workflow_id: str, target_job_id: str
@@ -1365,75 +1369,75 @@ class JobService:
                 f"Job '{target_job_id}' is not a member of workflow '{workflow_id}'"
             )
         definitions: dict[str, dict[str, Any]] = {}
-        for reference in workflow.references:
-            if reference.target_job_id != target_job_id:
+        for link in workflow.input_links:
+            if link.target_job_id != target_job_id:
                 continue
-            source_job = self.get_job(reference.source_job_id)
+            source_job = self.get_job(link.source_job_id)
             if source_job.status != "succeeded":
                 raise InvalidJobInputError(
                     f"Workflow source job '{source_job.job_id}' must be succeeded"
                 )
-            if reference.source_kind == "artifact":
-                artifacts = self.repository.get_artifacts(reference.source_job_id)
-                if reference.source_artifact_id is not None:
+            if link.source_kind == "artifact":
+                artifacts = self.repository.get_artifacts(link.source_job_id)
+                if link.source_artifact_id is not None:
                     matches = [
                         artifact
                         for artifact in artifacts
-                        if artifact.artifact_id == reference.source_artifact_id
+                        if artifact.artifact_id == link.source_artifact_id
                     ]
                 else:
                     matches = [
                         artifact
                         for artifact in artifacts
-                        if artifact.name == reference.source_name
+                        if artifact.name == link.source_name
                     ]
                 if len(matches) != 1:
                     raise InvalidJobInputError(
-                        f"Workflow reference '{reference.reference_id}' did not resolve uniquely"
+                        f"Workflow input link '{link.link_id}' did not resolve uniquely"
                     )
                 artifact = matches[0]
-                definitions[reference.target_input_name] = {
+                definitions[link.target_input_name] = {
                     "sourceKind": "artifact",
                     "artifactId": artifact.artifact_id,
                     "format": artifact.format,
                     "contentSha256": artifact.sha256,
-                    "resolvedFromReferenceId": reference.reference_id,
+                    "resolvedFromReferenceId": link.link_id,
                 }
                 continue
 
-            source_bindings = self.repository.list_job_input_bindings(
-                reference.source_job_id
+            source_snapshots = self.repository.list_job_input_snapshots(
+                link.source_job_id
             )
             matches = [
-                binding
-                for binding in source_bindings
-                if binding.input_name == reference.source_name
+                snapshot
+                for snapshot in source_snapshots
+                if snapshot.input_name == link.source_name
             ]
             if len(matches) != 1:
                 raise InvalidJobInputError(
-                    f"Workflow reference '{reference.reference_id}' did not resolve uniquely"
+                    f"Workflow input link '{link.link_id}' did not resolve uniquely"
                 )
             source = matches[0]
             if source.source_kind == "literal":
                 literal = source.literal_value
-                definitions[reference.target_input_name] = {
+                definitions[link.target_input_name] = {
                     "sourceKind": "literal",
                     "format": literal.get("format") if isinstance(literal, Mapping) else "structure",
                     "value": literal,
-                    "resolvedFromReferenceId": reference.reference_id,
+                    "resolvedFromReferenceId": link.link_id,
                 }
             elif source.source_kind == "artifact":
                 artifact = self.repository.get_artifact(source.artifact_id or "")
                 if artifact is None:
                     raise InvalidJobInputError(
-                        f"Source binding '{source.binding_id}' lost its artifact"
+                        f"Source snapshot '{source.snapshot_id}' lost its artifact"
                     )
-                definitions[reference.target_input_name] = {
+                definitions[link.target_input_name] = {
                     "sourceKind": "artifact",
                     "artifactId": artifact.artifact_id,
                     "format": artifact.format,
                     "contentSha256": source.content_sha256,
-                    "resolvedFromReferenceId": reference.reference_id,
+                    "resolvedFromReferenceId": link.link_id,
                 }
             elif source.source_kind == "molecule_revision":
                 revision = self.repository.get_molecule_revision(
@@ -1441,79 +1445,85 @@ class JobService:
                 )
                 if revision is None:
                     raise InvalidJobInputError(
-                        f"Source binding '{source.binding_id}' lost its molecule revision"
+                        f"Source snapshot '{source.snapshot_id}' lost its molecule revision"
                     )
-                definitions[reference.target_input_name] = {
+                definitions[link.target_input_name] = {
                     "sourceKind": "molecule_revision",
                     "moleculeRevisionId": revision.revision_id,
                     "format": "molecule",
                     "contentSha256": source.content_sha256,
-                    "resolvedFromReferenceId": reference.reference_id,
+                    "resolvedFromReferenceId": link.link_id,
                 }
             else:
                 raise InvalidJobInputError(
-                    f"Source binding '{source.binding_id}' is not supported yet"
+                    f"Source snapshot '{source.snapshot_id}' is not supported yet"
                 )
         return definitions
 
     def _populate_workflow_relations(self, workflow: Workflow) -> None:
         workflow.job_ids = self.repository.get_workflow_job_ids(workflow.workflow_id)
-        workflow.references = self.repository.get_job_input_references(workflow.workflow_id)
+        workflow.input_links = self.repository.get_workflow_input_links(
+            workflow.workflow_id
+        )
 
     def _build_workflow(
         self,
         workflow_id: str,
         name: str,
         job_ids: list[str],
-        reference_definitions: list[dict[str, Any]],
+        input_link_definitions: list[dict[str, Any]],
         *,
         created_at: datetime | None = None,
     ) -> Workflow:
         for job_id in job_ids:
             self._require_job(job_id)
         now = _now()
-        references = [
-            JobInputReference(
-                reference_id=_new_reference_id(),
+        input_links = [
+            WorkflowInputLink(
+                link_id=_new_input_link_id(),
                 workflow_id=workflow_id,
                 target_job_id=definition["targetJobId"],
-                target_input_name=_required_text(definition["targetInputName"], "targetInputName"),
+                target_input_name=_required_text(
+                    definition["targetInputName"], "targetInputName"
+                ),
                 source_job_id=definition["sourceJobId"],
                 source_artifact_id=definition.get("sourceArtifactId"),
                 source_kind=definition["sourceKind"],
-                source_name=_required_text(definition.get("sourceName") or "artifact", "sourceName"),
+                source_name=_required_text(
+                    definition.get("sourceName") or "artifact", "sourceName"
+                ),
                 created_at=now,
             )
-            for definition in reference_definitions
+            for definition in input_link_definitions
         ]
-        for reference in references:
-            self._validate_reference_source(reference)
-        validate_workflow_dag(job_ids, references)
+        for link in input_links:
+            self._validate_workflow_input_link_source(link)
+        validate_workflow_dag(job_ids, input_links)
         return Workflow(
             workflow_id=workflow_id,
             name=name,
             created_at=created_at or now,
             updated_at=now,
             job_ids=job_ids,
-            references=references,
+            input_links=input_links,
         )
 
-    def _validate_reference_source(self, reference: JobInputReference) -> None:
-        self._require_job(reference.source_job_id)
-        if reference.source_artifact_id is None:
+    def _validate_workflow_input_link_source(self, link: WorkflowInputLink) -> None:
+        self._require_job(link.source_job_id)
+        if link.source_artifact_id is None:
             return
         artifact = next(
             (
                 item
-                for item in self.repository.get_artifacts(reference.source_job_id)
-                if item.artifact_id == reference.source_artifact_id
+                for item in self.repository.get_artifacts(link.source_job_id)
+                if item.artifact_id == link.source_artifact_id
             ),
             None,
         )
         if artifact is None:
             raise ValueError(
-                f"Artifact '{reference.source_artifact_id}' does not belong to job "
-                f"'{reference.source_job_id}'"
+                f"Artifact '{link.source_artifact_id}' does not belong to job "
+                f"'{link.source_job_id}'"
             )
 
     def _require_workflow_structure_artifact(
@@ -1590,7 +1600,7 @@ def _new_workflow_id() -> str:
     return f"workflow-{secrets.token_hex(8)}"
 
 
-def _new_reference_id() -> str:
+def _new_input_link_id() -> str:
     return f"reference-{secrets.token_hex(8)}"
 
 

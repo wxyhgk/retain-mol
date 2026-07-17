@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { JobsApi, JobDetail } from '@/features/jobs'
+import type { JobsApi, JobDetail } from '@retainmol/jobs'
 import type { WorkflowDefinition, WorkflowsApi } from '@/features/workflows'
 import { replaceWorkflowJobStructure } from './replaceWorkflowJobStructure'
 

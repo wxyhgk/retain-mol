@@ -1,22 +1,35 @@
-import { ArrowRight, Atom, CheckCircle2, CircleDot, Clock3, FlaskConical, GitBranch, PlayCircle, TriangleAlert } from 'lucide-react'
+import { ArrowRight, Atom, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useJobsQuery, resolveJobArtifactUrl, type JobSummary } from '@/features/jobs'
+import {
+  JobEmptyState,
+  JobStatMetrics,
+  JobStatusBadge,
+  JobThumbnail,
+  calculationLabel,
+  useJobsQuery,
+  type JobSummary,
+} from '@retainmol/jobs'
 import { useWorkflowsQuery } from '@/features/workflows'
-import { cn } from '@/lib/utils'
-import { jobPath, workflowPath } from '@/app/appRoute'
+import { jobPath, jobsPath, workflowPath } from '@/app/appRoute'
+
+const RECENT_JOBS_LIMIT = 8
+const RECENT_WORKFLOWS_LIMIT = 5
 
 export interface PlatformDashboardProps {
   onNavigate: (path: string) => void
+  recentJobsLimit?: number
+  recentWorkflowsLimit?: number
 }
 
-export function PlatformDashboard({ onNavigate }: PlatformDashboardProps) {
+export function PlatformDashboard({
+  onNavigate,
+  recentJobsLimit = RECENT_JOBS_LIMIT,
+  recentWorkflowsLimit = RECENT_WORKFLOWS_LIMIT,
+}: PlatformDashboardProps) {
   const jobsQuery = useJobsQuery()
   const workflowsQuery = useWorkflowsQuery()
   const jobs = jobsQuery.data ?? []
   const workflows = workflowsQuery.data ?? []
-  const activeJobs = jobs.filter(job => job.status === 'queued' || job.status === 'running')
-  const succeededJobs = jobs.filter(job => job.status === 'succeeded')
-  const failedJobs = jobs.filter(job => job.status === 'failed' || job.status === 'interrupted')
 
   function openJob(jobId: string) {
     onNavigate(jobPath(jobId))
@@ -37,12 +50,7 @@ export function PlatformDashboard({ onNavigate }: PlatformDashboardProps) {
           </div>
         </header>
 
-        <section aria-label="任务状态概览" className="grid grid-cols-2 border-b border-l border-border md:grid-cols-4">
-          <Metric label="全部任务" value={jobs.length} icon={FlaskConical} />
-          <Metric label="等待或运行" value={activeJobs.length} icon={PlayCircle} />
-          <Metric label="已完成" value={succeededJobs.length} icon={CheckCircle2} />
-          <Metric label="需要处理" value={failedJobs.length} icon={TriangleAlert} />
-        </section>
+        <JobStatMetrics jobs={jobs} onSelectBucket={bucket => onNavigate(jobsPath(bucket))} />
 
         <div className="grid min-h-[32rem] flex-1 gap-5 pt-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(19rem,0.8fr)]">
           <section className="min-h-0 border border-border bg-card">
@@ -51,9 +59,9 @@ export function PlatformDashboard({ onNavigate }: PlatformDashboardProps) {
               <Button variant="ghost" size="sm" onClick={() => onNavigate('/jobs')}>查看全部<ArrowRight /></Button>
             </div>
             <div className="divide-y divide-border">
-              {jobsQuery.isLoading && <EmptyState text="正在加载任务…" />}
-              {!jobsQuery.isLoading && jobs.length === 0 && <EmptyState text="还没有计算任务。请先在分子编辑器中准备结构。" />}
-              {jobs.slice(0, 8).map(job => <RecentJobRow key={job.id} job={job} onOpen={() => openJob(job.id)} />)}
+              {jobsQuery.isLoading && <JobEmptyState title="正在加载任务…" />}
+              {!jobsQuery.isLoading && jobs.length === 0 && <JobEmptyState title="还没有计算任务。请先在分子编辑器中准备结构。" />}
+              {jobs.slice(0, recentJobsLimit).map(job => <RecentJobRow key={job.id} job={job} onOpen={() => openJob(job.id)} />)}
             </div>
           </section>
 
@@ -64,9 +72,9 @@ export function PlatformDashboard({ onNavigate }: PlatformDashboardProps) {
                 <Button variant="ghost" size="icon" className="size-8" title="打开工作流" onClick={() => onNavigate('/workflows')}><ArrowRight /></Button>
               </div>
               <div className="divide-y divide-border">
-                {workflowsQuery.isLoading && <EmptyState text="正在加载工作流…" />}
-                {!workflowsQuery.isLoading && workflows.length === 0 && <EmptyState text="暂无工作流" />}
-                {workflows.slice(0, 5).map(workflow => (
+                {workflowsQuery.isLoading && <JobEmptyState title="正在加载工作流…" />}
+                {!workflowsQuery.isLoading && workflows.length === 0 && <JobEmptyState title="暂无工作流" />}
+                {workflows.slice(0, recentWorkflowsLimit).map(workflow => (
                   <button key={workflow.workflowId} type="button" onClick={() => onNavigate(workflowPath(workflow.workflowId))} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/70">
                     <span className="grid size-8 shrink-0 place-items-center border border-border"><GitBranch className="size-3.5" /></span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{workflow.name}</span><span className="mt-0.5 block text-[10px] text-muted-foreground">{workflow.jobIds.length} 个任务 · {workflow.references.length} 条依赖</span></span>
@@ -91,37 +99,16 @@ export function PlatformDashboard({ onNavigate }: PlatformDashboardProps) {
   )
 }
 
-function Metric({ label, value, icon: Icon }: { label: string; value: number; icon: typeof FlaskConical }) {
-  return <div className="flex items-center gap-3 border-r border-t border-border bg-card px-4 py-4"><Icon className="size-4 text-muted-foreground" /><div><p className="text-xl font-semibold tabular-nums">{value}</p><p className="text-[11px] text-muted-foreground">{label}</p></div></div>
-}
-
 function RecentJobRow({ job, onOpen }: { job: JobSummary; onOpen: () => void }) {
-  const preview = job.artifacts?.find(item => item.role === 'preview' && item.format === 'png')
-  const Icon = job.status === 'running' ? CircleDot : job.status === 'queued' ? Clock3 : job.status === 'succeeded' ? CheckCircle2 : TriangleAlert
   return (
     <button type="button" onClick={onOpen} className="grid w-full grid-cols-[3rem_minmax(0,1fr)_7rem_7rem_1.5rem] items-center gap-3 px-4 py-3 text-left hover:bg-muted/70">
-      {preview ? <img src={resolveJobArtifactUrl(preview)} alt="" loading="lazy" className="size-12 border border-border bg-background object-cover" /> : <span className="grid size-12 place-items-center border border-border bg-muted"><FlaskConical className="size-4 text-muted-foreground" /></span>}
+      <JobThumbnail job={job} size="lg" />
       <span className="min-w-0"><span className="block truncate text-xs font-medium">{job.name}</span><span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">{job.id}</span></span>
-      <span className="text-[11px] text-muted-foreground">{job.kind}</span>
-      <span className={cn('flex items-center gap-1 text-[11px]', statusColor(job.status))}><Icon className="size-3" />{statusLabel(job.status)}</span>
+      <span className="text-[11px] text-muted-foreground">{calculationLabel(job.kind)}</span>
+      <span><JobStatusBadge status={job.status} size="sm" /></span>
       <ArrowRight className="size-3.5 text-muted-foreground" />
     </button>
   )
-}
-
-function statusColor(status: string) {
-  if (status === 'succeeded') return 'text-emerald-700 dark:text-emerald-400'
-  if (status === 'failed' || status === 'interrupted') return 'text-destructive'
-  return 'text-foreground'
-}
-
-function statusLabel(status: string) {
-  const labels: Record<string, string> = { created: '已创建', queued: '等待中', running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消', interrupted: '已中断' }
-  return labels[status] ?? status
-}
-
-function EmptyState({ text }: { text: string }) {
-  return <p className="px-4 py-8 text-center text-xs text-muted-foreground">{text}</p>
 }
 
 function FlowStep({ number, text }: { number: string; text: string }) {

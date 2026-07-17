@@ -201,7 +201,7 @@ def _execute_claimed_xtb_job(
 
 
 def _resolve_xtb_request(service: JobService, job: Any) -> dict[str, Any] | None:
-    """Compose an executable request from frozen bindings, with legacy fallback."""
+    """Compose an executable request from frozen snapshots, with legacy fallback."""
     return resolve_structure_request(service, job)
 
 

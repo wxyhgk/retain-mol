@@ -4,7 +4,7 @@
 
 ```ts
 
-import { JSX } from 'react/jsx-runtime';
+import { JSX } from 'react';
 import { StoreApi } from 'zustand';
 import { TemporalState } from 'zundo';
 import { UseBoundStore } from 'zustand';

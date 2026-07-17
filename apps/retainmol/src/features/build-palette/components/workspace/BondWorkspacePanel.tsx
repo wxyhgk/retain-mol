@@ -71,7 +71,7 @@ export function BondWorkspacePanel(props: BondWorkspacePanelProps) {
             </button>
           </div>
         ) : (
-          <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 text-[11px] text-slate-500">
+          <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-border bg-muted text-[11px] text-muted-foreground">
             在画布中点击一根键
           </div>
         )}

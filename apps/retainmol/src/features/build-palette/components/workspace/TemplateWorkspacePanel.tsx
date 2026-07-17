@@ -36,19 +36,19 @@ export function TemplateWorkspacePanel({ activeFragmentId, onPickTemplate, onPic
     }
     return (
       <div className="space-y-3">
-        <button type="button" onClick={closePreview} className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+        <button type="button" onClick={closePreview} className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground">
           <ArrowLeft size={13} />模板资源
         </button>
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-slate-900">{preview.name}</div>
-            <div className="mt-0.5 font-mono text-[10px] text-slate-500">{preview.formula}</div>
+            <div className="truncate text-sm font-semibold text-foreground">{preview.name}</div>
+            <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">{preview.formula}</div>
           </div>
           <button
             type="button"
             onClick={() => onPickTemplate(preview.id)}
             title="载入为画布起始结构"
-            className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-100 px-2 text-[10px] font-medium text-slate-700 hover:border-slate-500 hover:text-slate-900"
+            className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-border bg-accent px-2 text-[10px] font-medium text-foreground hover:border-foreground/40 hover:text-foreground"
           >
             <Upload size={12} />起始结构
           </button>
@@ -60,9 +60,9 @@ export function TemplateWorkspacePanel({ activeFragmentId, onPickTemplate, onPic
 
   return (
     <div className="space-y-5">
-      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
-        <div className="text-xs font-semibold text-slate-900">模板库</div>
-        <p className="mt-1 text-[10px] leading-4 text-slate-500">环系与完整模板统一从这里进入。打开模板后，在独立 3D 预览中选择原子或边。</p>
+      <div className="rounded-md border border-border bg-muted px-3 py-2.5">
+        <div className="text-xs font-semibold text-foreground">模板库</div>
+        <p className="mt-1 text-[10px] leading-4 text-muted-foreground">环系与完整模板统一从这里进入。打开模板后，在独立 3D 预览中选择原子或边。</p>
       </div>
 
       <WorkspaceSection title="常用环系" meta={String(RING_FRAGMENTS.length)}>
@@ -76,13 +76,13 @@ export function TemplateWorkspacePanel({ activeFragmentId, onPickTemplate, onPic
                 'flex h-12 min-w-0 items-center gap-2 rounded-md border px-2.5 text-left transition-colors',
                 activeFragmentId === fragment.id
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-500 hover:bg-slate-100',
+                  : 'border-border bg-white text-foreground hover:border-foreground/40 hover:bg-accent',
               )}
             >
-              <Hexagon size={14} className="shrink-0 text-slate-500" />
+              <Hexagon size={14} className="shrink-0 text-muted-foreground" />
               <span className="min-w-0">
                 <span className="block truncate text-[11px] font-semibold">{fragment.name}</span>
-                <span className="block truncate font-mono text-[9px] text-slate-500">{fragment.formula}</span>
+                <span className="block truncate font-mono text-[9px] text-muted-foreground">{fragment.formula}</span>
               </span>
             </button>
           ))}
@@ -100,7 +100,7 @@ export function TemplateWorkspacePanel({ activeFragmentId, onPickTemplate, onPic
 function TemplateSection({ title, templates, onOpen }: { title: string; templates: readonly CanvasTemplateSummary[]; onOpen: (id: string) => void }) {
   return (
     <WorkspaceSection title={title} meta={String(templates.length)}>
-      <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+      <div className="overflow-hidden rounded-md border border-border bg-muted">
         {templates.map((template, index) => (
           <button
             key={template.id}
@@ -108,16 +108,16 @@ function TemplateSection({ title, templates, onOpen }: { title: string; template
             title={template.description || template.name}
             onClick={() => onOpen(template.id)}
             className={cn(
-              'group flex h-11 w-full min-w-0 items-center gap-2 px-2.5 text-left transition-colors hover:bg-slate-100',
-              index > 0 && 'border-t border-slate-200',
+              'group flex h-11 w-full min-w-0 items-center gap-2 px-2.5 text-left transition-colors hover:bg-accent',
+              index > 0 && 'border-t border-border',
             )}
           >
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[11px] font-medium text-slate-800">{template.name}</span>
-              <span className="block truncate font-mono text-[9px] text-slate-500">{template.formula}</span>
+              <span className="block truncate text-[11px] font-medium text-foreground">{template.name}</span>
+              <span className="block truncate font-mono text-[9px] text-muted-foreground">{template.formula}</span>
             </span>
-            <span className="text-[9px] text-slate-500 opacity-0 group-hover:opacity-100">选择位点</span>
-            <ChevronRight size={13} className="shrink-0 text-slate-600 group-hover:text-slate-700" />
+            <span className="text-[9px] text-muted-foreground opacity-0 group-hover:opacity-100">选择位点</span>
+            <ChevronRight size={13} className="shrink-0 text-muted-foreground group-hover:text-foreground" />
           </button>
         ))}
       </div>

@@ -296,6 +296,6 @@ def test_runner_composes_request_from_an_immutable_molecule_revision(
     assert resolved is not None
     assert resolved["molecule"] == molecule
     assert resolved["structure"]["atoms"] == molecule["atoms"]
-    binding = service.get_input_bindings(queued.job_id)[0]
-    assert binding.molecule_revision_id == revision.revision_id
-    assert binding.content_sha256 == revision.sha256
+    snapshot = service.get_input_snapshots(queued.job_id)[0]
+    assert snapshot.molecule_revision_id == revision.revision_id
+    assert snapshot.content_sha256 == revision.sha256

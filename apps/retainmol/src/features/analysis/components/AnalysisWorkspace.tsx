@@ -1,6 +1,6 @@
 import { BarChart3, LoaderCircle } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
-import { useJobDetailQuery, useJobsQuery, useJobUiStore } from '@/features/jobs'
+import { useJobDetailQuery, useJobsQuery, useJobUiStore } from '@retainmol/jobs'
 import { useOptimizationTrajectoryQuery } from '../application/trajectoryQueries'
 import { OptimizationTrajectoryChart } from './OptimizationTrajectoryChart'
 

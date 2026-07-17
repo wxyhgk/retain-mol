@@ -15,3 +15,5 @@ export type {
   WorkflowSaveRequest,
   WorkflowsApi,
 } from './domain/workflowTypes'
+export { WorkflowReadOnlyCanvas } from './components/WorkflowReadOnlyCanvas'
+export type { WorkflowReadOnlyCanvasProps } from './components/WorkflowReadOnlyCanvas'

@@ -1,4 +1,4 @@
-"""Resolve immutable molecular structure bindings for calculation runners."""
+"""Resolve immutable molecular input snapshots for calculation runners."""
 
 from __future__ import annotations
 
@@ -15,19 +15,19 @@ from .molecule_canonicalize import molecule_content_hash
 def resolve_structure_request(service: Any, job: Any) -> dict[str, Any] | None:
     """Compose an engine request from a calculation spec and frozen structure."""
     spec = service.get_calculation_spec(job.job_id)
-    bindings = service.get_input_bindings(job.job_id)
-    if spec is not None and bindings:
-        binding = next(
-            (item for item in bindings if item.input_name == "structure"), None
+    input_snapshots = service.get_input_snapshots(job.job_id)
+    if spec is not None and input_snapshots:
+        snapshot = next(
+            (item for item in input_snapshots if item.input_name == "structure"), None
         )
-        if binding is None:
+        if snapshot is None:
             raise JobExecutionError(
-                f"Job '{job.job_id}' has no supported frozen structure binding"
+                f"Job '{job.job_id}' has no supported frozen structure snapshot"
             )
         request = dict(spec.payload)
-        if binding.source_kind == "molecule_revision":
-            revision = service.get_molecule_revision(binding.molecule_revision_id or "")
-            if revision.sha256 != binding.content_sha256:
+        if snapshot.source_kind == "molecule_revision":
+            revision = service.get_molecule_revision(snapshot.molecule_revision_id or "")
+            if revision.sha256 != snapshot.content_sha256:
                 raise JobExecutionError(
                     f"Job '{job.job_id}' frozen molecule revision failed its digest check"
                 )
@@ -42,11 +42,11 @@ def resolve_structure_request(service: Any, job: Any) -> dict[str, Any] | None:
                 if key in {"name", "atoms"}
             }
             return request
-        if binding.source_kind == "artifact":
-            artifact = service.get_artifact(binding.artifact_id or "")
-            if artifact.sha256 != binding.content_sha256:
+        if snapshot.source_kind == "artifact":
+            artifact = service.get_artifact(snapshot.artifact_id or "")
+            if artifact.sha256 != snapshot.content_sha256:
                 raise JobExecutionError(
-                    f"Job '{job.job_id}' frozen artifact binding failed its digest check"
+                    f"Job '{job.job_id}' frozen artifact snapshot failed its digest check"
                 )
             structure = artifact.metadata.get("structure")
             if isinstance(structure, Mapping):
@@ -67,18 +67,18 @@ def resolve_structure_request(service: Any, job: Any) -> dict[str, Any] | None:
             if isinstance(molecule, Mapping):
                 request["molecule"] = dict(molecule)
             return request
-        if binding.source_kind != "literal":
+        if snapshot.source_kind != "literal":
             raise JobExecutionError(
                 f"Job '{job.job_id}' frozen structure source is not supported"
             )
-        literal = binding.literal_value
-        if canonical_json_sha256(literal) != binding.content_sha256:
+        literal = snapshot.literal_value
+        if canonical_json_sha256(literal) != snapshot.content_sha256:
             raise JobExecutionError(
-                f"Job '{job.job_id}' frozen structure binding failed its digest check"
+                f"Job '{job.job_id}' frozen structure snapshot failed its digest check"
             )
         if not isinstance(literal, Mapping):
             raise JobExecutionError(
-                f"Job '{job.job_id}' frozen structure binding is not an object"
+                f"Job '{job.job_id}' frozen structure snapshot is not an object"
             )
         if isinstance(literal.get("structure"), Mapping):
             request["structure"] = dict(literal["structure"])
@@ -86,7 +86,7 @@ def resolve_structure_request(service: Any, job: Any) -> dict[str, Any] | None:
             request["structure"] = dict(literal)
         else:
             raise JobExecutionError(
-                f"Job '{job.job_id}' frozen structure binding has no structure"
+                f"Job '{job.job_id}' frozen structure snapshot has no structure"
             )
         if isinstance(literal.get("molecule"), Mapping):
             request["molecule"] = dict(literal["molecule"])
