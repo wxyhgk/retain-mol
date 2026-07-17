@@ -85,6 +85,13 @@ export type { VirtualListProps } from './data/VirtualList'
 export { sortAriaValue } from './data/dataTableAccessibility'
 export type { TableSortDirection } from './data/dataTableAccessibility'
 
+export { StatusPill } from './ui/status-pill'
+export type { StatusTone } from './ui/status-pill'
+export { Chip } from './ui/chip'
+export { MonoId, middleEllipsis } from './ui/mono-id'
+export { ElapsedTime } from './ui/elapsed-time'
+export { useNowTick, formatDuration } from './hooks/use-ticker'
+
 export { useIsMobile } from './hooks/use-mobile'
 export { cn } from './utils'
 export { useUiThemeStore } from './theme'

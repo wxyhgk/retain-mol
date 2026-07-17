@@ -48,7 +48,7 @@ function oclToMolecule(oclMol: OCLMol, fallbackName = 'Imported'): Molecule {
   return { atoms, bonds, name: oclName || fallbackName }
 }
 
-function moleculeToOCL(mol: Molecule): OCLMol {
+export function moleculeToOCL(mol: Molecule): OCLMol {
   const oclMol = new OCL.Molecule(mol.atoms.length || 16, mol.bonds.length || 16)
   const idxMap = new Map<string, number>()
   const getAtomicNo = (OCL.Molecule as unknown as { getAtomicNoFromLabel(s: string): number }).getAtomicNoFromLabel

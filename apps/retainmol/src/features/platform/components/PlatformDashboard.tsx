@@ -1,13 +1,10 @@
 import { ArrowRight, Atom, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
+  JobCard,
   JobEmptyState,
   JobStatMetrics,
-  JobStatusBadge,
-  JobThumbnail,
-  calculationLabel,
   useJobsQuery,
-  type JobSummary,
 } from '@retainmol/jobs'
 import { useWorkflowsQuery } from '@/features/workflows'
 import { jobPath, jobsPath, workflowPath } from '@/app/appRoute'
@@ -61,7 +58,9 @@ export function PlatformDashboard({
             <div className="divide-y divide-border">
               {jobsQuery.isLoading && <JobEmptyState title="正在加载任务…" />}
               {!jobsQuery.isLoading && jobs.length === 0 && <JobEmptyState title="还没有计算任务。请先在分子编辑器中准备结构。" />}
-              {jobs.slice(0, recentJobsLimit).map(job => <RecentJobRow key={job.id} job={job} onOpen={() => openJob(job.id)} />)}
+              {jobs.slice(0, recentJobsLimit).map(job => (
+                <JobCard key={job.id} job={job} variant="row" className="border-x-0 border-t-0 last:border-b-0" onOpen={() => openJob(job.id)} />
+              ))}
             </div>
           </section>
 
@@ -99,17 +98,6 @@ export function PlatformDashboard({
   )
 }
 
-function RecentJobRow({ job, onOpen }: { job: JobSummary; onOpen: () => void }) {
-  return (
-    <button type="button" onClick={onOpen} className="grid w-full grid-cols-[3rem_minmax(0,1fr)_7rem_7rem_1.5rem] items-center gap-3 px-4 py-3 text-left hover:bg-muted/70">
-      <JobThumbnail job={job} size="lg" />
-      <span className="min-w-0"><span className="block truncate text-xs font-medium">{job.name}</span><span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">{job.id}</span></span>
-      <span className="text-[11px] text-muted-foreground">{calculationLabel(job.kind)}</span>
-      <span><JobStatusBadge status={job.status} size="sm" /></span>
-      <ArrowRight className="size-3.5 text-muted-foreground" />
-    </button>
-  )
-}
 
 function FlowStep({ number, text }: { number: string; text: string }) {
   return <li className="flex items-center gap-3"><span className="grid size-6 shrink-0 place-items-center border border-border font-mono text-[10px]">{number}</span><span>{text}</span></li>

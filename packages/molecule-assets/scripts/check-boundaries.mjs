@@ -10,6 +10,7 @@ import { dirname, resolve, sep } from 'node:path'
 const ALLOWED_MOL_VIEWER_SUBPATHS = new Set([
   '@retainmol/mol-viewer/core',
   '@retainmol/mol-viewer/state',
+  '@retainmol/mol-viewer/io',
 ])
 const ALLOWED_SIBLING_PACKAGES = new Set(['@retainmol/ui-kit'])
 

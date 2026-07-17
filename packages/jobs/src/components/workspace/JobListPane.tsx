@@ -9,7 +9,7 @@ import type { JobStatusBucket } from '../../domain/jobFilter'
 import type { JobSummary } from '../../domain/jobTypes'
 import { useJobUiStore } from '../../model/jobUiStore'
 import { JobStatusBadge } from '../JobStatusBadge'
-import { JobCard } from './JobCard'
+import { JobCard } from '../cards/JobCard'
 
 const BUCKET_CHIPS: Array<{ bucket: JobStatusBucket; label: string }> = [
   { bucket: 'all', label: '全部' },
@@ -91,7 +91,7 @@ export function JobListPane({ jobs, totalCount, isLoading, isFetching, error, se
             getItemKey={job => job.id}
             emptyContent={isLoading ? '正在加载任务…' : filtered || totalCount > 0 ? '没有符合筛选的任务' : '暂无任务'}
             itemClassName="pb-1"
-            renderItem={job => <JobCard job={job} selected={selectedJobId === job.id} onSelect={() => onSelect(job.id)} />}
+            renderItem={job => <JobCard job={job} variant="row" showId={false} showKind={false} selected={selectedJobId === job.id} onOpen={() => onSelect(job.id)} />}
           />
         ) : (
           <DataTable
