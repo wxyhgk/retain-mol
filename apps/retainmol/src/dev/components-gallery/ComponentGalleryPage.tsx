@@ -12,6 +12,8 @@ import {
   JobThumbnail,
   WorkbenchTaskList,
 } from '@retainmol/jobs'
+import { MoleculeStructureView } from '@retainmol/molecule-assets'
+import { SAMPLE_MOLECULES } from '@retainmol/mol-viewer/samples'
 import { WorkflowReadOnlyCanvas } from '@/features/workflows'
 import { MOCK_GRAPH, MOCK_JOBS, MOCK_JOB_DETAIL } from '../mockJobs'
 
@@ -85,6 +87,25 @@ const artifactActions = () => (
 )
 
 const SECTIONS: GallerySection[] = [
+  {
+    name: 'MoleculeStructureView',
+    importPath: '@retainmol/molecule-assets → components/molecule3d/MoleculeStructureView',
+    description: '2D/3D 可切换分子结构视图。2D 为 OCL 骨架式 SVG（主题自适应）；3D 经池控制同屏数量（上限 3），第 4 个切 3D 时最早的自动退回 2D。',
+    relations: [
+      ['依赖', '@retainmol/mol-viewer (io/three/styles) · molecule3dPool'],
+      ['数据', 'props: molecule / posterUrl / themeId'],
+      ['用于', '分子卡片 visual 槽、详情页结构区'],
+    ],
+    demo: (
+      <div className="grid max-w-3xl grid-cols-2 gap-3 md:grid-cols-4">
+        {SAMPLE_MOLECULES.slice(0, 4).map(sample => (
+          <div key={sample.name} className="h-40 overflow-hidden rounded-lg border border-border bg-card">
+            <MoleculeStructureView molecule={sample.mol()} label={sample.name} />
+          </div>
+        ))}
+      </div>
+    ),
+  },
   {
     name: 'JobStatusBadge',
     importPath: '@retainmol/jobs → components/JobStatusBadge',

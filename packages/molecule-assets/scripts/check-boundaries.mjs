@@ -11,6 +11,8 @@ const ALLOWED_MOL_VIEWER_SUBPATHS = new Set([
   '@retainmol/mol-viewer/core',
   '@retainmol/mol-viewer/state',
   '@retainmol/mol-viewer/io',
+  '@retainmol/mol-viewer/three',
+  '@retainmol/mol-viewer/styles',
 ])
 const ALLOWED_SIBLING_PACKAGES = new Set(['@retainmol/ui-kit'])
 
