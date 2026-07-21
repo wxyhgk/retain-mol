@@ -12,7 +12,7 @@ export function Chip({ children, mono = false, title, className }: {
     <span
       title={title}
       className={cn(
-        'inline-flex max-w-full items-center gap-1 truncate border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground',
+        'inline-flex max-w-full items-center gap-1 truncate rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground',
         mono && 'font-mono',
         className,
       )}

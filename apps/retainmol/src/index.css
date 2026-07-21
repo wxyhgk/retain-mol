@@ -7,48 +7,52 @@
 
 @layer base {
   :root {
-    /* 黑白为主:画布纯白,灰色只给次级文字、发丝线与轻微 hover 填充 */
-    --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 0%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 0%;
-    --primary: 0 0% 0%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 0%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 40%;
-    --accent: 0 0% 95%;
-    --accent-foreground: 0 0% 0%;
-    --destructive: 0 0% 0%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 0%;
-    --radius: 0.5rem;
+    /* 古建筑配色逻辑：中性 80%（宣纸/石灰/黛黑）+ 主色 15%（铜青）+ 强调 5%（朱砂/鎏金）。
+       高饱和只许小面积；铜青=主要操作与"正在发生"，孔雀蓝=选中/聚焦，朱砂=危险，鎏金=高级点缀。 */
+    --background: 43 26% 95%;        /* 宣纸白 #F5F3EE */
+    --foreground: 160 4% 15%;        /* 黛黑 #252827 */
+    --card: 45 40% 98%;              /* 石灰白 #FCFBF8 */
+    --card-foreground: 160 4% 15%;
+    --popover: 45 40% 98%;
+    --popover-foreground: 160 4% 15%;
+    --primary: 167 29% 34%;          /* 铜青 #3E7065 */
+    --primary-foreground: 43 26% 96%;
+    --secondary: 42 24% 90%;         /* 浅宣底 */
+    --secondary-foreground: 160 4% 15%;
+    --muted: 42 24% 91%;
+    --muted-foreground: 30 9% 42%;   /* 暖灰 #756B61 */
+    --accent: 165 18% 90%;           /* 淡铜青 hover 洗色 */
+    --accent-foreground: 167 32% 24%;
+    --destructive: 4 53% 41%;        /* 朱砂红 #A13A32 */
+    --destructive-foreground: 43 26% 96%;
+    --border: 40 20% 82%;
+    --input: 40 20% 82%;
+    --ring: 196 33% 35%;             /* 孔雀蓝 #3B6675 */
+    --gilt: 37 45% 45%;              /* 鎏金 #B58A45：只用于高级标签/核心指标，控制面积 */
+    --radius: 0.625rem;
   }
   .dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
-    --card: 0 0% 4%;
-    --card-foreground: 0 0% 100%;
-    --popover: 0 0% 4%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 0 0% 100%;
-    --primary-foreground: 0 0% 0%;
-    --secondary: 0 0% 10%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 66%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 0% 100%;
-    --destructive-foreground: 0 0% 0%;
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
-    --ring: 0 0% 100%;
+    /* 黛瓦墨色：深色以青灰为基，不用死黑 */
+    --background: 200 10% 10%;       /* #171A1C */
+    --foreground: 36 24% 87%;        /* 暖宣纸字 #E7E1D8 */
+    --card: 202 9% 18%;              /* #2B3033 */
+    --card-foreground: 36 24% 87%;
+    --popover: 202 9% 18%;
+    --popover-foreground: 36 24% 87%;
+    --primary: 164 19% 45%;          /* 铜青亮化 */
+    --primary-foreground: 200 10% 8%;
+    --secondary: 205 9% 15%;
+    --secondary-foreground: 36 24% 87%;
+    --muted: 205 9% 16%;
+    --muted-foreground: 180 4% 63%;
+    --accent: 165 14% 24%;
+    --accent-foreground: 36 24% 87%;
+    --destructive: 8 47% 55%;        /* 朱砂亮化 */
+    --destructive-foreground: 200 10% 8%;
+    --border: 198 8% 26%;
+    --input: 198 8% 26%;
+    --ring: 196 35% 55%;
+    --gilt: 37 42% 55%;
   }
 }
 
@@ -74,25 +78,25 @@
 }
 
 :root {
-  --sidebar: hsl(0 0% 100%);
-  --sidebar-foreground: hsl(0 0% 0%);
-  --sidebar-primary: hsl(0 0% 0%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(0 0% 92%);
-  --sidebar-accent-foreground: hsl(0 0% 0%);
-  --sidebar-border: hsl(0 0% 84%);
-  --sidebar-ring: hsl(0 0% 0%);
+  --sidebar: hsl(45 40% 98%);
+  --sidebar-foreground: hsl(160 4% 15%);
+  --sidebar-primary: hsl(167 29% 34%);
+  --sidebar-primary-foreground: hsl(43 26% 96%);
+  --sidebar-accent: hsl(165 18% 90%);
+  --sidebar-accent-foreground: hsl(167 32% 24%);
+  --sidebar-border: hsl(40 20% 82%);
+  --sidebar-ring: hsl(196 33% 35%);
 }
 
 .dark {
-  --sidebar: hsl(0 0% 0%);
-  --sidebar-foreground: hsl(0 0% 100%);
-  --sidebar-primary: hsl(0 0% 100%);
-  --sidebar-primary-foreground: hsl(0 0% 0%);
-  --sidebar-accent: hsl(0 0% 15%);
-  --sidebar-accent-foreground: hsl(0 0% 100%);
-  --sidebar-border: hsl(0 0% 22%);
-  --sidebar-ring: hsl(0 0% 100%);
+  --sidebar: hsl(202 9% 14%);
+  --sidebar-foreground: hsl(36 24% 87%);
+  --sidebar-primary: hsl(164 19% 45%);
+  --sidebar-primary-foreground: hsl(200 10% 8%);
+  --sidebar-accent: hsl(165 14% 24%);
+  --sidebar-accent-foreground: hsl(36 24% 87%);
+  --sidebar-border: hsl(198 8% 26%);
+  --sidebar-ring: hsl(196 35% 55%);
 }
 
 @theme inline {
@@ -115,6 +119,7 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+  --color-gilt: hsl(var(--gilt));
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

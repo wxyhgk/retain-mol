@@ -60,7 +60,7 @@ export function MoleculeCard({
     : {}
 
   const frame = cn(
-    'border text-left transition-colors',
+    'rounded-lg border text-left shadow-[0_1px_2px_rgba(38,34,31,0.05)] transition-colors',
     selected ? 'border-foreground bg-background' : 'border-border bg-card',
     interactive && 'cursor-pointer hover:border-foreground/40 hover:bg-muted/40',
     className,
@@ -84,7 +84,7 @@ export function MoleculeCard({
   if (variant === 'row') {
     return (
       <Root {...rootProps} className={cn(frame, 'flex w-full items-center gap-3 p-2')}>
-        {visual && <div className="size-12 shrink-0 overflow-hidden [&_svg]:size-full">{visual}</div>}
+        {visual && <div className="size-12 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/20 [&_svg]:size-full">{visual}</div>}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="truncate text-xs font-medium">{title}</p>
@@ -104,7 +104,7 @@ export function MoleculeCard({
   return (
     <Root {...rootProps} className={cn(frame, 'flex w-full flex-col', isNode ? 'max-w-60' : '')}>
       {visual && (
-        <div className={cn('w-full overflow-hidden border-b border-border bg-muted/20 [&_svg]:h-full [&_svg]:w-full', isNode ? 'h-28' : 'aspect-[4/3]')}>
+        <div className={cn('w-full overflow-hidden rounded-t-lg border-b border-border bg-muted/20 [&_svg]:h-full [&_svg]:w-full', isNode ? 'h-28' : 'aspect-[4/3]')}>
           {visual}
         </div>
       )}

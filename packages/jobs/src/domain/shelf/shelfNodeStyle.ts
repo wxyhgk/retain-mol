@@ -36,7 +36,7 @@ export function shelfNodeStatusStyle(state: WorkflowNodeVisualState, theme: Shel
       return shelfStatusStyle('queued', theme)
     case 'ready': {
       const base = shelfStatusStyle('queued', theme)
-      return { ...base, edgeColor: theme === 'day' ? 0x2f8fdd : 0x4db2ff, edgeOpacity: 1, moleculeOpacity: 0.9 }
+      return { ...base, edgeColor: theme === 'day' ? 0x3b6675 : 0x5f93a6, edgeOpacity: 1, moleculeOpacity: 0.9 }
     }
     case 'queued':
       return shelfStatusStyle('queued', theme)
