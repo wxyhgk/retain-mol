@@ -98,7 +98,8 @@ export function canPreviewArtifact(artifact: JobArtifact): boolean {
 /** 状态 → StatusPill 色调（词汇单源：与 jobStatusLabel 配对使用）。 */
 export function jobStatusTone(status: JobStatus): 'neutral' | 'success' | 'danger' | 'info' | 'emphasis' {
   if (status === 'succeeded') return 'success'
-  if (status === 'failed' || status === 'cancelled' || status === 'interrupted') return 'danger'
+  if (status === 'failed' || status === 'interrupted') return 'danger'
+  if (status === 'cancelled') return 'neutral'
   if (status === 'running') return 'emphasis'
   return 'neutral'
 }
