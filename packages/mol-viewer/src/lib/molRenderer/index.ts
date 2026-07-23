@@ -8,5 +8,6 @@ export type {
   RendererViewportPort,
   RendererMeasurementPort,
   RendererInteractionPort,
+  RendererReactionHighlightPort,
   ThreeRendererOverlayPort,
 } from './rendererPorts'

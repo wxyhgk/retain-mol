@@ -8,7 +8,7 @@
  * 所有受控 prop 均可选；只传部分 prop 时，未传的字段仍由内部 store 管理。
  */
 
-import { useRef, useMemo, useState } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import type { RendererPort, ThreeRendererPort } from '../../lib/molRenderer'
 import type { DisplayMode } from '../../lib/types'
 import { toolCan } from '../../config/toolCapabilities.config'
@@ -38,6 +38,10 @@ import type {
   BondPairGizmoPhase,
   BondPairGizmoValue,
 } from '../../lib/bondPairGizmo'
+import type {
+  ReactionHighlight,
+  ReactionHighlightKind,
+} from '../../lib/reactionHighlights'
 
 // ── 公开 API ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +54,10 @@ export type {
   BondPairGizmoPhase,
   BondPairGizmoValue,
 } from '../../lib/bondPairGizmo'
+export type {
+  ReactionHighlight,
+  ReactionHighlightKind,
+} from '../../lib/reactionHighlights'
 
 export interface MolViewerProps {
   molecule?:          Molecule
@@ -57,6 +65,8 @@ export interface MolViewerProps {
   selectedAtomIds?:   ReadonlySet<string>
   selectedBondIds?:   ReadonlySet<string>
   onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void
+  /** Non-topological 3D annotations rendered inside the molecule model group. */
+  reactionHighlights?: readonly ReactionHighlight[]
   /** Canvas-native φ/θ controls for a validated disconnected bond pair. */
   bondPairGizmo?:      BondPairGizmoConfig
   /** Reports transactional gizmo phases and the current d/θ/φ/coplanarity value. */
@@ -86,6 +96,8 @@ export interface MolViewerProps {
   onRendererChange?:  (renderer: RendererPort | null) => void
 }
 
+const EMPTY_REACTION_HIGHLIGHTS: readonly ReactionHighlight[] = []
+
 // ── 組件 ─────────────────────────────────────────────────────────────────────
 
 export default function MolViewer(props: MolViewerProps = {}) {
@@ -104,6 +116,7 @@ function MolViewerContent({
   selectedAtomIds: selectedAtomIdsProp,
   selectedBondIds: selectedBondIdsProp,
   onSelectionChange,
+  reactionHighlights = EMPTY_REACTION_HIGHLIGHTS,
   bondPairGizmo,
   onBondPairGizmoChange,
   onBondPairGizmoError,
@@ -181,6 +194,10 @@ function MolViewerContent({
 
   useViewerRuntimeBridge(renderer, gridVisibleProp)
   useSketchPlaneShortcuts(rendererRef, !editingEnabled)
+  useEffect(() => {
+    if (!renderer) return
+    renderer.setReactionHighlights(reactionHighlights)
+  }, [renderer, reactionHighlights])
 
   // ── 统一指针事件路由（move-object + 框选）────────────────────────────────
   const { boxRect } = useCanvasPointerRouter(containerRef, rendererRef, interactionMode)

@@ -8,6 +8,8 @@ export type {
   BondPairGizmoValue,
   InteractionMode,
   MolViewerProps,
+  ReactionHighlight,
+  ReactionHighlightKind,
 } from '../components/viewer/MolViewer'
 export {
   createViewerRuntime,

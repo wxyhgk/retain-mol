@@ -21,8 +21,25 @@ export function fitToMolecule(
   distanceMultiplier = FIT.distanceMultiplier,
 ) {
   if (atoms.length === 0) { resetCamera(camera, rotationGroup, modelGroup); return }
+  fitToPoints(
+    atoms.map(atom => new THREE.Vector3(atom.x, atom.y, atom.z)),
+    camera,
+    rotationGroup,
+    modelGroup,
+    distanceMultiplier,
+  )
+}
+
+export function fitToPoints(
+  points: readonly THREE.Vector3[],
+  camera: THREE.PerspectiveCamera,
+  rotationGroup: THREE.Group,
+  modelGroup: THREE.Group,
+  distanceMultiplier = FIT.distanceMultiplier,
+) {
+  if (points.length === 0) { resetCamera(camera, rotationGroup, modelGroup); return }
   const box = new THREE.Box3()
-  atoms.forEach(a => box.expandByPoint(new THREE.Vector3(a.x, a.y, a.z)))
+  points.forEach(point => box.expandByPoint(point))
   const center = new THREE.Vector3()
   box.getCenter(center)
   const size = new THREE.Vector3()

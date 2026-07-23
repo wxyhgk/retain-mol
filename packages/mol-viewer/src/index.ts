@@ -9,6 +9,8 @@ export type {
   BondPairGizmoValue,
   InteractionMode,
   MolViewerProps,
+  ReactionHighlight,
+  ReactionHighlightKind,
 } from './components/viewer/MolViewer'
 
 // ── 分子数据类型 & 工具函数 ────────────────────────────────────────────────────

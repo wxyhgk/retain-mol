@@ -169,6 +169,7 @@ export interface MolViewerProps {
     onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void;
     // (undocumented)
     overlays?: React.ReactNode;
+    reactionHighlights?: readonly ReactionHighlight[];
     // @deprecated (undocumented)
     readOnly?: boolean;
     runtime?: ViewerRuntime;
@@ -185,6 +186,31 @@ export interface MolViewerProps {
 }
 
 // @public (undocumented)
+export interface ReactionHighlight {
+    // (undocumented)
+    readonly atomId1: string;
+    // (undocumented)
+    readonly atomId2: string;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly dashed?: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: ReactionHighlightKind;
+    // (undocumented)
+    readonly label?: string;
+    // (undocumented)
+    readonly opacity?: number;
+    // (undocumented)
+    readonly radius?: number;
+}
+
+// @public (undocumented)
+export type ReactionHighlightKind = 'breaking' | 'forming' | 'coordination';
+
+// @public (undocumented)
 export interface RendererCapturePort {
     // (undocumented)
     captureImage(scale?: number): string;
@@ -196,8 +222,10 @@ export interface RendererPort extends RendererCapturePort, RendererViewportPort 
 
 // @public (undocumented)
 export interface RendererViewportPort {
+    clearReactionHighlights(): void;
     // (undocumented)
     fitToMolecule(atoms: Atom[]): void;
+    focusReactionHighlights(): boolean;
     // (undocumented)
     getViewPlaneLocal(): {
         origin: [number, number, number];

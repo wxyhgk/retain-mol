@@ -5,7 +5,7 @@ import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
 import { CAMERA, CONTROLS } from '../../config/camera.config'
 import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
 import { resolveRenderProfile, type RenderStyle } from '../../styles'
-import { ticker as defaultTicker, type Ticker } from '../animation'
+import { Phase, ticker as defaultTicker, type Ticker } from '../animation'
 import { MoleculeRenderer } from './MoleculeRenderer'
 import { MoleculeSceneLayer } from './MoleculeSceneLayer'
 import { InteractionHandler } from './InteractionHandler'
@@ -16,6 +16,8 @@ import { captureCanvasPNG } from './capture'
 import { ViewportGuides, type SketchPlane } from './ViewportGuides'
 import { disposeObject3D } from './disposeObject3D'
 import { SceneRenderPipeline } from './SceneRenderPipeline'
+import { ReactionHighlightManager } from './ReactionHighlightManager'
+import type { ReactionHighlight } from '../reactionHighlights'
 
 let rendererSequence = 0
 
@@ -48,6 +50,8 @@ export class MolRenderer {
   private _sceneLayer: MoleculeSceneLayer
   private _interaction: InteractionHandler
   private _measureVisuals: MeasureVisuals
+  private _reactionHighlights: ReactionHighlightManager
+  private _unsubscribeReactionHighlights: () => void
 
   // 芳香环心缓存（DFS 结果按 bonds 引用缓存，环心每帧实时算）
   private _aromatic = new AromaticRingCache()
@@ -191,6 +195,30 @@ export class MolRenderer {
 
     this._molRenderer = new MoleculeRenderer(this.modelGroup, () => this.theme, () => this.frameTicker.invalidate())
     this._sceneLayer = new MoleculeSceneLayer(this.modelGroup, () => this.theme, () => this.frameTicker.invalidate())
+    this._reactionHighlights = new ReactionHighlightManager(
+      this.modelGroup,
+      (atomId, target) => {
+        const mesh = this._sceneLayer
+          .aggregateAtomMeshes(this._molRenderer.atomMeshes)
+          .get(atomId)
+        if (!mesh) return false
+        let ancestor: THREE.Object3D | null = mesh
+        while (ancestor && ancestor !== this.modelGroup) {
+          if (!ancestor.visible) return false
+          ancestor = ancestor.parent
+        }
+        mesh.updateWorldMatrix(true, false)
+        mesh.getWorldPosition(target)
+        this.modelGroup.worldToLocal(target)
+        return true
+      },
+      () => this.frameTicker.invalidate(),
+    )
+    this._unsubscribeReactionHighlights = this.frameTicker.subscribe(
+      `reaction-highlights:${this._tickerKey}`,
+      Phase.Gizmo,
+      () => this._reactionHighlights.update(),
+    )
     this._interaction = new InteractionHandler(
       canvas, this.camera, this.rotationGroup, this.modelGroup, this.controls,
       () => {
@@ -290,6 +318,30 @@ export class MolRenderer {
     this.frameTicker.invalidate()
   }
 
+  setReactionHighlights(highlights: readonly ReactionHighlight[]): void {
+    this._reactionHighlights.setHighlights(highlights)
+  }
+
+  clearReactionHighlights(): void {
+    this._reactionHighlights.clear()
+  }
+
+  focusReactionHighlights(): boolean {
+    const points = this._reactionHighlights.getFocusPoints()
+    if (points.length === 0) return false
+    const profile = resolveRenderProfile(this.renderStyle)
+    this._renderPipeline.setFov(profile.cameraFov)
+    CameraUtils.fitToPoints(
+      points,
+      this.camera,
+      this.rotationGroup,
+      this.modelGroup,
+      profile.cameraFitMultiplier,
+    )
+    this.frameTicker.invalidate()
+    return true
+  }
+
   // ── 相机 / 视图 ──
 
   setAxesVisible(visible: boolean) {
@@ -380,6 +432,8 @@ export class MolRenderer {
     this._molRenderer.dispose()
     this._sceneLayer.dispose()
     this._measureVisuals.dispose()
+    this._unsubscribeReactionHighlights()
+    this._reactionHighlights.dispose()
     this._viewportGuides.dispose()
     this._renderPipeline.dispose()
     this.controls.dispose()
