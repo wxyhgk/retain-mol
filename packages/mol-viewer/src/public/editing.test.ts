@@ -118,8 +118,9 @@ describe('alignBondPair', () => {
       code: 'session-not-started',
     })
     session.start()
-    expect(session.update({ ...base, azimuthDegrees: 5 }).ok).toBe(true)
-    expect(session.update({ ...base, azimuthDegrees: 8 }).ok).toBe(true)
+    for (let index = 1; index <= 100; index += 1) {
+      expect(session.update({ ...base, azimuthDegrees: index * 0.08 }).ok).toBe(true)
+    }
     session.end()
 
     expect(store.temporal.getState().pastStates).toHaveLength(1)
@@ -128,6 +129,13 @@ describe('alignBondPair', () => {
     expect(Math.atan2(alignedAnchor.z, alignedAnchor.y) * 180 / Math.PI).toBeCloseTo(8, 10)
     store.temporal.getState().undo()
     expect(store.getState().objectsById[movingObjectId]!.molecule).toBe(before)
+
+    store.temporal.getState().clear()
+    session.start()
+    expect(session.update({ ...base, azimuthDegrees: 35 }).ok).toBe(true)
+    session.cancel()
+    expect(store.getState().objectsById[movingObjectId]!.molecule).toBe(before)
+    expect(store.temporal.getState().pastStates).toHaveLength(0)
     runtime.dispose()
   })
 })

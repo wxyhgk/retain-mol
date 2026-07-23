@@ -14,6 +14,10 @@ import {
   type Vec3,
 } from '../../math/vec3'
 import { getConnectedFragment } from '../analysis/fragments'
+import type {
+  BondPairGizmoGeometry,
+  BondPairGizmoValue,
+} from '../../bondPairGizmo'
 
 const EPSILON = 1e-9
 
@@ -86,6 +90,10 @@ interface LocatedBond {
   readonly bond: Bond
 }
 
+export type InspectBondPairGeometryResult =
+  | { readonly ok: true; readonly snapshot: BondPairGizmoGeometry }
+  | { readonly ok: false; readonly code: AlignBondPairFailureCode; readonly reason: string }
+
 function atomPosition(object: SceneObject, atomId: string): Vec3 | null {
   const atom = object.molecule.atoms.find(candidate => candidate.id === atomId)
   if (!atom) return null
@@ -148,6 +156,121 @@ function orientedVolume(a1: Vec3, a2: Vec3, b1: Vec3, b2: Vec3): number {
 
 function invalid(code: AlignBondPairFailureCode, reason: string): AlignBondPairGeometryResult {
   return { ok: false, code, reason }
+}
+
+function inspectionInvalid(
+  code: AlignBondPairFailureCode,
+  reason: string,
+): InspectBondPairGeometryResult {
+  return { ok: false, code, reason }
+}
+
+/** Validate a bond pair and read its current world-space geometry without mutation. */
+export function inspectBondPairGeometry(
+  objectsById: Readonly<Record<string, SceneObject>>,
+  objectOrder: readonly string[],
+  input: Pick<
+    AlignBondPairInput,
+    | 'referenceBondId'
+    | 'movingBondId'
+    | 'referenceAnchorAtomId'
+    | 'movingAnchorAtomId'
+  >,
+): InspectBondPairGeometryResult {
+  const reference = locateBond(objectsById, objectOrder, input.referenceBondId)
+  if (!reference) return inspectionInvalid('reference-bond-not-found', '找不到参考键')
+  const moving = locateBond(objectsById, objectOrder, input.movingBondId)
+  if (!moving) return inspectionInvalid('moving-bond-not-found', '找不到移动键')
+  if (reference.bond.id === moving.bond.id) {
+    return inspectionInvalid('same-bond', '参考键和移动键不能是同一条键')
+  }
+  if (!reference.object.visible) {
+    return inspectionInvalid('reference-object-hidden', '参考键所在对象不可见')
+  }
+  if (!moving.object.visible) {
+    return inspectionInvalid('moving-object-hidden', '移动键所在对象不可见')
+  }
+  if (moving.object.locked) {
+    return inspectionInvalid('moving-object-locked', '移动键所在对象已锁定')
+  }
+
+  const referenceOtherId = otherEndpoint(reference.bond, input.referenceAnchorAtomId)
+  if (!referenceOtherId) {
+    return inspectionInvalid('reference-anchor-not-on-bond', '参考锚点不是参考键的端点')
+  }
+  const movingOtherId = otherEndpoint(moving.bond, input.movingAnchorAtomId)
+  if (!movingOtherId) {
+    return inspectionInvalid('moving-anchor-not-on-bond', '移动锚点不是移动键的端点')
+  }
+
+  const referenceAnchor = atomPosition(reference.object, input.referenceAnchorAtomId)!
+  const referenceOther = atomPosition(reference.object, referenceOtherId)!
+  const movingAnchor = atomPosition(moving.object, input.movingAnchorAtomId)!
+  const movingOther = atomPosition(moving.object, movingOtherId)!
+  const referenceAxisVector = sub(referenceAnchor, referenceOther)
+  const movingAxisVector = sub(movingOther, movingAnchor)
+  if (length(referenceAxisVector) < EPSILON) {
+    return inspectionInvalid('zero-length-reference-bond', '参考键长度为 0，无法建立参考轴')
+  }
+  if (length(movingAxisVector) < EPSILON) {
+    return inspectionInvalid('zero-length-moving-bond', '移动键长度为 0，无法建立移动轴')
+  }
+
+  const movingAtomIds = getConnectedFragment(
+    moving.molecule.atoms,
+    moving.molecule.bonds,
+    input.movingAnchorAtomId,
+  )
+  if (
+    reference.object.id === moving.object.id
+    && (movingAtomIds.has(reference.bond.atomId1) || movingAtomIds.has(reference.bond.atomId2))
+  ) {
+    return inspectionInvalid(
+      'connected-bond-pair',
+      '两条键属于同一连通片段；整体移动第二条键会同时移动参考键',
+    )
+  }
+
+  const volume = orientedVolume(referenceOther, referenceAnchor, movingAnchor, movingOther)
+  const referenceAxis = normalize(referenceAxisVector)
+  const movingAxis = normalize(movingAxisVector)
+  const anchorDirection = normalize(sub(movingAnchor, referenceAnchor))
+  const radial = perpendicularDirection(anchorDirection, referenceAxis, movingAxis)
+  const movingRadial = dot(movingAxis, radial)
+  const coplanar: false | 0 | 180 = Math.abs(volume) <= 1e-8
+    ? (movingRadial >= 0 ? 0 : 180)
+    : false
+  const topologySignature = [
+    reference.object.id,
+    reference.bond.id,
+    reference.bond.atomId1,
+    reference.bond.atomId2,
+    moving.object.id,
+    ...moving.molecule.bonds
+      .filter(bond => movingAtomIds.has(bond.atomId1) || movingAtomIds.has(bond.atomId2))
+      .map(bond => `${bond.id}:${bond.atomId1}:${bond.atomId2}:${bond.order}`)
+      .sort(),
+    ...[...movingAtomIds].sort(),
+  ].join('|')
+
+  return {
+    ok: true,
+    snapshot: {
+      value: {
+        distance: distance(referenceAnchor, movingAnchor),
+        axisAngleDegrees: angleBetween(referenceAxisVector, movingAxisVector) * 180 / Math.PI,
+        azimuthDegrees: 0,
+        coplanar,
+      },
+      referenceOther,
+      referenceAnchor,
+      movingAnchor,
+      movingOther,
+      movingAtomIds,
+      movingObjectId: moving.object.id,
+      topologySignature,
+    },
+  }
 }
 
 /**

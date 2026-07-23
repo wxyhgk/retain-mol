@@ -44,6 +44,51 @@ export interface Bond {
     readonly order: 1 | 2 | 3;
 }
 
+// @public (undocumented)
+export interface BondPairGizmoConfig {
+    // (undocumented)
+    readonly enabled: boolean;
+    // (undocumented)
+    readonly mode?: BondPairGizmoMode;
+    // (undocumented)
+    readonly movingAnchorAtomId: string;
+    // (undocumented)
+    readonly movingBondId: string;
+    // (undocumented)
+    readonly referenceAnchorAtomId: string;
+    // (undocumented)
+    readonly referenceBondId: string;
+    readonly showCoplanarHandles?: boolean;
+}
+
+// @public (undocumented)
+export interface BondPairGizmoError {
+    // (undocumented)
+    readonly code: BondPairGizmoErrorCode;
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public (undocumented)
+export type BondPairGizmoErrorCode = 'invalid-number' | 'invalid-angle' | 'invalid-distance' | 'unsupported-move-mode' | 'session-not-started' | 'reference-bond-not-found' | 'moving-bond-not-found' | 'same-bond' | 'reference-object-hidden' | 'moving-object-hidden' | 'moving-object-locked' | 'reference-anchor-not-on-bond' | 'moving-anchor-not-on-bond' | 'zero-length-reference-bond' | 'zero-length-moving-bond' | 'connected-bond-pair' | 'topology-changed';
+
+// @public (undocumented)
+export type BondPairGizmoMode = 'azimuth' | 'axis-angle' | 'both';
+
+// @public (undocumented)
+export type BondPairGizmoPhase = 'start' | 'preview' | 'commit' | 'cancel';
+
+// @public (undocumented)
+export interface BondPairGizmoValue {
+    // (undocumented)
+    readonly axisAngleDegrees: number;
+    readonly azimuthDegrees: number;
+    // (undocumented)
+    readonly coplanar: false | 0 | 180;
+    // (undocumented)
+    readonly distance: number;
+}
+
 // @public
 export function captureViewportImage(scale?: number): string | null;
 
@@ -106,6 +151,7 @@ export function MolViewer(props?: MolViewerProps): JSX.Element;
 // @public (undocumented)
 export interface MolViewerProps {
     appearance?: 'day' | 'night';
+    bondPairGizmo?: BondPairGizmoConfig;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -114,6 +160,8 @@ export interface MolViewerProps {
     interactionMode?: InteractionMode;
     // (undocumented)
     molecule?: Molecule;
+    onBondPairGizmoChange?: (value: BondPairGizmoValue, phase: BondPairGizmoPhase) => void;
+    onBondPairGizmoError?: (error: BondPairGizmoError) => void;
     // (undocumented)
     onMoleculeChange?: (mol: Molecule) => void;
     onRendererChange?: (renderer: RendererPort | null) => void;

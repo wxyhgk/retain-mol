@@ -31,10 +31,25 @@ import {
   resolveInteractionMode,
   type InteractionMode,
 } from '../../lib/interaction/interactionMode'
+import type {
+  BondPairGizmoConfig,
+  BondPairGizmoError,
+  BondPairGizmoErrorCode,
+  BondPairGizmoPhase,
+  BondPairGizmoValue,
+} from '../../lib/bondPairGizmo'
 
 // ── 公开 API ──────────────────────────────────────────────────────────────────
 
 export type { InteractionMode } from '../../lib/interaction/interactionMode'
+export type {
+  BondPairGizmoConfig,
+  BondPairGizmoError,
+  BondPairGizmoErrorCode,
+  BondPairGizmoMode,
+  BondPairGizmoPhase,
+  BondPairGizmoValue,
+} from '../../lib/bondPairGizmo'
 
 export interface MolViewerProps {
   molecule?:          Molecule
@@ -42,6 +57,12 @@ export interface MolViewerProps {
   selectedAtomIds?:   ReadonlySet<string>
   selectedBondIds?:   ReadonlySet<string>
   onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void
+  /** Canvas-native φ/θ controls for a validated disconnected bond pair. */
+  bondPairGizmo?:      BondPairGizmoConfig
+  /** Reports transactional gizmo phases and the current d/θ/φ/coplanarity value. */
+  onBondPairGizmoChange?: (value: BondPairGizmoValue, phase: BondPairGizmoPhase) => void
+  /** Reports invalid selection, locking, degeneracy, or mid-drag topology changes. */
+  onBondPairGizmoError?: (error: BondPairGizmoError) => void
   displayMode?:       DisplayMode
   theme?:             string
   showAtomLabels?:    boolean
@@ -83,6 +104,9 @@ function MolViewerContent({
   selectedAtomIds: selectedAtomIdsProp,
   selectedBondIds: selectedBondIdsProp,
   onSelectionChange,
+  bondPairGizmo,
+  onBondPairGizmoChange,
+  onBondPairGizmoError,
   displayMode: displayModeProp,
   theme: themeProp,
   showAtomLabels: showAtomLabelsProp,
@@ -185,6 +209,9 @@ function MolViewerContent({
         brushArmed={brushArmed}
         interactionMode={interactionMode}
         boxRect={boxRect}
+        bondPairGizmo={bondPairGizmo}
+        onBondPairGizmoChange={onBondPairGizmoChange}
+        onBondPairGizmoError={onBondPairGizmoError}
       >
         {overlays}
       </MolViewerOverlays>

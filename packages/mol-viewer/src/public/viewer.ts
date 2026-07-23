@@ -1,5 +1,14 @@
 export { default as MolViewer } from '../components/viewer/MolViewer'
-export type { InteractionMode, MolViewerProps } from '../components/viewer/MolViewer'
+export type {
+  BondPairGizmoConfig,
+  BondPairGizmoError,
+  BondPairGizmoErrorCode,
+  BondPairGizmoMode,
+  BondPairGizmoPhase,
+  BondPairGizmoValue,
+  InteractionMode,
+  MolViewerProps,
+} from '../components/viewer/MolViewer'
 export {
   createViewerRuntime,
   defaultViewerRuntime,

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Molecule } from '../../molecule'
 import type { SceneObject } from '../../sceneObject'
-import { runAlignBondPairGeometry } from './bondPairAlignment'
+import {
+  inspectBondPairGeometry,
+  runAlignBondPairGeometry,
+} from './bondPairAlignment'
 
 function sceneObject(id: string, molecule: Molecule, locked = false): SceneObject {
   return {
@@ -169,5 +172,108 @@ describe('runAlignBondPairGeometry', () => {
       },
     )
     expect(lockedResult).toMatchObject({ ok: false, code: 'moving-object-locked' })
+
+    const hiddenMoving = {
+      ...sceneObject('moving', movingMolecule),
+      visible: false,
+    }
+    expect(inspectBondPairGeometry(
+      {
+        reference: sceneObject('reference', referenceMolecule),
+        moving: hiddenMoving,
+      },
+      ['reference', 'moving'],
+      {
+        referenceBondId: 'bond-a',
+        movingBondId: 'bond-b',
+        referenceAnchorAtomId: 'a2',
+        movingAnchorAtomId: 'b1',
+      },
+    )).toMatchObject({ ok: false, code: 'moving-object-hidden' })
+    expect(inspectBondPairGeometry(
+      {
+        reference: sceneObject('reference', referenceMolecule),
+        moving: sceneObject('moving', movingMolecule),
+      },
+      ['reference', 'moving'],
+      {
+        referenceBondId: 'bond-a',
+        movingBondId: 'bond-b',
+        referenceAnchorAtomId: 'not-on-reference',
+        movingAnchorAtomId: 'b1',
+      },
+    )).toMatchObject({ ok: false, code: 'reference-anchor-not-on-bond' })
+  })
+
+  it('changes φ and θ independently while preserving d and rigid fragment distances', () => {
+    const objectsById = {
+      reference: sceneObject('reference', referenceMolecule),
+      moving: sceneObject('moving', movingMolecule),
+    }
+    const inspected = inspectBondPairGeometry(objectsById, ['reference', 'moving'], {
+      referenceBondId: 'bond-a',
+      movingBondId: 'bond-b',
+      referenceAnchorAtomId: 'a2',
+      movingAnchorAtomId: 'b1',
+    })
+    expect(inspected.ok).toBe(true)
+    if (!inspected.ok) return
+
+    const afterAzimuth = runAlignBondPairGeometry(objectsById, ['reference', 'moving'], {
+      referenceBondId: 'bond-a',
+      movingBondId: 'bond-b',
+      referenceAnchorAtomId: 'a2',
+      movingAnchorAtomId: 'b1',
+      anchorDistance: inspected.snapshot.value.distance,
+      axisAngleDegrees: inspected.snapshot.value.axisAngleDegrees,
+      azimuthDegrees: 47,
+      coplanar: false,
+      moveWholeFragment: true,
+    })
+    expect(afterAzimuth.ok).toBe(true)
+    if (!afterAzimuth.ok) return
+    expect(afterAzimuth.diagnostics.anchorDistance).toBeCloseTo(
+      inspected.snapshot.value.distance,
+      10,
+    )
+    expect(afterAzimuth.diagnostics.axisAngleDegrees).toBeCloseTo(
+      inspected.snapshot.value.axisAngleDegrees,
+      10,
+    )
+
+    const beforeThetaMolecule = afterAzimuth.objectsById.moving!.molecule
+    const beforeDistances = [
+      distance(beforeThetaMolecule.atoms[0]!, beforeThetaMolecule.atoms[1]!),
+      distance(beforeThetaMolecule.atoms[0]!, beforeThetaMolecule.atoms[2]!),
+      distance(beforeThetaMolecule.atoms[1]!, beforeThetaMolecule.atoms[2]!),
+    ]
+    const afterTheta = runAlignBondPairGeometry(
+      afterAzimuth.objectsById,
+      ['reference', 'moving'],
+      {
+        referenceBondId: 'bond-a',
+        movingBondId: 'bond-b',
+        referenceAnchorAtomId: 'a2',
+        movingAnchorAtomId: 'b1',
+        anchorDistance: inspected.snapshot.value.distance,
+        axisAngleDegrees: 123.5,
+        azimuthDegrees: 0,
+        coplanar: false,
+        moveWholeFragment: true,
+      },
+    )
+    expect(afterTheta.ok).toBe(true)
+    if (!afterTheta.ok) return
+    expect(afterTheta.diagnostics.anchorDistance).toBeCloseTo(
+      inspected.snapshot.value.distance,
+      10,
+    )
+    expect(afterTheta.diagnostics.axisAngleDegrees).toBeCloseTo(123.5, 10)
+    const afterThetaMolecule = afterTheta.objectsById.moving!.molecule
+    expect([
+      distance(afterThetaMolecule.atoms[0]!, afterThetaMolecule.atoms[1]!),
+      distance(afterThetaMolecule.atoms[0]!, afterThetaMolecule.atoms[2]!),
+      distance(afterThetaMolecule.atoms[1]!, afterThetaMolecule.atoms[2]!),
+    ]).toEqual(beforeDistances.map(value => expect.closeTo(value, 10)))
   })
 })
