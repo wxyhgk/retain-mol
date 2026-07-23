@@ -29,6 +29,11 @@ import {
   shouldStartBoxSelect,
 } from './useCanvasPointerRouterEffects'
 import { useViewerRuntimeServices } from '../runtime/ViewerRuntime'
+import {
+  canEditInInteractionMode,
+  shouldEnableCameraControls,
+  type InteractionMode,
+} from '../lib/interaction/interactionMode'
 
 export interface BoxRect { x: number; y: number; w: number; h: number }
 
@@ -169,8 +174,9 @@ function finishBoxSelect(
 export function useCanvasPointerRouter(
   containerRef: RefObject<HTMLDivElement | null>,
   rendererRef: RefObject<ThreeRendererPort | null>,
-  readOnly = false,
+  interactionMode: InteractionMode = 'edit',
 ): { boxRect: BoxRect | null } {
+  const editingEnabled = canEditInInteractionMode(interactionMode)
   const { moleculeStore, editorStore } = useViewerRuntimeServices()
   const activeTool = editorStore(s => s.activeTool)
   const [boxRect, setBoxRect] = useState<BoxRect | null>(null)
@@ -187,8 +193,13 @@ export function useCanvasPointerRouter(
   // 同步相机控制开关；切换工具时清理可能残留的变换状态（防止 pointerup 未触发导致状态卡死）
   useEffect(() => {
     const r = rendererRef.current
-    if (r) r.controls.enabled = readOnly || !toolCan(activeTool, 'transformsObject')
-    if (readOnly || !toolCan(activeTool, 'transformsObject')) {
+    if (r) {
+      r.controls.enabled = shouldEnableCameraControls(
+        interactionMode,
+        toolCan(activeTool, 'transformsObject'),
+      )
+    }
+    if (!editingEnabled || !toolCan(activeTool, 'transformsObject')) {
       const ts = transformRef.current
       cancelObjectTransform(ts, transformSession)
       const bs = boxRef.current
@@ -197,10 +208,10 @@ export function useCanvasPointerRouter(
         setBoxRect(null)
       }
     }
-  }, [activeTool, readOnly, rendererRef, transformSession])
+  }, [activeTool, editingEnabled, interactionMode, rendererRef, transformSession])
 
   useEffect(() => {
-    if (readOnly) {
+    if (!editingEnabled) {
       setBoxRect(null)
       return
     }
@@ -322,7 +333,7 @@ export function useCanvasPointerRouter(
       container.removeEventListener('pointerup',   onUp)
       container.removeEventListener('pointercancel', onCancel)
     }
-  }, [containerRef, rendererRef, readOnly, moleculeStore, editorStore, transformSession])
+  }, [containerRef, rendererRef, editingEnabled, moleculeStore, editorStore, transformSession])
 
   return { boxRect }
 }

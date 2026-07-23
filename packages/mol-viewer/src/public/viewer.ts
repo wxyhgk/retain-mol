@@ -1,5 +1,5 @@
 export { default as MolViewer } from '../components/viewer/MolViewer'
-export type { MolViewerProps } from '../components/viewer/MolViewer'
+export type { InteractionMode, MolViewerProps } from '../components/viewer/MolViewer'
 export {
   createViewerRuntime,
   defaultViewerRuntime,
