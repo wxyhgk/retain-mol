@@ -88,6 +88,9 @@ export function fitViewport(): boolean;
 export function focusViewportSelection(): boolean;
 
 // @public (undocumented)
+export type InteractionMode = 'read-only' | 'select' | 'edit';
+
+// @public (undocumented)
 export interface Molecule {
     // (undocumented)
     readonly atoms: readonly Atom[];
@@ -108,6 +111,7 @@ export interface MolViewerProps {
     // (undocumented)
     displayMode?: DisplayMode;
     gridVisible?: boolean;
+    interactionMode?: InteractionMode;
     // (undocumented)
     molecule?: Molecule;
     // (undocumented)
@@ -117,7 +121,7 @@ export interface MolViewerProps {
     onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void;
     // (undocumented)
     overlays?: React.ReactNode;
-    // (undocumented)
+    // @deprecated (undocumented)
     readOnly?: boolean;
     runtime?: ViewerRuntime;
     // (undocumented)

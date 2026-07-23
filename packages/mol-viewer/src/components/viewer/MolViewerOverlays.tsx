@@ -10,12 +10,16 @@ import BoxSelectOverlay from './BoxSelectOverlay'
 import MeasureOverlay from './MeasureOverlay'
 import RotateGizmo from './RotateGizmo'
 import type { BoxRect } from '../../hooks/useCanvasPointerRouter'
+import {
+  canEditInInteractionMode,
+  type InteractionMode,
+} from '../../lib/interaction/interactionMode'
 
 interface Props {
   readonly renderer: ThreeRendererPort | null
   readonly activeTool: Tool
   readonly brushArmed: boolean
-  readonly readOnly: boolean
+  readonly interactionMode: InteractionMode
   readonly boxRect: BoxRect | null
   readonly children?: ReactNode
 }
@@ -25,24 +29,25 @@ export function MolViewerOverlays({
   renderer,
   activeTool,
   brushArmed,
-  readOnly,
+  interactionMode,
   boxRect,
   children,
 }: Props) {
+  const editingEnabled = canEditInInteractionMode(interactionMode)
   return (
     <>
       <MeasureOverlay renderer={renderer} />
       <AtomLabelOverlay renderer={renderer} />
-      <RotateGizmo renderer={renderer} readOnly={readOnly} />
+      <RotateGizmo renderer={renderer} readOnly={!editingEnabled} />
       <BondLengthGizmo
         renderer={renderer}
         visible={toolCan(activeTool, 'canEdit') && brushArmed}
-        readOnly={readOnly}
+        readOnly={!editingEnabled}
       />
-      <BoxSelectOverlay rect={readOnly ? null : boxRect} />
-      {!readOnly && <AtomContextMenu renderer={renderer} />}
+      <BoxSelectOverlay rect={editingEnabled ? boxRect : null} />
+      {editingEnabled && <AtomContextMenu renderer={renderer} />}
       {children}
-      {!readOnly && <BuilderHint />}
+      {editingEnabled && <BuilderHint />}
     </>
   )
 }

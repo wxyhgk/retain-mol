@@ -5,6 +5,7 @@ import type { DisplayMode, Measurement, MeasureStyle, Tool } from '../lib/types'
 import type { ResolvedTheme } from '../presets'
 import type { RenderStyle } from '../styles'
 import type { BuilderHandlers } from './useBuilder'
+import type { InteractionMode } from '../lib/interaction/interactionMode'
 
 export interface RendererBindingRefs {
   readonly containerRef: RefObject<HTMLDivElement | null>
@@ -13,7 +14,7 @@ export interface RendererBindingRefs {
 }
 
 export interface RendererBindingOptions extends RendererBindingRefs {
-  readonly readOnly: boolean
+  readonly interactionMode: InteractionMode
   readonly activeTool: Tool
   readonly brushArmed: boolean
   readonly sceneObjects: SceneObject[]
