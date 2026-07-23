@@ -127,6 +127,8 @@ export interface MolViewerProps {
     // (undocumented)
     selectedAtomIds?: ReadonlySet<string>;
     // (undocumented)
+    selectedBondIds?: ReadonlySet<string>;
+    // (undocumented)
     showAtomLabels?: boolean;
     // (undocumented)
     style?: React.CSSProperties;

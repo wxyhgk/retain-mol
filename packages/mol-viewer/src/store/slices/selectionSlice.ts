@@ -13,6 +13,7 @@ import {
   runSelectAtomCommand,
   runSelectAtomsCommand,
   runSelectBondCommand,
+  runSetSelectionCommand,
 } from '../../lib/builder/commands/selection'
 
 function sceneAtomIds(state: MoleculeState): Set<string> {
@@ -52,6 +53,18 @@ export const createSelectionSlice: StateCreator<MoleculeState, [], [], Selection
   selectBond: (id, multi = false) => set((s) => {
     if (!sceneBondIds(s).has(id)) return {}
     const result = runSelectBondCommand(s.selectedAtomIds, s.selectedBondIds, id, multi)
+    return applySelectionResult(s, result)
+  }),
+
+  setSelection: (atomIds, bondIds) => set((s) => {
+    const validAtomIds = sceneAtomIds(s)
+    const validBondIds = sceneBondIds(s)
+    const result = runSetSelectionCommand(
+      s.selectedAtomIds,
+      s.selectedBondIds,
+      [...atomIds].filter(id => validAtomIds.has(id)),
+      [...bondIds].filter(id => validBondIds.has(id)),
+    )
     return applySelectionResult(s, result)
   }),
 

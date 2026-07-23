@@ -30,6 +30,11 @@ export type {
 export type { RenderStyle } from '../styles/schema'
 export type { ElementStyle, ResolvedTheme, Theme } from '../presets'
 export type { EditCommandResult } from '../lib/builder/commands/shared'
+export type {
+  AlignBondPairDiagnostics,
+  AlignBondPairFailureCode,
+  AlignBondPairInput,
+} from '../lib/builder/geometry/bondPairAlignment'
 export type { UndoTransactionHandle } from '../store/contracts/transaction'
 export type {
   SelectorStoreApi,

@@ -8,6 +8,7 @@ import {
   runSetBondLengthCommand,
   runSetDihedralAngleCommand,
 } from '../../lib/builder/commands/geometry'
+import { runAlignBondPairGeometry } from '../../lib/builder/geometry/bondPairAlignment'
 
 type GeometryEditActions = Pick<
   EditSlice,
@@ -15,6 +16,7 @@ type GeometryEditActions = Pick<
   | 'setBondLength'
   | 'setBondAngle'
   | 'setDihedralAngle'
+  | 'alignBondPair'
   | 'cleanupGeometry'
 >
 
@@ -48,6 +50,19 @@ export function createGeometryEditActions({
       return applyGeomEdit(get, set, (mol) =>
         runSetDihedralAngleCommand(mol, aId, bId, cId, dId, deg),
       )
+    },
+
+    alignBondPair: (input) => {
+      const state = get()
+      const result = runAlignBondPairGeometry(state.objectsById, state.objectOrder, input)
+      if (!result.ok) return result
+      if (result.changed) {
+        set((current) => ({
+          objectsById: result.objectsById as typeof current.objectsById,
+          atomPositionVersion: current.atomPositionVersion + 1,
+        }))
+      }
+      return { ok: true, diagnostics: result.diagnostics }
     },
 
     cleanupGeometry: () => {

@@ -9,6 +9,36 @@ import { TemporalState } from 'zundo';
 import { UseBoundStore } from 'zustand';
 
 // @public (undocumented)
+export interface AlignBondPairDiagnostics {
+    // (undocumented)
+    readonly anchorDistance: number;
+    // (undocumented)
+    readonly axisAngleDegrees: number;
+    // (undocumented)
+    readonly movedAtomIds: ReadonlySet<string>;
+    readonly orientedVolume: number;
+}
+
+// @public (undocumented)
+export type AlignBondPairFailureCode = 'invalid-number' | 'invalid-angle' | 'invalid-distance' | 'unsupported-move-mode' | 'session-not-started' | 'reference-bond-not-found' | 'moving-bond-not-found' | 'same-bond' | 'reference-object-hidden' | 'moving-object-hidden' | 'moving-object-locked' | 'reference-anchor-not-on-bond' | 'moving-anchor-not-on-bond' | 'zero-length-reference-bond' | 'zero-length-moving-bond' | 'connected-bond-pair';
+
+// @public (undocumented)
+export interface AlignBondPairInput {
+    readonly anchorDistance: number;
+    readonly axisAngleDegrees: number;
+    readonly azimuthDegrees: number;
+    readonly coplanar: boolean;
+    readonly coplanarDirection?: 0 | 180;
+    readonly moveWholeFragment?: boolean;
+    readonly movingAnchorAtomId: string;
+    // (undocumented)
+    readonly movingBondId: string;
+    readonly referenceAnchorAtomId: string;
+    // (undocumented)
+    readonly referenceBondId: string;
+}
+
+// @public (undocumented)
 export interface Atom {
     readonly charge?: number;
     readonly coordinationDirections?: readonly (readonly [number, number, number])[];
@@ -235,6 +265,15 @@ export interface EditSlice {
     addOneHydrogen: (atomId: string) => void;
     // (undocumented)
     addOneHydrogens: (atomIds: readonly string[]) => void;
+    // (undocumented)
+    alignBondPair: (input: AlignBondPairInput) => {
+        ok: true;
+        diagnostics: AlignBondPairDiagnostics;
+    } | {
+        ok: false;
+        code: AlignBondPairFailureCode;
+        reason: string;
+    };
     // (undocumented)
     atomPositionVersion: number;
     // (undocumented)
@@ -500,6 +539,8 @@ export interface SelectionSlice {
     selectedBondIds: Set<string>;
     // (undocumented)
     selectionVersion: number;
+    // (undocumented)
+    setSelection: (atomIds: Iterable<string>, bondIds: Iterable<string>) => void;
 }
 
 // @public (undocumented)

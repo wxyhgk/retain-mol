@@ -35,6 +35,17 @@ export type {
 export type { SelectorStoreApi, SelectorSubscribe } from './store/contracts/selectorStore'
 export type { UndoTransactionHandle } from './store/contracts/transaction'
 export type { EditCommandResult } from './lib/builder/commands/shared'
+export {
+  alignBondPair,
+  createBondPairAlignmentEditSession,
+} from './public/editing'
+export type {
+  AlignBondPairDiagnostics,
+  AlignBondPairFailureCode,
+  AlignBondPairInput,
+  AlignBondPairResult,
+  BondPairAlignmentEditSession,
+} from './public/editing'
 export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement, MolClipboard } from './lib/types'
 export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from './lib/types'
 

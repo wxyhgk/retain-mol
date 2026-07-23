@@ -5,6 +5,7 @@ import {
   commitControlledMoleculePropToStore,
   commitControlledSelectedAtomsProp,
   commitControlledSelectedAtomsPropToStore,
+  commitControlledSelectionProps,
   runControlledStoreCommit,
   shouldNotifyControlledStoreChange,
 } from './useMolViewerSyncEffects'
@@ -103,6 +104,26 @@ describe('useMolViewerSync effects', () => {
     )
 
     expect(version).toBeNull()
+  })
+
+  it('controls bond selection without overwriting uncontrolled atom selection', () => {
+    const calls: Array<{ atoms: string[]; bonds: string[] }> = []
+    const version = commitControlledSelectionProps(
+      undefined,
+      new Set(['bond-1', 'bond-2']),
+      {
+        setSelection: (atomIds, bondIds) => calls.push({
+          atoms: [...atomIds],
+          bonds: [...bondIds],
+        }),
+        getSelectedAtomIds: () => new Set(['atom-1']),
+        getSelectedBondIds: () => new Set(),
+        getSelectionVersion: () => 12,
+      },
+    )
+
+    expect(version).toBe(12)
+    expect(calls).toEqual([{ atoms: ['atom-1'], bonds: ['bond-1', 'bond-2'] }])
   })
 
   it('suppresses controlled commits but not later user edits on real subscriptions', () => {

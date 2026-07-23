@@ -40,6 +40,7 @@ export interface MolViewerProps {
   molecule?:          Molecule
   onMoleculeChange?:  (mol: Molecule) => void
   selectedAtomIds?:   ReadonlySet<string>
+  selectedBondIds?:   ReadonlySet<string>
   onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void
   displayMode?:       DisplayMode
   theme?:             string
@@ -80,6 +81,7 @@ function MolViewerContent({
   molecule: moleculeProp,
   onMoleculeChange,
   selectedAtomIds: selectedAtomIdsProp,
+  selectedBondIds: selectedBondIdsProp,
   onSelectionChange,
   displayMode: displayModeProp,
   theme: themeProp,
@@ -130,6 +132,7 @@ function MolViewerContent({
     ...(moleculeProp !== undefined ? { molecule: moleculeProp } : {}),
     ...(onMoleculeChange !== undefined ? { onMoleculeChange } : {}),
     ...(selectedAtomIdsProp !== undefined ? { selectedAtomIds: selectedAtomIdsProp } : {}),
+    ...(selectedBondIdsProp !== undefined ? { selectedBondIds: selectedBondIdsProp } : {}),
     ...(onSelectionChange !== undefined ? { onSelectionChange } : {}),
     ...(displayModeProp !== undefined ? { displayMode: displayModeProp } : {}),
     ...(themeProp !== undefined ? { theme: themeProp } : {}),
