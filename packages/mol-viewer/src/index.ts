@@ -1,6 +1,6 @@
 // ── 组件 ─────────────────────────────────────────────────────────────────────
 export { default as MolViewer } from './components/viewer/MolViewer'
-export type { MolViewerProps } from './components/viewer/MolViewer'
+export type { InteractionMode, MolViewerProps } from './components/viewer/MolViewer'
 
 // ── 分子数据类型 & 工具函数 ────────────────────────────────────────────────────
 export type { Molecule, Atom, Bond } from './lib/molecule'

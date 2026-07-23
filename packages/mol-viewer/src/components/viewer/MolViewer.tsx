@@ -26,8 +26,15 @@ import { MolViewerOverlays } from './MolViewerOverlays'
 import { useSketchPlaneShortcuts } from './useSketchPlaneShortcuts'
 import { useViewerRuntimeBridge } from './useViewerRuntimeBridge'
 import type { Molecule } from '../../lib/molecule'
+import {
+  canEditInInteractionMode,
+  resolveInteractionMode,
+  type InteractionMode,
+} from '../../lib/interaction/interactionMode'
 
 // ── 公开 API ──────────────────────────────────────────────────────────────────
+
+export type { InteractionMode } from '../../lib/interaction/interactionMode'
 
 export interface MolViewerProps {
   molecule?:          Molecule
@@ -41,6 +48,12 @@ export interface MolViewerProps {
   appearance?:        'day' | 'night'
   /** Initial grid visibility. Reapplied when the renderer is recreated. */
   gridVisible?:       boolean
+  /**
+   * Interaction capability: camera-only, selection-only, or full editing.
+   * Takes precedence over the legacy readOnly prop.
+   */
+  interactionMode?:   InteractionMode
+  /** @deprecated Use interactionMode="read-only" instead. */
   readOnly?:          boolean
   overlays?:          React.ReactNode
   className?:         string
@@ -73,12 +86,15 @@ function MolViewerContent({
   showAtomLabels: showAtomLabelsProp,
   appearance = 'day',
   gridVisible: gridVisibleProp,
-  readOnly = false,
+  interactionMode: interactionModeProp,
+  readOnly,
   overlays,
   className,
   style,
   onRendererChange,
 }: MolViewerProps) {
+  const interactionMode = resolveInteractionMode(interactionModeProp, readOnly)
+  const editingEnabled = canEditInInteractionMode(interactionMode)
   const runtime = useViewerRuntime()
   const { moleculeStore, editorStore } = useViewerRuntimeServices()
   const canvasRef    = useRef<HTMLCanvasElement>(null)
@@ -124,7 +140,7 @@ function MolViewerContent({
   const handlers = useBuilder(runtime)
   useRendererBinding({
     containerRef, rendererRef, canvasRef,
-    readOnly, activeTool, brushArmed,
+    interactionMode, activeTool, brushArmed,
     sceneObjects, activeObjectId,
     selectedAtomIds, selectedBondIds,
     displayMode, renderStyle, theme, appearance,
@@ -137,17 +153,17 @@ function MolViewerContent({
   })
 
   useViewerRuntimeBridge(renderer, gridVisibleProp)
-  useSketchPlaneShortcuts(rendererRef, readOnly)
+  useSketchPlaneShortcuts(rendererRef, !editingEnabled)
 
   // ── 统一指针事件路由（move-object + 框选）────────────────────────────────
-  const { boxRect } = useCanvasPointerRouter(containerRef, rendererRef, readOnly)
+  const { boxRect } = useCanvasPointerRouter(containerRef, rendererRef, interactionMode)
 
   // ── cursor ───────────────────────────────────────────────────────────────
   // 内联样式挂在容器上（不依赖宿主 app 的 Tailwind 扫描到本包的 class）；
   // canvas 自身不设 cursor，继承容器值 —— InteractionHandler 在 bond-drag 中
   // 直接写 canvas.style.cursor（cell/crosshair），复位为 '' 后自动落回容器光标。
   const baseCursor =
-    readOnly                     ? 'default'   :
+    !editingEnabled              ? 'default'   :
     activeTool === 'measure'     ? 'zoom-in'   :
     toolCan(activeTool, 'transformsObject') ? 'grab'      :
     toolCan(activeTool, 'canEdit') && brushArmed ? 'crosshair' :
@@ -164,7 +180,7 @@ function MolViewerContent({
         renderer={renderer}
         activeTool={activeTool}
         brushArmed={brushArmed}
-        readOnly={readOnly}
+        interactionMode={interactionMode}
         boxRect={boxRect}
       >
         {overlays}

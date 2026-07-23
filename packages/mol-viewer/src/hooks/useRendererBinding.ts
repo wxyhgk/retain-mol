@@ -23,7 +23,7 @@ export function useRendererBinding(options: RendererBindingOptions) {
   useRendererInteractionBinding({
     rendererRef: options.rendererRef,
     moleculeStore,
-    readOnly: options.readOnly,
+    interactionMode: options.interactionMode,
     activeTool: options.activeTool,
     brushArmed: options.brushArmed,
     handlers: options.handlers,

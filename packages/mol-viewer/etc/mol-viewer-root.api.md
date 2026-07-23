@@ -569,6 +569,9 @@ export interface IboViewShaderMaterialProfile {
 // @public (undocumented)
 export function inferBonds(atoms: readonly Atom[]): Bond[];
 
+// @public (undocumented)
+export type InteractionMode = 'read-only' | 'select' | 'edit';
+
 // @public
 export function is2D(mol: Molecule, eps?: number): boolean;
 
@@ -731,6 +734,7 @@ export interface MolViewerProps {
     // (undocumented)
     displayMode?: DisplayMode;
     gridVisible?: boolean;
+    interactionMode?: InteractionMode;
     // (undocumented)
     molecule?: Molecule;
     // (undocumented)
@@ -740,7 +744,7 @@ export interface MolViewerProps {
     onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void;
     // (undocumented)
     overlays?: React.ReactNode;
-    // (undocumented)
+    // @deprecated (undocumented)
     readOnly?: boolean;
     runtime?: ViewerRuntime;
     // (undocumented)

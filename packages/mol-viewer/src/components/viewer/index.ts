@@ -1,5 +1,5 @@
 export { default as MolViewer } from './MolViewer'
-export type { MolViewerProps } from './MolViewer'
+export type { InteractionMode, MolViewerProps } from './MolViewer'
 export { default as RotateGizmo } from './RotateGizmo'
 export { default as BoxSelectOverlay } from './BoxSelectOverlay'
 export { default as MeasureOverlay } from './MeasureOverlay'

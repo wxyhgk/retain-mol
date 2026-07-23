@@ -4,11 +4,13 @@ import type { ThreeRendererPort } from '../lib/molRenderer'
 import type { Tool } from '../lib/types'
 import type { MoleculeStoreApi } from '../store/moleculeStore'
 import type { BuilderHandlers } from './useBuilder'
+import { canEditInInteractionMode, type InteractionMode } from '../lib/interaction/interactionMode'
+import { configureRendererInteractionBindings } from './rendererInteractionBindings'
 
 interface Options {
   readonly rendererRef: RefObject<ThreeRendererPort | null>
   readonly moleculeStore: MoleculeStoreApi
-  readonly readOnly: boolean
+  readonly interactionMode: InteractionMode
   readonly activeTool: Tool
   readonly brushArmed: boolean
   readonly handlers: BuilderHandlers
@@ -17,12 +19,12 @@ interface Options {
 export function useRendererInteractionBinding({
   rendererRef,
   moleculeStore,
-  readOnly,
+  interactionMode,
   activeTool,
   brushArmed,
   handlers,
 }: Options) {
-  const interactionModeRef = useRef(`${readOnly}:${activeTool}:${brushArmed}`)
+  const interactionStateRef = useRef(`${interactionMode}:${activeTool}:${brushArmed}`)
   const {
     onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
     onAtomDragStart, onAtomDrag, onAtomDragEnd, onAtomDragCancel,
@@ -34,48 +36,30 @@ export function useRendererInteractionBinding({
   useEffect(() => {
     const renderer = rendererRef.current
     if (!renderer) return
-    const canEdit = toolCan(activeTool, 'canEdit')
-    const interactionMode = `${readOnly}:${activeTool}:${brushArmed}`
-    if (interactionModeRef.current !== interactionMode) {
+    const editingEnabled = canEditInInteractionMode(interactionMode)
+    const canEdit = editingEnabled && toolCan(activeTool, 'canEdit')
+    const interactionState = `${interactionMode}:${activeTool}:${brushArmed}`
+    if (interactionStateRef.current !== interactionState) {
       renderer.cancelActiveInteraction()
-      interactionModeRef.current = interactionMode
+      interactionStateRef.current = interactionState
     }
-    if (readOnly || !canEdit) renderer.cancelActiveInteraction()
+    if (!editingEnabled || !canEdit) renderer.cancelActiveInteraction()
 
-    if (readOnly) {
-      renderer.idleCursor = ''
-      renderer.onAtomClick = renderer.onAtomDoubleClick = renderer.onBondClick = renderer.onBackgroundClick = undefined
-      renderer.onAtomDrag = renderer.onAtomDragStart = renderer.onAtomDragEnd = renderer.onAtomDragCancel = renderer.canDragAtom = undefined
-      renderer.canStartBondDrag = renderer.onBondDragStart = renderer.onBondDragEnd = renderer.onBondDragHover = undefined
-      renderer.getGrowPreview = renderer.getGrowGuide = undefined
-      renderer.canStartFragmentTorsion = renderer.onFragmentTorsionStart = renderer.getFragmentTorsionPreview = renderer.onFragmentTorsionEnd = undefined
-      return
-    }
-
-    renderer.idleCursor = canEdit && brushArmed ? 'crosshair' : ''
-    renderer.onAtomClick = onAtomClick
-    renderer.onAtomDoubleClick = canEdit && !brushArmed ? onAtomDoubleClick : undefined
-    renderer.onBondClick = onBondClick
-    renderer.onBackgroundClick = onBackgroundClick
-    renderer.onAtomDrag = canEdit ? onAtomDrag : undefined
-    renderer.onAtomDragStart = canEdit ? onAtomDragStart : undefined
-    renderer.onAtomDragEnd = canEdit ? onAtomDragEnd : undefined
-    renderer.onAtomDragCancel = canEdit ? onAtomDragCancel : undefined
-    renderer.canDragAtom = canEdit
-      ? id => moleculeStore.getState().selectedAtomIds.has(id)
-      : undefined
-    renderer.canStartBondDrag = canStartBondDrag
-    renderer.onBondDragStart = onBondDragStart
-    renderer.onBondDragEnd = onBondDragEnd
-    renderer.onBondDragHover = id => renderer.setDragHoverAtom(id)
-    renderer.getGrowPreview = getGrowPreview
-    renderer.getGrowGuide = getGrowGuide
-    renderer.canStartFragmentTorsion = canStartFragmentTorsion
-    renderer.onFragmentTorsionStart = onFragmentTorsionStart
-    renderer.getFragmentTorsionPreview = getFragmentTorsionPreview
-    renderer.onFragmentTorsionEnd = onFragmentTorsionEnd
+    configureRendererInteractionBindings({
+      renderer,
+      interactionMode,
+      activeTool,
+      brushArmed,
+      handlers,
+      selection: {
+        selectAtom: (atomId, multi) => moleculeStore.getState().selectAtom(atomId, multi),
+        selectBond: (bondId, multi) => moleculeStore.getState().selectBond(bondId, multi),
+        clearSelection: () => moleculeStore.getState().clearSelection(),
+        isAtomSelected: atomId => moleculeStore.getState().selectedAtomIds.has(atomId),
+      },
+    })
   }, [
-    readOnly, onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
+    interactionMode, onAtomClick, onAtomDoubleClick, onBondClick, onBackgroundClick,
     onAtomDrag, onAtomDragStart, onAtomDragEnd, onAtomDragCancel,
     canStartBondDrag, onBondDragStart, onBondDragEnd, getGrowPreview, getGrowGuide,
     canStartFragmentTorsion, onFragmentTorsionStart,
