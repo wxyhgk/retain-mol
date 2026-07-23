@@ -7,6 +7,7 @@ import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { ATOM_LABEL as L } from '../../config/overlay.config'
 import { CAMERA } from '../../config/camera.config'
 import { resolveRenderProfile } from '../../styles'
+import { buildNumberedAtomLabels } from './atomLabels'
 
 interface Props {
   renderer: ThreeRendererPort | null
@@ -134,13 +135,9 @@ export default function AtomLabelOverlay({ renderer }: Props) {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
 
-      const counters = new Map<string, number>()
-      const labels = molecule.atoms.map(atom => {
-        if (showElementLabels) return atom.symbol
-        const n = (counters.get(atom.symbol) ?? 0) + 1
-        counters.set(atom.symbol, n)
-        return `${atom.symbol}${n}`
-      })
+      const labels = showElementLabels
+        ? molecule.atoms.map(atom => atom.symbol)
+        : buildNumberedAtomLabels(molecule.atoms)
 
       molecule.atoms.forEach((atom, i) => {
         if (showElementLabels) {
