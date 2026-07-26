@@ -10,7 +10,8 @@ import pytest
 from software.backend.jobs import JobService
 from software.backend.jobs.trajectory import TrajectoryParseError, parse_xtb_trajectory, write_xtb_trajectory
 import software.backend.jobs.xtb_runner as xtb_runner
-import software.backend.routers.optimize as optimize_router
+import software.backend.jobs.job_types.xtb.collector as xtb_collector
+import software.backend.jobs.job_types.xtb.executor as xtb_executor
 
 
 XTBOPT_LOG = """2
@@ -108,28 +109,33 @@ def test_runner_registers_trajectory_artifact_from_xtbopt_log(
         },
     )
 
-    monkeypatch.setattr(optimize_router, "_build_xtb_command", lambda *_: ["xtb", "input.xyz"])
-    monkeypatch.setattr(optimize_router, "_write_xyz", lambda path, _atoms: path.write_text("input\n"))
     monkeypatch.setattr(
-        optimize_router,
-        "_read_first_existing_xyz",
+        xtb_collector,
+        "read_first_existing_xyz",
         lambda *_: [
             {"symbol": "O", "x": 0.01, "y": 0.0, "z": 0.0},
             {"symbol": "H", "x": 0.0, "y": 0.01, "z": 1.0},
         ],
     )
-    monkeypatch.setattr(optimize_router, "_parse_energy_steps", lambda _log: (-5.0712345678, 2, True))
+    monkeypatch.setattr(xtb_collector, "parse_energy_steps", lambda _log: (-5.0712345678, 2, True))
     monkeypatch.setattr(
-        optimize_router,
-        "_prepare_output_atoms",
+        xtb_collector,
+        "prepare_output_atoms",
         lambda atoms, _request: [
             {"id": "oxygen", **atoms[0]},
             {"id": "hydrogen", **atoms[1]},
         ],
     )
 
-    def run(*_args: object, cwd: Path, log_path: Path, **_kwargs: object) -> object:
-        work = Path(cwd)
+    def run(
+        _request: object,
+        *,
+        work_directory: Path,
+        log_path: Path,
+        **_kwargs: object,
+    ) -> object:
+        work = Path(work_directory)
+        (work / "input.xyz").write_text("input\n", encoding="utf-8")
         output = "GEOMETRY OPTIMIZATION CYCLE 4\nGEOMETRY OPTIMIZATION CYCLE 5\n"
         log_path.write_text(output, encoding="utf-8")
         (work / "xtbopt.xyz").write_text(
@@ -147,7 +153,7 @@ def test_runner_registers_trajectory_artifact_from_xtbopt_log(
             },
         )()
 
-    monkeypatch.setattr(xtb_runner, "run_live_process", run)
+    monkeypatch.setattr(xtb_executor, "run_xtb_process", run)
 
     completed = xtb_runner.run_xtb_optimization_job(service, job.job_id)
     artifact = next(item for item in completed.artifacts if item.name == "optimization-trajectory.json")

@@ -8,7 +8,7 @@ import sqlite3
 from collections.abc import Callable
 
 
-LATEST_SCHEMA_VERSION = 9
+LATEST_SCHEMA_VERSION = 10
 
 Migration = Callable[[sqlite3.Connection], None]
 
@@ -623,6 +623,156 @@ def _migration_9_add_job_retry_lineage(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_10_add_job_type_data_and_runs(
+    connection: sqlite3.Connection,
+) -> None:
+    """Separate JobType-owned request data from concrete execution attempts."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS job_type_data (
+            job_id TEXT PRIMARY KEY REFERENCES jobs(job_id) ON DELETE CASCADE,
+            job_type TEXT NOT NULL,
+            job_type_version INTEGER NOT NULL DEFAULT 1
+                CHECK (job_type_version >= 1),
+            schema_version INTEGER NOT NULL DEFAULT 1
+                CHECK (schema_version >= 1),
+            data_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS job_runs (
+            run_id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+            run_number INTEGER NOT NULL CHECK (run_number >= 1),
+            engine TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (
+                status IN (
+                    'running', 'succeeded', 'failed', 'cancelled', 'interrupted'
+                )
+            ),
+            collector_id TEXT,
+            collector_version INTEGER
+                CHECK (collector_version IS NULL OR collector_version >= 1),
+            error_code TEXT,
+            error_message TEXT,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            UNIQUE (job_id, run_number)
+        )
+        """
+    )
+    _add_column_if_missing(
+        connection,
+        "artifacts",
+        "run_id",
+        "TEXT REFERENCES job_runs(run_id) ON DELETE RESTRICT",
+    )
+
+    # Existing calculation specs are the best available JobType-owned payload.
+    # Frozen structure identities remain in job_input_bindings during migration.
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO job_type_data
+            (job_id, job_type, job_type_version, schema_version, data_json,
+             created_at, updated_at)
+        SELECT
+            j.job_id,
+            j.task_type,
+            1,
+            COALESCE(s.schema_version, 1),
+            COALESCE(s.payload_json, '{}'),
+            j.created_at,
+            j.updated_at
+        FROM jobs j
+        LEFT JOIN calculation_specs s ON s.spec_id = j.spec_id
+        """
+    )
+
+    # Preserve historical execution facts as one synthetic run per attempted Job.
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO job_runs
+            (run_id, job_id, run_number, engine, status, collector_id,
+             collector_version, error_code, error_message, metadata_json,
+             started_at, finished_at)
+        SELECT
+            'migration-run-' || j.job_id,
+            j.job_id,
+            1,
+            COALESCE(s.engine, 'unknown'),
+            CASE
+                WHEN j.status IN (
+                    'running', 'succeeded', 'failed', 'cancelled', 'interrupted'
+                ) THEN j.status
+                ELSE 'interrupted'
+            END,
+            NULL,
+            NULL,
+            j.error_code,
+            j.error_message,
+            '{}',
+            COALESCE(j.started_at, j.updated_at),
+            CASE
+                WHEN j.status IN ('succeeded', 'failed', 'cancelled', 'interrupted')
+                THEN COALESCE(j.finished_at, j.updated_at)
+                ELSE NULL
+            END
+        FROM jobs j
+        LEFT JOIN calculation_specs s ON s.spec_id = j.spec_id
+        WHERE j.attempt_count > 0
+           OR j.status IN ('running', 'succeeded', 'failed', 'interrupted')
+        """
+    )
+    connection.execute(
+        """
+        UPDATE artifacts
+        SET run_id = 'migration-run-' || job_id
+        WHERE run_id IS NULL
+          AND EXISTS (
+              SELECT 1 FROM job_runs r
+              WHERE r.run_id = 'migration-run-' || artifacts.job_id
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM artifacts duplicate
+              WHERE duplicate.job_id = artifacts.job_id
+                AND duplicate.name = artifacts.name
+                AND duplicate.artifact_id <> artifacts.artifact_id
+          )
+        """
+    )
+
+    statements = (
+        """
+        CREATE INDEX IF NOT EXISTS idx_job_type_data_type
+        ON job_type_data(job_type, job_type_version)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_job_runs_job
+        ON job_runs(job_id, run_number)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_job_runs_status
+        ON job_runs(status, started_at)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_artifacts_run
+        ON artifacts(run_id, created_at)
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_artifacts_run_name
+        ON artifacts(run_id, name)
+        WHERE run_id IS NOT NULL
+        """,
+    )
+    for statement in statements:
+        connection.execute(statement)
+
+
 _MIGRATIONS: dict[int, Migration] = {
     1: _migration_1_create_legacy_schema,
     2: _migration_2_expand_durable_job_schema,
@@ -633,4 +783,5 @@ _MIGRATIONS: dict[int, Migration] = {
     7: _migration_7_add_durable_job_dispatches,
     8: _migration_8_add_workflow_executions,
     9: _migration_9_add_job_retry_lineage,
+    10: _migration_10_add_job_type_data_and_runs,
 }

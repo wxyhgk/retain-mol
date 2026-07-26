@@ -9,7 +9,8 @@
 - [实体定义](./entities.md)：职责、ID、不可变性、关系和约束。
 - [MoleculeAsset / MoleculeRevision 契约](./molecule-assets.md)：schema 6 实现、service/API、来源追踪、head 乐观并发和 Job 冻结边界。
 - [Job 输入快照](./input-snapshots.md)：输入端口、冻结事务、Workflow 解析和兼容边界。
-- [Job 创建契约 v1](./job-create-contract-v1.md)：分层创建请求、Task Contract、输入来源和执行策略。
+- [Job 创建契约 v1（旧草案）](./job-create-contract-v1.md)：当前兼容路径使用的分层创建请求，不再作为目标架构扩展。
+- [Job Kernel 与 JobType 扩展边界](./job-kernel-and-job-types.md)：轻量 Job、类型插件、运行记录、Artifact 与逐任务结果收集边界。
 - [生命周期](./lifecycles.md)：Job 状态机、输入解析和 Artifact 提交流程。
 - [v1 迁移](./migration-v1.md)：SQLite 现状、迁移步骤和兼容窗口。
 

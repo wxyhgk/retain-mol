@@ -200,13 +200,10 @@ def _public_source_type(source_kind: str) -> str:
 def _public_input_formats(
     formats_by_source_kind: Mapping[str, frozenset[str]],
 ) -> dict[str, list[str]]:
-    public_formats = {
+    return {
         _public_source_type(source_kind): sorted(formats)
         for source_kind, formats in formats_by_source_kind.items()
     }
-    if "artifact" in public_formats:
-        public_formats["job-output"] = list(public_formats["artifact"])
-    return public_formats
 
 
 __all__ = [

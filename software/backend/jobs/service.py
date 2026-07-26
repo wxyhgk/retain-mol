@@ -13,6 +13,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from .artifact_storage import ArtifactStorage
 from .input_contracts import validate_calculation_inputs
 from .molecule_canonicalize import (
@@ -28,7 +30,9 @@ from .models import (
     JobDispatch,
     JobInput,
     JobInputSnapshot,
+    JobRun,
     JobStatus,
+    JobTypeData,
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
@@ -38,6 +42,7 @@ from .models import (
     WorkflowSchedule,
 )
 from .repository import JobRepository
+from .job_types import JOB_TYPE_REGISTRY, UnknownJobTypeError
 from .workflows import validate_workflow_dag, workflow_predecessors
 
 DEFAULT_DATA_ROOT = Path(
@@ -232,8 +237,17 @@ class JobService:
                 created_at=now,
                 updated_at=now,
             )
+            job_type_data = JobTypeData(
+                jobId=job.job_id,
+                jobType=job.task_type,
+                jobTypeVersion=self._job_type_version(job.task_type),
+                schemaVersion=1,
+                data=_job_type_payload(metadata or {}),
+                createdAt=now,
+                updatedAt=now,
+            )
             try:
-                self.repository.create_job(job)
+                self.repository.create_job(job, job_type_data)
             except sqlite3.IntegrityError:
                 continue
             self._write_snapshot(job)
@@ -253,6 +267,10 @@ class JobService:
         """Atomically create, bind, and queue one immutable calculation run."""
         now = _now()
         spec_payload = dict(payload)
+        job_metadata = dict(metadata or {})
+        request_name = spec_payload.pop("name", None)
+        if request_name is not None and "name" not in job_metadata:
+            job_metadata["name"] = _required_text(request_name, "name")
         input_definitions = dict(inputs or {})
         if not input_definitions and "structure" in spec_payload:
             structure = spec_payload.pop("structure")
@@ -273,6 +291,10 @@ class JobService:
             payload=spec_payload,
             created_at=now,
         )
+        normalized_job_type_data = self._normalize_job_type_data(
+            spec.kind,
+            {"engine": spec.engine, "parameters": spec.payload},
+        )
         for _ in range(10):
             job = Job(
                 job_id=_new_job_id(now),
@@ -280,16 +302,25 @@ class JobService:
                 status="created",
                 spec_id=spec.spec_id,
                 supersedes_job_id=supersedes_job_id,
-                metadata=metadata or {},
+                metadata=job_metadata,
                 created_at=now,
                 updated_at=now,
             )
             input_snapshots = self._build_input_snapshots(
                 job.job_id, spec.kind, input_definitions, now
             )
+            job_type_data = JobTypeData(
+                jobId=job.job_id,
+                jobType=job.task_type,
+                jobTypeVersion=self._job_type_version(job.task_type),
+                schemaVersion=spec.schema_version,
+                data=normalized_job_type_data,
+                createdAt=now,
+                updatedAt=now,
+            )
             try:
                 self.repository.create_queued_job_with_spec_and_snapshots(
-                    job, spec, input_snapshots, now
+                    job, spec, input_snapshots, now, job_type_data
                 )
             except sqlite3.IntegrityError:
                 continue
@@ -308,13 +339,22 @@ class JobService:
     ) -> Job:
         """Create a persistent calculation draft for later workflow binding."""
         now = _now()
+        spec_payload = dict(payload)
+        job_metadata = dict(metadata or {})
+        request_name = spec_payload.pop("name", None)
+        if request_name is not None and "name" not in job_metadata:
+            job_metadata["name"] = _required_text(request_name, "name")
         spec = CalculationSpec(
             specId=f"spec-{secrets.token_hex(8)}",
             schemaVersion=1,
             kind=_required_text(kind, "kind"),
             engine=_required_text(engine, "engine"),
-            payload=dict(payload),
+            payload=spec_payload,
             createdAt=now,
+        )
+        normalized_job_type_data = self._normalize_job_type_data(
+            spec.kind,
+            {"engine": spec.engine, "parameters": spec.payload},
         )
         for _ in range(10):
             job = Job(
@@ -322,12 +362,21 @@ class JobService:
                 taskType=spec.kind,
                 status="created",
                 specId=spec.spec_id,
-                metadata=metadata or {},
+                metadata=job_metadata,
+                createdAt=now,
+                updatedAt=now,
+            )
+            job_type_data = JobTypeData(
+                jobId=job.job_id,
+                jobType=job.task_type,
+                jobTypeVersion=self._job_type_version(job.task_type),
+                schemaVersion=spec.schema_version,
+                data=normalized_job_type_data,
                 createdAt=now,
                 updatedAt=now,
             )
             try:
-                self.repository.create_job_with_spec(job, spec)
+                self.repository.create_job_with_spec(job, spec, job_type_data)
             except sqlite3.IntegrityError:
                 continue
             created = self.get_job(job.job_id)
@@ -393,6 +442,25 @@ class JobService:
     def get_input_snapshots(self, job_id: str) -> list[JobInputSnapshot]:
         self._require_job(job_id)
         return self.repository.list_job_input_snapshots(job_id)
+
+    def get_job_type_data(self, job_id: str) -> JobTypeData:
+        self._require_job(job_id)
+        job_type_data = self.repository.get_job_type_data(job_id)
+        if job_type_data is None:
+            raise InvalidJobOperationError(
+                f"Job '{job_id}' has no persisted JobType data"
+            )
+        return job_type_data
+
+    def list_job_runs(self, job_id: str) -> list[JobRun]:
+        self._require_job(job_id)
+        return self.repository.list_job_runs(job_id)
+
+    def get_job_run(self, run_id: str) -> JobRun:
+        run = self.repository.get_job_run(run_id)
+        if run is None:
+            raise InvalidJobOperationError(f"JobRun '{run_id}' does not exist")
+        return run
 
     def list_jobs(self) -> list[Job]:
         jobs = self.repository.list_jobs()
@@ -1012,11 +1080,19 @@ class JobService:
         *,
         media_type: str | None = None,
         metadata: dict[str, Any] | None = None,
+        run_id: str | None = None,
     ) -> Artifact:
         self._require_job(job_id)
+        if run_id is not None:
+            run = self.get_job_run(run_id)
+            if run.job_id != job_id:
+                raise InvalidJobOperationError(
+                    f"JobRun '{run_id}' does not belong to Job '{job_id}'"
+                )
         artifact = Artifact(
             artifact_id=f"artifact-{secrets.token_hex(8)}",
             job_id=job_id,
+            run_id=run_id,
             name=_required_text(name, "name"),
             path=_required_text(path, "path"),
             **self._artifact_identity(job_id, path),
@@ -1027,7 +1103,7 @@ class JobService:
             metadata=metadata or {},
             created_at=_now(),
         )
-        self.repository.add_artifact(artifact)
+        artifact = self.repository.add_artifact(artifact)
         self._touch_job(job_id)
         self._write_snapshot(self._require_job(job_id))
         return artifact
@@ -1062,16 +1138,76 @@ class JobService:
 
     def claim_queued_job(self, job_id: str) -> Job | None:
         """Atomically claim a queued job for one runner process."""
-        if not self.repository.claim_job(
-            job_id,
-            expected_status="queued",
-            next_status="running",
-            updated_at=_now(),
-        ):
+        job = self._require_job(job_id)
+        engine, collector_id, collector_version = self._execution_descriptor(job)
+        now = _now()
+        run = JobRun(
+            runId=f"run-{secrets.token_hex(8)}",
+            jobId=job_id,
+            runNumber=len(self.repository.list_job_runs(job_id)) + 1,
+            engine=engine,
+            status="running",
+            collectorId=collector_id,
+            collectorVersion=collector_version,
+            metadata={},
+            startedAt=now,
+        )
+        if not self.repository.claim_job_run(run):
             return None
         job = self._require_job(job_id)
         self._write_snapshot(job)
         return job
+
+    def get_active_job_run(self, job_id: str) -> JobRun:
+        self._require_job(job_id)
+        run = self.repository.get_active_job_run(job_id)
+        if run is None:
+            raise InvalidJobOperationError(
+                f"Job '{job_id}' has no active execution run"
+            )
+        return run
+
+    @staticmethod
+    def _job_type_version(job_type: str) -> int:
+        try:
+            return JOB_TYPE_REGISTRY.resolve(job_type).job_type_version
+        except UnknownJobTypeError:
+            return 1
+
+    @staticmethod
+    def _normalize_job_type_data(
+        job_type: str,
+        raw_data: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Delegate creation validation to the exact registered JobType."""
+        try:
+            handler = JOB_TYPE_REGISTRY.resolve(job_type)
+        except UnknownJobTypeError:
+            return dict(raw_data)
+        try:
+            return handler.normalize_job_type_data(raw_data)
+        except (ValidationError, TypeError, ValueError) as error:
+            raise InvalidJobInputError(
+                f"Invalid {job_type}@{handler.job_type_version} parameters: {error}"
+            ) from error
+
+    def _execution_descriptor(
+        self, job: Job
+    ) -> tuple[str, str | None, int | None]:
+        try:
+            handler = JOB_TYPE_REGISTRY.resolve(job.task_type)
+            return (
+                handler.engine_id,
+                handler.collector_id,
+                handler.collector_version,
+            )
+        except UnknownJobTypeError:
+            spec = (
+                self.repository.get_calculation_spec(job.spec_id)
+                if job.spec_id is not None
+                else None
+            )
+            return (spec.engine if spec is not None else "unknown", None, None)
 
     def request_job_dispatch(self, job_id: str, *, max_inflight: int) -> bool:
         """Persist an idempotent execution request for one queued job."""
@@ -1602,6 +1738,11 @@ def _new_workflow_id() -> str:
 
 def _new_input_link_id() -> str:
     return f"reference-{secrets.token_hex(8)}"
+
+
+def _job_type_payload(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    request = metadata.get("request")
+    return dict(request) if isinstance(request, Mapping) else {}
 
 
 def _required_text(value: str, field_name: str) -> str:

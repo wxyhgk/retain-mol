@@ -9,8 +9,10 @@ from unittest.mock import Mock
 import pytest
 
 from software.backend.jobs import JobService
+from software.backend.jobs.job_types.xtb import XtbOptimizationExecutor
+import software.backend.jobs.job_types.xtb.collector as xtb_collector
+import software.backend.jobs.job_types.xtb.executor as xtb_executor
 import software.backend.jobs.xtb_runner as xtb_runner
-import software.backend.routers.optimize as optimize_router
 
 
 def _request() -> dict:
@@ -56,12 +58,17 @@ def test_queued_xtb_job_persists_output_log_and_artifacts(
         {"symbol": "H", "x": 0.0, "y": 0.1, "z": 1.0},
     ]
 
-    def fake_write_xyz(path: Path, _atoms: object) -> None:
-        path.write_text("input geometry\n", encoding="utf-8")
-
-    def fake_run(command: list[str], *, cwd: Path, log_path: Path, **_: object) -> SimpleNamespace:
-        assert command == ["xtb", "input.xyz"]
-        (Path(cwd) / "xtbopt.xyz").write_text(
+    def fake_run(
+        _request: object,
+        *,
+        work_directory: Path,
+        log_path: Path,
+        **_: object,
+    ) -> SimpleNamespace:
+        (work_directory / "input.xyz").write_text(
+            "input geometry\n", encoding="utf-8"
+        )
+        (work_directory / "xtbopt.xyz").write_text(
             "2\noptimized by fake xTB\nO 0.1 0.0 0.0\nH 0.0 0.1 1.0\n",
             encoding="utf-8",
         )
@@ -69,23 +76,21 @@ def test_queued_xtb_job_persists_output_log_and_artifacts(
         log_path.write_text(output, encoding="utf-8")
         return SimpleNamespace(stdout=output, stderr="", returncode=0)
 
-    monkeypatch.setattr(optimize_router, "_build_xtb_command", lambda *_: ["xtb", "input.xyz"])
-    monkeypatch.setattr(optimize_router, "_write_xyz", fake_write_xyz)
-    monkeypatch.setattr(optimize_router, "_read_first_existing_xyz", lambda *_: output_atoms)
+    monkeypatch.setattr(xtb_collector, "read_first_existing_xyz", lambda *_: output_atoms)
     monkeypatch.setattr(
-        optimize_router,
-        "_parse_energy_steps",
+        xtb_collector,
+        "parse_energy_steps",
         lambda _log: (-76.1234, 8, True),
     )
     monkeypatch.setattr(
-        optimize_router,
-        "_prepare_output_atoms",
+        xtb_collector,
+        "prepare_output_atoms",
         lambda atoms, _request: [
             {"id": "oxygen", **atoms[0]},
             {"id": "hydrogen", **atoms[1]},
         ],
     )
-    monkeypatch.setattr(xtb_runner, "run_live_process", fake_run)
+    monkeypatch.setattr(xtb_executor, "run_xtb_process", fake_run)
 
     completed = xtb_runner.run_xtb_optimization_job(service, job.job_id)
 
@@ -99,6 +104,10 @@ def test_queued_xtb_job_persists_output_log_and_artifacts(
 
     artifacts = {artifact.name: artifact for artifact in completed.artifacts}
     assert set(artifacts) == {"optimized.xyz", "xtb.log"}
+    runs = service.list_job_runs(job.job_id)
+    assert len(runs) == 1
+    assert runs[0].status == "succeeded"
+    assert {artifact.run_id for artifact in artifacts.values()} == {runs[0].run_id}
     assert artifacts["optimized.xyz"].path == "optimized.xyz"
     assert artifacts["optimized.xyz"].media_type == "chemical/x-xyz"
     assert artifacts["optimized.xyz"].metadata == {
@@ -134,7 +143,7 @@ def test_non_queued_xtb_job_cannot_be_run_again(
     assert service.claim_queued_job(job.job_id) is not None
     service.update_status(job.job_id, "succeeded")
     run = Mock()
-    monkeypatch.setattr(xtb_runner, "run_live_process", run)
+    monkeypatch.setattr(xtb_executor, "run_xtb_process", run)
 
     with pytest.raises(
         xtb_runner.JobExecutionError,
@@ -154,15 +163,24 @@ def test_successful_job_keeps_a_loadable_optimized_molecule_snapshot(
     request = _request() | {"molecule": _molecule_snapshot()}
     job = service.create_job("xtb-optimization", metadata={"request": request})
 
-    monkeypatch.setattr(optimize_router, "_build_xtb_command", lambda *_: ["xtb", "input.xyz"])
-    monkeypatch.setattr(optimize_router, "_write_xyz", lambda path, _atoms: path.write_text("input\n", encoding="utf-8"))
-    monkeypatch.setattr(xtb_runner, "run_live_process", lambda *_args, log_path, **_kwargs: (log_path.write_text("", encoding="utf-8"), SimpleNamespace(stdout="", stderr="", returncode=0))[1])
-    monkeypatch.setattr(optimize_router, "_read_first_existing_xyz", lambda *_: [
+    def run(
+        _request: object,
+        *,
+        work_directory: Path,
+        log_path: Path,
+        **_: object,
+    ) -> SimpleNamespace:
+        (work_directory / "input.xyz").write_text("input\n", encoding="utf-8")
+        log_path.write_text("", encoding="utf-8")
+        return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    monkeypatch.setattr(xtb_executor, "run_xtb_process", run)
+    monkeypatch.setattr(xtb_collector, "read_first_existing_xyz", lambda *_: [
         {"symbol": "O", "x": 2.0, "y": 3.0, "z": 4.0},
         {"symbol": "H", "x": 5.0, "y": 6.0, "z": 7.0},
     ])
-    monkeypatch.setattr(optimize_router, "_parse_energy_steps", lambda _log: (None, None, True))
-    monkeypatch.setattr(optimize_router, "_prepare_output_atoms", lambda atoms, _request: [
+    monkeypatch.setattr(xtb_collector, "parse_energy_steps", lambda _log: (None, None, True))
+    monkeypatch.setattr(xtb_collector, "prepare_output_atoms", lambda atoms, _request: [
         {"id": "oxygen", **atoms[0]}, {"id": "hydrogen", **atoms[1]},
     ])
 
@@ -191,6 +209,22 @@ def test_missing_request_finishes_as_failed_instead_of_staying_running(tmp_path:
     assert failed.error_code == "execution_failed"
 
 
+def test_job_type_data_is_validated_before_starting_xtb(tmp_path: Path) -> None:
+    service = JobService(tmp_path / "data")
+    invalid_request = _request() | {"maxSteps": 0}
+    job = service.create_job(
+        "xtb-optimization",
+        metadata={"request": invalid_request},
+    )
+
+    with pytest.raises(
+        xtb_runner.JobExecutionError,
+        match=r"invalid xtb-optimization@1 data",
+    ) as error:
+        XtbOptimizationExecutor().prepare_request(service, job)
+    assert "maxSteps" in str(error.value)
+
+
 def test_runner_composes_new_request_from_spec_and_frozen_literal(tmp_path: Path) -> None:
     service = JobService(tmp_path / "data")
     request = _request() | {"molecule": _molecule_snapshot()}
@@ -201,16 +235,60 @@ def test_runner_composes_new_request_from_spec_and_frozen_literal(tmp_path: Path
         metadata={"name": request["name"], "request": request},
     )
 
-    resolved = xtb_runner._resolve_xtb_request(service, job)
+    prepared = XtbOptimizationExecutor().prepare_request(service, job)
 
-    assert resolved is not None
-    assert resolved["method"] == "gfn2"
-    assert resolved["structure"] == request["structure"]
-    assert resolved["molecule"] == request["molecule"]
+    assert prepared.job_data.method == "gfn2"
+    assert prepared.collection_request["structure"] == request["structure"]
+    assert prepared.collection_request["molecule"] == request["molecule"]
+    assert prepared.engine_request.method == "gfn2"
+    assert [atom.id for atom in prepared.engine_request.atoms] == [
+        "oxygen",
+        "hydrogen",
+    ]
     spec = service.get_calculation_spec(job.job_id)
     assert spec is not None
     assert "structure" not in spec.payload
     assert "molecule" not in spec.payload
+
+
+def test_runner_uses_canonical_job_type_data_instead_of_raw_spec(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = JobService(tmp_path / "data")
+    request = _request()
+    job = service.create_calculation_job(
+        "xtb-optimization",
+        "xtb",
+        request,
+        metadata={"name": request["name"]},
+    )
+    spec = service.get_calculation_spec(job.job_id)
+    assert spec is not None
+    original_get_spec = service.get_calculation_spec
+    changed_spec = spec.model_copy(
+        update={
+            "payload": {
+                **spec.payload,
+                "method": "gfn1",
+                "maxSteps": 17,
+            }
+        }
+    )
+
+    monkeypatch.setattr(
+        service,
+        "get_calculation_spec",
+        lambda job_id: changed_spec
+        if job_id == job.job_id
+        else original_get_spec(job_id),
+    )
+
+    prepared = XtbOptimizationExecutor().prepare_request(service, job)
+
+    assert prepared.engine_request.method == "gfn2"
+    assert prepared.engine_request.max_steps == 200
+    assert prepared.collection_request["name"] == "Water optimization"
 
 
 def test_runner_reads_xyz_from_a_frozen_artifact_binding(tmp_path: Path) -> None:
@@ -249,10 +327,10 @@ def test_runner_reads_xyz_from_a_frozen_artifact_binding(tmp_path: Path) -> None
         },
     )
 
-    resolved = xtb_runner._resolve_xtb_request(service, queued)
+    prepared = XtbOptimizationExecutor().prepare_request(service, queued)
 
-    assert resolved is not None
-    assert [atom["symbol"] for atom in resolved["structure"]["atoms"]] == ["O", "H"]
+    assert [atom.symbol for atom in prepared.job_data.structure.atoms] == ["O", "H"]
+    assert [atom.symbol for atom in prepared.engine_request.atoms] == ["O", "H"]
 
 
 def test_runner_composes_request_from_an_immutable_molecule_revision(
@@ -291,11 +369,10 @@ def test_runner_composes_request_from_an_immutable_molecule_revision(
         },
     )
 
-    resolved = xtb_runner._resolve_xtb_request(service, queued)
+    prepared = XtbOptimizationExecutor().prepare_request(service, queued)
 
-    assert resolved is not None
-    assert resolved["molecule"] == molecule
-    assert resolved["structure"]["atoms"] == molecule["atoms"]
+    assert prepared.collection_request["molecule"] == molecule
+    assert prepared.collection_request["structure"]["atoms"] == molecule["atoms"]
     snapshot = service.get_input_snapshots(queued.job_id)[0]
     assert snapshot.molecule_revision_id == revision.revision_id
     assert snapshot.content_sha256 == revision.sha256

@@ -1,6 +1,8 @@
 # Job 创建契约 v1
 
-本文定义外部客户端创建计算 Job 时使用的稳定请求。它面向前端表单、Workflow、脚本和 AI 客户端，不暴露 SQLite、工作目录或 runner 实现。
+> **状态：旧草案，已停止作为目标架构继续扩展。** 当前实现仍有兼容路径使用本文契约，但新的目标边界以 [Job Kernel 与 JobType 扩展边界](./job-kernel-and-job-types.md) 为准。后续迁移不能继续把 `profile / definition / inputs / execution` 固化进通用 Job。
+
+本文定义外部客户端创建单个计算 Job 时使用的稳定请求。它面向前端表单、脚本和 AI 客户端，不暴露 SQLite、工作目录或 runner 实现。
 
 ## 为什么需要分层
 
@@ -11,7 +13,7 @@
 3. `inputs` 描述命名输入端口及其来源，提交时必须冻结。
 4. `execution` 是资源和队列策略，不属于科学参数。
 
-如果将这些字段放进同一个任意字典，前端无法生成可靠表单，Workflow 无法验证连接，AI 也无法知道可用参数。v1 因此采用以下总结构：
+如果将这些字段放进同一个任意字典，前端无法生成可靠表单，AI 也无法知道可用参数。v1 因此采用以下总结构：
 
 ```text
 CreateJobRequest
@@ -150,9 +152,9 @@ CreateJobRequest
 | `inline` | 小型临时结构或值 | 规范化并计算摘要 |
 | `molecule-revision` | 正式分子版本 | 校验 Revision 并冻结其摘要 |
 | `artifact` | 已有计算产物 | 校验来源 Job、格式和摘要 |
-| `job-output` | 按 Job 和输出名称引用 | 解析为唯一 Artifact 后再冻结 |
-
 正式前端流程应优先保存 `MoleculeRevision` 后再创建 Job。`inline` 主要用于脚本、兼容接口和小型临时任务。
+
+单 Job 创建请求不接受“某个 Job 的输出”这类尚未解析的间接来源。如果调用方要复用已有结果，必须先确定具体 `artifactId`，再通过 `artifact` 输入创建当前 Job。这样 `inputs` 中永远只有当前 Job 真正消费的数据。
 
 ## 第四层：Execution
 

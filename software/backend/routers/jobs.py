@@ -23,7 +23,6 @@ try:
         ArtifactInputSource,
         CreateJobRequest,
         InlineInputSource,
-        JobOutputSource,
         MoleculeRevisionInputSource,
         list_task_contracts,
         resolve_task_contract,
@@ -33,7 +32,6 @@ except ModuleNotFoundError:
         ArtifactInputSource,
         CreateJobRequest,
         InlineInputSource,
-        JobOutputSource,
         MoleculeRevisionInputSource,
         list_task_contracts,
         resolve_task_contract,
@@ -378,25 +376,6 @@ class _JobServiceAdapter:
                 artifact = await self._call("get_artifact", source.artifact_id)
                 inputs[port] = _artifact_input_descriptor(artifact)
                 continue
-            if isinstance(source, JobOutputSource):
-                artifacts = await self.list_artifacts(source.job_id)
-                matches = [
-                    artifact
-                    for artifact in artifacts
-                    if source.output
-                    in {
-                        _read_field(artifact, "artifactId", "artifact_id"),
-                        _read_field(artifact, "name"),
-                        _read_field(artifact, "role"),
-                    }
-                ]
-                if len(matches) != 1:
-                    raise ValueError(
-                        f"Job output '{source.job_id}:{source.output}' must resolve "
-                        f"to exactly one artifact; found {len(matches)}"
-                    )
-                inputs[port] = _artifact_input_descriptor(matches[0])
-                continue
             raise TypeError(f"Unsupported input source for port '{port}'")
         return inputs
 
@@ -434,6 +413,27 @@ class _JobServiceAdapter:
 
     async def list_artifacts(self, job_id: str) -> Any:
         return await self._call("list_artifacts", job_id)
+
+    async def get_job_type_data(self, job_id: str) -> Any:
+        await self.get_job(job_id)
+        return await self._call("get_job_type_data", job_id)
+
+    async def list_job_runs(self, job_id: str) -> Any:
+        await self.get_job(job_id)
+        return await self._call("list_job_runs", job_id)
+
+    async def get_job_run(self, job_id: str, run_id: str) -> Any:
+        await self.get_job(job_id)
+        try:
+            run = await self._call("get_job_run", run_id)
+        except ValueError as exc:
+            if exc.__class__.__name__ == "InvalidJobOperationError":
+                raise KeyError(run_id) from exc
+            raise
+        run_job_id = _read_field(run, "jobId", "job_id")
+        if run_job_id != job_id:
+            raise KeyError(run_id)
+        return run
 
     async def create_workflow(self, request: WorkflowRequest) -> Any:
         return await self._call(
@@ -711,6 +711,9 @@ def _frontend_artifact(artifact: Any) -> dict[str, Any]:
         "createdAt": payload.get("createdAt", payload.get("created_at")),
         "metadata": metadata,
     }
+    run_id = payload.get("runId", payload.get("run_id"))
+    if run_id is not None:
+        response["runId"] = run_id
     if isinstance(job_id, str) and job_id and isinstance(artifact_id, str) and artifact_id:
         response["downloadUrl"] = f"/jobs/{job_id}/artifacts/{artifact_id}/content"
     return response
@@ -1081,6 +1084,42 @@ async def get_job(job_id: str = Path(min_length=1)) -> Any:
     service = _service_adapter()
     job = await _run("get job", job_id, service.get_job(job_id))
     return _frontend_job(job)
+
+
+@router.get("/{job_id}/type-data")
+async def get_job_type_data(job_id: str = Path(min_length=1)) -> Any:
+    """Return the immutable, versioned request interpreted by the JobType."""
+    service = _service_adapter()
+    return await _run(
+        "get job type data",
+        job_id,
+        service.get_job_type_data(job_id),
+    )
+
+
+@router.get("/{job_id}/runs")
+async def list_job_runs(job_id: str = Path(min_length=1)) -> Any:
+    """List concrete execution attempts for one durable Job."""
+    service = _service_adapter()
+    return await _run(
+        "list job runs",
+        job_id,
+        service.list_job_runs(job_id),
+    )
+
+
+@router.get("/{job_id}/runs/{run_id}")
+async def get_job_run(
+    job_id: str = Path(min_length=1),
+    run_id: str = Path(min_length=1),
+) -> Any:
+    """Return one execution attempt after verifying Job ownership."""
+    service = _service_adapter()
+    return await _run(
+        "get job run",
+        job_id,
+        service.get_job_run(job_id, run_id),
+    )
 
 
 @router.patch("/{job_id}")

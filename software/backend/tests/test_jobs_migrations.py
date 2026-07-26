@@ -77,6 +77,8 @@ def test_migrate_initializes_an_empty_database() -> None:
         "molecule_assets",
         "molecule_revisions",
         "job_dispatches",
+        "job_runs",
+        "job_type_data",
         "workflow_executions",
     } <= _tables(connection)
     assert "supersedes_job_id" in _columns(connection, "jobs")
@@ -100,7 +102,10 @@ def test_migrate_v8_adds_nullable_retry_lineage_without_changing_jobs() -> None:
 
     migrate(connection)
 
-    assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+    assert (
+        connection.execute("PRAGMA user_version").fetchone()[0]
+        == LATEST_SCHEMA_VERSION
+    )
     assert connection.execute(
         "SELECT job_id, supersedes_job_id FROM jobs"
     ).fetchone() == ("legacy-job", None)
@@ -154,6 +159,37 @@ def test_migrate_preserves_legacy_data_and_normalizes_statuses() -> None:
     ]
 
 
+def test_migrate_keeps_ambiguous_legacy_artifacts_outside_backfilled_run() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.executescript(LEGACY_SCHEMA)
+    connection.execute(
+        """
+        INSERT INTO jobs
+            (job_id, task_type, status, metadata_json, created_at, updated_at)
+        VALUES
+            ('legacy-job', 'xtb-optimization', 'succeeded', '{}',
+             '2026-07-14T00:00:00Z', '2026-07-14T00:01:00Z')
+        """
+    )
+    connection.executemany(
+        """
+        INSERT INTO artifacts
+            (artifact_id, job_id, name, path, media_type, metadata_json, created_at)
+        VALUES (?, 'legacy-job', 'result.xyz', ?, 'chemical/x-xyz', '{}', ?)
+        """,
+        (
+            ("artifact-1", "first.xyz", "2026-07-14T00:01:00Z"),
+            ("artifact-2", "second.xyz", "2026-07-14T00:02:00Z"),
+        ),
+    )
+
+    migrate(connection)
+
+    assert connection.execute(
+        "SELECT artifact_id, run_id FROM artifacts ORDER BY artifact_id"
+    ).fetchall() == [("artifact-1", None), ("artifact-2", None)]
+
+
 def test_migrate_adds_all_requested_columns() -> None:
     connection = sqlite3.connect(":memory:")
     connection.executescript(LEGACY_SCHEMA)
@@ -204,6 +240,22 @@ def test_migrate_adds_all_requested_columns() -> None:
         "error_code",
         "finished_at",
     } <= _columns(connection, "workflow_executions")
+    assert {
+        "job_type",
+        "job_type_version",
+        "schema_version",
+        "data_json",
+    } <= _columns(connection, "job_type_data")
+    assert {
+        "run_id",
+        "job_id",
+        "run_number",
+        "engine",
+        "collector_id",
+        "collector_version",
+        "status",
+    } <= _columns(connection, "job_runs")
+    assert "run_id" in _columns(connection, "artifacts")
 
 
 def test_migrate_is_idempotent_for_repeated_and_partially_applied_runs() -> None:

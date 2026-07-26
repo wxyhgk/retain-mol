@@ -13,9 +13,10 @@ from .molecule_canonicalize import molecule_content_hash
 
 
 def resolve_structure_request(service: Any, job: Any) -> dict[str, Any] | None:
-    """Compose an engine request from a calculation spec and frozen structure."""
+    """Compose an engine request from canonical type data and frozen structure."""
     spec = service.get_calculation_spec(job.job_id)
     input_snapshots = service.get_input_snapshots(job.job_id)
+    request = _runtime_parameters(service, job, spec)
     if spec is not None and input_snapshots:
         snapshot = next(
             (item for item in input_snapshots if item.input_name == "structure"), None
@@ -24,7 +25,6 @@ def resolve_structure_request(service: Any, job: Any) -> dict[str, Any] | None:
             raise JobExecutionError(
                 f"Job '{job.job_id}' has no supported frozen structure snapshot"
             )
-        request = dict(spec.payload)
         if snapshot.source_kind == "molecule_revision":
             revision = service.get_molecule_revision(snapshot.molecule_revision_id or "")
             if revision.sha256 != snapshot.content_sha256:
@@ -92,9 +92,42 @@ def resolve_structure_request(service: Any, job: Any) -> dict[str, Any] | None:
             request["molecule"] = dict(literal["molecule"])
         return request
     if spec is not None:
-        return dict(spec.payload)
+        return request
     request = job.metadata.get("request")
     return request if isinstance(request, dict) else None
+
+
+def _runtime_parameters(service: Any, job: Any, spec: Any) -> dict[str, Any]:
+    """Prefer canonical JobTypeData while retaining migrated-spec fallback."""
+    request: dict[str, Any] | None = None
+    get_job_type_data = getattr(service, "get_job_type_data", None)
+    if callable(get_job_type_data):
+        job_type_data = get_job_type_data(job.job_id)
+        if job_type_data.job_type != job.task_type:
+            raise JobExecutionError(
+                f"Job '{job.job_id}' type data belongs to "
+                f"'{job_type_data.job_type}', not '{job.task_type}'"
+            )
+        data = job_type_data.data
+        parameters = data.get("parameters") if isinstance(data, Mapping) else None
+        if isinstance(parameters, Mapping):
+            if spec is not None:
+                engine = data.get("engine")
+                if isinstance(engine, str) and engine != spec.engine:
+                    raise JobExecutionError(
+                        f"Job '{job.job_id}' type data engine '{engine}' does not "
+                        f"match calculation engine '{spec.engine}'"
+                    )
+            request = deepcopy(dict(parameters))
+
+    # Schema 10 migrated legacy payloads without the engine/parameters envelope.
+    if request is None:
+        request = deepcopy(dict(spec.payload)) if spec is not None else {}
+
+    name = job.metadata.get("name")
+    if isinstance(name, str) and name.strip():
+        request["name"] = name.strip()
+    return request
 
 
 def canonical_json_sha256(value: Any) -> str:

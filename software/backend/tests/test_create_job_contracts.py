@@ -114,6 +114,22 @@ def test_create_job_request_rejects_unsupported_task_engine_pair() -> None:
         CreateJobRequest.model_validate(payload)
 
 
+def test_single_job_inputs_reject_unresolved_job_outputs() -> None:
+    payload = _xtb_request()
+    payload["inputs"] = {
+        "ports": {
+            "structure": {
+                "type": "job-output",
+                "jobId": "job-upstream",
+                "output": "optimized-structure",
+            }
+        }
+    }
+
+    with pytest.raises(ValidationError, match="union_tag_invalid"):
+        CreateJobRequest.model_validate(payload)
+
+
 def test_task_contract_registry_exposes_parameters_and_input_ports() -> None:
     contracts = list_task_contracts()
     xtb = next(
@@ -131,7 +147,6 @@ def test_task_contract_registry_exposes_parameters_and_input_ports() -> None:
             "formatsBySourceType": {
                 "artifact": ["mol", "retainmol-json", "sdf", "xyz"],
                 "inline": ["molecule", "structure"],
-                "job-output": ["mol", "retainmol-json", "sdf", "xyz"],
                 "molecule-revision": ["molecule"],
             },
         }
@@ -202,75 +217,3 @@ def test_contract_listing_route_does_not_require_a_job_service() -> None:
     assert response.status_code == 200
     assert response.json()["schemaVersion"] == 1
     assert len(response.json()["contracts"]) == 4
-
-
-def test_job_output_source_resolves_to_one_frozen_artifact(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    service = JobService(tmp_path / "data")
-    source = service.create_calculation_job(
-        "xtb-optimization",
-        "xtb",
-        {
-            "charge": 0,
-            "multiplicity": 1,
-            "method": "gfn2",
-            "maxSteps": 50,
-            "optLevel": "normal",
-        },
-        inputs={
-            "structure": {
-                "sourceKind": "literal",
-                "format": "molecule",
-                "value": {
-                    "format": "molecule",
-                    "structure": {
-                        "atoms": [
-                            {
-                                "id": "h",
-                                "symbol": "H",
-                                "x": 0,
-                                "y": 0,
-                                "z": 0,
-                            }
-                        ]
-                    },
-                },
-            }
-        },
-    )
-    service.update_status(source.job_id, "running")
-    service.update_status(source.job_id, "succeeded")
-    xyz = service.task_directory(source.job_id) / "optimized.xyz"
-    xyz.write_text("1\noptimized\nH 0 0 0\n", encoding="utf-8")
-    artifact = service.add_artifact(
-        source.job_id,
-        "optimized.xyz",
-        str(xyz),
-        metadata={"format": "xyz", "role": "optimized-structure"},
-    )
-
-    payload = _xtb_request()
-    payload["profile"]["name"] = "Derived optimization"
-    payload["inputs"] = {
-        "ports": {
-            "structure": {
-                "type": "job-output",
-                "jobId": source.job_id,
-                "output": "optimized-structure",
-            }
-        }
-    }
-    monkeypatch.setattr(
-        jobs_router, "_load_get_job_service", lambda: lambda: service
-    )
-    app = FastAPI()
-    app.include_router(jobs_router.router)
-    response = TestClient(app).post("/jobs/calculations", json=payload)
-
-    assert response.status_code == 201, response.text
-    snapshots = service.get_input_snapshots(response.json()["id"])
-    assert len(snapshots) == 1
-    assert snapshots[0].source_kind == "artifact"
-    assert snapshots[0].artifact_id == artifact.artifact_id
-    assert snapshots[0].content_sha256 == artifact.sha256

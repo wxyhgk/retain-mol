@@ -18,6 +18,14 @@ JobStatus = Literal[
     "interrupted",
 ]
 
+JobRunStatus = Literal[
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "interrupted",
+]
+
 DispatchStatus = Literal["pending", "leased", "finished"]
 WorkflowExecutionStatus = Literal["active", "succeeded", "blocked", "cancelled"]
 WorkflowNodeState = Literal[
@@ -194,6 +202,41 @@ class JobInputSnapshot(BaseModel):
         return self
 
 
+class JobTypeData(BaseModel):
+    """Opaque, versioned request data interpreted by one JobType handler."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    job_id: str = Field(alias="jobId")
+    job_type: str = Field(alias="jobType")
+    job_type_version: int = Field(default=1, alias="jobTypeVersion", ge=1)
+    schema_version: int = Field(default=1, alias="schemaVersion", ge=1)
+    data: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class JobRun(BaseModel):
+    """One concrete execution attempt of a durable Job."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    run_id: str = Field(alias="runId")
+    job_id: str = Field(alias="jobId")
+    run_number: int = Field(alias="runNumber", ge=1)
+    engine: str
+    status: JobRunStatus
+    collector_id: str | None = Field(default=None, alias="collectorId")
+    collector_version: int | None = Field(
+        default=None, alias="collectorVersion", ge=1
+    )
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    started_at: datetime = Field(alias="startedAt")
+    finished_at: datetime | None = Field(default=None, alias="finishedAt")
+
+
 class Artifact(BaseModel):
     """A file or generated value associated with a completed job."""
 
@@ -201,6 +244,7 @@ class Artifact(BaseModel):
 
     artifact_id: str = Field(alias="artifactId")
     job_id: str = Field(alias="jobId")
+    run_id: str | None = Field(default=None, alias="runId")
     name: str
     path: str
     storage_key: str | None = Field(default=None, alias="storageKey")

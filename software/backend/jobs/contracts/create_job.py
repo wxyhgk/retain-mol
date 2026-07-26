@@ -90,17 +90,10 @@ class ArtifactInputSource(_ContractModel):
     artifact_id: str = Field(alias="artifactId", min_length=1)
 
 
-class JobOutputSource(_ContractModel):
-    type: Literal["job-output"]
-    job_id: str = Field(alias="jobId", min_length=1)
-    output: str = Field(min_length=1, max_length=160)
-
-
 JobInputSource = Annotated[
     InlineInputSource
     | MoleculeRevisionInputSource
-    | ArtifactInputSource
-    | JobOutputSource,
+    | ArtifactInputSource,
     Field(discriminator="type"),
 ]
 
@@ -157,7 +150,6 @@ __all__ = [
     "JobInputManifest",
     "JobInputSource",
     "JobOutputRequest",
-    "JobOutputSource",
     "JobProfile",
     "JobResourceRequest",
     "JobSystem",

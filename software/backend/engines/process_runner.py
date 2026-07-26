@@ -27,7 +27,7 @@ def run_live_process(
     *,
     cwd: Path,
     log_path: Path,
-    timeout: int,
+    timeout: float,
     cancel_check: Callable[[], bool] | None = None,
     poll_interval: float = 0.2,
 ) -> LiveProcessResult:

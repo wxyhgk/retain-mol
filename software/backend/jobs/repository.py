@@ -19,7 +19,9 @@ from .models import (
     JobDispatch,
     JobInput,
     JobInputSnapshot,
+    JobRun,
     JobStatus,
+    JobTypeData,
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
@@ -244,15 +246,26 @@ class JobRepository:
             ),
         )
 
-    def create_job(self, job: Job) -> None:
+    def create_job(
+        self, job: Job, job_type_data: JobTypeData | None = None
+    ) -> None:
         with self._connection() as connection:
             self._insert_job(connection, job)
+            if job_type_data is not None:
+                self._insert_job_type_data(connection, job_type_data)
 
-    def create_job_with_spec(self, job: Job, spec: CalculationSpec) -> None:
+    def create_job_with_spec(
+        self,
+        job: Job,
+        spec: CalculationSpec,
+        job_type_data: JobTypeData | None = None,
+    ) -> None:
         """Persist an immutable calculation definition and its first run atomically."""
         with self._connection() as connection:
             self._insert_calculation_spec(connection, spec)
             self._insert_job(connection, job)
+            if job_type_data is not None:
+                self._insert_job_type_data(connection, job_type_data)
 
     def create_queued_job_with_spec_and_snapshots(
         self,
@@ -260,6 +273,7 @@ class JobRepository:
         spec: CalculationSpec,
         input_snapshots: list[JobInputSnapshot],
         queued_at: datetime,
+        job_type_data: JobTypeData | None = None,
     ) -> None:
         """Create a draft run, freeze inputs, and queue it in one transaction."""
         if job.status != "created" or job.state_version != 0:
@@ -270,6 +284,8 @@ class JobRepository:
             connection.execute("BEGIN IMMEDIATE")
             self._insert_calculation_spec(connection, spec)
             self._insert_job(connection, job)
+            if job_type_data is not None:
+                self._insert_job_type_data(connection, job_type_data)
             self._insert_job_input_snapshots(connection, input_snapshots)
             self._queue_created_job(connection, job.job_id, queued_at)
 
@@ -387,6 +403,142 @@ class JobRepository:
             """,
             (f"event-{secrets.token_hex(8)}", job.job_id, job.status, job.state_version, _timestamp(job.created_at)),
         )
+
+    @staticmethod
+    def _insert_job_type_data(
+        connection: sqlite3.Connection, job_type_data: JobTypeData
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO job_type_data
+                (job_id, job_type, job_type_version, schema_version, data_json,
+                 created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_type_data.job_id,
+                job_type_data.job_type,
+                job_type_data.job_type_version,
+                job_type_data.schema_version,
+                _json_dump(job_type_data.data),
+                _timestamp(job_type_data.created_at),
+                _timestamp(job_type_data.updated_at),
+            ),
+        )
+
+    def get_job_type_data(self, job_id: str) -> JobTypeData | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM job_type_data WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        return self._job_type_data_from_row(row) if row is not None else None
+
+    def list_job_runs(self, job_id: str) -> list[JobRun]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM job_runs
+                WHERE job_id = ?
+                ORDER BY run_number, run_id
+                """,
+                (job_id,),
+            ).fetchall()
+        return [self._job_run_from_row(row) for row in rows]
+
+    def get_job_run(self, run_id: str) -> JobRun | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM job_runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+        return self._job_run_from_row(row) if row is not None else None
+
+    def get_active_job_run(self, job_id: str) -> JobRun | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM job_runs
+                WHERE job_id = ? AND status = 'running'
+                ORDER BY run_number DESC
+                LIMIT 1
+                """,
+                (job_id,),
+            ).fetchone()
+        return self._job_run_from_row(row) if row is not None else None
+
+    def claim_job_run(self, run: JobRun) -> bool:
+        """Atomically claim a queued Job and create its concrete running attempt."""
+        if run.status != "running":
+            raise ValueError("a claimed JobRun must start in the running state")
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT status, state_version FROM jobs WHERE job_id = ?",
+                (run.job_id,),
+            ).fetchone()
+            if row is None or row["status"] != "queued":
+                return False
+            next_run_number = int(
+                connection.execute(
+                    "SELECT COALESCE(MAX(run_number), 0) + 1 FROM job_runs WHERE job_id = ?",
+                    (run.job_id,),
+                ).fetchone()[0]
+            )
+            if run.run_number != next_run_number:
+                raise ValueError(
+                    f"JobRun number must be {next_run_number} for Job '{run.job_id}'"
+                )
+            connection.execute(
+                """
+                INSERT INTO job_runs
+                    (run_id, job_id, run_number, engine, status, collector_id,
+                     collector_version, error_code, error_message, metadata_json,
+                     started_at, finished_at)
+                VALUES (?, ?, ?, ?, 'running', ?, ?, NULL, NULL, ?, ?, NULL)
+                """,
+                (
+                    run.run_id,
+                    run.job_id,
+                    run.run_number,
+                    run.engine,
+                    run.collector_id,
+                    run.collector_version,
+                    _json_dump(run.metadata),
+                    _timestamp(run.started_at),
+                ),
+            )
+            next_version = int(row["state_version"]) + 1
+            cursor = connection.execute(
+                """
+                UPDATE jobs
+                SET status = 'running', started_at = COALESCE(started_at, ?),
+                    attempt_count = attempt_count + 1, state_version = ?, updated_at = ?
+                WHERE job_id = ? AND status = 'queued' AND state_version = ?
+                """,
+                (
+                    _timestamp(run.started_at),
+                    next_version,
+                    _timestamp(run.started_at),
+                    run.job_id,
+                    row["state_version"],
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise sqlite3.IntegrityError("job changed while creating its run")
+            connection.execute(
+                """
+                INSERT INTO job_status_events
+                    (event_id, job_id, from_status, to_status, error_code,
+                     error_message, state_version, created_at)
+                VALUES (?, ?, 'queued', 'running', NULL, NULL, ?, ?)
+                """,
+                (
+                    f"event-{secrets.token_hex(8)}",
+                    run.job_id,
+                    next_version,
+                    _timestamp(run.started_at),
+                ),
+            )
+            return True
 
     def get_calculation_spec(self, spec_id: str) -> CalculationSpec | None:
         with self._connection() as connection:
@@ -798,18 +950,39 @@ class JobRepository:
             ],
         )
 
-    def add_artifact(self, artifact: Artifact) -> None:
+    def add_artifact(self, artifact: Artifact) -> Artifact:
         with self._connection() as connection:
+            if artifact.run_id is not None:
+                connection.execute("BEGIN IMMEDIATE")
+                existing = connection.execute(
+                    """
+                    SELECT * FROM artifacts
+                    WHERE run_id = ? AND name = ?
+                    """,
+                    (artifact.run_id, artifact.name),
+                ).fetchone()
+                if existing is not None:
+                    persisted = self._artifact_from_row(existing)
+                    if (
+                        persisted.sha256 != artifact.sha256
+                        or persisted.storage_key != artifact.storage_key
+                        or persisted.path != artifact.path
+                    ):
+                        raise sqlite3.IntegrityError(
+                            "a different artifact already exists for this run and name"
+                        )
+                    return persisted
             connection.execute(
                 """
                 INSERT INTO artifacts
-                (artifact_id, job_id, name, path, storage_key, kind, role, format,
-                 media_type, sha256, byte_size, metadata_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (artifact_id, job_id, run_id, name, path, storage_key, kind, role,
+                 format, media_type, sha256, byte_size, metadata_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     artifact.artifact_id,
                     artifact.job_id,
+                    artifact.run_id,
                     artifact.name,
                     artifact.path,
                     artifact.storage_key,
@@ -823,6 +996,7 @@ class JobRepository:
                     _timestamp(artifact.created_at),
                 ),
             )
+        return artifact
 
     def get_artifact(self, artifact_id: str) -> Artifact | None:
         with self._connection() as connection:
@@ -899,6 +1073,25 @@ class JobRepository:
                 ),
             )
             if terminal:
+                connection.execute(
+                    """
+                    UPDATE job_runs
+                    SET status = ?, error_code = ?, error_message = ?, finished_at = ?
+                    WHERE run_id = (
+                        SELECT run_id FROM job_runs
+                        WHERE job_id = ? AND status = 'running'
+                        ORDER BY run_number DESC
+                        LIMIT 1
+                    )
+                    """,
+                    (
+                        next_status,
+                        error_code,
+                        error_message,
+                        _timestamp(updated_at),
+                        job_id,
+                    ),
+                )
                 self._finish_dispatches_for_terminal_jobs(connection, updated_at)
             return True
 
@@ -1168,10 +1361,40 @@ class JobRepository:
         )
 
     @staticmethod
+    def _job_type_data_from_row(row: sqlite3.Row) -> JobTypeData:
+        return JobTypeData(
+            job_id=row["job_id"],
+            job_type=row["job_type"],
+            job_type_version=row["job_type_version"],
+            schema_version=row["schema_version"],
+            data=_json_load(row["data_json"]),
+            created_at=_parse_timestamp(row["created_at"]),
+            updated_at=_parse_timestamp(row["updated_at"]),
+        )
+
+    @staticmethod
+    def _job_run_from_row(row: sqlite3.Row) -> JobRun:
+        return JobRun(
+            run_id=row["run_id"],
+            job_id=row["job_id"],
+            run_number=row["run_number"],
+            engine=row["engine"],
+            status=row["status"],
+            collector_id=row["collector_id"],
+            collector_version=row["collector_version"],
+            error_code=row["error_code"],
+            error_message=row["error_message"],
+            metadata=_json_load(row["metadata_json"]),
+            started_at=_parse_timestamp(row["started_at"]),
+            finished_at=_optional_parse_timestamp(row["finished_at"]),
+        )
+
+    @staticmethod
     def _artifact_from_row(row: sqlite3.Row) -> Artifact:
         return Artifact(
             artifact_id=row["artifact_id"],
             job_id=row["job_id"],
+            run_id=row["run_id"],
             name=row["name"],
             path=row["path"],
             storage_key=row["storage_key"],
