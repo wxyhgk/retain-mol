@@ -54,11 +54,16 @@ class OptimizeResponse(BaseModel):
 
 async def _stream_optimization(req: OptimizeRequest) -> AsyncGenerator[str, None]:
     """Encode transport-neutral xTB events as server-sent events."""
+    events = stream_xtb_optimization_events(req)
     try:
-        async for event in stream_xtb_optimization_events(req):
+        async for event in events:
             yield f"data: {json.dumps(event)}\n\n"
     except Exception as exc:
         yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+    finally:
+        # Client disconnects close this wrapper; propagate the close so the
+        # engine generator terminates its xtb subprocess deterministically.
+        await events.aclose()
 
 
 # ── 端点 ──────────────────────────────────────────────────────────────────────

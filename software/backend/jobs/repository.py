@@ -967,6 +967,15 @@ class JobRepository:
                         persisted.sha256 != artifact.sha256
                         or persisted.storage_key != artifact.storage_key
                         or persisted.path != artifact.path
+                        or persisted.media_type != artifact.media_type
+                        # Collectors keep semantic results (energy, converged,
+                        # structure, ...) in metadata rather than file bytes,
+                        # so a byte-identical replay with different metadata is
+                        # still "different content" and must be rejected instead
+                        # of silently returning the stale record. Round-trip
+                        # through JSON so the comparison matches storage form.
+                        or _json_load(_json_dump(artifact.metadata))
+                        != persisted.metadata
                     ):
                         raise sqlite3.IntegrityError(
                             "a different artifact already exists for this run and name"

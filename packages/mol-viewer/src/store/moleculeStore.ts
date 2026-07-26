@@ -63,7 +63,7 @@ function afterTimeTravel(store: MoleculeStoreApi) {
 export function createMoleculeStore(): MoleculeStoreApi {
   let moleculeStore: MoleculeStoreApi
   const stateCreator: StateCreator<MoleculeState, [], []> = (set, get, store) => ({
-    ...createSceneSlice(set, get, store),
+    ...createSceneSlice(() => moleculeStore.temporal)(set, get, store),
     ...createSelectionSlice(set, get, store),
     ...createEditSlice(() => moleculeStore.temporal)(set, get, store),
   })

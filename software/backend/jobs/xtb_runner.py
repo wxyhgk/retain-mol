@@ -15,6 +15,14 @@ from .execution import JobExecutionError
 from .service import JobService
 
 
+def _timeout_message(error: subprocess.TimeoutExpired) -> str:
+    """Report the actual configured timeout instead of a fixed 5 minutes."""
+    timeout_seconds = getattr(error, "timeout", None)
+    if isinstance(timeout_seconds, (int, float)):
+        return f"xTB job timed out after {timeout_seconds:g} seconds"
+    return "xTB job timed out"
+
+
 def run_xtb_optimization_job(
     service: JobService,
     job_id: str,
@@ -62,13 +70,14 @@ def run_xtb_optimization_job(
             )
         return service.get_job(job_id)
     except subprocess.TimeoutExpired as error:
+        message = _timeout_message(error)
         service.update_status(
             job_id,
             "failed",
-            error="xTB job timed out after 5 minutes",
+            error=message,
             error_code="timeout",
         )
-        raise JobExecutionError("xTB job timed out after 5 minutes") from error
+        raise JobExecutionError(message) from error
     except FileNotFoundError as error:
         service.update_status(
             job_id,

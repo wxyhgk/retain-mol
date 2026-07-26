@@ -5,6 +5,7 @@ import { BONDING } from '../../../../config/bonding.config'
 import { getElementConfig } from '../../../../config/elements.config'
 import { degree, findBond, hNeighborsOf } from '../../graph'
 import { dot, sub, type Vec3 } from '../../math'
+import { availableMaxValenceByBonds } from '../../valence'
 
 /** ① 几何 pass 的产物：合并映射 + 已算好的重原子落点 */
 type MergeResult = {
@@ -88,9 +89,9 @@ export function remapAndMergeBonds(
     f1i: number; f2i: number; T1id: string; T2id: string
     skip: Set<number>; isH: (i: number) => boolean
     merge: MergeResult; removeIds: Set<string>
-    orderOverride: Map<string, 1 | 2 | 3>
+    orderOverride: ReadonlyMap<string, 1 | 2 | 3>
   },
-): { molecule: Molecule; mergeCount: number } | null {
+): { molecule: Molecule; mergeCount: number; repairFlips: number; ringAlternating: boolean } | null {
   const { f1i, f2i, T1id, T2id, skip, isH, merge, removeIds, orderOverride } = ctx
   const { mergeByIndex, posByIndex } = merge
 
@@ -146,8 +147,10 @@ export function remapAndMergeBonds(
   // 退化保护：模板原子全部与已有原子重合（点了稠环共享键）→ 什么都没加，拒绝
   if (newBonds.length === 0) return null
 
-  // 自动重合宿主至少不能超过元素允许的连接数。完整键级合法化属于
-  // Kekule 重排阶段；这里不能用局部键级求和破坏现有 peri 连续并环。
+  // 最终防线：任何原子都不得超过允许的连接数，也不得超过键级和上限
+  // （maxValence）。凯库勒相位在上游以多候选提供（buildRingFuseOrderOverrideCandidates），
+  // 违法相位在这里被拒绝、由合法相位候选顶上 —— peri/bay 合并路径同样受此校验，
+  // 不再放行五价碳。
   const finalBonds: Bond[] = [
     ...mol.bonds
       .filter(b => !removeIds.has(b.atomId1) && !removeIds.has(b.atomId2))
@@ -160,17 +163,195 @@ export function remapAndMergeBonds(
     ...newBonds,
   ]
   const finalAtoms = [...mol.atoms.filter(a => !removeIds.has(a.id)), ...newAtoms]
+
+  // 新环的成员键（目标键 + 凯库勒路径键）：局部重排时尽量不动它们，
+  // 保住新环自身的双键交替
+  const ringBondIds = collectNewRingBondIds(finalBonds, T1id, T2id, idByIndex, orderOverride)
+
+  // 合并式并环（peri/bay）：新环路径的凯库勒交替可能与合并原子的
+  // 环外双键冲突（如萘桥头旁并环拼非那烯基），任何相位都会在合并原子上
+  // 超价。此时对旧环做局部凯库勒重排（交替翻转路径），把多出的键级
+  // 转移出去；干净并环不重排 —— 冲突由相位候选切换解决，修不了就拒绝。
+  let repairedBonds = finalBonds
+  let repairFlips = 0
+  if (mergeByIndex.size > 0) {
+    const repair = repairKekuleOverValence(finalAtoms, finalBonds, ringBondIds)
+    if (!repair) return null
+    repairedBonds = repair.bonds
+    repairFlips = repair.flips
+  }
+
   const atomById = new Map(finalAtoms.map(atom => [atom.id, atom]))
   for (const atom of atomById.values()) {
-    if (degree(finalBonds, atom.id) > getElementConfig(atom.symbol).maxBonds) return null
+    if (degree(repairedBonds, atom.id) > getElementConfig(atom.symbol).maxBonds) return null
+    // 按键级和校验（数条数拦不住“两双键+一单键”的五价碳）
+    if (availableMaxValenceByBonds(atom, repairedBonds) < -1e-8) return null
   }
 
   return {
     mergeCount: mergeByIndex.size,
+    repairFlips,
+    ringAlternating: isNewRingAlternating(repairedBonds, ringBondIds, orderOverride),
     molecule: {
       ...mol,
       atoms: finalAtoms,
-      bonds: finalBonds,
+      bonds: repairedBonds,
     },
   }
+}
+
+/** 新环成员键 id：目标键 + orderOverride 覆盖的路径键（重映射到最终原子 id）。 */
+function collectNewRingBondIds(
+  bonds: readonly Bond[],
+  T1id: string,
+  T2id: string,
+  idByIndex: ReadonlyMap<number, string>,
+  orderOverride: ReadonlyMap<string, 1 | 2 | 3>,
+): Set<string> {
+  const ids = new Set<string>()
+  const target = findBond(bonds, T1id, T2id)
+  if (target) ids.add(target.id)
+  for (const key of orderOverride.keys()) {
+    const [a, b] = key.split('-').map(Number)
+    if (a === undefined || b === undefined) continue
+    const id1 = idByIndex.get(a)
+    const id2 = idByIndex.get(b)
+    if (id1 === undefined || id2 === undefined) continue
+    const bond = findBond(bonds, id1, id2)
+    if (bond) ids.add(bond.id)
+  }
+  return ids
+}
+
+/**
+ * 新环是否保持双键交替（环内每个原子的两条环内键键级不同）。
+ * 芳香模板并环时用来在多相位候选间优先选出交替完好的构型
+ * （如菲 bay 拼芘：只有一个相位能给出全交替的新环）。
+ * 无凯库勒重排的饱和模板恒为 true（该判据不参与排序区分）。
+ */
+function isNewRingAlternating(
+  bonds: readonly Bond[],
+  ringBondIds: ReadonlySet<string>,
+  orderOverride: ReadonlyMap<string, 1 | 2 | 3>,
+): boolean {
+  if (orderOverride.size === 0) return true
+  const ordersByAtom = new Map<string, number[]>()
+  for (const bond of bonds) {
+    if (!ringBondIds.has(bond.id)) continue
+    ordersByAtom.set(bond.atomId1, [...(ordersByAtom.get(bond.atomId1) ?? []), bond.order])
+    ordersByAtom.set(bond.atomId2, [...(ordersByAtom.get(bond.atomId2) ?? []), bond.order])
+  }
+  for (const orders of ordersByAtom.values()) {
+    if (orders.length === 2 && orders[0] === orders[1]) return false
+  }
+  return true
+}
+
+/**
+ * 局部凯库勒重排：把超价原子多出的键级沿“双-单交替路径”翻转转移出去。
+ * 每条救济路径从超价原子的一条双键出发（降 1），沿途双降单升交替（途中
+ * 原子净变 0），终点要么以升键落在欠饱和原子上（净移走 1 且不产生自由
+ * 基），要么以降键结束（终点原子降 1，留下一个欠饱和位 —— 奇电子体系
+ * 如非那烯基的必然结果）。找不到路径或修完仍超价 → null。
+ */
+type WorkingBond = {
+  readonly source: Bond
+  order: 1 | 2 | 3
+  flipped: boolean
+}
+
+function repairKekuleOverValence(
+  atoms: readonly Atom[],
+  bonds: readonly Bond[],
+  preferProtectedBondIds: ReadonlySet<string>,
+): { bonds: Bond[]; flips: number } | null {
+  const atomById = new Map(atoms.map(atom => [atom.id, atom]))
+  const working: WorkingBond[] = bonds.map(bond => ({ source: bond, order: bond.order, flipped: false }))
+  const currentBonds = (): Bond[] => working.map(w => {
+    if (!w.flipped) return w.source
+    const { aromatic: _aromatic, ...rest } = w.source
+    return { ...rest, order: w.order }
+  })
+  const excessOf = (atomId: string): number => {
+    const atom = atomById.get(atomId)
+    if (!atom) return 0
+    return -availableMaxValenceByBonds(atom, currentBonds())
+  }
+  const overAtomIds = () => atoms.filter(atom => excessOf(atom.id) > 1e-8).map(atom => atom.id)
+
+  let flips = 0
+  const maxRounds = overAtomIds().length * 4 + 1
+  for (let round = 0; round < maxRounds; round += 1) {
+    const over = overAtomIds()[0]
+    if (over === undefined) break
+    // 先找绕开新环成员键的救济路径（保住新环交替），实在没有再放开
+    const path = findAlternatingReliefPath(working, atomById, over, excessOf, preferProtectedBondIds)
+      ?? findAlternatingReliefPath(working, atomById, over, excessOf, new Set())
+    if (!path) return null
+    for (const bond of path) {
+      bond.order = bond.order === 2 ? 1 : 2
+      bond.flipped = true
+    }
+    flips += path.length
+  }
+
+  if (overAtomIds().length > 0) return null
+  return { bonds: currentBonds(), flips }
+}
+
+/**
+ * BFS 找救济路径：优先“升键终于欠饱和原子”（不产生自由基），退而求其次
+ * “降键终止”（终点降为欠饱和）。返回按序要翻转的键。
+ */
+function findAlternatingReliefPath(
+  bonds: readonly WorkingBond[],
+  atomById: ReadonlyMap<string, Atom>,
+  startId: string,
+  excessOf: (atomId: string) => number,
+  excludeBondIds: ReadonlySet<string>,
+): WorkingBond[] | null {
+  const flippable = (bond: WorkingBond): boolean => {
+    if (excludeBondIds.has(bond.source.id)) return false
+    if (bond.source.aromatic && !bond.flipped) return false
+    if (bond.order !== 1 && bond.order !== 2) return false
+    const a = atomById.get(bond.source.atomId1)
+    const b = atomById.get(bond.source.atomId2)
+    return !!a && !!b && a.symbol !== 'H' && b.symbol !== 'H'
+  }
+  const adjacency = new Map<string, WorkingBond[]>()
+  for (const bond of bonds) {
+    if (!flippable(bond)) continue
+    adjacency.set(bond.source.atomId1, [...(adjacency.get(bond.source.atomId1) ?? []), bond])
+    adjacency.set(bond.source.atomId2, [...(adjacency.get(bond.source.atomId2) ?? []), bond])
+  }
+
+  type State = { atomId: string; wantOrder: 1 | 2; path: WorkingBond[] }
+  // wantOrder=2：下一步要翻一条双键（降）；wantOrder=1：翻一条单键（升）
+  const queue: State[] = [{ atomId: startId, wantOrder: 2, path: [] }]
+  const seen = new Set<string>([`${startId}|2`])
+  let radicalFallback: WorkingBond[] | null = null
+
+  while (queue.length > 0) {
+    const state = queue.shift()!
+    for (const bond of adjacency.get(state.atomId) ?? []) {
+      if (bond.order !== state.wantOrder) continue
+      if (state.path.includes(bond)) continue
+      const nextId = bond.source.atomId1 === state.atomId ? bond.source.atomId2 : bond.source.atomId1
+      const nextPath = [...state.path, bond]
+      if (state.wantOrder === 1) {
+        // 升键终点：落在欠饱和原子上 → 完美救济（不产生自由基）
+        if (excessOf(nextId) < -(1 - 1e-8)) return nextPath
+      } else if (radicalFallback === null) {
+        // 降键终点：终点原子降 1 → 留下一个欠饱和位（奇电子体系的必然结果）
+        radicalFallback = nextPath
+      }
+      const nextWant: 1 | 2 = state.wantOrder === 2 ? 1 : 2
+      const key = `${nextId}|${nextWant}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      queue.push({ atomId: nextId, wantOrder: nextWant, path: nextPath })
+    }
+  }
+
+  return radicalFallback
 }

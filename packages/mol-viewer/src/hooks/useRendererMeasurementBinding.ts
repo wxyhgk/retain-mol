@@ -17,6 +17,9 @@ export function resolveMeasurementAtoms(
 ): { committed: ResolvedMeasurement[]; pending: Atom[] } {
   const atomMap = new Map<string, Atom>()
   for (const object of sceneObjects) {
+    // 隐藏对象的原子不参与测量解析：分子本体已按 visible 隐藏
+    //（MoleculeSceneLayer），其测量线/标签若继续渲染就成了悬浮在空处的孤儿图元
+    if (object.visible === false) continue
     for (const atom of object.molecule.atoms) atomMap.set(atom.id, atom)
   }
 

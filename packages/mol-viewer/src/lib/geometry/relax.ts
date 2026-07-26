@@ -164,6 +164,11 @@ export class GeometryRelaxer {
       const centerSymbol = readAt(this.sym, c, 'atom symbol')
       const hyb = inferHybridization(mol.bonds, centerId)
       const geom = inferGeometry(centerSymbol, deg, hyb)
+      // 'free' 几何（终端元素当桥，如 B₂H₆ 桥氢 / Al₂Cl₆ 桥氯）的 bondAngle=360 是哨兵值：
+      // cos360°=1 会把 1-3 目标距离算成 |la−lb|（等键长时为 0），把两个桥头原子拉到重合，
+      // 且该对被记入 constrained 后连非键斥力都不再推开。无可用理想角 → 跳过角约束，
+      // 让键长约束 + 非键斥力自然定形。
+      if (geom === 'free') continue
       const cosT = Math.cos(GEOMETRY_RULES[geom].bondAngle * DEG)
       for (let a = 0; a < deg; a++) {
         for (let b = a + 1; b < deg; b++) {

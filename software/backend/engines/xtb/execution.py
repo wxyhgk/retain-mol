@@ -103,11 +103,19 @@ def run_xtb_optimization(
 
 async def stream_xtb_optimization_events(
     request: XtbOptimizationRequest,
+    *,
+    timeout: float = 300,
 ) -> AsyncGenerator[dict[str, Any], None]:
-    """Yield transport-neutral status, frame, and completion events."""
+    """Yield transport-neutral status, frame, and completion events.
+
+    The spawned xtb process never outlives this generator: closing it early
+    (client disconnect -> ``aclose()``/cancellation) or hitting ``timeout``
+    terminates the subprocess before the work directory is cleaned up.
+    """
     _validate_structure(request)
 
     temporary = tempfile.TemporaryDirectory(prefix="retainmol_xtb_stream_")
+    process: asyncio.subprocess.Process | None = None
     try:
         work_directory = Path(temporary.name)
         input_path = work_directory / "input.xyz"
@@ -132,14 +140,22 @@ async def stream_xtb_optimization_events(
                     "xtb 命令未找到，请确认已安装并在 PATH 中"
                 ) from error
 
+            started_at = asyncio.get_running_loop().time()
             frames_sent = 0
             last_signature: tuple[int, float | None] | None = None
             last_status_at = 0.0
             while process.returncode is None:
                 await asyncio.sleep(0.05)
 
+                loop_time = asyncio.get_running_loop().time()
+                if loop_time - started_at >= timeout:
+                    raise XtbExecutionTimeoutError(
+                        "xTB 计算超时（> 5 min）"
+                        if timeout == 300
+                        else f"xTB 计算超时（> {timeout:g} s）"
+                    )
+
                 if not trajectory_path.exists():
-                    loop_time = asyncio.get_running_loop().time()
                     if loop_time - last_status_at > 2.0:
                         last_status_at = loop_time
                         yield {
@@ -232,7 +248,29 @@ async def stream_xtb_optimization_events(
             ),
         }
     finally:
+        if process is not None:
+            await _terminate_stream_process(process)
         temporary.cleanup()
+
+
+async def _terminate_stream_process(
+    process: asyncio.subprocess.Process,
+) -> None:
+    """Stop an abandoned xtb subprocess (disconnect, timeout, or error)."""
+    if process.returncode is not None:
+        return
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        return
+    try:
+        await asyncio.wait_for(asyncio.shield(process.wait()), timeout=3)
+    except (asyncio.TimeoutError, TimeoutError):
+        try:
+            process.kill()
+        except ProcessLookupError:
+            return
+        await process.wait()
 
 
 def _validate_structure(request: XtbOptimizationRequest) -> None:

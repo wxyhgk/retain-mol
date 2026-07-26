@@ -149,13 +149,18 @@ export function resaturateAtom(mol: Molecule, atomId: string): Molecule {
   return mol
 }
 
-/** 只删除超出当前目标价态的 H，不补缺失 H；用于显式提高键级后的拓扑清理。 */
+/**
+ * 只删除超出当前目标价态的 H，不补缺失 H；用于显式提高键级后的拓扑清理。
+ * 保守取整（与 autoAddHydrogens 的 floor 对称）：aromatic 键计 1.5 价，局部化键
+ * 与 aromatic 键混排会产生 <1 的簿记残差（如苯环单键升双键后另一条环键仍为
+ * aromatic，excess = 0.5），这种残差不代表真的多出一个 H，不删。
+ */
 export function removeExcessHydrogens(mol: Molecule, atomId: string): Molecule {
   const atom = mol.atoms.find(a => a.id === atomId)
   if (!atom) return mol
   const excess = valenceUsed(mol, atomId) - targetValence(atom)
   if (excess <= 0) return mol
-  const hs = hNeighborsOf(mol, atomId).slice(0, Math.ceil(excess))
+  const hs = hNeighborsOf(mol, atomId).slice(0, Math.floor(excess + 1e-6))
   if (hs.length === 0) return mol
   const remove = new Set(hs.map(h => h.id))
   return {

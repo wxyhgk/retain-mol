@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 
 class XtbAtom(BaseModel):
     id: str
-    symbol: str
+    symbol: str = Field(pattern=r"^[A-Za-z]{1,2}$")
     x: float
     y: float
     z: float
@@ -19,7 +19,7 @@ class XtbOptimizationRequest(BaseModel):
     atoms: list[XtbAtom]
     fixed_atom_ids: list[str] = Field(default_factory=list)
     charge: int = 0
-    multiplicity: int = 1
+    multiplicity: int = Field(default=1, ge=1)
     method: Literal["gfn2", "gfn1", "gfnff"] = "gfn2"
     max_steps: int = Field(default=200, ge=1, le=1000)
     optlevel: Literal[
