@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { JobsApiClient, resolveJobArtifactUrl, resolveJobsApiBase } from './jobsApiClient'
+import {
+  configureJobsApiBase,
+  JobsApiClient,
+  resolveJobArtifactUrl,
+  resolveJobsApiBase,
+} from './jobsApiClient'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  configureJobsApiBase(undefined)
+  vi.unstubAllGlobals()
+})
 
 describe('JobsApiClient', () => {
   it('uses the xTB backend URL resolution behavior', () => {
@@ -9,6 +17,20 @@ describe('JobsApiClient', () => {
       .toBe('http://192.168.0.20:8000')
     expect(resolveJobsApiBase('https://compute.example.test/', { protocol: 'http:', hostname: 'localhost' }))
       .toBe('https://compute.example.test')
+  })
+
+  it('uses host configuration applied after the default client is created', async () => {
+    const client = new JobsApiClient()
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    configureJobsApiBase('http://configured.test:9000/')
+    await client.listJobs()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://configured.test:9000/jobs',
+      expect.any(Object),
+    )
   })
 
   it('posts an xTB optimization request and exposes backend errors', async () => {

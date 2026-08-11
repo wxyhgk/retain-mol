@@ -78,9 +78,6 @@ export function JobShelfView({ jobs, molecules, onOpenJob, onRunJob, runPendingJ
 
     const manager = new ShelfSceneManager(canvas)
     managerRef.current = manager
-    if (import.meta.env.DEV) {
-      ;(window as unknown as Record<string, unknown>).__shelfManager = manager
-    }
 
     // 展签逐帧贴盒：绕开 React，直接写 transform
     const applyAnchors = () => {

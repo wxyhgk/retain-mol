@@ -95,7 +95,11 @@ function encodeSegment(value: string) {
 }
 
 export class JobsApiClient implements JobsApi {
-  constructor(private readonly baseUrl = resolveJobsApiBase()) {}
+  constructor(private readonly baseUrlOverride?: string) {}
+
+  private get baseUrl() {
+    return resolveJobsApiBase(this.baseUrlOverride)
+  }
 
   async listJobs(options: { signal?: AbortSignal } = {}): Promise<JobSummary[]> {
     return projectJobListWire(await this.get<unknown>('/jobs', options))

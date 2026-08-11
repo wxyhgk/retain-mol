@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  configureMoleculeAssetsApiBase,
   MoleculeAssetsApiClient,
   MoleculeAssetsApiError,
   resolveMoleculeAssetsApiBase,
@@ -23,7 +24,10 @@ const revision = {
   createdAt: '2026-07-14T00:00:00Z',
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  configureMoleculeAssetsApiBase(undefined)
+  vi.unstubAllGlobals()
+})
 
 describe('MoleculeAssetsApiClient', () => {
   it('uses the shared backend URL resolution convention', () => {
@@ -32,6 +36,17 @@ describe('MoleculeAssetsApiClient', () => {
     expect(resolveMoleculeAssetsApiBase('https://compute.example.test/', {
       protocol: 'http:', hostname: 'localhost',
     })).toBe('https://compute.example.test')
+  })
+
+  it('uses host configuration applied after the default client is created', async () => {
+    const client = new MoleculeAssetsApiClient()
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ assets: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    configureMoleculeAssetsApiBase('http://configured.test:9000/')
+    await client.listAssets()
+
+    expect(fetchMock.mock.calls[0][0]).toBe('http://configured.test:9000/molecule-assets')
   })
 
   it('lists and creates molecule assets through the adapter', async () => {

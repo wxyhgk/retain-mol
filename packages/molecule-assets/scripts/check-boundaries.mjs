@@ -45,7 +45,11 @@ function collectModuleSpecifiers(source) {
 const violations = []
 for (const file of walk(SRC_DIR)) {
   const rel = file.slice(SRC_DIR.length + 1)
-  for (const specifier of collectModuleSpecifiers(readFileSync(file, 'utf8'))) {
+  const source = readFileSync(file, 'utf8')
+  if (/\bimport\.meta\.env(?:\.|\[)/.test(source)) {
+    violations.push(`${rel}: molecule-assets 包不得读取 import.meta.env，由宿主注入配置`)
+  }
+  for (const specifier of collectModuleSpecifiers(source)) {
     if (specifier.startsWith('@/')) {
       violations.push(`${rel}: 禁止使用 app 别名 '@/',包内用相对导入`)
     }

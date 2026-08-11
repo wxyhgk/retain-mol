@@ -51,7 +51,11 @@ export class MoleculeAssetsApiError extends Error {
 }
 
 export class MoleculeAssetsApiClient implements MoleculeAssetsApi {
-  constructor(private readonly baseUrl = resolveMoleculeAssetsApiBase()) {}
+  constructor(private readonly baseUrlOverride?: string) {}
+
+  private get baseUrl() {
+    return resolveMoleculeAssetsApiBase(this.baseUrlOverride)
+  }
 
   listAssets(options: MoleculeAssetsRequestOptions = {}) {
     return this.request('/molecule-assets', options).then(projectMoleculeAssetListWire)
