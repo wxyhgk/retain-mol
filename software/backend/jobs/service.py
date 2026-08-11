@@ -25,7 +25,6 @@ from .errors import (
     MoleculeAssetNotFoundError,
     MoleculeHeadConflictError,
     MoleculeRevisionNotFoundError,
-    WorkflowNotFoundError,
 )
 from .input_resolution import JobInputResolver
 from .lifecycle import (
@@ -51,13 +50,12 @@ from .models import (
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
-    WorkflowInputLink,
     WorkflowSchedule,
 )
 from .repository import JobRepository
 from .job_types import JOB_TYPE_REGISTRY, UnknownJobTypeError
+from .workflow_definitions import WorkflowDefinitionManager
 from .workflow_runtime import WorkflowRuntimeCoordinator
-from .workflows import validate_workflow_dag
 
 DEFAULT_DATA_ROOT = Path(
     os.getenv(
@@ -80,6 +78,7 @@ class JobService:
         self.input_resolver = JobInputResolver(self.repository)
         self.lifecycle = JobLifecycle(self.repository)
         self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
+        self.workflow_definitions = WorkflowDefinitionManager(self.repository, self)
         self.workflow_runtime = WorkflowRuntimeCoordinator(self.repository, self)
 
     def create_molecule_asset(
@@ -633,11 +632,7 @@ class JobService:
         input_links: list[dict[str, Any]],
     ) -> Workflow:
         """Persist a dependency graph after validating every referenced job."""
-        name = _required_text(name, "name")
-        workflow_id = _new_workflow_id()
-        workflow = self._build_workflow(workflow_id, name, job_ids, input_links)
-        self.repository.create_workflow(workflow)
-        return workflow
+        return self.workflow_definitions.create(name, job_ids, input_links)
 
     def create_ts_preparation_workflow(
         self,
@@ -654,10 +649,10 @@ class JobService:
                 "Reactant and product must come from different jobs"
             )
 
-        reactant_artifact = self._require_workflow_structure_artifact(
+        reactant_artifact = self.workflow_definitions.require_structure_artifact(
             reactant_job_id, reactant_artifact_id, "reactant"
         )
-        product_artifact = self._require_workflow_structure_artifact(
+        product_artifact = self.workflow_definitions.require_structure_artifact(
             product_job_id, product_artifact_id, "product"
         )
         target = self.create_calculation_draft(
@@ -701,17 +696,10 @@ class JobService:
         return workflow, target
 
     def list_workflows(self) -> list[Workflow]:
-        workflows = self.repository.list_workflows()
-        for workflow in workflows:
-            self._populate_workflow_relations(workflow)
-        return workflows
+        return self.workflow_definitions.list()
 
     def get_workflow(self, workflow_id: str) -> Workflow:
-        workflow = self.repository.get_workflow(workflow_id)
-        if workflow is None:
-            raise WorkflowNotFoundError(workflow_id)
-        self._populate_workflow_relations(workflow)
-        return workflow
+        return self.workflow_definitions.get(workflow_id)
 
     def update_workflow(
         self,
@@ -720,21 +708,12 @@ class JobService:
         job_ids: list[str],
         input_links: list[dict[str, Any]],
     ) -> Workflow:
-        if self.repository.get_workflow_execution(workflow_id) is not None:
-            raise InvalidJobOperationError(
-                "an activated workflow is immutable; create a new workflow revision"
-            )
-        current = self.get_workflow(workflow_id)
-        workflow = self._build_workflow(
+        return self.workflow_definitions.update(
             workflow_id,
-            _required_text(name, "name"),
+            name,
             job_ids,
             input_links,
-            created_at=current.created_at,
         )
-        if not self.repository.update_workflow(workflow):
-            raise WorkflowNotFoundError(workflow_id)
-        return workflow
 
     def start_workflow_execution(self, workflow_id: str) -> WorkflowSchedule:
         """Idempotently activate a workflow and reconcile its first runnable nodes."""
@@ -1026,101 +1005,6 @@ class JobService:
             workflow_id, target_job_id
         )
 
-    def _populate_workflow_relations(self, workflow: Workflow) -> None:
-        workflow.job_ids = self.repository.get_workflow_job_ids(workflow.workflow_id)
-        workflow.input_links = self.repository.get_workflow_input_links(
-            workflow.workflow_id
-        )
-
-    def _build_workflow(
-        self,
-        workflow_id: str,
-        name: str,
-        job_ids: list[str],
-        input_link_definitions: list[dict[str, Any]],
-        *,
-        created_at: datetime | None = None,
-    ) -> Workflow:
-        for job_id in job_ids:
-            self._require_job(job_id)
-        now = _now()
-        input_links = [
-            WorkflowInputLink(
-                link_id=_new_input_link_id(),
-                workflow_id=workflow_id,
-                target_job_id=definition["targetJobId"],
-                target_input_name=_required_text(
-                    definition["targetInputName"], "targetInputName"
-                ),
-                source_job_id=definition["sourceJobId"],
-                source_artifact_id=definition.get("sourceArtifactId"),
-                source_kind=definition["sourceKind"],
-                source_name=_required_text(
-                    definition.get("sourceName") or "artifact", "sourceName"
-                ),
-                created_at=now,
-            )
-            for definition in input_link_definitions
-        ]
-        for link in input_links:
-            self._validate_workflow_input_link_source(link)
-        validate_workflow_dag(job_ids, input_links)
-        return Workflow(
-            workflow_id=workflow_id,
-            name=name,
-            created_at=created_at or now,
-            updated_at=now,
-            job_ids=job_ids,
-            input_links=input_links,
-        )
-
-    def _validate_workflow_input_link_source(self, link: WorkflowInputLink) -> None:
-        self._require_job(link.source_job_id)
-        if link.source_artifact_id is None:
-            return
-        artifact = next(
-            (
-                item
-                for item in self.repository.get_artifacts(link.source_job_id)
-                if item.artifact_id == link.source_artifact_id
-            ),
-            None,
-        )
-        if artifact is None:
-            raise ValueError(
-                f"Artifact '{link.source_artifact_id}' does not belong to job "
-                f"'{link.source_job_id}'"
-            )
-
-    def _require_workflow_structure_artifact(
-        self, job_id: str, artifact_id: str, role: str
-    ) -> Artifact:
-        job = self.get_job(job_id)
-        if job.status != "succeeded":
-            raise InvalidJobInputError(
-                f"{role.capitalize()} job '{job_id}' must be succeeded"
-            )
-        artifact = next(
-            (item for item in job.artifacts if item.artifact_id == artifact_id), None
-        )
-        if artifact is None:
-            raise InvalidJobInputError(
-                f"{role.capitalize()} artifact '{artifact_id}' does not belong to job '{job_id}'"
-            )
-        if artifact.format.lower() not in {"retainmol-json", "xyz", "sdf", "mol"}:
-            raise InvalidJobInputError(
-                f"{role.capitalize()} artifact must be a molecular structure"
-            )
-        if artifact.role != "output":
-            raise InvalidJobInputError(
-                f"{role.capitalize()} artifact must be an output artifact"
-            )
-        if not artifact.sha256:
-            raise InvalidJobInputError(
-                f"{role.capitalize()} artifact has no immutable content digest"
-            )
-        return artifact
-
     def _touch_job(self, job_id: str) -> None:
         if not self.repository.touch_job(job_id, _now()):
             raise JobNotFoundError(job_id)
@@ -1149,14 +1033,6 @@ def _now() -> datetime:
 
 def _new_job_id(now: datetime) -> str:
     return f"{now:%Y%m%d}-{secrets.token_hex(4)}"
-
-
-def _new_workflow_id() -> str:
-    return f"workflow-{secrets.token_hex(8)}"
-
-
-def _new_input_link_id() -> str:
-    return f"reference-{secrets.token_hex(8)}"
 
 
 def _job_type_payload(metadata: Mapping[str, Any]) -> dict[str, Any]:
