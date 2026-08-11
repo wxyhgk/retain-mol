@@ -8,13 +8,14 @@ import secrets
 import shutil
 import sqlite3
 from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
 from .artifact_storage import ArtifactStorage
+from .dispatching import JobDispatchCoordinator
 from .errors import (
     InvalidJobInputError,
     InvalidJobOperationError,
@@ -27,6 +28,11 @@ from .errors import (
     WorkflowNotFoundError,
 )
 from .input_resolution import JobInputResolver
+from .lifecycle import (
+    RETRYABLE_JOB_STATUSES,
+    JobLifecycle,
+    normalize_job_status,
+)
 from .molecule_canonicalize import (
     InvalidMoleculeError,
     molecule_content_hash,
@@ -41,7 +47,6 @@ from .models import (
     JobInput,
     JobInputSnapshot,
     JobRun,
-    JobStatus,
     JobTypeData,
     MoleculeAsset,
     MoleculeRevision,
@@ -63,17 +68,6 @@ DEFAULT_DATA_ROOT = Path(
 )
 
 
-_ALLOWED_TRANSITIONS: dict[JobStatus, frozenset[JobStatus]] = {
-    "created": frozenset({"queued", "cancelled"}),
-    "queued": frozenset({"running", "cancelled"}),
-    "running": frozenset({"succeeded", "failed", "cancelled", "interrupted"}),
-    "succeeded": frozenset(),
-    "failed": frozenset(),
-    "cancelled": frozenset(),
-    "interrupted": frozenset(),
-}
-
-
 class JobService:
     """Creates jobs and keeps SQLite records and filesystem snapshots in sync."""
 
@@ -85,6 +79,8 @@ class JobService:
         self.artifact_storage = ArtifactStorage(self.data_root)
         self.repository = JobRepository(self.data_root / "retainmol.sqlite")
         self.input_resolver = JobInputResolver(self.repository)
+        self.lifecycle = JobLifecycle(self.repository)
+        self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
 
     def create_molecule_asset(
         self, name: str, *, metadata: dict[str, Any] | None = None
@@ -149,7 +145,9 @@ class JobService:
         computed_content_hash = molecule_content_hash(snapshot)
         computed_topology_fingerprint = molecule_topology_fingerprint(snapshot)
         if content_hash is not None and content_hash != computed_content_hash:
-            raise InvalidMoleculeError("contentHash does not match the molecule snapshot")
+            raise InvalidMoleculeError(
+                "contentHash does not match the molecule snapshot"
+            )
         if (
             topology_fingerprint is not None
             and topology_fingerprint != computed_topology_fingerprint
@@ -186,7 +184,10 @@ class JobService:
         if isinstance(task_type, Mapping):
             definition = dict(task_type)
             task_type = str(
-                definition.pop("taskType", definition.pop("task_type", definition.pop("type", "job")))
+                definition.pop(
+                    "taskType",
+                    definition.pop("task_type", definition.pop("type", "job")),
+                )
             )
             status = str(definition.pop("status", status))
             supplied_metadata = definition.pop("metadata", {})
@@ -194,7 +195,7 @@ class JobService:
                 raise ValueError("metadata must be an object")
             metadata = {**supplied_metadata, **definition, **(metadata or {})}
         task_type = _required_text(task_type, "task_type")
-        status = _normalize_status(status)
+        status = normalize_job_status(status)
         if status not in {"created", "queued"}:
             raise ValueError("new jobs must start in 'created' or 'queued'")
         now = _now()
@@ -371,7 +372,9 @@ class JobService:
             )
         spec = self.get_calculation_spec(job_id)
         if spec is None:
-            raise InvalidJobInputError(f"Job '{job_id}' has no calculation specification")
+            raise InvalidJobInputError(
+                f"Job '{job_id}' has no calculation specification"
+            )
         definitions = dict(inputs or {})
         if workflow_id is not None:
             for name, definition in self._resolve_workflow_input_definitions(
@@ -408,7 +411,9 @@ class JobService:
 
     def get_calculation_spec(self, job_id: str) -> CalculationSpec | None:
         job = self._require_job(job_id)
-        return self.repository.get_calculation_spec(job.spec_id) if job.spec_id else None
+        return (
+            self.repository.get_calculation_spec(job.spec_id) if job.spec_id else None
+        )
 
     def get_input_snapshots(self, job_id: str) -> list[JobInputSnapshot]:
         self._require_job(job_id)
@@ -424,14 +429,10 @@ class JobService:
         return job_type_data
 
     def list_job_runs(self, job_id: str) -> list[JobRun]:
-        self._require_job(job_id)
-        return self.repository.list_job_runs(job_id)
+        return self.lifecycle.list_runs(job_id)
 
     def get_job_run(self, run_id: str) -> JobRun:
-        run = self.repository.get_job_run(run_id)
-        if run is None:
-            raise InvalidJobOperationError(f"JobRun '{run_id}' does not exist")
-        return run
+        return self.lifecycle.get_run(run_id)
 
     def list_jobs(self) -> list[Job]:
         jobs = self.repository.list_jobs()
@@ -506,7 +507,7 @@ class JobService:
     def retry_job(self, job_id: str, *, name: str | None = None) -> Job:
         """Create a new immutable run from a failed terminal attempt."""
         source = self.get_job(job_id)
-        if source.status not in {"failed", "cancelled", "interrupted"}:
+        if source.status not in RETRYABLE_JOB_STATUSES:
             raise InvalidJobOperationError(
                 f"job in '{source.status}' state cannot be retried"
             )
@@ -538,14 +539,10 @@ class JobService:
 
     def cancel_job(self, job_id: str) -> Job:
         """Cancel a pending or active run through the persisted state machine."""
+        self.lifecycle.cancel(job_id)
         job = self.get_job(job_id)
-        if job.status == "cancelled":
-            return job
-        if job.status not in {"created", "queued", "running"}:
-            raise InvalidJobOperationError(
-                f"job in '{job.status}' state cannot be cancelled"
-            )
-        return self.update_status(job_id, "cancelled")
+        self._write_snapshot(job)
+        return job
 
     def read_job_log(
         self,
@@ -566,13 +563,16 @@ class JobService:
             directory / "irc-forward" / "psi4.log",
             directory / "irc-backward" / "psi4.log",
         ]
-        path = next((candidate for candidate in candidates if candidate.is_file()), None)
+        path = next(
+            (candidate for candidate in candidates if candidate.is_file()), None
+        )
         if path is None:
             return {
                 "content": "",
                 "cursor": 0,
                 "source": None,
-                "complete": job.status in {"succeeded", "failed", "cancelled", "interrupted"},
+                "complete": job.status
+                in {"succeeded", "failed", "cancelled", "interrupted"},
             }
         size = path.stat().st_size
         if cursor > size:
@@ -584,7 +584,8 @@ class JobService:
             "content": chunk.decode("utf-8", errors="replace"),
             "cursor": cursor + len(chunk),
             "source": path.name,
-            "complete": job.status in {"succeeded", "failed", "cancelled", "interrupted"},
+            "complete": job.status
+            in {"succeeded", "failed", "cancelled", "interrupted"},
         }
 
     def delete_job(self, job_id: str) -> None:
@@ -600,8 +601,7 @@ class JobService:
         superseding_job_ids = self.repository.list_superseding_job_ids(job_id)
         if superseding_job_ids:
             raise JobInUseError(
-                "job is superseded by retry job(s): "
-                + ", ".join(superseding_job_ids)
+                "job is superseded by retry job(s): " + ", ".join(superseding_job_ids)
             )
         if not self.repository.delete_job(job_id):
             raise JobNotFoundError(job_id)
@@ -839,12 +839,8 @@ class JobService:
         if execution is None:
             raise InvalidJobOperationError("workflow has not been activated")
 
-        ordered_job_ids = validate_workflow_dag(
-            workflow.job_ids, workflow.input_links
-        )
-        predecessors = workflow_predecessors(
-            workflow.job_ids, workflow.input_links
-        )
+        ordered_job_ids = validate_workflow_dag(workflow.job_ids, workflow.input_links)
+        predecessors = workflow_predecessors(workflow.job_ids, workflow.input_links)
         jobs = {job_id: self.get_job(job_id) for job_id in ordered_job_ids}
         if execution.status == "cancelled":
             cancelled_nodes: list[WorkflowNodeRuntime] = []
@@ -884,8 +880,7 @@ class JobService:
             blocked_by = sorted(
                 predecessor
                 for predecessor in predecessors[job_id]
-                if jobs[predecessor].status
-                in {"failed", "cancelled", "interrupted"}
+                if jobs[predecessor].status in {"failed", "cancelled", "interrupted"}
                 or predecessor in blocked_job_ids
             )
             if blocked_by:
@@ -904,7 +899,11 @@ class JobService:
                 jobs[predecessor].status == "succeeded"
                 for predecessor in predecessors[job_id]
             )
-            if job.status == "created" and upstream_succeeded and execution.status == "active":
+            if (
+                job.status == "created"
+                and upstream_succeeded
+                and execution.status == "active"
+            ):
                 try:
                     job = self.queue_calculation_job(
                         job_id,
@@ -985,9 +984,7 @@ class JobService:
                     node.state in {"waiting", "ready", "queued", "running"}
                     for node in nodes
                 )
-                has_failure = any(
-                    node.state in {"failed", "blocked"} for node in nodes
-                )
+                has_failure = any(node.state in {"failed", "blocked"} for node in nodes)
                 if has_failure and not has_viable_work:
                     code, message = scheduler_error or (
                         "workflow_dependency_failed",
@@ -1087,23 +1084,13 @@ class JobService:
         error: str | None = None,
         error_code: str | None = None,
     ) -> Job:
-        current = self._require_job(job_id)
-        next_status = _normalize_status(status)
-        if next_status not in _ALLOWED_TRANSITIONS[current.status]:
-            raise InvalidJobTransitionError(
-                f"Job '{job_id}' cannot transition from '{current.status}' to '{next_status}'"
-            )
-        updated = self.repository.transition_status(
+        self.lifecycle.transition(
             job_id,
-            (current.status,),
-            next_status,
-            _now(),
-            error_code,
-            error,
+            status,
+            error=error,
+            error_code=error_code,
         )
-        if not updated:
-            raise JobNotFoundError(job_id)
-        job = self._require_job(job_id)
+        job = self.get_job(job_id)
         self._write_snapshot(job)
         return job
 
@@ -1111,32 +1098,20 @@ class JobService:
         """Atomically claim a queued job for one runner process."""
         job = self._require_job(job_id)
         engine, collector_id, collector_version = self._execution_descriptor(job)
-        now = _now()
-        run = JobRun(
-            runId=f"run-{secrets.token_hex(8)}",
-            jobId=job_id,
-            runNumber=len(self.repository.list_job_runs(job_id)) + 1,
+        claimed = self.lifecycle.claim_queued(
+            job_id,
             engine=engine,
-            status="running",
-            collectorId=collector_id,
-            collectorVersion=collector_version,
-            metadata={},
-            startedAt=now,
+            collector_id=collector_id,
+            collector_version=collector_version,
         )
-        if not self.repository.claim_job_run(run):
+        if claimed is None:
             return None
-        job = self._require_job(job_id)
+        job = self.get_job(job_id)
         self._write_snapshot(job)
         return job
 
     def get_active_job_run(self, job_id: str) -> JobRun:
-        self._require_job(job_id)
-        run = self.repository.get_active_job_run(job_id)
-        if run is None:
-            raise InvalidJobOperationError(
-                f"Job '{job_id}' has no active execution run"
-            )
-        return run
+        return self.lifecycle.get_active_run(job_id)
 
     @staticmethod
     def _job_type_version(job_type: str) -> int:
@@ -1162,9 +1137,7 @@ class JobService:
                 f"Invalid {job_type}@{handler.job_type_version} parameters: {error}"
             ) from error
 
-    def _execution_descriptor(
-        self, job: Job
-    ) -> tuple[str, str | None, int | None]:
+    def _execution_descriptor(self, job: Job) -> tuple[str, str | None, int | None]:
         try:
             handler = JOB_TYPE_REGISTRY.resolve(job.task_type)
             return (
@@ -1182,23 +1155,7 @@ class JobService:
 
     def request_job_dispatch(self, job_id: str, *, max_inflight: int) -> bool:
         """Persist an idempotent execution request for one queued job."""
-        job = self._require_job(job_id)
-        if job.status != "queued":
-            raise InvalidJobOperationError(
-                f"Job '{job_id}' has status '{job.status}'; only queued jobs can run"
-            )
-        now = _now()
-        dispatch = JobDispatch(
-            dispatch_id=f"dispatch-{secrets.token_hex(8)}",
-            job_id=job_id,
-            status="pending",
-            requested_at=now,
-            available_at=now,
-        )
-        return self.repository.request_job_dispatch(
-            dispatch,
-            max_inflight=max_inflight,
-        )
+        return self.dispatches.request(job_id, max_inflight=max_inflight)
 
     def claim_next_dispatch(
         self,
@@ -1209,32 +1166,18 @@ class JobService:
     ) -> JobDispatch | None:
         """Recover stale work, then lease the next queued execution request."""
         self.recover_stale_executions()
-        now = _now()
-        return self.repository.claim_next_dispatch(
-            lease_owner=worker_id,
+        return self.dispatches.claim_next(
+            worker_id=worker_id,
             lease_token=lease_token,
-            now=now,
-            lease_expires_at=now + timedelta(seconds=lease_seconds),
+            lease_seconds=lease_seconds,
         )
 
     def recover_stale_executions(self) -> list[Job]:
         """Interrupt expired or legacy running jobs without a live worker lease."""
-        now = _now()
-        self.repository.recover_expired_dispatches(now)
-        recovered_jobs: list[Job] = []
-        for job_id in self.repository.list_unleased_running_job_ids(now):
-            if not self.repository.transition_status(
-                job_id,
-                ("running",),
-                "interrupted",
-                now,
-                "worker_lease_expired",
-                "worker lease expired while the calculation was running",
-            ):
-                continue
-            recovered = self.get_job(job_id)
+        recovered_jobs = self.dispatches.recover_stale()
+        for recovered in recovered_jobs:
+            self._populate_relations(recovered)
             self._write_snapshot(recovered)
-            recovered_jobs.append(recovered)
         return recovered_jobs
 
     def renew_dispatch_lease(
@@ -1244,12 +1187,10 @@ class JobService:
         *,
         lease_seconds: float,
     ) -> bool:
-        now = _now()
-        return self.repository.renew_dispatch_lease(
+        return self.dispatches.renew_lease(
             job_id,
             lease_token,
-            heartbeat_at=now,
-            lease_expires_at=now + timedelta(seconds=lease_seconds),
+            lease_seconds=lease_seconds,
         )
 
     def finish_job_dispatch(
@@ -1259,34 +1200,21 @@ class JobService:
         *,
         last_error: str | None = None,
     ) -> bool:
-        return self.repository.finish_job_dispatch(
+        return self.dispatches.finish(
             job_id,
             lease_token,
-            finished_at=_now(),
             last_error=last_error,
         )
 
     def dispatch_counts(self) -> dict[str, int]:
-        return self.repository.dispatch_counts()
+        return self.dispatches.counts()
 
     def interrupt_running_jobs(self, reason: str) -> list[Job]:
         """Mark runs left active by a previous backend process as interrupted."""
-        interrupted: list[Job] = []
-        for job in self.repository.list_jobs():
-            if job.status != "running":
-                continue
-            if not self.repository.transition_status(
-                job.job_id,
-                ("running",),
-                "interrupted",
-                _now(),
-                "backend_restart",
-                reason,
-            ):
-                continue
-            recovered = self.get_job(job.job_id)
+        interrupted = self.lifecycle.interrupt_all_running(reason)
+        for recovered in interrupted:
+            self._populate_relations(recovered)
             self._write_snapshot(recovered)
-            interrupted.append(recovered)
         return interrupted
 
     def _artifact_identity(self, job_id: str, path: str) -> dict[str, Any]:
@@ -1483,13 +1411,6 @@ def _required_text(value: str, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
     return value
-
-
-def _normalize_status(value: str) -> JobStatus:
-    normalized = "succeeded" if value == "completed" else value
-    if normalized not in _ALLOWED_TRANSITIONS:
-        raise ValueError(f"Unsupported job status: {value}")
-    return normalized  # type: ignore[return-value]
 
 
 def _path_format(path: str) -> str:
