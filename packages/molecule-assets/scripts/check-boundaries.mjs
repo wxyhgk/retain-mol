@@ -9,7 +9,6 @@ import { dirname, resolve, sep } from 'node:path'
  */
 const ALLOWED_MOL_VIEWER_SUBPATHS = new Set([
   '@retainmol/mol-viewer/core',
-  '@retainmol/mol-viewer/state',
   '@retainmol/mol-viewer/io',
   '@retainmol/mol-viewer/three',
   '@retainmol/mol-viewer/styles',

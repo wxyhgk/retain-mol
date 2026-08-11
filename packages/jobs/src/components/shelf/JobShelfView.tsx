@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { resolveTheme, type ResolvedTheme } from '@retainmol/mol-viewer/styles'
 import { useUiThemeStore } from '@retainmol/ui-kit'
-import { useEditorStore } from '@retainmol/mol-viewer/state'
 import type { JobSummary } from '../../domain/jobTypes'
 import type { ShelfMoleculeEntry } from '../../domain/shelf/jobMolecule'
 import type { WorkflowNodeVisualState } from '../../domain/shelf/shelfNodeStyle'
@@ -24,6 +23,8 @@ export interface JobShelfViewProps {
   nodeStates?: Map<string, WorkflowNodeVisualState>
   /** 盒子之间的依赖管道 */
   edges?: readonly ShelfEdgeInput[]
+  /** Molecule rendering theme supplied by the host; platform pages default to CPK. */
+  moleculeThemeId?: string
 }
 
 function safeResolveTheme(themeId: string): ResolvedTheme {
@@ -34,7 +35,16 @@ function safeResolveTheme(themeId: string): ResolvedTheme {
   }
 }
 
-export function JobShelfView({ jobs, molecules, onOpenJob, onRunJob, runPendingJobId, nodeStates, edges = NO_EDGES }: JobShelfViewProps) {
+export function JobShelfView({
+  jobs,
+  molecules,
+  onOpenJob,
+  onRunJob,
+  runPendingJobId,
+  nodeStates,
+  edges = NO_EDGES,
+  moleculeThemeId = 'default',
+}: JobShelfViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const managerRef = useRef<ShelfSceneManager | null>(null)
@@ -43,8 +53,7 @@ export function JobShelfView({ jobs, molecules, onOpenJob, onRunJob, runPendingJ
   const cardsRef = useRef(new Map<string, HTMLDivElement>())
 
   const uiTheme = useUiThemeStore(state => state.theme)
-  const molThemeId = useEditorStore(state => state.themeId)
-  const molTheme = useMemo(() => safeResolveTheme(molThemeId), [molThemeId])
+  const molTheme = useMemo(() => safeResolveTheme(moleculeThemeId), [moleculeThemeId])
   const molThemeRef = useRef(molTheme)
 
   const entries = useMemo<ShelfSyncEntry[]>(

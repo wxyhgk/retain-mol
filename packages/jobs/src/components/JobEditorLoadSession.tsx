@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Atom, LoaderCircle, X } from 'lucide-react'
 import { Button } from '@retainmol/ui-kit'
-import { useMoleculeStore } from '@retainmol/mol-viewer/state'
-import { useEditorStore } from '@retainmol/mol-viewer/state'
+import type { EditorHostPort } from '@retainmol/mol-viewer/core'
 import {
   loadMoleculeRevisionForEditor,
   moleculeAssetsApi,
@@ -14,10 +13,16 @@ import { jobsApi } from '../application/jobQueries'
 export interface JobEditorLoadSessionProps {
   jobId: string
   artifactId: string | null
+  editorHost: EditorHostPort
   onClose: (jobId: string) => void
 }
 
-export function JobEditorLoadSession({ jobId, artifactId, onClose }: JobEditorLoadSessionProps) {
+export function JobEditorLoadSession({
+  jobId,
+  artifactId,
+  editorHost,
+  onClose,
+}: JobEditorLoadSessionProps) {
   const [loading, setLoading] = useState(true)
   const [loadedName, setLoadedName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -46,12 +51,8 @@ export function JobEditorLoadSession({ jobId, artifactId, onClose }: JobEditorLo
           molecule = result.molecule
         }
 
-        const moleculeStore = useMoleculeStore.getState()
-        const objectId = moleculeStore.activeObjectId
-          ? moleculeStore.activeObjectId
-          : moleculeStore.addToScene(molecule, false)
-        if (moleculeStore.activeObjectId) moleculeStore.setMolecule(molecule)
-        moleculeStore.clearSelection()
+        const objectId = editorHost.replaceActiveMolecule(molecule)
+        editorHost.clearSelection()
 
         useMoleculeDocumentStore.getState().bindSavedDocument({
           objectId,
@@ -67,7 +68,7 @@ export function JobEditorLoadSession({ jobId, artifactId, onClose }: JobEditorLo
           ...(artifactId ? { derivedFromArtifactId: artifactId } : {}),
         })
         setLoadedName(job.name)
-        useEditorStore.getState().flashHint(
+        editorHost.notify(
           artifactId ? `已载入任务“${job.name}”的输出结构` : `已载入任务“${job.name}”的输入结构`,
         )
       } catch (caught) {
@@ -77,7 +78,7 @@ export function JobEditorLoadSession({ jobId, artifactId, onClose }: JobEditorLo
       }
     })()
     return () => { cancelled = true }
-  }, [artifactId, jobId])
+  }, [artifactId, editorHost, jobId])
 
   return (
     <div className="pointer-events-none absolute left-1/2 top-3 z-40 w-[min(680px,calc(100%-24px))] -translate-x-1/2">

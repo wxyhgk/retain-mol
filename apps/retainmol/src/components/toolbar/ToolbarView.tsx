@@ -9,6 +9,7 @@ import { MoleculeFileDropzone } from '@/features/molecule-placement'
 import type { ToolbarModel } from './useToolbarModel'
 import type { WorkspaceMode } from '@/App'
 import { MoleculeDocumentControls } from '@/features/molecule-assets'
+import { editorHostPort } from '@/domain/viewer/editorHostPort'
 
 export interface ToolbarProps {
   showInspector: boolean
@@ -74,7 +75,7 @@ export function ToolbarView({
 
         <div className="mx-1 h-5 w-px bg-border" />
 
-        <MoleculeDocumentControls />
+        <MoleculeDocumentControls editorHost={editorHostPort} />
 
         <div className="mx-1 h-5 w-px bg-border" />
 

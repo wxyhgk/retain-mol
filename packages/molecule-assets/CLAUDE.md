@@ -5,6 +5,7 @@
 ## 铁律
 * 依赖方向：只可依赖 `@retainmol/ui-kit`；`@retainmol/mol-viewer` 是 peerDependency（经公共子入口 import）。
 * 不读 `import.meta.env`——后端地址由宿主经 `configureMoleculeAssetsApiBase()` 注入。
+* 组件不得直接读取 `mol-viewer` Zustand store；编辑器能力通过显式 `EditorHostPort` 由宿主传入。
 * Revision 不可变：任何"修改"都是新 Revision；冲突只有「加载服务端头」或「另存新资产」两条路，无静默覆盖。
 * 服务端状态只走 TanStack Query（`moleculeAssetQueries`），禁止复制进 zustand。
 

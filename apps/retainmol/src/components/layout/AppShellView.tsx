@@ -13,6 +13,7 @@ import { ViewportToolbar } from './ViewportToolbar'
 import { JobEditorLoadSession, SimulationWorkspace, resolveOptimizedJobStructure } from '@retainmol/jobs'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { useEditorStore } from '@/domain/viewer/editorState'
+import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import type { JobArtifact, JobDetail } from '@retainmol/jobs'
 import { useMoleculeDocumentStore } from '@/features/molecule-assets'
 import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
@@ -122,6 +123,7 @@ export function AppShellView({
               key={`${jobEditSession.jobId}:${jobEditSession.artifactId ?? 'input'}`}
               jobId={jobEditSession.jobId}
               artifactId={jobEditSession.artifactId}
+              editorHost={editorHostPort}
               onClose={onCloseJobEdit}
             />
           )}

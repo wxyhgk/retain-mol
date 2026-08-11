@@ -5,6 +5,7 @@
 ## 铁律
 * 依赖方向：可依赖 `@retainmol/molecule-assets`、`@retainmol/ui-kit`；`@retainmol/mol-viewer` 与 `three` 是 peerDependency。
 * 不读 `import.meta.env`——后端地址由宿主经 `configureJobsApiBase()` 注入（vite 只在应用构建时替换 env，预构建包里的 env 表达式是死代码）。
+* 组件不得直接读取 `mol-viewer` Zustand store；载入结构、清理选择与提示通过宿主 `EditorHostPort`。
 * **词汇单源**：状态/类型文案只准来自 `domain/jobPresentation`（jobStatusLabel/calculationLabel/jobParameterRows）与 `domain/shelf/shelfNodeStyle`，任何组件不得自带第二套。
 * 服务端状态只走 TanStack Query；缓存写经 `commitJob`；mutation 不要往 `jobUiStore` 写选中态（审查定论，逐步退役现存写点）。
 * ID 一律 `genId()`，禁止 `crypto.randomUUID()`。

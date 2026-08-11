@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Database, History, LoaderCircle, Save } from 'lucide-react'
 import { Button } from '@retainmol/ui-kit'
 import {
@@ -9,8 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@retainmol/ui-kit'
-import { useEditorStore } from '@retainmol/mol-viewer/state'
-import { useMoleculeStore } from '@retainmol/mol-viewer/state'
+import type { EditorHostPort } from '@retainmol/mol-viewer/core'
 import { computeContentHash } from '../domain/canonicalize'
 import type { MoleculeAsset, MoleculeRevision } from '../domain/types'
 import {
@@ -24,11 +23,18 @@ import {
   type MoleculeDocumentBinding,
 } from '../model/moleculeDocumentStore'
 
-export function MoleculeDocumentControls() {
-  const activeObjectId = useMoleculeStore(state => state.activeObjectId)
-  const molecule = useMoleculeStore(state => (
-    state.activeObjectId ? state.objectsById[state.activeObjectId]?.molecule : undefined
-  ))
+export interface MoleculeDocumentControlsProps {
+  editorHost: EditorHostPort
+}
+
+export function MoleculeDocumentControls({ editorHost }: MoleculeDocumentControlsProps) {
+  const editorSnapshot = useSyncExternalStore(
+    editorHost.subscribe,
+    editorHost.getSnapshot,
+    editorHost.getSnapshot,
+  )
+  const activeObjectId = editorSnapshot.activeObjectId
+  const molecule = editorSnapshot.activeMolecule ?? undefined
   const binding = useMoleculeDocumentStore(state => (
     activeObjectId ? state.bindingsByObjectId[activeObjectId] : undefined
   ))
@@ -75,7 +81,7 @@ export function MoleculeDocumentControls() {
         metadata: pendingRevisionMetadata,
       },
       {
-        onSuccess: result => useEditorStore.getState().flashHint(
+        onSuccess: result => editorHost.notify(
           result.status === 'unchanged'
             ? '当前分子没有需要保存的更改'
             : result.status === 'created'
@@ -84,7 +90,7 @@ export function MoleculeDocumentControls() {
         ),
         onError: error => {
           if (!useMoleculeDocumentStore.getState().conflictsByObjectId[activeObjectId]) {
-            useEditorStore.getState().flashHint(error instanceof Error ? error.message : '保存分子失败')
+            editorHost.notify(error instanceof Error ? error.message : '保存分子失败')
           }
         },
       },
@@ -141,11 +147,13 @@ export function MoleculeDocumentControls() {
         onOpenChange={setLibraryOpen}
         activeObjectId={activeObjectId}
         currentBinding={binding ?? null}
+        editorHost={editorHost}
       />
       {conflict && activeObjectId && molecule && (
         <MoleculeConflictDialog
           objectId={activeObjectId}
           asset={conflict.currentAsset}
+          editorHost={editorHost}
           onSaveAsCopy={() => {
             useMoleculeDocumentStore.getState().detachDocument(activeObjectId)
             save(null)
@@ -161,11 +169,13 @@ function MoleculeLibraryDialog({
   onOpenChange,
   activeObjectId,
   currentBinding,
+  editorHost,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   activeObjectId: string | null
   currentBinding: MoleculeDocumentBinding | null
+  editorHost: EditorHostPort
 }) {
   const assetsQuery = useMoleculeAssetsQuery(open)
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
@@ -184,23 +194,23 @@ function MoleculeLibraryDialog({
     setLoadingRevisionId(revision.id)
     try {
       const loaded = await loadMoleculeRevisionForEditor(asset, revision.id)
-      useMoleculeStore.getState().setMolecule(loaded.revision.molecule)
+      const loadedObjectId = editorHost.replaceActiveMolecule(loaded.revision.molecule)
       useMoleculeDocumentStore.getState().bindSavedDocument({
-        objectId: activeObjectId,
+        objectId: loadedObjectId,
         assetId: asset.id,
         headRevisionId: loaded.headRevision.id,
         assetVersion: asset.version,
         savedContentHash: loaded.headRevision.contentHash,
         savedAt: loaded.headRevision.createdAt,
       })
-      useEditorStore.getState().flashHint(
+      editorHost.notify(
         loaded.revision.id === loaded.headRevision.id
           ? `已载入“${asset.name}”最新版本`
           : `已载入“${asset.name}”历史版本；保存将创建新的头版本`,
       )
       onOpenChange(false)
     } catch (error) {
-      useEditorStore.getState().flashHint(error instanceof Error ? error.message : '载入分子版本失败')
+      editorHost.notify(error instanceof Error ? error.message : '载入分子版本失败')
     } finally {
       setLoadingRevisionId(null)
     }
@@ -291,10 +301,12 @@ function MoleculeLibraryDialog({
 function MoleculeConflictDialog({
   objectId,
   asset,
+  editorHost,
   onSaveAsCopy,
 }: {
   objectId: string
   asset: MoleculeAsset
+  editorHost: EditorHostPort
   onSaveAsCopy: () => void
 }) {
   const [loading, setLoading] = useState(false)
@@ -304,18 +316,18 @@ function MoleculeConflictDialog({
     setLoading(true)
     try {
       const loaded = await loadMoleculeRevisionForEditor(asset, asset.headRevisionId)
-      useMoleculeStore.getState().setMolecule(loaded.headRevision.molecule)
+      const loadedObjectId = editorHost.replaceActiveMolecule(loaded.headRevision.molecule)
       useMoleculeDocumentStore.getState().bindSavedDocument({
-        objectId,
+        objectId: loadedObjectId,
         assetId: asset.id,
         headRevisionId: loaded.headRevision.id,
         assetVersion: asset.version,
         savedContentHash: loaded.headRevision.contentHash,
         savedAt: loaded.headRevision.createdAt,
       })
-      useEditorStore.getState().flashHint('已载入服务器最新版本')
+      editorHost.notify('已载入服务器最新版本')
     } catch (error) {
-      useEditorStore.getState().flashHint(error instanceof Error ? error.message : '载入服务器版本失败')
+      editorHost.notify(error instanceof Error ? error.message : '载入服务器版本失败')
     } finally {
       setLoading(false)
     }
