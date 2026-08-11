@@ -38,18 +38,18 @@ from .executor import (
     execution_mode,
     get_job_executor,
 )
-from .service import (
+from .errors import (
     InvalidJobInputError,
     InvalidJobOperationError,
     InvalidJobTransitionError,
     JobInUseError,
     JobNotFoundError,
-    JobService,
     MoleculeAssetNotFoundError,
     MoleculeHeadConflictError,
     MoleculeRevisionNotFoundError,
     WorkflowNotFoundError,
 )
+from .service import JobService
 
 __all__ = [
     "Artifact",

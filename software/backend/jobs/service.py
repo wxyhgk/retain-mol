@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import secrets
@@ -16,7 +15,18 @@ from typing import Any
 from pydantic import ValidationError
 
 from .artifact_storage import ArtifactStorage
-from .input_contracts import validate_calculation_inputs
+from .errors import (
+    InvalidJobInputError,
+    InvalidJobOperationError,
+    InvalidJobTransitionError,
+    JobInUseError,
+    JobNotFoundError,
+    MoleculeAssetNotFoundError,
+    MoleculeHeadConflictError,
+    MoleculeRevisionNotFoundError,
+    WorkflowNotFoundError,
+)
+from .input_resolution import JobInputResolver
 from .molecule_canonicalize import (
     InvalidMoleculeError,
     molecule_content_hash,
@@ -53,46 +63,6 @@ DEFAULT_DATA_ROOT = Path(
 )
 
 
-class JobNotFoundError(KeyError):
-    """Raised when an operation targets a job that is not persisted."""
-
-
-class WorkflowNotFoundError(KeyError):
-    """Raised when an operation targets a workflow that is not persisted."""
-
-
-class InvalidJobTransitionError(ValueError):
-    """Raised when a job lifecycle operation would violate the state machine."""
-
-
-class InvalidJobInputError(ValueError):
-    """Raised when calculation inputs cannot be frozen safely."""
-
-
-class InvalidJobOperationError(ValueError):
-    """Raised when a management operation conflicts with the job lifecycle."""
-
-
-class JobInUseError(ValueError):
-    """Raised when a workflow still references a job targeted for deletion."""
-
-
-class MoleculeAssetNotFoundError(KeyError):
-    """Raised when a molecule asset id has no persisted aggregate."""
-
-
-class MoleculeRevisionNotFoundError(KeyError):
-    """Raised when a molecule revision id has no immutable snapshot."""
-
-
-class MoleculeHeadConflictError(RuntimeError):
-    """Raised when optimistic head/version expectations are stale."""
-
-    def __init__(self, asset: MoleculeAsset) -> None:
-        self.asset = asset
-        super().__init__(f"Molecule asset '{asset.asset_id}' head changed")
-
-
 _ALLOWED_TRANSITIONS: dict[JobStatus, frozenset[JobStatus]] = {
     "created": frozenset({"queued", "cancelled"}),
     "queued": frozenset({"running", "cancelled"}),
@@ -114,6 +84,7 @@ class JobService:
         self.tasks_root.mkdir(parents=True, exist_ok=True)
         self.artifact_storage = ArtifactStorage(self.data_root)
         self.repository = JobRepository(self.data_root / "retainmol.sqlite")
+        self.input_resolver = JobInputResolver(self.repository)
 
     def create_molecule_asset(
         self, name: str, *, metadata: dict[str, Any] | None = None
@@ -1350,27 +1321,7 @@ class JobService:
         job.artifacts = self.repository.get_artifacts(job.job_id)
 
     def _copy_input_definitions(self, source: Job) -> dict[str, dict[str, Any]]:
-        """Rebind immutable input identities without copying private output files."""
-        inputs: dict[str, dict[str, Any]] = {}
-        for snapshot in source.input_snapshots:
-            descriptor: dict[str, Any] = {"sourceKind": snapshot.source_kind}
-            if snapshot.content_sha256:
-                descriptor["contentSha256"] = snapshot.content_sha256
-            if snapshot.source_kind == "literal":
-                descriptor["value"] = snapshot.literal_value
-                if isinstance(snapshot.literal_value, Mapping):
-                    literal_format = snapshot.literal_value.get("format")
-                    if literal_format:
-                        descriptor["format"] = literal_format
-            elif snapshot.source_kind == "molecule_revision":
-                descriptor["format"] = "molecule"
-                descriptor["moleculeRevisionId"] = snapshot.molecule_revision_id
-            else:
-                artifact = self.get_artifact(snapshot.artifact_id or "")
-                descriptor["format"] = artifact.format
-                descriptor["artifactId"] = artifact.artifact_id
-            inputs[snapshot.input_name] = descriptor
-        return inputs
+        return self.input_resolver.copy_definitions(source)
 
     def _build_input_snapshots(
         self,
@@ -1379,222 +1330,16 @@ class JobService:
         definitions: Mapping[str, Any],
         created_at: datetime,
     ) -> list[JobInputSnapshot]:
-        descriptors: dict[str, dict[str, Any]] = {}
-        input_snapshots: list[JobInputSnapshot] = []
-        for input_name, definition in definitions.items():
-            if not isinstance(definition, Mapping):
-                definition = {
-                    "sourceKind": "literal",
-                    "format": "structure",
-                    "value": definition,
-                }
-            descriptor = dict(definition)
-            source_kind = descriptor.get("sourceKind", descriptor.get("source_kind"))
-            value_format = descriptor.get("format")
-            descriptors[input_name] = {
-                "sourceKind": source_kind,
-                "format": value_format,
-            }
-            if source_kind not in {"literal", "molecule_revision", "artifact"}:
-                raise InvalidJobInputError(
-                    f"Input '{input_name}' source '{source_kind}' is not resolvable"
-                )
-            if source_kind == "literal":
-                literal_value = descriptor.get("value", descriptor.get("literalValue"))
-                if literal_value is None:
-                    raise InvalidJobInputError(f"Literal input '{input_name}' has no value")
-                if isinstance(literal_value, Mapping) and "format" not in literal_value:
-                    literal_value = {"format": value_format, **dict(literal_value)}
-                input_snapshots.append(
-                    JobInputSnapshot(
-                        snapshot_id=f"binding-{secrets.token_hex(8)}",
-                        jobId=job_id,
-                        inputName=_required_text(input_name, "input name"),
-                        sourceKind="literal",
-                        literalValue=literal_value,
-                        contentSha256=_canonical_json_sha256(literal_value),
-                        resolved_from_link_id=descriptor.get("resolvedFromReferenceId"),
-                        createdAt=created_at,
-                    )
-                )
-                continue
-
-            if source_kind == "molecule_revision":
-                revision_id = descriptor.get(
-                    "moleculeRevisionId", descriptor.get("molecule_revision_id")
-                )
-                revision = (
-                    self.repository.get_molecule_revision(revision_id)
-                    if isinstance(revision_id, str)
-                    else None
-                )
-                if revision is None:
-                    raise InvalidJobInputError(
-                        f"Revision input '{input_name}' does not resolve to a molecule revision"
-                    )
-                expected_digest = descriptor.get("contentSha256")
-                if expected_digest is not None and expected_digest != revision.sha256:
-                    raise InvalidJobInputError(
-                        f"Molecule revision '{revision.revision_id}' digest does not match the snapshot"
-                    )
-                input_snapshots.append(
-                    JobInputSnapshot(
-                        snapshot_id=f"binding-{secrets.token_hex(8)}",
-                        jobId=job_id,
-                        inputName=_required_text(input_name, "input name"),
-                        sourceKind="molecule_revision",
-                        moleculeRevisionId=revision.revision_id,
-                        contentSha256=revision.sha256,
-                        resolved_from_link_id=descriptor.get(
-                            "resolvedFromReferenceId"
-                        ),
-                        createdAt=created_at,
-                    )
-                )
-                continue
-
-            artifact_id = descriptor.get("artifactId", descriptor.get("artifact_id"))
-            artifact = (
-                self.repository.get_artifact(artifact_id)
-                if isinstance(artifact_id, str)
-                else None
-            )
-            if artifact is None:
-                raise InvalidJobInputError(
-                    f"Artifact input '{input_name}' does not resolve to an artifact"
-                )
-            source_job = self._require_job(artifact.job_id)
-            if source_job.status != "succeeded":
-                raise InvalidJobInputError(
-                    f"Artifact '{artifact.artifact_id}' comes from non-succeeded job '{artifact.job_id}'"
-                )
-            if not artifact.sha256:
-                raise InvalidJobInputError(
-                    f"Artifact '{artifact.artifact_id}' has no immutable content digest"
-                )
-            expected_digest = descriptor.get("contentSha256")
-            if expected_digest is not None and expected_digest != artifact.sha256:
-                raise InvalidJobInputError(
-                    f"Artifact '{artifact.artifact_id}' digest does not match the snapshot"
-                )
-            input_snapshots.append(
-                JobInputSnapshot(
-                    snapshot_id=f"binding-{secrets.token_hex(8)}",
-                    jobId=job_id,
-                    inputName=_required_text(input_name, "input name"),
-                    sourceKind="artifact",
-                    artifactId=artifact.artifact_id,
-                    contentSha256=artifact.sha256,
-                    resolved_from_link_id=descriptor.get("resolvedFromReferenceId"),
-                    createdAt=created_at,
-                )
-            )
-
-        validation = validate_calculation_inputs(calculation_kind, descriptors)
-        if not validation.is_valid:
-            details = "; ".join(issue.message for issue in validation.issues)
-            raise InvalidJobInputError(details)
-        return input_snapshots
+        return self.input_resolver.build_snapshots(
+            job_id, calculation_kind, definitions, created_at
+        )
 
     def _resolve_workflow_input_definitions(
         self, workflow_id: str, target_job_id: str
     ) -> dict[str, dict[str, Any]]:
-        workflow = self.get_workflow(workflow_id)
-        if target_job_id not in workflow.job_ids:
-            raise InvalidJobInputError(
-                f"Job '{target_job_id}' is not a member of workflow '{workflow_id}'"
-            )
-        definitions: dict[str, dict[str, Any]] = {}
-        for link in workflow.input_links:
-            if link.target_job_id != target_job_id:
-                continue
-            source_job = self.get_job(link.source_job_id)
-            if source_job.status != "succeeded":
-                raise InvalidJobInputError(
-                    f"Workflow source job '{source_job.job_id}' must be succeeded"
-                )
-            if link.source_kind == "artifact":
-                artifacts = self.repository.get_artifacts(link.source_job_id)
-                if link.source_artifact_id is not None:
-                    matches = [
-                        artifact
-                        for artifact in artifacts
-                        if artifact.artifact_id == link.source_artifact_id
-                    ]
-                else:
-                    matches = [
-                        artifact
-                        for artifact in artifacts
-                        if artifact.name == link.source_name
-                    ]
-                if len(matches) != 1:
-                    raise InvalidJobInputError(
-                        f"Workflow input link '{link.link_id}' did not resolve uniquely"
-                    )
-                artifact = matches[0]
-                definitions[link.target_input_name] = {
-                    "sourceKind": "artifact",
-                    "artifactId": artifact.artifact_id,
-                    "format": artifact.format,
-                    "contentSha256": artifact.sha256,
-                    "resolvedFromReferenceId": link.link_id,
-                }
-                continue
-
-            source_snapshots = self.repository.list_job_input_snapshots(
-                link.source_job_id
-            )
-            matches = [
-                snapshot
-                for snapshot in source_snapshots
-                if snapshot.input_name == link.source_name
-            ]
-            if len(matches) != 1:
-                raise InvalidJobInputError(
-                    f"Workflow input link '{link.link_id}' did not resolve uniquely"
-                )
-            source = matches[0]
-            if source.source_kind == "literal":
-                literal = source.literal_value
-                definitions[link.target_input_name] = {
-                    "sourceKind": "literal",
-                    "format": literal.get("format") if isinstance(literal, Mapping) else "structure",
-                    "value": literal,
-                    "resolvedFromReferenceId": link.link_id,
-                }
-            elif source.source_kind == "artifact":
-                artifact = self.repository.get_artifact(source.artifact_id or "")
-                if artifact is None:
-                    raise InvalidJobInputError(
-                        f"Source snapshot '{source.snapshot_id}' lost its artifact"
-                    )
-                definitions[link.target_input_name] = {
-                    "sourceKind": "artifact",
-                    "artifactId": artifact.artifact_id,
-                    "format": artifact.format,
-                    "contentSha256": source.content_sha256,
-                    "resolvedFromReferenceId": link.link_id,
-                }
-            elif source.source_kind == "molecule_revision":
-                revision = self.repository.get_molecule_revision(
-                    source.molecule_revision_id or ""
-                )
-                if revision is None:
-                    raise InvalidJobInputError(
-                        f"Source snapshot '{source.snapshot_id}' lost its molecule revision"
-                    )
-                definitions[link.target_input_name] = {
-                    "sourceKind": "molecule_revision",
-                    "moleculeRevisionId": revision.revision_id,
-                    "format": "molecule",
-                    "contentSha256": source.content_sha256,
-                    "resolvedFromReferenceId": link.link_id,
-                }
-            else:
-                raise InvalidJobInputError(
-                    f"Source snapshot '{source.snapshot_id}' is not supported yet"
-                )
-        return definitions
+        return self.input_resolver.resolve_workflow_definitions(
+            workflow_id, target_job_id
+        )
 
     def _populate_workflow_relations(self, workflow: Workflow) -> None:
         workflow.job_ids = self.repository.get_workflow_job_ids(workflow.workflow_id)
@@ -1715,17 +1460,6 @@ class JobService:
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-def _canonical_json_sha256(value: Any) -> str:
-    payload = json.dumps(
-        value,
-        ensure_ascii=True,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
 
 
 def _new_job_id(now: datetime) -> str:
