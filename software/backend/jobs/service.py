@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from .artifact_manager import ArtifactManager
 from .artifact_storage import ArtifactStorage
 from .dispatching import JobDispatchCoordinator
 from .errors import (
@@ -75,6 +76,11 @@ class JobService:
         self.tasks_root.mkdir(parents=True, exist_ok=True)
         self.artifact_storage = ArtifactStorage(self.data_root)
         self.repository = JobRepository(self.data_root / "retainmol.sqlite")
+        self.artifact_manager = ArtifactManager(
+            self.repository,
+            self.artifact_storage,
+            self.tasks_root,
+        )
         self.input_resolver = JobInputResolver(self.repository)
         self.lifecycle = JobLifecycle(self.repository)
         self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
@@ -617,13 +623,10 @@ class JobService:
 
     def list_artifacts(self, job_id: str) -> list[Artifact]:
         """Return every artifact registered for a job."""
-        return self.get_job(job_id).artifacts
+        return self.artifact_manager.list(job_id)
 
     def get_artifact(self, artifact_id: str) -> Artifact:
-        artifact = self.repository.get_artifact(artifact_id)
-        if artifact is None:
-            raise KeyError(artifact_id)
-        return artifact
+        return self.artifact_manager.get(artifact_id)
 
     def create_workflow(
         self,
@@ -786,28 +789,14 @@ class JobService:
         metadata: dict[str, Any] | None = None,
         run_id: str | None = None,
     ) -> Artifact:
-        self._require_job(job_id)
-        if run_id is not None:
-            run = self.get_job_run(run_id)
-            if run.job_id != job_id:
-                raise InvalidJobOperationError(
-                    f"JobRun '{run_id}' does not belong to Job '{job_id}'"
-                )
-        artifact = Artifact(
-            artifact_id=f"artifact-{secrets.token_hex(8)}",
-            job_id=job_id,
-            run_id=run_id,
-            name=_required_text(name, "name"),
-            path=_required_text(path, "path"),
-            **self._artifact_identity(job_id, path),
-            kind=_artifact_kind((metadata or {}).get("format")),
-            role=str((metadata or {}).get("role") or "output"),
-            format=str((metadata or {}).get("format") or _path_format(path)),
+        artifact = self.artifact_manager.add(
+            job_id,
+            name,
+            path,
             media_type=media_type,
-            metadata=metadata or {},
-            created_at=_now(),
+            metadata=metadata,
+            run_id=run_id,
         )
-        artifact = self.repository.add_artifact(artifact)
         self._touch_job(job_id)
         self._write_snapshot(self._require_job(job_id))
         return artifact
@@ -953,18 +942,6 @@ class JobService:
             self._write_snapshot(recovered)
         return interrupted
 
-    def _artifact_identity(self, job_id: str, path: str) -> dict[str, Any]:
-        candidate = (self.tasks_root / job_id / path).resolve()
-        task_root = (self.tasks_root / job_id).resolve()
-        if task_root not in candidate.parents or not candidate.is_file():
-            return {}
-        published = self.artifact_storage.publish_file(candidate)
-        return {
-            "storage_key": published["storageKey"],
-            "sha256": published["sha256"],
-            "byte_size": published["byteSize"],
-        }
-
     def task_directory(self, job_id: str) -> Path:
         """Return the on-disk directory for a persisted job, creating it if needed."""
         self._require_job(job_id)
@@ -1044,25 +1021,3 @@ def _required_text(value: str, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
     return value
-
-
-def _path_format(path: str) -> str:
-    suffix = Path(path).suffix.lower().lstrip(".")
-    return suffix or "file"
-
-
-def _artifact_kind(format_name: Any) -> str:
-    normalized = str(format_name or "").lower()
-    if normalized in {"xyz", "sdf", "mol", "retainmol-json"}:
-        return "structure"
-    if normalized in {"cube"}:
-        return "volumetric-grid"
-    if normalized in {"molden"}:
-        return "wavefunction"
-    if normalized in {"png", "jpg", "jpeg", "webp"}:
-        return "image"
-    if normalized in {"log", "out"}:
-        return "log"
-    if normalized in {"trajectory-json"}:
-        return "trajectory"
-    return "file"
