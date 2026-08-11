@@ -67,31 +67,41 @@ export function createMoleculeStore(): MoleculeStoreApi {
     ...createSelectionSlice(set, get, store),
     ...createEditSlice(() => moleculeStore.temporal)(set, get, store),
   })
+  const createTemporalState = temporal<MoleculeState, [], [], MoleculeState>
 
-  moleculeStore = (create<MoleculeState>()(
-    temporal(subscribeWithSelector(stateCreator) as unknown as StateCreator<MoleculeState>, {
-    limit: UNDO_LIMIT,
-    partialize: (s) => partializeForUndo(s) as MoleculeState,
-    // 不配 equality 时 zundo 对每次 set 都无条件入栈（包括纯选择/版本号变更）
-    equality: (a, b) => undoSnapshotEqual(a as UndoSnapshot, b as UndoSnapshot),
-    wrapTemporal: (config) => (set, get, store) => {
-      const state = config(set, get, store)
-      return {
-        ...state,
-        undo: (steps?: number) => {
-          if (!get().isTracking) return
-          state.undo(steps)
-          afterTimeTravel(moleculeStore)
-        },
-        redo: (steps?: number) => {
-          if (!get().isTracking) return
-          state.redo(steps)
-          afterTimeTravel(moleculeStore)
-        },
-      }
+  const temporalStateCreator = createTemporalState(
+    stateCreator as unknown as Parameters<typeof createTemporalState>[0],
+    {
+      limit: UNDO_LIMIT,
+      partialize: (s) => partializeForUndo(s) as MoleculeState,
+      // 不配 equality 时 zundo 对每次 set 都无条件入栈（包括纯选择/版本号变更）
+      equality: (a, b) => undoSnapshotEqual(a as UndoSnapshot, b as UndoSnapshot),
+      wrapTemporal: (config) => (set, get, store) => {
+        const state = config(set, get, store)
+        return {
+          ...state,
+          undo: (steps?: number) => {
+            if (!get().isTracking) return
+            state.undo(steps)
+            afterTimeTravel(moleculeStore)
+          },
+          redo: (steps?: number) => {
+            if (!get().isTracking) return
+            state.redo(steps)
+            afterTimeTravel(moleculeStore)
+          },
+        }
+      },
     },
-    }) as unknown as StateCreator<MoleculeState>,
-  )) as unknown as MoleculeStoreApi
+  )
+  // Zustand 5 re-exports StateCreator from zustand/vanilla, while zundo augments
+  // the vanilla StoreMutators declaration. Erase only the middleware metadata at
+  // this assembly boundary; MoleculeStoreApi below preserves the public store API.
+  const subscribedStateCreator = subscribeWithSelector(
+    temporalStateCreator as unknown as StateCreator<MoleculeState>,
+  ) as unknown as StateCreator<MoleculeState>
+
+  moleculeStore = create<MoleculeState>()(subscribedStateCreator) as unknown as MoleculeStoreApi
   return moleculeStore
 }
 

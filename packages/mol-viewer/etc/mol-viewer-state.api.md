@@ -196,6 +196,7 @@ export interface EditorState {
     measureStyle: MeasureStyle;
     // (undocumented)
     measureType: MeasureType;
+    orphanedMeasurements: Measurement[];
     // (undocumented)
     pendingAtomIds: string[];
     // (undocumented)
