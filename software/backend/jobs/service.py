@@ -51,14 +51,13 @@ from .models import (
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
-    WorkflowExecution,
     WorkflowInputLink,
-    WorkflowNodeRuntime,
     WorkflowSchedule,
 )
 from .repository import JobRepository
 from .job_types import JOB_TYPE_REGISTRY, UnknownJobTypeError
-from .workflows import validate_workflow_dag, workflow_predecessors
+from .workflow_runtime import WorkflowRuntimeCoordinator
+from .workflows import validate_workflow_dag
 
 DEFAULT_DATA_ROOT = Path(
     os.getenv(
@@ -81,6 +80,7 @@ class JobService:
         self.input_resolver = JobInputResolver(self.repository)
         self.lifecycle = JobLifecycle(self.repository)
         self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
+        self.workflow_runtime = WorkflowRuntimeCoordinator(self.repository, self)
 
     def create_molecule_asset(
         self, name: str, *, metadata: dict[str, Any] | None = None
@@ -738,277 +738,34 @@ class JobService:
 
     def start_workflow_execution(self, workflow_id: str) -> WorkflowSchedule:
         """Idempotently activate a workflow and reconcile its first runnable nodes."""
-        self.get_workflow(workflow_id)
-        now = _now()
-        execution = WorkflowExecution(
-            executionId=f"execution-{secrets.token_hex(8)}",
-            workflowId=workflow_id,
-            status="active",
-            startedAt=now,
-            updatedAt=now,
-        )
-        persisted = self.repository.create_workflow_execution(execution)
-        if persisted.status == "cancelled":
-            raise InvalidJobOperationError("a cancelled workflow cannot be restarted")
-        return self.advance_workflow_execution(workflow_id)
+        return self.workflow_runtime.start(self.get_workflow(workflow_id))
 
     def get_workflow_schedule(self, workflow_id: str) -> WorkflowSchedule:
-        self.get_workflow(workflow_id)
-        if self.repository.get_workflow_execution(workflow_id) is None:
-            raise InvalidJobOperationError("workflow has not been activated")
-        return self.advance_workflow_execution(workflow_id)
+        return self.workflow_runtime.get_schedule(self.get_workflow(workflow_id))
 
     def list_active_workflow_ids(self) -> list[str]:
-        return [
-            execution.workflow_id
-            for execution in self.repository.list_active_workflow_executions()
-        ]
+        return self.workflow_runtime.list_active_workflow_ids()
 
     def active_workflow_ids_for_job(self, job_id: str) -> list[str]:
-        active = set(self.list_active_workflow_ids())
-        return [
-            workflow_id
-            for workflow_id in self.repository.list_workflow_ids_for_job(job_id)
-            if workflow_id in active
-        ]
+        return self.workflow_runtime.active_workflow_ids_for_job(job_id)
 
     def block_workflow_execution(
         self, workflow_id: str, *, error_code: str, error_message: str
     ) -> WorkflowSchedule:
         """Record a scheduler-level failure that cannot be represented by a Job."""
-        self.get_workflow(workflow_id)
-        self.repository.transition_workflow_execution(
-            workflow_id,
-            expected_status="active",
-            next_status="blocked",
-            updated_at=_now(),
+        return self.workflow_runtime.block(
+            self.get_workflow(workflow_id),
             error_code=error_code,
             error_message=error_message,
         )
-        return self.advance_workflow_execution(workflow_id)
 
     def cancel_workflow_execution(self, workflow_id: str) -> WorkflowSchedule:
         """Cancel one active DAG without disrupting jobs shared by another active DAG."""
-        workflow = self.get_workflow(workflow_id)
-        execution = self.repository.get_workflow_execution(workflow_id)
-        if execution is None:
-            raise InvalidJobOperationError("workflow has not been activated")
-        if execution.status == "cancelled":
-            return self.advance_workflow_execution(workflow_id)
-        if execution.status != "active":
-            raise InvalidJobOperationError(
-                f"workflow in '{execution.status}' state cannot be cancelled"
-            )
-
-        transitioned = self.repository.transition_workflow_execution(
-            workflow_id,
-            expected_status="active",
-            next_status="cancelled",
-            updated_at=_now(),
-        )
-        if not transitioned:
-            refreshed = self.repository.get_workflow_execution(workflow_id)
-            if refreshed is None or refreshed.status != "cancelled":
-                status = refreshed.status if refreshed is not None else "missing"
-                raise InvalidJobOperationError(
-                    f"workflow in '{status}' state cannot be cancelled"
-                )
-
-        for job_id in workflow.job_ids:
-            job = self.get_job(job_id)
-            if job.status not in {"created", "queued", "running"}:
-                continue
-            other_active_workflows = [
-                active_id
-                for active_id in self.active_workflow_ids_for_job(job_id)
-                if active_id != workflow_id
-            ]
-            if other_active_workflows:
-                continue
-            try:
-                self.cancel_job(job_id)
-            except InvalidJobOperationError:
-                # A worker may have reached a terminal state after the status read.
-                pass
-        return self.advance_workflow_execution(workflow_id)
+        return self.workflow_runtime.cancel(self.get_workflow(workflow_id))
 
     def advance_workflow_execution(self, workflow_id: str) -> WorkflowSchedule:
         """Queue newly unblocked nodes and derive one durable DAG runtime snapshot."""
-        workflow = self.get_workflow(workflow_id)
-        execution = self.repository.get_workflow_execution(workflow_id)
-        if execution is None:
-            raise InvalidJobOperationError("workflow has not been activated")
-
-        ordered_job_ids = validate_workflow_dag(workflow.job_ids, workflow.input_links)
-        predecessors = workflow_predecessors(workflow.job_ids, workflow.input_links)
-        jobs = {job_id: self.get_job(job_id) for job_id in ordered_job_ids}
-        if execution.status == "cancelled":
-            cancelled_nodes: list[WorkflowNodeRuntime] = []
-            for job_id in ordered_job_ids:
-                job = jobs[job_id]
-                if job.status == "cancelled":
-                    state = "cancelled"
-                elif job.status == "succeeded":
-                    state = "succeeded"
-                elif job.status in {"failed", "interrupted"}:
-                    state = "failed"
-                elif job.status == "running":
-                    state = "running"
-                elif job.status == "queued":
-                    state = "queued"
-                else:
-                    state = "waiting"
-                cancelled_nodes.append(
-                    WorkflowNodeRuntime(
-                        jobId=job_id,
-                        jobStatus=job.status,
-                        state=state,
-                    )
-                )
-            return WorkflowSchedule(
-                execution=execution,
-                nodes=cancelled_nodes,
-                readyJobIds=[],
-            )
-        blocked_job_ids: set[str] = set()
-        nodes: list[WorkflowNodeRuntime] = []
-        ready_job_ids: list[str] = []
-        scheduler_error: tuple[str, str] | None = None
-
-        for job_id in ordered_job_ids:
-            job = jobs[job_id]
-            blocked_by = sorted(
-                predecessor
-                for predecessor in predecessors[job_id]
-                if jobs[predecessor].status in {"failed", "cancelled", "interrupted"}
-                or predecessor in blocked_job_ids
-            )
-            if blocked_by:
-                blocked_job_ids.add(job_id)
-                nodes.append(
-                    WorkflowNodeRuntime(
-                        jobId=job_id,
-                        jobStatus=job.status,
-                        state="blocked",
-                        blockedBy=blocked_by,
-                    )
-                )
-                continue
-
-            upstream_succeeded = all(
-                jobs[predecessor].status == "succeeded"
-                for predecessor in predecessors[job_id]
-            )
-            if (
-                job.status == "created"
-                and upstream_succeeded
-                and execution.status == "active"
-            ):
-                try:
-                    job = self.queue_calculation_job(
-                        job_id,
-                        workflow_id=workflow_id,
-                        require_active_workflow=True,
-                    )
-                    jobs[job_id] = job
-                except InvalidJobOperationError:
-                    refreshed_execution = self.repository.get_workflow_execution(
-                        workflow_id
-                    )
-                    if (
-                        refreshed_execution is None
-                        or refreshed_execution.status == "active"
-                    ):
-                        raise
-                    return self.advance_workflow_execution(workflow_id)
-                except (InvalidJobInputError, InvalidJobTransitionError) as exc:
-                    refreshed = self.get_job(job_id)
-                    jobs[job_id] = refreshed
-                    job = refreshed
-                    if job.status == "created":
-                        blocked_job_ids.add(job_id)
-                        scheduler_error = (
-                            "workflow_input_unresolved",
-                            f"Job '{job_id}' could not freeze workflow inputs: {exc}",
-                        )
-                        nodes.append(
-                            WorkflowNodeRuntime(
-                                jobId=job_id,
-                                jobStatus=job.status,
-                                state="blocked",
-                            )
-                        )
-                        continue
-
-            if job.status == "succeeded":
-                state = "succeeded"
-            elif job.status in {"failed", "cancelled", "interrupted"}:
-                state = "failed"
-            elif job.status == "running":
-                state = "running"
-            elif job.status == "queued" and upstream_succeeded:
-                dispatch = self.repository.get_job_dispatch(job_id)
-                if dispatch is None:
-                    state = "ready"
-                    if execution.status == "active":
-                        ready_job_ids.append(job_id)
-                elif dispatch.status in {"pending", "leased"}:
-                    state = "queued"
-                else:
-                    state = "blocked"
-                    blocked_job_ids.add(job_id)
-                    scheduler_error = (
-                        "workflow_dispatch_finished_early",
-                        f"Job '{job_id}' is queued but its dispatch is already finished",
-                    )
-            else:
-                state = "waiting"
-            nodes.append(
-                WorkflowNodeRuntime(
-                    jobId=job_id,
-                    jobStatus=job.status,
-                    state=state,
-                )
-            )
-
-        if execution.status == "active":
-            if all(node.state == "succeeded" for node in nodes):
-                self.repository.transition_workflow_execution(
-                    workflow_id,
-                    expected_status="active",
-                    next_status="succeeded",
-                    updated_at=_now(),
-                )
-            else:
-                has_viable_work = any(
-                    node.state in {"waiting", "ready", "queued", "running"}
-                    for node in nodes
-                )
-                has_failure = any(node.state in {"failed", "blocked"} for node in nodes)
-                if has_failure and not has_viable_work:
-                    code, message = scheduler_error or (
-                        "workflow_dependency_failed",
-                        "One or more workflow dependencies failed",
-                    )
-                    self.repository.transition_workflow_execution(
-                        workflow_id,
-                        expected_status="active",
-                        next_status="blocked",
-                        updated_at=_now(),
-                        error_code=code,
-                        error_message=message,
-                    )
-
-        refreshed_execution = self.repository.get_workflow_execution(workflow_id)
-        if refreshed_execution is None:
-            raise RuntimeError("workflow execution disappeared during reconciliation")
-        if refreshed_execution.status != "active":
-            ready_job_ids = []
-        return WorkflowSchedule(
-            execution=refreshed_execution,
-            nodes=nodes,
-            readyJobIds=ready_job_ids,
-        )
+        return self.workflow_runtime.advance(self.get_workflow(workflow_id))
 
     def add_input(
         self,
