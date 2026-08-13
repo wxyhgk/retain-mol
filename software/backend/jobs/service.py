@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
 import secrets
-import shutil
 import sqlite3
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -55,6 +53,7 @@ from .models import (
 )
 from .repository import JobRepository
 from .job_types import JOB_TYPE_REGISTRY, UnknownJobTypeError
+from .job_workspace import JobWorkspace
 from .workflow_definitions import WorkflowDefinitionManager
 from .workflow_runtime import WorkflowRuntimeCoordinator
 
@@ -72,14 +71,13 @@ class JobService:
     def __init__(self, data_root: str | Path | None = None) -> None:
         self.data_root = Path(data_root) if data_root is not None else DEFAULT_DATA_ROOT
         self.data_root.mkdir(parents=True, exist_ok=True)
-        self.tasks_root = self.data_root / "tasks"
-        self.tasks_root.mkdir(parents=True, exist_ok=True)
+        self.workspace = JobWorkspace(self.data_root)
         self.artifact_storage = ArtifactStorage(self.data_root)
         self.repository = JobRepository(self.data_root / "retainmol.sqlite")
         self.artifact_manager = ArtifactManager(
             self.repository,
             self.artifact_storage,
-            self.tasks_root,
+            self.workspace.root,
         )
         self.input_resolver = JobInputResolver(self.repository)
         self.lifecycle = JobLifecycle(self.repository)
@@ -227,7 +225,7 @@ class JobService:
                 self.repository.create_job(job, job_type_data)
             except sqlite3.IntegrityError:
                 continue
-            self._write_snapshot(job)
+            self.workspace.write_snapshot(job)
             return job
         raise RuntimeError("Unable to allocate a unique job id")
 
@@ -302,7 +300,7 @@ class JobService:
             except sqlite3.IntegrityError:
                 continue
             queued_job = self.get_job(job.job_id)
-            self._write_snapshot(queued_job)
+            self.workspace.write_snapshot(queued_job)
             return queued_job
         raise RuntimeError("Unable to allocate a unique calculation job id")
 
@@ -357,7 +355,7 @@ class JobService:
             except sqlite3.IntegrityError:
                 continue
             created = self.get_job(job.job_id)
-            self._write_snapshot(created)
+            self.workspace.write_snapshot(created)
             return created
         raise RuntimeError("Unable to allocate a unique calculation draft id")
 
@@ -411,7 +409,7 @@ class JobService:
                 f"Job '{job_id}' cannot queue from '{current.status}'"
             )
         queued = self.get_job(job_id)
-        self._write_snapshot(queued)
+        self.workspace.write_snapshot(queued)
         return queued
 
     def get_calculation_spec(self, job_id: str) -> CalculationSpec | None:
@@ -477,7 +475,7 @@ class JobService:
         if not self.repository.update_job_metadata(job_id, metadata, updated_at):
             raise JobNotFoundError(job_id)
         updated = self.get_job(job_id)
-        self._write_snapshot(updated)
+        self.workspace.write_snapshot(updated)
         return updated
 
     def clone_job(self, job_id: str, *, name: str | None = None) -> Job:
@@ -546,7 +544,7 @@ class JobService:
         """Cancel a pending or active run through the persisted state machine."""
         self.lifecycle.cancel(job_id)
         job = self.get_job(job_id)
-        self._write_snapshot(job)
+        self.workspace.write_snapshot(job)
         return job
 
     def read_job_log(
@@ -558,40 +556,7 @@ class JobService:
     ) -> dict[str, Any]:
         """Read an incremental UTF-8 log chunk without exposing task paths."""
         job = self.get_job(job_id)
-        cursor = max(0, int(cursor))
-        limit = min(max(1, int(limit)), 512 * 1024)
-        directory = self.tasks_root / job_id
-        candidates = [
-            directory / "xtb.log",
-            directory / "psi4.log",
-            directory / "psi4-process.log",
-            directory / "irc-forward" / "psi4.log",
-            directory / "irc-backward" / "psi4.log",
-        ]
-        path = next(
-            (candidate for candidate in candidates if candidate.is_file()), None
-        )
-        if path is None:
-            return {
-                "content": "",
-                "cursor": 0,
-                "source": None,
-                "complete": job.status
-                in {"succeeded", "failed", "cancelled", "interrupted"},
-            }
-        size = path.stat().st_size
-        if cursor > size:
-            cursor = 0
-        with path.open("rb") as handle:
-            handle.seek(cursor)
-            chunk = handle.read(limit)
-        return {
-            "content": chunk.decode("utf-8", errors="replace"),
-            "cursor": cursor + len(chunk),
-            "source": path.name,
-            "complete": job.status
-            in {"succeeded", "failed", "cancelled", "interrupted"},
-        }
+        return self.workspace.read_log(job, cursor=cursor, limit=limit)
 
     def delete_job(self, job_id: str) -> None:
         """Delete one non-running, unreferenced job and its private work directory."""
@@ -610,7 +575,7 @@ class JobService:
             )
         if not self.repository.delete_job(job_id):
             raise JobNotFoundError(job_id)
-        shutil.rmtree(self.tasks_root / job_id, ignore_errors=True)
+        self.workspace.remove(job_id)
 
     def add_inputs(self, job_id: str, inputs: Mapping[str, Any]) -> Job:
         """Add a batch of named inputs, as submitted by the jobs HTTP route."""
@@ -768,7 +733,7 @@ class JobService:
         )
         self.repository.add_input(job_input)
         self._touch_job(job_id)
-        self._write_snapshot(self._require_job(job_id))
+        self.workspace.write_snapshot(self._require_job(job_id))
         return job_input
 
     def _assert_legacy_inputs_mutable(self, job_id: str) -> None:
@@ -798,7 +763,7 @@ class JobService:
             run_id=run_id,
         )
         self._touch_job(job_id)
-        self._write_snapshot(self._require_job(job_id))
+        self.workspace.write_snapshot(self._require_job(job_id))
         return artifact
 
     def update_status(
@@ -816,7 +781,7 @@ class JobService:
             error_code=error_code,
         )
         job = self.get_job(job_id)
-        self._write_snapshot(job)
+        self.workspace.write_snapshot(job)
         return job
 
     def claim_queued_job(self, job_id: str) -> Job | None:
@@ -832,7 +797,7 @@ class JobService:
         if claimed is None:
             return None
         job = self.get_job(job_id)
-        self._write_snapshot(job)
+        self.workspace.write_snapshot(job)
         return job
 
     def get_active_job_run(self, job_id: str) -> JobRun:
@@ -902,7 +867,7 @@ class JobService:
         recovered_jobs = self.dispatches.recover_stale()
         for recovered in recovered_jobs:
             self._populate_relations(recovered)
-            self._write_snapshot(recovered)
+            self.workspace.write_snapshot(recovered)
         return recovered_jobs
 
     def renew_dispatch_lease(
@@ -939,15 +904,13 @@ class JobService:
         interrupted = self.lifecycle.interrupt_all_running(reason)
         for recovered in interrupted:
             self._populate_relations(recovered)
-            self._write_snapshot(recovered)
+            self.workspace.write_snapshot(recovered)
         return interrupted
 
     def task_directory(self, job_id: str) -> Path:
         """Return the on-disk directory for a persisted job, creating it if needed."""
         self._require_job(job_id)
-        directory = self.tasks_root / job_id
-        directory.mkdir(parents=True, exist_ok=True)
-        return directory
+        return self.workspace.directory(job_id)
 
     def job_directory(self, job_id: str) -> Path:
         """Alias for task_directory() used by job-oriented callers."""
@@ -985,23 +948,6 @@ class JobService:
     def _touch_job(self, job_id: str) -> None:
         if not self.repository.touch_job(job_id, _now()):
             raise JobNotFoundError(job_id)
-
-    def _write_snapshot(self, job: Job) -> None:
-        directory = self.tasks_root / job.job_id
-        directory.mkdir(parents=True, exist_ok=True)
-        snapshot_path = directory / "job.json"
-        temporary_path = directory / ".job.json.tmp"
-        temporary_path.write_text(
-            json.dumps(
-                job.model_dump(mode="json", by_alias=True),
-                ensure_ascii=True,
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        temporary_path.replace(snapshot_path)
 
 
 def _now() -> datetime:
