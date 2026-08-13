@@ -33,9 +33,9 @@ from .models import (
     WorkflowSchedule,
 )
 from .repository import JobRepository
-from .job_types import JOB_TYPE_REGISTRY, UnknownJobTypeError
 from .job_creation import JobCreationManager
 from .job_operations import JobOperationsManager
+from .job_runtime import JobRuntimeManager
 from .job_workspace import JobWorkspace
 from .molecule_assets import MoleculeAssetManager
 from .workflow_definitions import WorkflowDefinitionManager
@@ -81,6 +81,13 @@ class JobService:
             self.create_calculation_job,
         )
         self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
+        self.job_runtime = JobRuntimeManager(
+            self.repository,
+            self.lifecycle,
+            self.dispatches,
+            self.workspace,
+            self.get_job,
+        )
         self.workflow_definitions = WorkflowDefinitionManager(self.repository, self)
         self.workflow_runtime = WorkflowRuntimeCoordinator(self.repository, self)
 
@@ -199,10 +206,10 @@ class JobService:
         return job_type_data
 
     def list_job_runs(self, job_id: str) -> list[JobRun]:
-        return self.lifecycle.list_runs(job_id)
+        return self.job_runtime.list_runs(job_id)
 
     def get_job_run(self, run_id: str) -> JobRun:
-        return self.lifecycle.get_run(run_id)
+        return self.job_runtime.get_run(run_id)
 
     def list_jobs(self) -> list[Job]:
         jobs = self.repository.list_jobs()
@@ -440,54 +447,21 @@ class JobService:
         error: str | None = None,
         error_code: str | None = None,
     ) -> Job:
-        self.lifecycle.transition(
+        return self.job_runtime.update_status(
             job_id,
             status,
             error=error,
             error_code=error_code,
         )
-        job = self.get_job(job_id)
-        self.workspace.write_snapshot(job)
-        return job
 
     def claim_queued_job(self, job_id: str) -> Job | None:
-        """Atomically claim a queued job for one runner process."""
-        job = self._require_job(job_id)
-        engine, collector_id, collector_version = self._execution_descriptor(job)
-        claimed = self.lifecycle.claim_queued(
-            job_id,
-            engine=engine,
-            collector_id=collector_id,
-            collector_version=collector_version,
-        )
-        if claimed is None:
-            return None
-        job = self.get_job(job_id)
-        self.workspace.write_snapshot(job)
-        return job
+        return self.job_runtime.claim_queued_job(job_id)
 
     def get_active_job_run(self, job_id: str) -> JobRun:
-        return self.lifecycle.get_active_run(job_id)
-
-    def _execution_descriptor(self, job: Job) -> tuple[str, str | None, int | None]:
-        try:
-            handler = JOB_TYPE_REGISTRY.resolve(job.task_type)
-            return (
-                handler.engine_id,
-                handler.collector_id,
-                handler.collector_version,
-            )
-        except UnknownJobTypeError:
-            spec = (
-                self.repository.get_calculation_spec(job.spec_id)
-                if job.spec_id is not None
-                else None
-            )
-            return (spec.engine if spec is not None else "unknown", None, None)
+        return self.job_runtime.get_active_run(job_id)
 
     def request_job_dispatch(self, job_id: str, *, max_inflight: int) -> bool:
-        """Persist an idempotent execution request for one queued job."""
-        return self.dispatches.request(job_id, max_inflight=max_inflight)
+        return self.job_runtime.request_dispatch(job_id, max_inflight=max_inflight)
 
     def claim_next_dispatch(
         self,
@@ -496,21 +470,14 @@ class JobService:
         lease_token: str,
         lease_seconds: float,
     ) -> JobDispatch | None:
-        """Recover stale work, then lease the next queued execution request."""
-        self.recover_stale_executions()
-        return self.dispatches.claim_next(
+        return self.job_runtime.claim_next_dispatch(
             worker_id=worker_id,
             lease_token=lease_token,
             lease_seconds=lease_seconds,
         )
 
     def recover_stale_executions(self) -> list[Job]:
-        """Interrupt expired or legacy running jobs without a live worker lease."""
-        recovered_jobs = self.dispatches.recover_stale()
-        for recovered in recovered_jobs:
-            self._populate_relations(recovered)
-            self.workspace.write_snapshot(recovered)
-        return recovered_jobs
+        return self.job_runtime.recover_stale_executions()
 
     def renew_dispatch_lease(
         self,
@@ -519,7 +486,7 @@ class JobService:
         *,
         lease_seconds: float,
     ) -> bool:
-        return self.dispatches.renew_lease(
+        return self.job_runtime.renew_dispatch_lease(
             job_id,
             lease_token,
             lease_seconds=lease_seconds,
@@ -532,22 +499,17 @@ class JobService:
         *,
         last_error: str | None = None,
     ) -> bool:
-        return self.dispatches.finish(
+        return self.job_runtime.finish_dispatch(
             job_id,
             lease_token,
             last_error=last_error,
         )
 
     def dispatch_counts(self) -> dict[str, int]:
-        return self.dispatches.counts()
+        return self.job_runtime.dispatch_counts()
 
     def interrupt_running_jobs(self, reason: str) -> list[Job]:
-        """Mark runs left active by a previous backend process as interrupted."""
-        interrupted = self.lifecycle.interrupt_all_running(reason)
-        for recovered in interrupted:
-            self._populate_relations(recovered)
-            self.workspace.write_snapshot(recovered)
-        return interrupted
+        return self.job_runtime.interrupt_running_jobs(reason)
 
     def task_directory(self, job_id: str) -> Path:
         """Return the on-disk directory for a persisted job, creating it if needed."""
