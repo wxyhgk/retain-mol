@@ -21,21 +21,12 @@ from .errors import (
     InvalidJobTransitionError,
     JobInUseError,
     JobNotFoundError,
-    MoleculeAssetNotFoundError,
-    MoleculeHeadConflictError,
-    MoleculeRevisionNotFoundError,
 )
 from .input_resolution import JobInputResolver
 from .lifecycle import (
     RETRYABLE_JOB_STATUSES,
     JobLifecycle,
     normalize_job_status,
-)
-from .molecule_canonicalize import (
-    InvalidMoleculeError,
-    molecule_content_hash,
-    molecule_topology_fingerprint,
-    validate_molecule,
 )
 from .models import (
     Artifact,
@@ -54,6 +45,7 @@ from .models import (
 from .repository import JobRepository
 from .job_types import JOB_TYPE_REGISTRY, UnknownJobTypeError
 from .job_workspace import JobWorkspace
+from .molecule_assets import MoleculeAssetManager
 from .workflow_definitions import WorkflowDefinitionManager
 from .workflow_runtime import WorkflowRuntimeCoordinator
 
@@ -79,6 +71,7 @@ class JobService:
             self.artifact_storage,
             self.workspace.root,
         )
+        self.molecule_assets = MoleculeAssetManager(self.repository)
         self.input_resolver = JobInputResolver(self.repository)
         self.lifecycle = JobLifecycle(self.repository)
         self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
@@ -88,43 +81,19 @@ class JobService:
     def create_molecule_asset(
         self, name: str, *, metadata: dict[str, Any] | None = None
     ) -> MoleculeAsset:
-        now = _now()
-        for _ in range(10):
-            asset = MoleculeAsset(
-                assetId=f"mol-{secrets.token_hex(8)}",
-                name=_required_text(name, "name"),
-                schemaVersion=1,
-                headRevisionId=None,
-                version=1,
-                metadata=metadata or {},
-                createdAt=now,
-                updatedAt=now,
-            )
-            try:
-                self.repository.create_molecule_asset(asset)
-            except sqlite3.IntegrityError:
-                continue
-            return asset
-        raise RuntimeError("Unable to allocate a unique molecule asset id")
+        return self.molecule_assets.create(name, metadata=metadata)
 
     def list_molecule_assets(self) -> list[MoleculeAsset]:
-        return self.repository.list_molecule_assets()
+        return self.molecule_assets.list()
 
     def get_molecule_asset(self, asset_id: str) -> MoleculeAsset:
-        asset = self.repository.get_molecule_asset(asset_id)
-        if asset is None:
-            raise MoleculeAssetNotFoundError(asset_id)
-        return asset
+        return self.molecule_assets.get(asset_id)
 
     def get_molecule_revision(self, revision_id: str) -> MoleculeRevision:
-        revision = self.repository.get_molecule_revision(revision_id)
-        if revision is None:
-            raise MoleculeRevisionNotFoundError(revision_id)
-        return revision
+        return self.molecule_assets.get_revision(revision_id)
 
     def list_molecule_revisions(self, asset_id: str) -> list[MoleculeRevision]:
-        self.get_molecule_asset(asset_id)
-        return self.repository.list_molecule_revisions(asset_id)
+        return self.molecule_assets.list_revisions(asset_id)
 
     def save_molecule_revision(
         self,
@@ -138,44 +107,16 @@ class JobService:
         topology_fingerprint: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> MoleculeRevision:
-        """Create one immutable snapshot and CAS-advance the asset head."""
-        self.get_molecule_asset(asset_id)
-        if parent_revision_id != expected_head_revision_id:
-            raise InvalidMoleculeError(
-                "parentRevisionId must match expectedHeadRevisionId"
-            )
-        snapshot = validate_molecule(dict(molecule))
-        computed_content_hash = molecule_content_hash(snapshot)
-        computed_topology_fingerprint = molecule_topology_fingerprint(snapshot)
-        if content_hash is not None and content_hash != computed_content_hash:
-            raise InvalidMoleculeError(
-                "contentHash does not match the molecule snapshot"
-            )
-        if (
-            topology_fingerprint is not None
-            and topology_fingerprint != computed_topology_fingerprint
-        ):
-            raise InvalidMoleculeError(
-                "topologyFingerprint does not match the molecule topology"
-            )
-        revision = MoleculeRevision(
-            revisionId=f"rev-{secrets.token_hex(8)}",
-            schemaVersion=1,
-            assetId=asset_id,
-            parentRevisionId=parent_revision_id,
-            molecule=snapshot,
-            contentHash=computed_content_hash,
-            topologyFingerprint=computed_topology_fingerprint,
-            metadata=metadata or {},
-            createdAt=_now(),
+        return self.molecule_assets.save_revision(
+            asset_id,
+            molecule,
+            parent_revision_id=parent_revision_id,
+            expected_head_revision_id=expected_head_revision_id,
+            expected_version=expected_version,
+            content_hash=content_hash,
+            topology_fingerprint=topology_fingerprint,
+            metadata=metadata,
         )
-        if not self.repository.create_molecule_revision(
-            revision,
-            expected_head_revision_id,
-            expected_version,
-        ):
-            raise MoleculeHeadConflictError(self.get_molecule_asset(asset_id))
-        return revision
 
     def create_job(
         self,
