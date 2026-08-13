@@ -27,6 +27,7 @@ from .models import (
     JobInput,
     JobInputSnapshot,
     JobRun,
+    JobTypeData,
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
@@ -35,6 +36,7 @@ from .models import (
 from .repository import JobRepository
 from .job_creation import JobCreationManager
 from .job_operations import JobOperationsManager
+from .job_queries import JobQueryManager
 from .job_runtime import JobRuntimeManager
 from .job_workspace import JobWorkspace
 from .molecule_assets import MoleculeAssetManager
@@ -58,6 +60,7 @@ class JobService:
         self.workspace = JobWorkspace(self.data_root)
         self.artifact_storage = ArtifactStorage(self.data_root)
         self.repository = JobRepository(self.data_root / "retainmol.sqlite")
+        self.job_queries = JobQueryManager(self.repository)
         self.artifact_manager = ArtifactManager(
             self.repository,
             self.artifact_storage,
@@ -187,23 +190,13 @@ class JobService:
         )
 
     def get_calculation_spec(self, job_id: str) -> CalculationSpec | None:
-        job = self._require_job(job_id)
-        return (
-            self.repository.get_calculation_spec(job.spec_id) if job.spec_id else None
-        )
+        return self.job_queries.get_calculation_spec(job_id)
 
     def get_input_snapshots(self, job_id: str) -> list[JobInputSnapshot]:
-        self._require_job(job_id)
-        return self.repository.list_job_input_snapshots(job_id)
+        return self.job_queries.get_input_snapshots(job_id)
 
     def get_job_type_data(self, job_id: str) -> JobTypeData:
-        self._require_job(job_id)
-        job_type_data = self.repository.get_job_type_data(job_id)
-        if job_type_data is None:
-            raise InvalidJobOperationError(
-                f"Job '{job_id}' has no persisted JobType data"
-            )
-        return job_type_data
+        return self.job_queries.get_job_type_data(job_id)
 
     def list_job_runs(self, job_id: str) -> list[JobRun]:
         return self.job_runtime.list_runs(job_id)
@@ -212,17 +205,10 @@ class JobService:
         return self.job_runtime.get_run(run_id)
 
     def list_jobs(self) -> list[Job]:
-        jobs = self.repository.list_jobs()
-        for job in jobs:
-            self._populate_relations(job)
-        return jobs
+        return self.job_queries.list()
 
     def get_job(self, job_id: str) -> Job:
-        job = self.repository.get_job(job_id)
-        if job is None:
-            raise JobNotFoundError(job_id)
-        self._populate_relations(job)
-        return job
+        return self.job_queries.get(job_id)
 
     def update_job(self, job_id: str, changes: Mapping[str, Any]) -> Job:
         return self.job_operations.update(job_id, changes)
@@ -522,11 +508,6 @@ class JobService:
 
     def _require_job(self, job_id: str) -> Job:
         return self.get_job(job_id)
-
-    def _populate_relations(self, job: Job) -> None:
-        job.inputs = self.repository.get_inputs(job.job_id)
-        job.input_snapshots = self.repository.list_job_input_snapshots(job.job_id)
-        job.artifacts = self.repository.get_artifacts(job.job_id)
 
     def _touch_job(self, job_id: str) -> None:
         if not self.repository.touch_job(job_id, _now()):
