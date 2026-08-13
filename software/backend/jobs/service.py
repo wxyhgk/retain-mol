@@ -15,14 +15,10 @@ from .dispatching import JobDispatchCoordinator
 from .errors import (
     InvalidJobInputError,
     InvalidJobOperationError,
-    JobInUseError,
     JobNotFoundError,
 )
 from .input_resolution import JobInputResolver
-from .lifecycle import (
-    RETRYABLE_JOB_STATUSES,
-    JobLifecycle,
-)
+from .lifecycle import JobLifecycle
 from .models import (
     Artifact,
     CalculationSpec,
@@ -39,6 +35,7 @@ from .models import (
 from .repository import JobRepository
 from .job_types import JOB_TYPE_REGISTRY, UnknownJobTypeError
 from .job_creation import JobCreationManager
+from .job_operations import JobOperationsManager
 from .job_workspace import JobWorkspace
 from .molecule_assets import MoleculeAssetManager
 from .workflow_definitions import WorkflowDefinitionManager
@@ -75,6 +72,14 @@ class JobService:
             self.get_job,
         )
         self.lifecycle = JobLifecycle(self.repository)
+        self.job_operations = JobOperationsManager(
+            self.repository,
+            self.lifecycle,
+            self.workspace,
+            self.input_resolver,
+            self.get_job,
+            self.create_calculation_job,
+        )
         self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
         self.workflow_definitions = WorkflowDefinitionManager(self.repository, self)
         self.workflow_runtime = WorkflowRuntimeCoordinator(self.repository, self)
@@ -213,101 +218,16 @@ class JobService:
         return job
 
     def update_job(self, job_id: str, changes: Mapping[str, Any]) -> Job:
-        """Update mutable presentation metadata without changing frozen inputs."""
-        if not isinstance(changes, Mapping) or not changes:
-            raise ValueError("job update must contain at least one field")
-        unsupported = set(changes) - {"name", "description"}
-        if unsupported:
-            raise ValueError(
-                "unsupported mutable job fields: " + ", ".join(sorted(unsupported))
-            )
-
-        job = self.get_job(job_id)
-        metadata = dict(job.metadata)
-        if "name" in changes:
-            metadata["name"] = _required_text(changes["name"], "name")
-        if "description" in changes:
-            description = changes["description"]
-            if description is None or not str(description).strip():
-                metadata.pop("description", None)
-            else:
-                metadata["description"] = str(description).strip()
-
-        updated_at = _now()
-        if not self.repository.update_job_metadata(job_id, metadata, updated_at):
-            raise JobNotFoundError(job_id)
-        updated = self.get_job(job_id)
-        self.workspace.write_snapshot(updated)
-        return updated
+        return self.job_operations.update(job_id, changes)
 
     def clone_job(self, job_id: str, *, name: str | None = None) -> Job:
-        """Create a fresh queued calculation from an immutable spec and snapshots."""
-        source = self.get_job(job_id)
-        spec = self.get_calculation_spec(job_id)
-        if spec is None:
-            raise InvalidJobOperationError(
-                "only jobs with an immutable calculation specification can be copied"
-            )
-
-        clone_name = (
-            _required_text(name, "name")
-            if name is not None
-            else f"{source.metadata.get('name') or source.task_type} 副本"
-        )
-        metadata = dict(source.metadata)
-        metadata["name"] = clone_name
-        metadata["sourceJobId"] = source.job_id
-        request = metadata.get("request")
-        if isinstance(request, Mapping):
-            metadata["request"] = {**dict(request), "name": clone_name}
-
-        return self.create_calculation_job(
-            spec.kind,
-            spec.engine,
-            spec.payload,
-            inputs=self._copy_input_definitions(source),
-            metadata=metadata,
-        )
+        return self.job_operations.clone(job_id, name=name)
 
     def retry_job(self, job_id: str, *, name: str | None = None) -> Job:
-        """Create a new immutable run from a failed terminal attempt."""
-        source = self.get_job(job_id)
-        if source.status not in RETRYABLE_JOB_STATUSES:
-            raise InvalidJobOperationError(
-                f"job in '{source.status}' state cannot be retried"
-            )
-        spec = self.get_calculation_spec(job_id)
-        if spec is None:
-            raise InvalidJobOperationError(
-                "only jobs with an immutable calculation specification can be retried"
-            )
-
-        retry_name = (
-            _required_text(name, "name")
-            if name is not None
-            else f"{source.metadata.get('name') or source.task_type} 重试"
-        )
-        metadata = dict(source.metadata)
-        metadata["name"] = retry_name
-        request = metadata.get("request")
-        if isinstance(request, Mapping):
-            metadata["request"] = {**dict(request), "name": retry_name}
-
-        return self.create_calculation_job(
-            spec.kind,
-            spec.engine,
-            spec.payload,
-            inputs=self._copy_input_definitions(source),
-            metadata=metadata,
-            supersedes_job_id=source.job_id,
-        )
+        return self.job_operations.retry(job_id, name=name)
 
     def cancel_job(self, job_id: str) -> Job:
-        """Cancel a pending or active run through the persisted state machine."""
-        self.lifecycle.cancel(job_id)
-        job = self.get_job(job_id)
-        self.workspace.write_snapshot(job)
-        return job
+        return self.job_operations.cancel(job_id)
 
     def read_job_log(
         self,
@@ -321,23 +241,7 @@ class JobService:
         return self.workspace.read_log(job, cursor=cursor, limit=limit)
 
     def delete_job(self, job_id: str) -> None:
-        """Delete one non-running, unreferenced job and its private work directory."""
-        job = self.get_job(job_id)
-        if job.status == "running":
-            raise InvalidJobOperationError("running jobs cannot be deleted")
-        workflow_ids = self.repository.list_workflow_ids_for_job(job_id)
-        if workflow_ids:
-            raise JobInUseError(
-                f"job is referenced by workflow(s): {', '.join(workflow_ids)}"
-            )
-        superseding_job_ids = self.repository.list_superseding_job_ids(job_id)
-        if superseding_job_ids:
-            raise JobInUseError(
-                "job is superseded by retry job(s): " + ", ".join(superseding_job_ids)
-            )
-        if not self.repository.delete_job(job_id):
-            raise JobNotFoundError(job_id)
-        self.workspace.remove(job_id)
+        self.job_operations.delete(job_id)
 
     def add_inputs(self, job_id: str, inputs: Mapping[str, Any]) -> Job:
         """Add a batch of named inputs, as submitted by the jobs HTTP route."""
@@ -661,9 +565,6 @@ class JobService:
         job.inputs = self.repository.get_inputs(job.job_id)
         job.input_snapshots = self.repository.list_job_input_snapshots(job.job_id)
         job.artifacts = self.repository.get_artifacts(job.job_id)
-
-    def _copy_input_definitions(self, source: Job) -> dict[str, dict[str, Any]]:
-        return self.input_resolver.copy_definitions(source)
 
     def _touch_job(self, job_id: str) -> None:
         if not self.repository.touch_job(job_id, _now()):
