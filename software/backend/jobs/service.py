@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import os
 import secrets
-import sqlite3
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
-from pydantic import ValidationError
 
 from .artifact_manager import ArtifactManager
 from .artifact_storage import ArtifactStorage
@@ -18,7 +15,6 @@ from .dispatching import JobDispatchCoordinator
 from .errors import (
     InvalidJobInputError,
     InvalidJobOperationError,
-    InvalidJobTransitionError,
     JobInUseError,
     JobNotFoundError,
 )
@@ -26,7 +22,6 @@ from .input_resolution import JobInputResolver
 from .lifecycle import (
     RETRYABLE_JOB_STATUSES,
     JobLifecycle,
-    normalize_job_status,
 )
 from .models import (
     Artifact,
@@ -36,7 +31,6 @@ from .models import (
     JobInput,
     JobInputSnapshot,
     JobRun,
-    JobTypeData,
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
@@ -44,6 +38,7 @@ from .models import (
 )
 from .repository import JobRepository
 from .job_types import JOB_TYPE_REGISTRY, UnknownJobTypeError
+from .job_creation import JobCreationManager
 from .job_workspace import JobWorkspace
 from .molecule_assets import MoleculeAssetManager
 from .workflow_definitions import WorkflowDefinitionManager
@@ -73,6 +68,12 @@ class JobService:
         )
         self.molecule_assets = MoleculeAssetManager(self.repository)
         self.input_resolver = JobInputResolver(self.repository)
+        self.job_creation = JobCreationManager(
+            self.repository,
+            self.input_resolver,
+            self.workspace,
+            self.get_job,
+        )
         self.lifecycle = JobLifecycle(self.repository)
         self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
         self.workflow_definitions = WorkflowDefinitionManager(self.repository, self)
@@ -125,50 +126,7 @@ class JobService:
         metadata: dict[str, Any] | None = None,
         status: str = "queued",
     ) -> Job:
-        if isinstance(task_type, Mapping):
-            definition = dict(task_type)
-            task_type = str(
-                definition.pop(
-                    "taskType",
-                    definition.pop("task_type", definition.pop("type", "job")),
-                )
-            )
-            status = str(definition.pop("status", status))
-            supplied_metadata = definition.pop("metadata", {})
-            if not isinstance(supplied_metadata, dict):
-                raise ValueError("metadata must be an object")
-            metadata = {**supplied_metadata, **definition, **(metadata or {})}
-        task_type = _required_text(task_type, "task_type")
-        status = normalize_job_status(status)
-        if status not in {"created", "queued"}:
-            raise ValueError("new jobs must start in 'created' or 'queued'")
-        now = _now()
-        for _ in range(10):
-            job = Job(
-                job_id=_new_job_id(now),
-                task_type=task_type,
-                status=status,
-                queued_at=now if status == "queued" else None,
-                metadata=metadata or {},
-                created_at=now,
-                updated_at=now,
-            )
-            job_type_data = JobTypeData(
-                jobId=job.job_id,
-                jobType=job.task_type,
-                jobTypeVersion=self._job_type_version(job.task_type),
-                schemaVersion=1,
-                data=_job_type_payload(metadata or {}),
-                createdAt=now,
-                updatedAt=now,
-            )
-            try:
-                self.repository.create_job(job, job_type_data)
-            except sqlite3.IntegrityError:
-                continue
-            self.workspace.write_snapshot(job)
-            return job
-        raise RuntimeError("Unable to allocate a unique job id")
+        return self.job_creation.create_job(task_type, metadata=metadata, status=status)
 
     def create_calculation_job(
         self,
@@ -180,70 +138,14 @@ class JobService:
         metadata: dict[str, Any] | None = None,
         supersedes_job_id: str | None = None,
     ) -> Job:
-        """Atomically create, bind, and queue one immutable calculation run."""
-        now = _now()
-        spec_payload = dict(payload)
-        job_metadata = dict(metadata or {})
-        request_name = spec_payload.pop("name", None)
-        if request_name is not None and "name" not in job_metadata:
-            job_metadata["name"] = _required_text(request_name, "name")
-        input_definitions = dict(inputs or {})
-        if not input_definitions and "structure" in spec_payload:
-            structure = spec_payload.pop("structure")
-            molecule = spec_payload.pop("molecule", None)
-            literal = {"format": "molecule", "structure": structure}
-            if molecule is not None:
-                literal["molecule"] = molecule
-            input_definitions["structure"] = {
-                "sourceKind": "literal",
-                "format": "molecule",
-                "value": literal,
-            }
-        spec = CalculationSpec(
-            spec_id=f"spec-{secrets.token_hex(8)}",
-            schema_version=1,
-            kind=_required_text(kind, "kind"),
-            engine=_required_text(engine, "engine"),
-            payload=spec_payload,
-            created_at=now,
+        return self.job_creation.create_calculation_job(
+            kind,
+            engine,
+            payload,
+            inputs=inputs,
+            metadata=metadata,
+            supersedes_job_id=supersedes_job_id,
         )
-        normalized_job_type_data = self._normalize_job_type_data(
-            spec.kind,
-            {"engine": spec.engine, "parameters": spec.payload},
-        )
-        for _ in range(10):
-            job = Job(
-                job_id=_new_job_id(now),
-                task_type=spec.kind,
-                status="created",
-                spec_id=spec.spec_id,
-                supersedes_job_id=supersedes_job_id,
-                metadata=job_metadata,
-                created_at=now,
-                updated_at=now,
-            )
-            input_snapshots = self._build_input_snapshots(
-                job.job_id, spec.kind, input_definitions, now
-            )
-            job_type_data = JobTypeData(
-                jobId=job.job_id,
-                jobType=job.task_type,
-                jobTypeVersion=self._job_type_version(job.task_type),
-                schemaVersion=spec.schema_version,
-                data=normalized_job_type_data,
-                createdAt=now,
-                updatedAt=now,
-            )
-            try:
-                self.repository.create_queued_job_with_spec_and_snapshots(
-                    job, spec, input_snapshots, now, job_type_data
-                )
-            except sqlite3.IntegrityError:
-                continue
-            queued_job = self.get_job(job.job_id)
-            self.workspace.write_snapshot(queued_job)
-            return queued_job
-        raise RuntimeError("Unable to allocate a unique calculation job id")
 
     def create_calculation_draft(
         self,
@@ -253,52 +155,9 @@ class JobService:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> Job:
-        """Create a persistent calculation draft for later workflow binding."""
-        now = _now()
-        spec_payload = dict(payload)
-        job_metadata = dict(metadata or {})
-        request_name = spec_payload.pop("name", None)
-        if request_name is not None and "name" not in job_metadata:
-            job_metadata["name"] = _required_text(request_name, "name")
-        spec = CalculationSpec(
-            specId=f"spec-{secrets.token_hex(8)}",
-            schemaVersion=1,
-            kind=_required_text(kind, "kind"),
-            engine=_required_text(engine, "engine"),
-            payload=spec_payload,
-            createdAt=now,
+        return self.job_creation.create_calculation_draft(
+            kind, engine, payload, metadata=metadata
         )
-        normalized_job_type_data = self._normalize_job_type_data(
-            spec.kind,
-            {"engine": spec.engine, "parameters": spec.payload},
-        )
-        for _ in range(10):
-            job = Job(
-                jobId=_new_job_id(now),
-                taskType=spec.kind,
-                status="created",
-                specId=spec.spec_id,
-                metadata=job_metadata,
-                createdAt=now,
-                updatedAt=now,
-            )
-            job_type_data = JobTypeData(
-                jobId=job.job_id,
-                jobType=job.task_type,
-                jobTypeVersion=self._job_type_version(job.task_type),
-                schemaVersion=spec.schema_version,
-                data=normalized_job_type_data,
-                createdAt=now,
-                updatedAt=now,
-            )
-            try:
-                self.repository.create_job_with_spec(job, spec, job_type_data)
-            except sqlite3.IntegrityError:
-                continue
-            created = self.get_job(job.job_id)
-            self.workspace.write_snapshot(created)
-            return created
-        raise RuntimeError("Unable to allocate a unique calculation draft id")
 
     def queue_calculation_job(
         self,
@@ -308,50 +167,12 @@ class JobService:
         workflow_id: str | None = None,
         require_active_workflow: bool = False,
     ) -> Job:
-        """Resolve explicit/workflow inputs, freeze them, then queue one draft."""
-        job = self._require_job(job_id)
-        if job.status != "created":
-            raise InvalidJobTransitionError(
-                f"Job '{job_id}' cannot freeze inputs from '{job.status}'"
-            )
-        spec = self.get_calculation_spec(job_id)
-        if spec is None:
-            raise InvalidJobInputError(
-                f"Job '{job_id}' has no calculation specification"
-            )
-        definitions = dict(inputs or {})
-        if workflow_id is not None:
-            for name, definition in self._resolve_workflow_input_definitions(
-                workflow_id, job_id
-            ).items():
-                if name in definitions:
-                    raise InvalidJobInputError(
-                        f"Input '{name}' is supplied explicitly and by workflow"
-                    )
-                definitions[name] = definition
-        now = _now()
-        input_snapshots = self._build_input_snapshots(
-            job_id, spec.kind, definitions, now
-        )
-        if not self.repository.freeze_job_input_snapshots_and_queue(
+        return self.job_creation.queue_calculation_job(
             job_id,
-            input_snapshots,
-            now,
-            active_workflow_id=workflow_id if require_active_workflow else None,
-        ):
-            current = self._require_job(job_id)
-            if workflow_id is not None and require_active_workflow:
-                execution = self.repository.get_workflow_execution(workflow_id)
-                if execution is None or execution.status != "active":
-                    raise InvalidJobOperationError(
-                        f"Workflow '{workflow_id}' is no longer active"
-                    )
-            raise InvalidJobTransitionError(
-                f"Job '{job_id}' cannot queue from '{current.status}'"
-            )
-        queued = self.get_job(job_id)
-        self.workspace.write_snapshot(queued)
-        return queued
+            inputs,
+            workflow_id=workflow_id,
+            require_active_workflow=require_active_workflow,
+        )
 
     def get_calculation_spec(self, job_id: str) -> CalculationSpec | None:
         job = self._require_job(job_id)
@@ -744,30 +565,6 @@ class JobService:
     def get_active_job_run(self, job_id: str) -> JobRun:
         return self.lifecycle.get_active_run(job_id)
 
-    @staticmethod
-    def _job_type_version(job_type: str) -> int:
-        try:
-            return JOB_TYPE_REGISTRY.resolve(job_type).job_type_version
-        except UnknownJobTypeError:
-            return 1
-
-    @staticmethod
-    def _normalize_job_type_data(
-        job_type: str,
-        raw_data: Mapping[str, Any],
-    ) -> dict[str, Any]:
-        """Delegate creation validation to the exact registered JobType."""
-        try:
-            handler = JOB_TYPE_REGISTRY.resolve(job_type)
-        except UnknownJobTypeError:
-            return dict(raw_data)
-        try:
-            return handler.normalize_job_type_data(raw_data)
-        except (ValidationError, TypeError, ValueError) as error:
-            raise InvalidJobInputError(
-                f"Invalid {job_type}@{handler.job_type_version} parameters: {error}"
-            ) from error
-
     def _execution_descriptor(self, job: Job) -> tuple[str, str | None, int | None]:
         try:
             handler = JOB_TYPE_REGISTRY.resolve(job.task_type)
@@ -868,24 +665,6 @@ class JobService:
     def _copy_input_definitions(self, source: Job) -> dict[str, dict[str, Any]]:
         return self.input_resolver.copy_definitions(source)
 
-    def _build_input_snapshots(
-        self,
-        job_id: str,
-        calculation_kind: str,
-        definitions: Mapping[str, Any],
-        created_at: datetime,
-    ) -> list[JobInputSnapshot]:
-        return self.input_resolver.build_snapshots(
-            job_id, calculation_kind, definitions, created_at
-        )
-
-    def _resolve_workflow_input_definitions(
-        self, workflow_id: str, target_job_id: str
-    ) -> dict[str, dict[str, Any]]:
-        return self.input_resolver.resolve_workflow_definitions(
-            workflow_id, target_job_id
-        )
-
     def _touch_job(self, job_id: str) -> None:
         if not self.repository.touch_job(job_id, _now()):
             raise JobNotFoundError(job_id)
@@ -893,15 +672,6 @@ class JobService:
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-def _new_job_id(now: datetime) -> str:
-    return f"{now:%Y%m%d}-{secrets.token_hex(4)}"
-
-
-def _job_type_payload(metadata: Mapping[str, Any]) -> dict[str, Any]:
-    request = metadata.get("request")
-    return dict(request) if isinstance(request, Mapping) else {}
 
 
 def _required_text(value: str, field_name: str) -> str:
