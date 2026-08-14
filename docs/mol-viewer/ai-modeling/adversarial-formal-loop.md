@@ -32,7 +32,8 @@ flowchart LR
 ## 多角色博弈
 
 1. Proposer 只看公开任务并提交 `EditPlan`。
-2. Trusted orchestrator 在 proposer 运行前封存 expected graph、policy、版本和哈希。
+2. Trusted orchestrator 在 proposer 运行前把 expected graph 和 `GeometryPolicySpec` 写入
+   `run-spec.json`，再由不可变 run manifest 封存版本与哈希。
 3. Executor 执行计划，机器检查执行完整性。
 4. Attacker 只能提交可复验挑战，例如锚点移动、键长越界、图变化或碰撞。
 5. Challenge verifier 独立复验，不接受 attacker 自定义阈值。
@@ -60,6 +61,8 @@ flowchart LR
 - 不接受芳香标记、同位素、立体标记、金属配位或断开的多组分结构；
 - xTB 坐标回传只有在可执行文件 SHA-256 与运行时信任配置一致，输入 SDF 与 input XYZ 逐行一致，
   output XYZ 经固定锚点投影可重建最终 SDF，并且行顺序契约与摘要链完整时，才可通过 safety 轴。
+- 固定锚点、刚性组和朝向来自冻结的 run spec；Python `Decimal` 在 Lean 量化前检查原始十进制
+  坐标，Lean 再对整数化后的有限策略求值。刚性组有 64 原子单组上限和 20,000 原子对总预算。
 
 全部尝试继续进入普通 history；只有 evaluator 与三轴验证都显式 PASS，且归档中的目标参考 SDF、
 评估器源码、不可变 run manifest、完整 geometry request 和全部上游证据重新计算摘要后仍一致的运行，

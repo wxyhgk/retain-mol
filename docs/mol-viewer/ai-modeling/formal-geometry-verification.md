@@ -50,31 +50,28 @@ Lean 必须位于 builder dry-run 之后。它不允许绕过现有命令直接�
 ## Policy 设计
 
 policy 不是“证明这个分子绝对正确”，而是由可信编排器声明本轮编辑必须保持的性质。AI
-不能提交或删减 policy：
+不能提交或删减 policy。生产 loop 先把下面的意图写入 `run-spec.json` schema v2，再由
+`run-manifest.json` 的 `runSpecSha256` 绑定；最终 gate 只能从这份冻结文件重建 policy：
 
 ```json
 {
+  "schemaVersion": 1,
   "policyId": "anchored-core-v2",
-  "requireGeometryConstraints": true,
-  "requireAllBondDistances": true,
   "fixedAtomIds": ["B:core", "N:left", "N:right"],
-  "distanceBounds": [
-    {
-      "atomId1": "C:center",
-      "atomId2": "C:tail",
-      "minAngstrom": 1.414,
-      "maxAngstrom": 1.517
-    }
-  ],
   "orientationChecks": [{
     "atomIds": ["B:core", "N:left", "N:right", "C:center"],
     "minAbsVolume6": 100000000
   }],
-  "rigidAtomGroups": []
+  "rigidAtomGroups": [{
+    "atomIds": ["B:core", "N:left", "N:right", "C:center"],
+    "maxSquaredDistanceDelta": 1000
+  }]
 }
 ```
 
-锚点坐标采用精确相等；连续量采用允许误差的闭区间；手性与局部朝向采用有向体积符号。
+全部成键距离区间由可信 gate 根据 expected 快照生成，不进入 AI 可编辑的 spec。锚点坐标采用精确相等；连续量采用允许误差的闭区间；手性与局部朝向采用有向体积符号。
+刚性组按全部原子对检查，单组最多 64 个原子，单次策略最多 20,000 对，防止策略把验证成本
+无界放大。仅有全部两两距离仍允许镜像，因此需要朝向检查表达不可翻转的局部构型。
 未来键角可用点积区间，二面角可用两个平面法向量的点积与叉积符号，均无需直接求反三角函数。
 
 ## 失败反馈
@@ -100,11 +97,26 @@ missing-bond-endpoint(bond-42, atom-99)
 - 受限 JSON 到 Lean 数据的桥接；
 - 结构化 issue，以及删键、改电荷、平行键、空 policy、移动锚点和扭曲刚体反例。
 
-当前 Lean 层只证明最终候选符合编码后的有限 policy，不证明图片识别正确，也不直接证明 builder
+当前 Lean 层只判定最终候选符合编码后的有限 policy，不证明图片识别正确，也不直接证明 builder
 实现正确。第二轮已经增加独立 ExpectedEffect 和最终 artifact bridge，把最终产物、policy、计划、
 执行回执、身份映射和 transport evidence 的 SHA-256 绑定到同一个 verification context。完整流程见
 [最终产物验证 V2](./final-artifact-verification-v2.md)。
 
 运行时还必须分别提供可信 `lake` 启动器与实际 Lean 编译器的 SHA-256。当前自动 gate 的精确
-十进制预检覆盖它实际生成的键长区间；朝向和刚性组虽已能在 Lean policy 中表达，但在进入自动
-PASS 域前仍需补齐量化边界攻击测试。
+十进制预检已经覆盖键长、固定原子、朝向和刚性组，并有小于整数坐标量化步长的攻击测试。
+Lean 使用 `#eval` 对具体请求求值；这里的“形式化”来自受限数据桥、固定源码、可信编译器和
+可复现判定，不等于已经证明任意三维编辑算法正确。
+
+## 当前仍缺少的关键桥梁
+
+`GeometryPolicySpec` 目前可由 benchmark 清单显式提供；旧清单只自动得到固定锚点策略。下一步
+不是继续增加更多全局坐标，而是为高阶 builder command 建立独立的 expected geometry effect：
+
+需要特别注意：当前 `fixedAtomIds` 比较的是 builder 执行后 snapshot 与最终候选，保证后续
+优化/传输不再移动这些原子；它还没有独立证明 builder 执行后的锚点坐标仍等于 run spec 中的
+原始锚点坐标。这个缺口必须由独立 expected effect 补齐，不能用当前 PASS 结论掩盖。
+
+- 模板连接声明新键和可旋转自由度；
+- 并环声明共享边、刚性组和不可镜像的朝向四元组；
+- 刚性片段旋转声明组内距离保持、连接轴和允许变化的二面角；
+- 最终候选只与这些声明比较，不与 AI 自己生成的阈值比较。

@@ -18,6 +18,7 @@ class RunPaths:
     archived_reference: Path
     archived_evaluator: Path
     run_manifest: Path
+    run_spec: Path
     initial: Path
     raw_candidate: Path
     metadata: Path
@@ -84,7 +85,7 @@ def prepare_run(
     trusted_xtb_sha256 = os.environ.get("RETAINMOL_TRUSTED_XTB_SHA256")
     run_spec = run_dir / "run-spec.json"
     run_spec_value = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "caseId": case.case_id,
         "charge": case.charge,
         "multiplicity": case.multiplicity,
@@ -103,6 +104,7 @@ def prepare_run(
             "conformerSeeds": list(conformer_seeds),
             "trustedExecutableSha256": trusted_xtb_sha256,
         },
+        "geometryPolicy": case.geometry_policy_spec.to_json(),
     }
     write_json_atomic(run_spec, run_spec_value)
 
@@ -135,6 +137,7 @@ def prepare_run(
         archived_reference=archived_reference,
         archived_evaluator=archived_evaluator,
         run_manifest=run_manifest,
+        run_spec=run_spec,
         initial=initial,
         raw_candidate=run_dir / ("candidate.raw.sdf" if refine else "candidate.sdf"),
         metadata=run_dir / "candidate.json",

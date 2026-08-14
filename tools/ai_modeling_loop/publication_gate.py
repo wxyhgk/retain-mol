@@ -10,6 +10,7 @@ from .artifact_contracts import (
     sha256_json,
 )
 from .formal_verdict import VerificationEnvelope, VerificationStatus
+from .geometry_policy_spec import load_run_geometry_policy_spec
 from .coordinate_semantics import verify_xtb_coordinate_chain
 from .run_manifest import load_run_manifest, require_manifest_matches_record
 
@@ -181,6 +182,27 @@ def archived_publication_status(
     policy = _mapping(geometry_request.get("policy"), "geometry request policy")
     if sha256_json(policy) != envelope.policy_sha256:
         raise PublicationEvidenceError("geometry policy hash mismatch")
+    if envelope.verifier_version == "retainmol-final-artifact-v3":
+        run_spec_digest = _require_file_hash(
+            run_dir,
+            "run-spec.json",
+            context.get("runSpecSha256"),
+            "context.runSpecSha256",
+        )
+        if run_spec_digest != manifest.get("runSpecSha256"):
+            raise PublicationEvidenceError("geometry policy run spec hash mismatch")
+        spec = load_run_geometry_policy_spec(run_dir / "run-spec.json")
+        expected_policy_fields = {
+            "policyId": spec.policy_id,
+            "fixedAtomIds": list(spec.fixed_atom_ids),
+            "orientationChecks": [item.to_json() for item in spec.orientation_checks],
+            "rigidAtomGroups": [item.to_json() for item in spec.rigid_atom_groups],
+        }
+        for field, expected_value in expected_policy_fields.items():
+            if policy.get(field) != expected_value:
+                raise PublicationEvidenceError(
+                    f"geometry policy field is not derived from frozen run spec: {field}"
+                )
     if sha256_json(evaluation) != context.get("evaluationSha256"):
         raise PublicationEvidenceError("evaluation hash mismatch")
 

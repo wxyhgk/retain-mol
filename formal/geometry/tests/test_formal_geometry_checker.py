@@ -185,7 +185,62 @@ class FormalGeometryCheckerTests(unittest.TestCase):
         }
         result = self.check_payload(payload)
         self.assertEqual(result.status, VerificationStatus.REJECT)
-        self.assertEqual(result.code, "exact-distance-policy-rejected")
+        self.assertEqual(result.code, "exact-geometry-policy-rejected")
+
+    def test_exact_fixed_atom_precheck_catches_sub_quantization_drift(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        payload["candidate"]["atoms"][0]["position"][0] = 0.0004
+
+        result = self.check_payload(payload)
+
+        self.assertEqual(result.status, VerificationStatus.REJECT)
+        self.assertEqual(result.code, "exact-geometry-policy-rejected")
+        self.assertIn("fixed-atom-changed", result.issues)
+
+    def test_exact_rigid_group_precheck_catches_sub_quantization_distortion(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        payload["policy"]["fixedAtomIds"] = []
+        payload["policy"]["orientationChecks"] = []
+        payload["policy"]["rigidAtomGroups"] = [{
+            "atomIds": ["B:core", "N:left"],
+            "maxSquaredDistanceDelta": 1,
+        }]
+        payload["candidate"]["atoms"][1]["position"][0] = -1.4004
+
+        result = self.check_payload(payload)
+
+        self.assertEqual(result.status, VerificationStatus.REJECT)
+        self.assertEqual(result.code, "exact-geometry-policy-rejected")
+        self.assertIn("rigid-group-distorted", result.issues)
+
+    def test_rigid_distances_allow_mirror_but_orientation_rejects_it(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        payload["policy"]["fixedAtomIds"] = []
+        payload["policy"]["orientationChecks"] = []
+        for atom in payload["candidate"]["atoms"]:
+            atom["position"][2] *= -1
+
+        rigid_only = self.check_payload(payload)
+
+        self.assertEqual(rigid_only.status, VerificationStatus.PASS)
+
+        payload["policy"]["orientationChecks"] = copy.deepcopy(
+            self.valid["policy"]["orientationChecks"]
+        )
+        oriented = self.check_payload(payload)
+
+        self.assertEqual(oriented.status, VerificationStatus.REJECT)
+        self.assertIn("orientation-invalid", oriented.issues)
+
+    def test_invalid_expected_orientation_margin_is_indeterminate(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        payload["policy"]["orientationChecks"][0]["minAbsVolume6"] = 10**20
+
+        result = self.check_payload(payload)
+
+        self.assertEqual(result.status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(result.code, "exact-geometry-policy-invalid")
+        self.assertIn("policy-invalid", result.issues)
 
     def test_untrusted_lean_binary_cannot_report_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -16,9 +16,16 @@ from tools.ai_modeling_loop.artifact_contracts import (
     sha256_file,
 )
 from tools.ai_modeling_loop.chemistry import load_sdf, write_sdf
-from tools.ai_modeling_loop.final_artifact_gate import verify_final_artifact
+from tools.ai_modeling_loop.final_artifact_gate import (
+    build_geometry_request,
+    verify_final_artifact,
+)
 from tools.ai_modeling_loop.formal_geometry_checker import FormalGeometryCheckResult
 from tools.ai_modeling_loop.formal_verdict import VerificationStatus
+from tools.ai_modeling_loop.geometry_policy_spec import (
+    GeometryPolicySpec,
+    RigidGroupSpec,
+)
 
 
 class FinalArtifactGateTests(unittest.TestCase):
@@ -175,10 +182,87 @@ class FinalArtifactGateTests(unittest.TestCase):
         )
         envelope = self.verify()
         self.assertEqual(envelope.status, VerificationStatus.PASS)
+        self.assertEqual(envelope.verifier_version, "retainmol-final-artifact-v2")
         self.assertEqual(envelope.publication_status(self.out / "final-snapshot.json"), VerificationStatus.PASS)
         contexts = {axis.verification_context_sha256 for axis in envelope.axes.values()}
         self.assertEqual(contexts, {envelope.verification_context_sha256})
         self.assertTrue((self.out / "geometry-request.json").exists())
+
+    def test_geometry_request_uses_only_the_trusted_policy_spec(self) -> None:
+        snapshot = json.loads(self.snapshot.read_text())
+        spec = GeometryPolicySpec(
+            policy_id="case-a-core-v1",
+            fixed_atom_ids=("C", "O"),
+            orientation_checks=(),
+            rigid_atom_groups=(RigidGroupSpec(
+                atom_ids=("C", "O"),
+                max_squared_distance_delta=25,
+            ),),
+        )
+
+        request = build_geometry_request(snapshot, snapshot, spec)
+
+        self.assertEqual(request["policy"]["policyId"], "case-a-core-v1")
+        self.assertEqual(request["policy"]["fixedAtomIds"], ["C", "O"])
+        self.assertEqual(request["policy"]["orientationChecks"], [])
+        self.assertEqual(request["policy"]["rigidAtomGroups"], [{
+            "atomIds": ["C", "O"],
+            "maxSquaredDistanceDelta": 25,
+        }])
+
+    @patch("tools.ai_modeling_loop.final_artifact_gate.check_formal_geometry")
+    def test_final_gate_freezes_geometry_policy_from_run_spec(self, check) -> None:
+        check.return_value = FormalGeometryCheckResult(
+            VerificationStatus.PASS,
+            "geometry-policy-satisfied",
+        )
+        run_spec = self.root / "run-spec.json"
+        run_spec.write_text(json.dumps({
+            "schemaVersion": 2,
+            "caseId": "case-a",
+            "charge": 0,
+            "multiplicity": 1,
+            "anchors": [
+                {
+                    "id": "C",
+                    "referenceAtomIndex": 1,
+                    "symbol": "C",
+                    "position": {"x": 0, "y": 0, "z": 0},
+                },
+                {
+                    "id": "O",
+                    "referenceAtomIndex": 2,
+                    "symbol": "O",
+                    "position": {"x": 1.2, "y": 0, "z": 0},
+                },
+            ],
+            "refinement": {
+                "enabled": False,
+                "xtb": None,
+                "conformerSeeds": [],
+                "trustedExecutableSha256": None,
+            },
+            "geometryPolicy": {
+                "schemaVersion": 1,
+                "policyId": "case-a-core-v1",
+                "fixedAtomIds": ["C", "O"],
+                "orientationChecks": [],
+                "rigidAtomGroups": [{
+                    "atomIds": ["C", "O"],
+                    "maxSquaredDistanceDelta": 25,
+                }],
+            },
+        }), encoding="utf-8")
+
+        envelope = self.verify(run_spec_path=run_spec)
+
+        self.assertEqual(envelope.status, VerificationStatus.PASS)
+        self.assertEqual(envelope.verifier_version, "retainmol-final-artifact-v3")
+        request = json.loads((self.out / "geometry-request.json").read_text())
+        self.assertEqual(request["policy"]["policyId"], "case-a-core-v1")
+        self.assertEqual(request["policy"]["fixedAtomIds"], ["C", "O"])
+        context = json.loads((self.out / "verification-context.json").read_text())
+        self.assertEqual(context["runSpecSha256"], self.sha256(run_spec))
 
     @patch("tools.ai_modeling_loop.final_artifact_gate.check_formal_geometry")
     def test_direct_output_must_match_executor_receipt(self, check) -> None:

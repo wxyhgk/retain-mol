@@ -142,10 +142,18 @@ private def bondHasDistanceBound
 private def orientationCheckIsWellFormed
     (expected : MoleculeSnapshot)
     (check : OrientationCheck) : Bool :=
-  allUnique [check.atomId1, check.atomId2, check.atomId3, check.atomId4] &&
+  let atomIds := [check.atomId1, check.atomId2, check.atomId3, check.atomId4]
+  let expectedHasMargin :=
+    match findAtom expected check.atomId1, findAtom expected check.atomId2,
+        findAtom expected check.atomId3, findAtom expected check.atomId4 with
+    | some atom1, some atom2, some atom3, some atom4 =>
+        decide (check.minAbsVolume6 ≤
+          (Vec3.signedVolume6 atom1.position atom2.position atom3.position atom4.position).natAbs)
+    | _, _, _, _ => false
+  allUnique atomIds &&
     decide (0 < check.minAbsVolume6) &&
-    [check.atomId1, check.atomId2, check.atomId3, check.atomId4].all
-      (fun atomId => (findAtom expected atomId).isSome)
+    atomIds.all (fun atomId => (findAtom expected atomId).isSome) &&
+    expectedHasMargin
 
 private def rigidAtomGroupIsWellFormed
     (expected : MoleculeSnapshot)

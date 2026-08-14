@@ -17,6 +17,7 @@ from .artifact_contracts import (
 from .execution_evidence import validate_execution_evidence
 from .coordinate_semantics import CoordinateSemanticError, verify_xtb_coordinate_chain
 from .formal_geometry_checker import check_formal_geometry
+from .geometry_policy_spec import GeometryPolicySpec, load_run_geometry_policy_spec
 from .formal_verdict import (
     AxisVerdict,
     VerificationEnvelope,
@@ -24,8 +25,10 @@ from .formal_verdict import (
 )
 
 
-VERIFIER_VERSION = "retainmol-final-artifact-v2"
-GEOMETRY_POLICY_VERSION = "covalent-distance-envelope-v1"
+VERIFIER_VERSION = "retainmol-final-artifact-v3"
+GEOMETRY_POLICY_VERSION = "trusted-geometry-intent-v2"
+LEGACY_VERIFIER_VERSION = "retainmol-final-artifact-v2"
+LEGACY_GEOMETRY_POLICY_VERSION = "covalent-distance-envelope-v1"
 XTB_ROW_ORDER_CONTRACT = "xtb-preserves-input-row-order-v1"
 XTB_POST_PROCESSING = "fixed-anchor-frame-projection-v1"
 
@@ -60,6 +63,7 @@ def _distance(left: Mapping[str, Any], right: Mapping[str, Any]) -> float:
 def build_geometry_request(
     expected_snapshot: Mapping[str, Any],
     candidate_snapshot: Mapping[str, Any],
+    geometry_policy_spec: GeometryPolicySpec | None = None,
 ) -> dict[str, Any]:
     expected_molecule = expected_snapshot["molecule"]
     candidate_molecule = candidate_snapshot["molecule"]
@@ -75,6 +79,21 @@ def build_geometry_request(
             "minAngstrom": max(0.4, distance * 0.65),
             "maxAngstrom": min(3.5, max(distance * 1.35, distance + 0.15)),
         })
+    fixed_atom_ids = (
+        list(geometry_policy_spec.fixed_atom_ids)
+        if geometry_policy_spec is not None
+        else []
+    )
+    orientation_checks = (
+        [item.to_json() for item in geometry_policy_spec.orientation_checks]
+        if geometry_policy_spec is not None
+        else []
+    )
+    rigid_atom_groups = (
+        [item.to_json() for item in geometry_policy_spec.rigid_atom_groups]
+        if geometry_policy_spec is not None
+        else []
+    )
     return {
         "schemaVersion": 2,
         "coordinateScale": 1000,
@@ -87,13 +106,17 @@ def build_geometry_request(
             "bonds": [_geometry_bond(bond) for bond in candidate_molecule["bonds"]],
         },
         "policy": {
-            "policyId": GEOMETRY_POLICY_VERSION,
+            "policyId": (
+                geometry_policy_spec.policy_id
+                if geometry_policy_spec is not None
+                else LEGACY_GEOMETRY_POLICY_VERSION
+            ),
             "requireGeometryConstraints": True,
             "requireAllBondDistances": True,
-            "fixedAtomIds": [],
+            "fixedAtomIds": fixed_atom_ids,
             "distanceBounds": bounds,
-            "orientationChecks": [],
-            "rigidAtomGroups": [],
+            "orientationChecks": orientation_checks,
+            "rigidAtomGroups": rigid_atom_groups,
         },
     }
 
@@ -259,6 +282,7 @@ def verify_final_artifact(
     target_reference_path: Path | None = None,
     target_evaluator_path: Path | None = None,
     run_manifest_path: Path | None = None,
+    run_spec_path: Path | None = None,
 ) -> VerificationEnvelope:
     output_dir.mkdir(parents=True, exist_ok=True)
     final_snapshot_path = output_dir / "final-snapshot.json"
@@ -284,10 +308,29 @@ def verify_final_artifact(
         else "unavailable"
     )
 
-    geometry_request: Mapping[str, Any] = {"policy": {"policyId": GEOMETRY_POLICY_VERSION}}
+    geometry_policy_spec = (
+        load_run_geometry_policy_spec(run_spec_path)
+        if run_spec_path is not None
+        else None
+    )
+    verifier_version = (
+        VERIFIER_VERSION if geometry_policy_spec is not None else LEGACY_VERIFIER_VERSION
+    )
+    geometry_policy_version = (
+        GEOMETRY_POLICY_VERSION
+        if geometry_policy_spec is not None
+        else LEGACY_GEOMETRY_POLICY_VERSION
+    )
+    geometry_request: Mapping[str, Any] = {
+        "policy": {"policyId": geometry_policy_version},
+    }
     if bridge.final_snapshot is not None:
         expected_snapshot = load_strict_json(builder_snapshot_path)
-        geometry_request = build_geometry_request(expected_snapshot, bridge.final_snapshot)
+        geometry_request = build_geometry_request(
+            expected_snapshot,
+            bridge.final_snapshot,
+            geometry_policy_spec,
+        )
         geometry_request_path.write_bytes(canonical_json_bytes(geometry_request) + b"\n")
 
     policy_sha256 = sha256_json(geometry_request["policy"])
@@ -324,8 +367,8 @@ def verify_final_artifact(
         formal = check_formal_geometry(geometry_request_path)
     context = {
         "schemaVersion": 1,
-        "verifierVersion": VERIFIER_VERSION,
-        "geometryPolicyVersion": GEOMETRY_POLICY_VERSION,
+        "verifierVersion": verifier_version,
+        "geometryPolicyVersion": geometry_policy_version,
         "builderSnapshotSha256": sha256_file(builder_snapshot_path),
         "identityMapSha256": sha256_file(identity_map_path),
         "finalSdfSha256": sha256_file(final_sdf_path),
@@ -340,6 +383,11 @@ def verify_final_artifact(
         ),
         "geometryRequestSha256": (
             sha256_file(geometry_request_path) if geometry_request_path.is_file() else None
+        ),
+        "runSpecSha256": (
+            sha256_file(run_spec_path)
+            if run_spec_path is not None and run_spec_path.is_file()
+            else None
         ),
         "transportEvidence": dict(transport_evidence or {"kind": "direct-no-refinement"}),
         "coordinateTransportReceiptSha256": coordinate_receipt_sha256,
@@ -433,7 +481,7 @@ def verify_final_artifact(
         policy_sha256=policy_sha256,
         expected_graph_sha256=sha256_file(builder_snapshot_path),
         enforced_plan_sha256=enforced_plan_sha256,
-        verifier_version=VERIFIER_VERSION,
+        verifier_version=verifier_version,
         verification_context_sha256=context_sha256,
         axes={"execution": execution, "safety": safety, "target": target},
     )

@@ -146,6 +146,7 @@ def verify_completed_run(
             target_reference_path=paths.archived_reference,
             target_evaluator_path=paths.archived_evaluator,
             run_manifest_path=paths.run_manifest,
+            run_spec_path=paths.run_spec,
         )
         if sha256_file(paths.run_manifest) != manifest_sha256:
             raise ValueError("run manifest changed during final verification")

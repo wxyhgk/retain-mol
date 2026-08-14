@@ -624,10 +624,20 @@ class LoopContractsTest(unittest.TestCase):
 
             frozen = run_dir / "inputs" / "initial-molecule.json"
             manifest = json.loads((run_dir / "run-manifest.json").read_text())
+            run_spec = json.loads((run_dir / "run-spec.json").read_text())
             self.assertEqual(observed_initial, [frozen])
             self.assertEqual(frozen.read_bytes(), original)
             self.assertEqual(manifest["schemaVersion"], 2)
             self.assertEqual(manifest["initialMoleculeSha256"], hashlib.sha256(original).hexdigest())
+            self.assertEqual(run_spec["schemaVersion"], 2)
+            self.assertEqual(
+                run_spec["geometryPolicy"],
+                case.geometry_policy_spec.to_json(),
+            )
+            self.assertEqual(
+                manifest["runSpecSha256"],
+                hashlib.sha256((run_dir / "run-spec.json").read_bytes()).hexdigest(),
+            )
 
             malformed = dict(manifest)
             malformed["initialMoleculeSha256"] = 123
