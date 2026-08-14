@@ -132,6 +132,7 @@ def verify_completed_run(
             execution_receipt_path=paths.execution_receipt,
             expected_effect_path=paths.expected_effect,
             enforced_plan_path=paths.enforced_plan,
+            initial_molecule_path=paths.initial,
             evaluation=result.to_json(),
             output_dir=paths.run_dir / "verification",
             coordinate_transport_receipt_path=paths.coordinate_transport_receipt,

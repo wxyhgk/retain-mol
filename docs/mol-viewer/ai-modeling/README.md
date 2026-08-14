@@ -42,6 +42,8 @@
 [对抗式形式化验证循环](./adversarial-formal-loop.md)。最终 SDF、稳定 ID、ExpectedEffect 与
 三轴发布门的完整证据链见[最终产物验证 V2](./final-artifact-verification-v2.md)。基础命令回执
 如何进入 Lean，以及为何仍需受信几何意图编译器，见[Lean 命令语义](./lean-command-semantics.md)。
+V4 严格意图桥、证据链以及下一代局部端口/刚性关节方法见
+[GeometryIntent：让 AI 用关系构造三维分子](./lean-geometry-intent.md)。
 
 ## 公共入口
 

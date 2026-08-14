@@ -1,4 +1,4 @@
-# AI 建模最终产物验证 V2
+# AI 建模最终产物验证 V2-V4
 
 ## 为什么要有第二条独立链
 
@@ -110,8 +110,9 @@ export RETAINMOL_TRUSTED_LEAN_SHA256="$(shasum -a 256 "$(lake env which lean)" |
 ```
 
 这些值属于部署信任策略，不写入仓库。缺失或不匹配时，Lean 轴必须是 `INDETERMINATE`。
-当前最终产物 gate 只生成键长距离区间；它还会以十进制精确运算预检距离，避免坐标整数化把越界值
-舍入成通过。朝向和刚性组扩展到自动 gate 前，仍需增加相同强度的区间语义与攻击测试。
+V4 最终产物 gate 不再由 Python 生成调用方可见的距离阈值。它从 ExpectedEffect、enforced plan、
+冻结初始结构和 builder 快照生成 GeometryIntent，Lean 根据 expected 编译成键距离、保护锚点、
+朝向和刚性约束。源快照在 0.001 Å 量化前做精确绑定，因此亚量化差异不能伪装成同一输入。
 
 ## 归档规则
 
@@ -132,7 +133,8 @@ Lean 证明的是“给定有限整数化 policy，候选满足这些不变量�
 二维图片识别无误，也不证明当前七种命令之外的高阶编辑语义。扩域必须先增加独立语义、反例和
 攻击测试，再允许进入 PASS。
 
-当前仍未闭合的信任边界包括：执行回执除输入摘要外的完整 V3 字段绑定、Lean proof mode 与源码
-闭包认证、以及 publication gate 对 verdict 生成来源和 case metadata 的可重放认证。它们完成前，
+V4 publication gate 会从归档证据重建 GeometryIntent，并核对 run spec、manifest 和完整请求摘要。
+当前仍未闭合的信任边界包括：runtime receipt 投影与 Lean 基础命令的逐字段等价定理、Lean proof
+mode 与源码闭包认证，以及高阶模板/并环/关节命令的关系语义。它们完成前，
 不能把现有 PASS 宣称为“AI 已经理解三维结构”或“结果具备完整数学正确性”；现有结论仅覆盖文档
 明确列出的离散几何与证据一致性不变量。

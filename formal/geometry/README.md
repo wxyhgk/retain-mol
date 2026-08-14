@@ -26,29 +26,31 @@ AI 负责提出候选，数值算法负责生成或优化坐标，Lean 负责回
 EditPlan -> schema -> builder dry-run -> 候选 Molecule
                                       |
                                       v
-                   trusted orchestrator 冻结 GeometryPolicySpec
+       ExpectedEffect 冻结 before / commands / expected
                                       |
                                       v
-                    Decimal 预检 + Lean 内核求值
+             生产 gate 生成严格 GeometryIntent schema v3
+                                      |
+                                      v
+                  Lean 编译 policy + 内核求值
                                       |
                            通过 / 拒绝并重新规划
 ```
 
-当前 schema v2 只接受固定 `coordinateScale = 1000`，即 1 个整数单位代表 0.001 Å。
-请求中的 scale、policy 和 Lean 源码都不能由 AI 提交。生产 loop 在运行前把策略写入
-`run-spec.json` schema v2，并由 `run-manifest.json` 的 `runSpecSha256` 冻结。距离使用平方距离，避免平方根；朝向
-使用四点行列式。十进制坐标采用明确的 half-even 量化，物理距离区间向内取整，避免把声明
-范围偷偷放宽。
+当前生产 schema v3 只接受固定 `coordinateScale = 1000`，即 1 个整数单位代表 0.001 Å。
+请求中的 scale、policy、距离阈值和 Lean 源码都不能由 AI 提交。Python 只做严格结构投影和
+证据绑定：原始冻结分子必须精确等于 `ExpectedEffect.baseSnapshot`，builder 快照必须精确等于
+`ExpectedEffect.finalSnapshot`；比较发生在坐标量化之前，0.001 Å 以下的伪造也不能被舍入隐藏。
 
-验证分成两道门：Python `Decimal` 预检先检查原始十进制坐标，阻止小于 0.001 Å 的变化在
-整数化时消失；之后 Lean 对量化后的有限请求执行 `#eval`。两道门消费同一份私有临时快照，
-并记录请求 SHA-256；调用方提供冻结哈希时，任何不一致都返回 `INDETERMINATE`。这是一种可
-复现的策略判定，不应描述成对任意分子或任意刚体变换的通用数学证明。
+生产 gate 将七种 ExpectedEffect V1 基础命令连同稳定 `commandId` 投影成 GeometryIntent。
+Lean 再从完整 expected 图编译全部成键距离约束、0.4 Å 成键硬下限、0.5 Å 非键碰撞下限、
+朝向裕量和固定刚性容差。调用方只能声明保护锚点及原子组，不能声明数值阈值。严格 JSON
+桥还限制命令数量、原子数量、坐标整数范围、电荷和自由基范围，避免把无界成本传给 Lean。
 
-两道门当前取交集：原始十进制检查和 half-even 量化后的 Lean 检查必须同时通过。在 0.4 Å
-或 0.5 Å 硬下限附近，两种数值表示可能落在边界两侧，因此会保守拒绝少量边界构型，但不会
-放行任何一层已经拒绝的构型。后续若要消除这种假拒绝，应让 Python 与 Lean 共用同一套精确
-有理数表示，而不是放宽硬下限。
+Lean 对受限有限请求执行 `#eval`，生产层记录完整请求 SHA-256。V4 发布回放会从归档的初始
+分子、ExpectedEffect、enforced plan、builder 快照、最终快照和可选 run spec 重新生成同一个
+GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一种可复现的有限策略判定，不应
+描述成对任意分子、任意刚体变换或数值优化器的通用数学证明。
 
 已经形式化的内容：
 
@@ -102,7 +104,8 @@ npm run verify:formal-geometry
 4. 把 `examples/anchored-core.json` 安全转换成 Lean 数据；
 5. 由 Lean 内核检查生成的候选策略。
 
-JSON 转换器不接收任何原始 Lean 源码，只序列化 expected、candidate 和 trusted policy。
+JSON 转换器不接收任何原始 Lean 源码，只序列化 before、identified commands、expected、
+系统拥有的原子组和 candidate。
 它拒绝重复键、未知字段、缺失字段和超限数据，避免拼错字段后静默少做检查。当前全原子对
 碰撞枚举把单次请求限制为 316 个原子，使无序原子对保持在 50,000 的证明预算内；更大分子
 必须先采用可证明完备的空间分桶，而不是静默跳过原子对。
@@ -118,23 +121,25 @@ formal/geometry/
 │   ├── Molecule.lean      # 分子快照与通用图不变量
 │   ├── Command.lean       # 基础命令、精确回执轨迹与 soundness 定理
 │   ├── Certificate.lean   # policy、结构化问题与几何判定
-│   ├── Intent.lean        # 受信 GeometryIntent V1 policy 编译器
+│   ├── Intent.lean        # GeometryIntent V1 policy 编译器与 soundness
 │   └── Examples.lean      # 正例与反例
 ├── examples/
 │   ├── anchored-core.json # B/N 固定母核示例
-│   └── primitive-command-trace.json # 基础命令回执示例
+│   ├── primitive-command-trace.json # 基础命令回执示例
+│   └── primitive-intent.json # 严格意图桥示例
 ├── tools/
 │   ├── json_to_lean.py    # 最终几何策略桥接器
-│   └── command_trace_to_lean.py # 命令回执桥接器
+│   ├── command_trace_to_lean.py # 命令回执桥接器
+│   └── intent_json_to_lean.py # 生产 GeometryIntent 严格桥
 └── verify.sh
 ```
 
 ## 后续扩展顺序
 
-1. 证明 runtime receipt projection 与 Lean 基础命令轨迹一致；
-2. 为 `GeometryIntent V1` 增加严格 JSON bridge，并由生产编排器而非 AI 调用；
-3. 从高阶 builder command 独立生成刚性组、朝向与自由度意图；
-4. 补充配位、同位素和立体语义的 canonical projection；
+1. 证明 runtime receipt projection 与 Lean 基础命令轨迹逐字段等价；
+2. 建立高阶关系内核：局部端口坐标系、刚性区域、可旋转关节和 `mate` 关系；
+3. 从模板连接、并环和刚性片段旋转命令生成关系意图，不展开成 AI 世界坐标；
+4. 补充配位、同位素和完整立体语义的 canonical projection；
 5. 用点积和有符号三重积增加键角、二面角 postcondition；
 6. 为大于 316 原子的结构实现可证明完备的空间分桶碰撞枚举；
 7. 把结构化失败映射为局部重规划提示。

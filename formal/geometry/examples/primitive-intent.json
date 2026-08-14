@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 3,
+  "projectionVersion": "expected-effect-v1-to-lean-v1",
+  "coordinateScale": 1000,
+  "intent": {
+    "before": {
+      "atoms": [
+        {"atomId": "C1", "symbol": "C", "positionUnits": [0, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+        {"atomId": "H1", "symbol": "H", "positionUnits": [1000, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false}
+      ],
+      "bonds": [
+        {"bondId": "C1-H1", "atomId1": "C1", "atomId2": "H1", "order": "single"}
+      ]
+    },
+    "commands": [
+      {"commandId": "move-h1", "kind": "atomMove", "atomId": "H1", "position": [1100, 0, 0]}
+    ],
+    "expected": {
+      "atoms": [
+        {"atomId": "C1", "symbol": "C", "positionUnits": [0, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+        {"atomId": "H1", "symbol": "H", "positionUnits": [1100, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false}
+      ],
+      "bonds": [
+        {"bondId": "C1-H1", "atomId1": "C1", "atomId2": "H1", "order": "single"}
+      ]
+    },
+    "protectedAnchorIds": ["C1"],
+    "orientationAtomGroups": [],
+    "rigidAtomGroups": []
+  },
+  "candidate": {
+    "atoms": [
+      {"atomId": "C1", "symbol": "C", "positionUnits": [0, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "H1", "symbol": "H", "positionUnits": [1100, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false}
+    ],
+    "bonds": [
+      {"bondId": "C1-H1", "atomId1": "C1", "atomId2": "H1", "order": "single"}
+    ]
+  }
+}

@@ -47,31 +47,37 @@ flowchart TD
 Lean 必须位于 builder dry-run 之后。它不允许绕过现有命令直接制造 SDF，也不把通用价态
 判断复制成另一套规则。
 
-## Policy 设计
+## 意图与 Policy 分层
 
-policy 不是“证明这个分子绝对正确”，而是由可信编排器声明本轮编辑必须保持的性质。AI
-不能提交或删减 policy。生产 loop 先把下面的意图写入 `run-spec.json` schema v2，再由
-`run-manifest.json` 的 `runSpecSha256` 绑定；最终 gate 只能从这份冻结文件重建 policy：
+policy 不是“证明这个分子绝对正确”，而是 Lean 从可信 GeometryIntent 编译出的有限检查条件。
+AI 不能提交或删减 policy，也不能给距离、刚性和朝向阈值。生产 loop 先冻结初始结构、
+ExpectedEffect、enforced plan 和可选 `run-spec.json`，再生成 schema v3 GeometryIntent：
 
 ```json
 {
-  "schemaVersion": 1,
-  "policyId": "anchored-core-v2",
-  "fixedAtomIds": ["B:core", "N:left", "N:right"],
-  "orientationChecks": [{
-    "atomIds": ["B:core", "N:left", "N:right", "C:center"],
-    "minAbsVolume6": 100000000
-  }],
-  "rigidAtomGroups": [{
-    "atomIds": ["B:core", "N:left", "N:right", "C:center"],
-    "maxSquaredDistanceDelta": 1000
-  }]
+  "schemaVersion": 3,
+  "projectionVersion": "expected-effect-v1-to-lean-v1",
+  "coordinateScale": 1000,
+  "intent": {
+    "before": { "atoms": [], "bonds": [] },
+    "commands": [{ "commandId": "move-1", "kind": "atomMove" }],
+    "expected": { "atoms": [], "bonds": [] },
+    "protectedAnchorIds": ["B:core", "N:left", "N:right"],
+    "orientationAtomGroups": [{
+      "atomIds": ["B:core", "N:left", "N:right", "C:center"]
+    }],
+    "rigidAtomGroups": [{
+      "atomIds": ["B:core", "N:left", "N:right", "C:center"]
+    }]
+  },
+  "candidate": { "atoms": [], "bonds": [] }
 }
 ```
 
-全部成键距离区间由可信 gate 根据 expected 快照生成，不进入 AI 可编辑的 spec。锚点坐标采用精确相等；连续量采用允许误差的闭区间；手性与局部朝向采用有向体积符号。
-刚性组按全部原子对检查，单组最多 64 个原子，单次策略最多 20,000 对，防止策略把验证成本
-无界放大。仅有全部两两距离仍允许镜像，因此需要朝向检查表达不可翻转的局部构型。
+完整命令和原子字段见严格 schema；示例省略了内容。全部成键距离区间由 Lean 根据 expected
+快照生成。锚点坐标采用精确相等；连续量采用系统固定的闭区间；手性与局部朝向采用有向
+体积符号。刚性组按全部原子对检查，桥接器限制列表大小，防止把验证成本无界放大。仅有
+全部两两距离仍允许镜像，因此需要朝向检查表达不可翻转的局部构型。
 未来键角可用点积区间，二面角可用两个平面法向量的点积与叉积符号，均无需直接求反三角函数。
 
 ## 失败反馈
@@ -102,11 +108,10 @@ missing-bond-endpoint(bond-42, atom-99)
 执行回执、身份映射和 transport evidence 的 SHA-256 绑定到同一个 verification context。完整流程见
 [最终产物验证 V2](./final-artifact-verification-v2.md)。
 
-形式化层现已增加 `GeometryIntent V1`。AI 只表达起始快照、基础命令、完整预期快照和保护
-锚点，不能直接给 policy 或阈值；Lean 编译器负责生成 policy，并证明成功编译绑定了精确命令
-结果、锚点完整身份与坐标保持、中间命令不触碰锚点，以及策略自验证。外部严格 bridge
-尚未完成，因此生产 gate 仍使用冻结的
-`GeometryPolicySpec`，不能把 V1 形式定理冒充成已接通的运行时能力。
+形式化层现已增加 `GeometryIntent V1`，并接入 V4 生产 gate。受信编排器表达起始快照、带稳定
+ID 的基础命令、完整预期快照和系统约束原子组；Lean 编译器负责生成 policy，并证明成功编译
+绑定了精确命令结果、锚点完整身份与坐标保持、中间命令不触碰锚点，以及策略自验证。
+发布时会用归档证据完整重建请求，不能只相信旧 verdict。
 
 运行时还必须分别提供可信 `lake` 启动器与实际 Lean 编译器的 SHA-256。当前自动 gate 的精确
 十进制预检已经覆盖键长、固定原子、朝向和刚性组，并有小于整数坐标量化步长的攻击测试。
@@ -124,12 +129,9 @@ Lean 使用 `#eval` 对具体请求求值；这里的“形式化”来自受限
 
 ## 当前仍缺少的关键桥梁
 
-`GeometryPolicySpec` 目前可由 benchmark 清单显式提供；旧清单只自动得到固定锚点策略。下一步
-不是继续增加更多全局坐标，而是为高阶 builder command 建立独立的 expected geometry effect：
-
-需要特别注意：当前 `fixedAtomIds` 比较的是 builder 执行后 snapshot 与最终候选，保证后续
-优化/传输不再移动这些原子；它还没有独立证明 builder 执行后的锚点坐标仍等于 run spec 中的
-原始锚点坐标。这个缺口必须由独立 expected effect 补齐，不能用当前 PASS 结论掩盖。
+V4 已把保护锚点同时约束在 `before -> expected` 和 `expected -> candidate` 两段，旧的“builder
+可先移动锚点”缺口已封闭。下一步不是继续增加更多全局坐标，而是为高阶 builder command
+建立关系级 expected geometry effect：
 
 - 模板连接声明新键和可旋转自由度；
 - 并环声明共享边、刚性组和不可镜像的朝向四元组；

@@ -10,6 +10,7 @@ from .artifact_contracts import (
     sha256_json,
 )
 from .formal_verdict import VerificationEnvelope, VerificationStatus
+from .final_artifact_gate import build_geometry_intent_request
 from .geometry_policy_spec import load_run_geometry_policy_spec
 from .coordinate_semantics import verify_xtb_coordinate_chain
 from .run_manifest import load_run_manifest, require_manifest_matches_record
@@ -72,7 +73,9 @@ def archived_publication_status(
         context.get("builderSnapshotSha256"),
         "context.builderSnapshotSha256",
     )
-    if builder_digest != envelope.expected_graph_sha256:
+    if envelope.verifier_version != "retainmol-final-artifact-v4" and (
+        builder_digest != envelope.expected_graph_sha256
+    ):
         raise PublicationEvidenceError("expected graph hash mismatch")
     _require_file_hash(
         run_dir,
@@ -92,7 +95,7 @@ def archived_publication_status(
         context.get("executionReceiptSha256"),
         "context.executionReceiptSha256",
     )
-    _require_file_hash(
+    expected_effect_digest = _require_file_hash(
         run_dir,
         "expected-effect.json",
         context.get("expectedEffectSha256"),
@@ -179,9 +182,49 @@ def archived_publication_status(
         "geometryRequestSha256"
     ):
         raise PublicationEvidenceError("geometry request hash mismatch")
-    policy = _mapping(geometry_request.get("policy"), "geometry request policy")
-    if sha256_json(policy) != envelope.policy_sha256:
-        raise PublicationEvidenceError("geometry policy hash mismatch")
+    if envelope.verifier_version == "retainmol-final-artifact-v4":
+        _require_file_hash(
+            run_dir,
+            "inputs/initial-molecule.json",
+            context.get("initialMoleculeSha256"),
+            "context.initialMoleculeSha256",
+        )
+        intent = _mapping(geometry_request.get("intent"), "geometry request intent")
+        if sha256_json(intent) != envelope.policy_sha256:
+            raise PublicationEvidenceError("geometry intent hash mismatch")
+        if sha256_json(_mapping(intent.get("expected"), "geometry intent expected")) != envelope.expected_graph_sha256:
+            raise PublicationEvidenceError("expected graph hash mismatch")
+        run_spec_path = run_dir / "run-spec.json"
+        if run_spec_path.is_file():
+            run_spec_digest = _require_file_hash(
+                run_dir,
+                "run-spec.json",
+                context.get("runSpecSha256"),
+                "context.runSpecSha256",
+            )
+            if run_spec_digest != manifest.get("runSpecSha256"):
+                raise PublicationEvidenceError("geometry intent run spec hash mismatch")
+            spec = load_run_geometry_policy_spec(run_spec_path)
+        else:
+            if context.get("runSpecSha256") is not None or manifest.get("runSpecSha256") is not None:
+                raise PublicationEvidenceError("geometry intent run spec is missing")
+            spec = None
+        rebuilt_request = build_geometry_intent_request(
+            _mapping(load_strict_json(run_dir / "expected-effect.json"), "expected effect"),
+            _mapping(load_strict_json(run_dir / "enforced-plan.json"), "enforced plan"),
+            _mapping(load_strict_json(run_dir / "inputs/initial-molecule.json"), "initial molecule"),
+            _mapping(load_strict_json(run_dir / "builder-snapshot.json"), "builder snapshot"),
+            _mapping(load_strict_json(final_snapshot), "final snapshot"),
+            spec,
+        )
+        if rebuilt_request != geometry_request:
+            raise PublicationEvidenceError("geometry intent is not reproducible from archived evidence")
+        if expected_effect_digest != context.get("expectedEffectSha256"):
+            raise PublicationEvidenceError("expected effect hash mismatch")
+    else:
+        policy = _mapping(geometry_request.get("policy"), "geometry request policy")
+        if sha256_json(policy) != envelope.policy_sha256:
+            raise PublicationEvidenceError("geometry policy hash mismatch")
     if envelope.verifier_version == "retainmol-final-artifact-v3":
         run_spec_digest = _require_file_hash(
             run_dir,

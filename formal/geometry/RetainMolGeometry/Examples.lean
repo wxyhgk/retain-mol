@@ -327,9 +327,9 @@ example : applyPrimitiveCommand commandBase (.bondAdd parallel) = none := by
 private def validGeometryIntent : GeometryIntent := {
   before := commandBase
   commands := [
-    .atomMove "B" { x := 1400, y := 100, z := 0 },
-    .atomAdd { atomId := "H", symbol := "H", position := { x := 2300, y := 500, z := 0 } },
-    .bondAdd { bondId := "B-H", atomId1 := "B", atomId2 := "H", order := .single }
+    ⟨"move-b", .atomMove "B" { x := 1400, y := 100, z := 0 }⟩,
+    ⟨"add-h", .atomAdd { atomId := "H", symbol := "H", position := { x := 2300, y := 500, z := 0 } }⟩,
+    ⟨"bond-b-h", .bondAdd { bondId := "B-H", atomId1 := "B", atomId2 := "H", order := .single }⟩
   ]
   expected := commandBonded
   protectedAnchorIds := ["A"]
@@ -352,18 +352,28 @@ example : compileGeometryPolicy forgedGeometryIntent = none := by
 private def anchorRoundTripIntent : GeometryIntent := {
   before := commandBase
   commands := [
-    .atomMove "A" { x := 50, y := 0, z := 0 },
-    .atomMove "A" { x := 0, y := 0, z := 0 }
+    ⟨"move-a-away", .atomMove "A" { x := 50, y := 0, z := 0 }⟩,
+    ⟨"move-a-back", .atomMove "A" { x := 0, y := 0, z := 0 }⟩
   ]
   expected := commandBase
   protectedAnchorIds := ["A"]
 }
 
 example : applyPrimitiveCommands anchorRoundTripIntent.before
-    anchorRoundTripIntent.commands = some anchorRoundTripIntent.expected := by
+    (anchorRoundTripIntent.commands.map (fun command => command.command)) =
+      some anchorRoundTripIntent.expected := by
   decide
 
 example : compileGeometryPolicy anchorRoundTripIntent = none := by
+  decide
+
+private def duplicateCommandIdIntent : GeometryIntent := {
+  validGeometryIntent with
+  commands := validGeometryIntent.commands.map fun command =>
+    { command with commandId := "duplicate" }
+}
+
+example : compileGeometryPolicy duplicateCommandIdIntent = none := by
   decide
 
 private def isolatedAtom : MoleculeSnapshot := {
@@ -379,5 +389,5 @@ private def isolatedAtomIntent : GeometryIntent := {
   expected := isolatedAtom
 }
 
-example : (compileGeometryPolicy isolatedAtomIntent).isSome = true := by
+example : compileGeometryPolicy isolatedAtomIntent = none := by
   decide

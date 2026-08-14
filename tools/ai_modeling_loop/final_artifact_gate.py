@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -17,7 +18,10 @@ from .artifact_contracts import (
 )
 from .execution_evidence import validate_execution_evidence
 from .coordinate_semantics import CoordinateSemanticError, verify_xtb_coordinate_chain
-from .formal_geometry_checker import check_formal_geometry
+from .formal_geometry_checker import (
+    FormalGeometryCheckResult,
+    check_formal_geometry_intent as check_formal_geometry,
+)
 from .geometry_policy_spec import GeometryPolicySpec, load_run_geometry_policy_spec
 from .formal_verdict import (
     AxisVerdict,
@@ -26,19 +30,35 @@ from .formal_verdict import (
 )
 
 
-VERIFIER_VERSION = "retainmol-final-artifact-v3"
-GEOMETRY_POLICY_VERSION = "trusted-geometry-intent-v2"
+VERIFIER_VERSION = "retainmol-final-artifact-v4"
+GEOMETRY_POLICY_VERSION = "lean-compiled-geometry-intent-v1"
 LEGACY_VERIFIER_VERSION = "retainmol-final-artifact-v2"
 LEGACY_GEOMETRY_POLICY_VERSION = "covalent-distance-envelope-v1"
 XTB_ROW_ORDER_CONTRACT = "xtb-preserves-input-row-order-v1"
 XTB_POST_PROCESSING = "fixed-anchor-frame-projection-v1"
+GEOMETRY_INTENT_PROJECTION_VERSION = "expected-effect-v1-to-lean-v1"
+GEOMETRY_COORDINATE_SCALE = 1000
+
+
+def _position_units(values: Any) -> list[int]:
+    if not isinstance(values, (list, tuple)) or len(values) != 3:
+        raise ArtifactContractError("geometry position must contain three coordinates")
+    try:
+        return [
+            int((Decimal(str(value)) * GEOMETRY_COORDINATE_SCALE).to_integral_value(
+                rounding=ROUND_HALF_EVEN,
+            ))
+            for value in values
+        ]
+    except (InvalidOperation, TypeError, ValueError) as error:
+        raise ArtifactContractError("geometry position is not finite numeric data") from error
 
 
 def _geometry_atom(atom: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "atomId": atom["atomId"],
         "symbol": atom["symbol"],
-        "position": atom["position"],
+        "positionUnits": _position_units(atom["position"]),
         "formalCharge": atom["formalCharge"],
         "radicalElectrons": atom["radicalElectrons"],
         "aromatic": False,
@@ -50,7 +70,192 @@ def _geometry_bond(bond: Mapping[str, Any]) -> dict[str, Any]:
         "bondId": bond["bondId"],
         "atomId1": bond["atomId1"],
         "atomId2": bond["atomId2"],
-        "order": {1: "single", 2: "double", 3: "triple"}[bond["order"]],
+        "order": (
+            "aromatic"
+            if bond.get("aromatic") is True
+            else {1: "single", 2: "double", 3: "triple"}[bond["order"]]
+        ),
+    }
+
+
+def _geometry_canonical_atom(atom: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "atomId": atom["id"],
+        "symbol": atom["symbol"],
+        "positionUnits": _position_units([atom["x"], atom["y"], atom["z"]]),
+        "formalCharge": atom.get("charge") or 0,
+        "radicalElectrons": atom.get("radical") or 0,
+        "aromatic": False,
+    }
+
+
+def _geometry_canonical_bond(bond: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "bondId": bond["id"],
+        "atomId1": bond["atomId1"],
+        "atomId2": bond["atomId2"],
+        "order": (
+            "aromatic"
+            if bond.get("aromatic") is True
+            else {1: "single", 2: "double", 3: "triple"}[bond["order"]]
+        ),
+    }
+
+
+def _geometry_canonical_molecule(snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "atoms": [_geometry_canonical_atom(atom) for atom in snapshot["atoms"]],
+        "bonds": [_geometry_canonical_bond(bond) for bond in snapshot["bonds"]],
+    }
+
+
+def _source_molecule_signature(snapshot: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Compare pre-projection source data without coordinate quantization."""
+    atoms = []
+    for atom in snapshot["atoms"]:
+        atom_id = atom.get("atomId", atom.get("id"))
+        position = atom.get("position")
+        if position is None:
+            position = [atom["x"], atom["y"], atom["z"]]
+        atoms.append((
+            atom_id,
+            atom["symbol"],
+            tuple(Decimal(str(value)) for value in position),
+            atom.get("formalCharge", atom.get("charge")) or 0,
+            atom.get("radicalElectrons", atom.get("radical")) or 0,
+        ))
+    bonds = []
+    for bond in snapshot["bonds"]:
+        atom_id1, atom_id2 = sorted((bond["atomId1"], bond["atomId2"]))
+        bonds.append((
+            bond.get("bondId", bond.get("id")),
+            atom_id1,
+            atom_id2,
+            bond["order"],
+            bond.get("aromatic") is True,
+        ))
+    return tuple(sorted(atoms)), tuple(sorted(bonds))
+
+
+def _geometry_primitive_command(command: Mapping[str, Any]) -> dict[str, Any]:
+    kind = command["kind"]
+    command_id = command["commandId"]
+    if kind == "atom.add":
+        position = command["position"]
+        return {
+            "commandId": command_id,
+            "kind": "atomAdd",
+            "atom": {
+                "atomId": command["atomId"],
+                "symbol": command["symbol"],
+                "positionUnits": _position_units([position["x"], position["y"], position["z"]]),
+                "formalCharge": 0,
+                "radicalElectrons": 0,
+                "aromatic": False,
+            },
+        }
+    if kind == "atom.replace":
+        return {"commandId": command_id, "kind": "atomReplace", "atomId": command["atomId"], "symbol": command["symbol"]}
+    if kind == "atom.remove":
+        return {"commandId": command_id, "kind": "atomRemove", "atomId": command["atomId"]}
+    if kind == "atom.move":
+        position = command["position"]
+        return {
+            "commandId": command_id,
+            "kind": "atomMove",
+            "atomId": command["atomId"],
+            "position": _position_units([position["x"], position["y"], position["z"]]),
+        }
+    if kind == "bond.add":
+        atom_id1, atom_id2 = sorted((command["atomId1"], command["atomId2"]))
+        return {
+            "commandId": command_id,
+            "kind": "bondAdd",
+            "bond": {
+                "bondId": command["bondId"],
+                "atomId1": atom_id1,
+                "atomId2": atom_id2,
+                "order": {1: "single", 2: "double", 3: "triple"}[command["order"]],
+            },
+        }
+    if kind == "bond.remove":
+        return {"commandId": command_id, "kind": "bondRemove", "bondId": command["bondId"]}
+    if kind == "bond.setOrder":
+        return {
+            "commandId": command_id,
+            "kind": "bondSetOrder",
+            "bondId": command["bondId"],
+            "order": {1: "single", 2: "double", 3: "triple"}[command["order"]],
+        }
+    raise ArtifactContractError(f"unsupported GeometryIntent command: {kind}")
+
+
+def build_geometry_intent_request(
+    expected_effect: Mapping[str, Any],
+    enforced_plan: Mapping[str, Any],
+    initial_molecule: Mapping[str, Any],
+    builder_snapshot: Mapping[str, Any],
+    candidate_snapshot: Mapping[str, Any],
+    geometry_policy_spec: GeometryPolicySpec | None = None,
+) -> dict[str, Any]:
+    if expected_effect.get("status") != "compiled":
+        raise ArtifactContractError("GeometryIntent requires a compiled ExpectedEffect")
+    before = expected_effect.get("baseSnapshot")
+    expected = expected_effect.get("finalSnapshot")
+    commands = enforced_plan.get("commands")
+    if not isinstance(before, Mapping) or not isinstance(expected, Mapping):
+        raise ArtifactContractError("ExpectedEffect snapshots are unavailable")
+    if not isinstance(commands, list):
+        raise ArtifactContractError("enforced plan commands are unavailable")
+    frozen_molecule = initial_molecule.get("molecule")
+    builder_molecule = builder_snapshot.get("molecule")
+    if not isinstance(frozen_molecule, Mapping):
+        raise ArtifactContractError("frozen initial molecule is unavailable")
+    if not isinstance(builder_molecule, Mapping):
+        raise ArtifactContractError("builder snapshot molecule is unavailable")
+    before_projection = _geometry_canonical_molecule(before)
+    expected_projection = _geometry_canonical_molecule(expected)
+    if _source_molecule_signature(frozen_molecule) != _source_molecule_signature(before):
+        raise ArtifactContractError("ExpectedEffect baseSnapshot differs from frozen initial molecule")
+    if _source_molecule_signature(builder_molecule) != _source_molecule_signature(expected):
+        raise ArtifactContractError("builder snapshot differs from ExpectedEffect finalSnapshot")
+    plan_constraints = enforced_plan.get("constraints")
+    if plan_constraints is not None and not isinstance(plan_constraints, Mapping):
+        raise ArtifactContractError("enforced plan constraints must be an object")
+    plan_constraints = plan_constraints or {}
+    protected_anchor_ids = set(
+        geometry_policy_spec.fixed_atom_ids if geometry_policy_spec is not None else ()
+    )
+    for field in ("fixedAtomPositions", "protectedAtomIds"):
+        atom_ids = plan_constraints.get(field, [])
+        if not isinstance(atom_ids, list) or any(not isinstance(item, str) for item in atom_ids):
+            raise ArtifactContractError(f"enforced plan constraints.{field} must be an atom id array")
+        protected_anchor_ids.update(atom_ids)
+    candidate_molecule = candidate_snapshot["molecule"]
+    return {
+        "schemaVersion": 3,
+        "projectionVersion": GEOMETRY_INTENT_PROJECTION_VERSION,
+        "coordinateScale": GEOMETRY_COORDINATE_SCALE,
+        "intent": {
+            "before": before_projection,
+            "commands": [_geometry_primitive_command(command) for command in commands],
+            "expected": expected_projection,
+            "protectedAnchorIds": sorted(protected_anchor_ids),
+            "orientationAtomGroups": (
+                [{"atomIds": list(item.atom_ids)} for item in geometry_policy_spec.orientation_checks]
+                if geometry_policy_spec is not None
+                else []
+            ),
+            "rigidAtomGroups": (
+                [{"atomIds": list(item.atom_ids)} for item in geometry_policy_spec.rigid_atom_groups]
+                if geometry_policy_spec is not None
+                else []
+            ),
+        },
+        "candidate": {
+            "atoms": [_geometry_atom(atom) for atom in candidate_molecule["atoms"]],
+            "bonds": [_geometry_bond(bond) for bond in candidate_molecule["bonds"]],
+        },
     }
 
 
@@ -272,6 +477,7 @@ def verify_final_artifact(
     execution_receipt_path: Path,
     expected_effect_path: Path,
     enforced_plan_path: Path,
+    initial_molecule_path: Path,
     evaluation: Mapping[str, Any],
     output_dir: Path,
     coordinate_transport_receipt_path: Path | None = None,
@@ -299,6 +505,8 @@ def verify_final_artifact(
     receipt = load_strict_json(execution_receipt_path)
     expected_effect = load_strict_json(expected_effect_path)
     plan = load_strict_json(enforced_plan_path)
+    initial_molecule = load_strict_json(initial_molecule_path)
+    builder_snapshot = load_strict_json(builder_snapshot_path)
     execution_receipt_sha256 = sha256_file(execution_receipt_path)
     expected_effect_sha256 = sha256_file(expected_effect_path)
     enforced_plan_sha256 = sha256_file(enforced_plan_path)
@@ -314,30 +522,30 @@ def verify_final_artifact(
         if run_spec_path is not None
         else None
     )
-    verifier_version = (
-        VERIFIER_VERSION if geometry_policy_spec is not None else LEGACY_VERIFIER_VERSION
-    )
-    geometry_policy_version = (
-        GEOMETRY_POLICY_VERSION
-        if geometry_policy_spec is not None
-        else LEGACY_GEOMETRY_POLICY_VERSION
-    )
+    verifier_version = VERIFIER_VERSION
+    geometry_policy_version = GEOMETRY_POLICY_VERSION
     geometry_request: Mapping[str, Any] = {
-        "policy": {"policyId": geometry_policy_version},
+        "intent": {"intentId": geometry_policy_version},
     }
     geometry_request_sha256: str | None = None
+    geometry_request_error: str | None = None
     if bridge.final_snapshot is not None:
-        expected_snapshot = load_strict_json(builder_snapshot_path)
-        geometry_request = build_geometry_request(
-            expected_snapshot,
-            bridge.final_snapshot,
-            geometry_policy_spec,
-        )
-        geometry_request_bytes = canonical_json_bytes(geometry_request) + b"\n"
-        geometry_request_sha256 = hashlib.sha256(geometry_request_bytes).hexdigest()
-        geometry_request_path.write_bytes(geometry_request_bytes)
+        try:
+            geometry_request = build_geometry_intent_request(
+                expected_effect,
+                plan,
+                initial_molecule,
+                builder_snapshot,
+                bridge.final_snapshot,
+                geometry_policy_spec,
+            )
+            geometry_request_bytes = canonical_json_bytes(geometry_request) + b"\n"
+            geometry_request_sha256 = hashlib.sha256(geometry_request_bytes).hexdigest()
+            geometry_request_path.write_bytes(geometry_request_bytes)
+        except (ArtifactContractError, KeyError, TypeError, ValueError) as error:
+            geometry_request_error = str(error)
 
-    policy_sha256 = sha256_json(geometry_request["policy"])
+    policy_sha256 = sha256_json(geometry_request["intent"])
     coordinate_receipt_sha256 = (
         sha256_file(coordinate_transport_receipt_path)
         if coordinate_transport_receipt_path is not None
@@ -366,8 +574,14 @@ def verify_final_artifact(
             assert target_evaluator_path is not None
             resolved_target_evidence["referenceSdfSha256"] = sha256_file(target_reference_path)
             resolved_target_evidence["evaluatorSourceSha256"] = sha256_file(target_evaluator_path)
-    formal = None
-    if bridge.status is VerificationStatus.PASS and transport_trusted:
+    formal: FormalGeometryCheckResult | None = None
+    if geometry_request_error is not None:
+        formal = FormalGeometryCheckResult(
+            status=VerificationStatus.INDETERMINATE,
+            code="geometry-intent-request-invalid",
+            issues=(geometry_request_error,),
+        )
+    elif bridge.status is VerificationStatus.PASS and transport_trusted:
         formal = check_formal_geometry(
             geometry_request_path,
             expected_request_sha256=geometry_request_sha256,
@@ -382,6 +596,7 @@ def verify_final_artifact(
         "executionReceiptSha256": execution_receipt_sha256,
         "expectedEffectSha256": expected_effect_sha256,
         "enforcedPlanSha256": enforced_plan_sha256,
+        "initialMoleculeSha256": sha256_file(initial_molecule_path),
         "executorOutputSha256": executor_output_sha256,
         "runManifestSha256": (
             sha256_file(run_manifest_path)
@@ -389,6 +604,7 @@ def verify_final_artifact(
             else None
         ),
         "geometryRequestSha256": geometry_request_sha256,
+        "geometryRequestError": geometry_request_error,
         "runSpecSha256": (
             sha256_file(run_spec_path)
             if run_spec_path is not None and run_spec_path.is_file()
@@ -458,7 +674,7 @@ def verify_final_artifact(
         safety = _axis(
             formal.status,
             formal.code,
-            "lean-retainmol-geometry-v2",
+            "lean-retainmol-geometry-intent-v1",
             artifact_sha256=artifact_sha256,
             policy_sha256=policy_sha256,
             context_sha256=context_sha256,
@@ -484,7 +700,7 @@ def verify_final_artifact(
     envelope = VerificationEnvelope(
         artifact_sha256=artifact_sha256,
         policy_sha256=policy_sha256,
-        expected_graph_sha256=sha256_file(builder_snapshot_path),
+        expected_graph_sha256=sha256_json(geometry_request["intent"].get("expected", {})),
         enforced_plan_sha256=enforced_plan_sha256,
         verifier_version=verifier_version,
         verification_context_sha256=context_sha256,

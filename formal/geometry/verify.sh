@@ -15,3 +15,7 @@ lake env lean "$GENERATED"
 COMMAND_GENERATED=".lake/generated/PrimitiveCommandTrace.lean"
 python3 tools/command_trace_to_lean.py examples/primitive-command-trace.json "$COMMAND_GENERATED"
 lake env lean "$COMMAND_GENERATED"
+
+INTENT_GENERATED=".lake/generated/PrimitiveIntent.lean"
+python3 tools/intent_json_to_lean.py examples/primitive-intent.json "$INTENT_GENERATED"
+lake env lean "$INTENT_GENERATED"

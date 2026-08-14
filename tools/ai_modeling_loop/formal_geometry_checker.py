@@ -34,6 +34,7 @@ KNOWN_ISSUES = frozenset({
     "distance-out-of-range",
     "orientation-invalid",
     "rigid-group-distorted",
+    "intent-invalid",
 })
 
 
@@ -118,7 +119,7 @@ def parse_lean_evaluation_output(stdout: str) -> FormalGeometryCheckResult:
             status=VerificationStatus.PASS,
             code="geometry-policy-satisfied",
         )
-    trusted_input_issues = {"expected-topology-invalid", "policy-invalid"}
+    trusted_input_issues = {"expected-topology-invalid", "policy-invalid", "intent-invalid"}
     if any(issue in trusted_input_issues for issue in issues):
         return FormalGeometryCheckResult(
             status=VerificationStatus.INDETERMINATE,
@@ -308,6 +309,20 @@ def _exact_geometry_issues(request_bytes: bytes) -> tuple[str, ...]:
         raise ExactGeometryRequestError(str(error)) from error
 
 
+def _exact_intent_geometry_issues(request_bytes: bytes) -> tuple[str, ...]:
+    """Reject malformed transport JSON without recompiling Lean-owned policy."""
+    try:
+        json.loads(
+            request_bytes.decode("utf-8", errors="strict"),
+            parse_float=Decimal,
+            parse_int=Decimal,
+            object_pairs_hook=_reject_duplicate_keys,
+        )
+        return ()
+    except (UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidOperation) as error:
+        raise ExactGeometryRequestError(str(error)) from error
+
+
 def check_formal_geometry(
     request_path: Path | str,
     *,
@@ -317,13 +332,16 @@ def check_formal_geometry(
     timeout_seconds: float = 30.0,
     trusted_lean_sha256: str | None = None,
     trusted_launcher_sha256: str | None = None,
+    _intent_mode: bool = False,
 ) -> FormalGeometryCheckResult:
     try:
         request = Path(request_path)
         root = Path(geometry_root)
     except (TypeError, ValueError, OSError) as error:
         return _indeterminate("checker-configuration-invalid", str(error))
-    generator = root / "tools" / "json_to_lean.py"
+    generator = root / "tools" / (
+        "intent_json_to_lean.py" if _intent_mode else "json_to_lean.py"
+    )
     if not request.is_file():
         return _indeterminate("request-unavailable", "request path is not a file")
     if not root.is_dir() or not generator.is_file():
@@ -420,15 +438,16 @@ def check_formal_geometry(
         generated = Path(directory) / "EvaluateGeometry.lean"
         try:
             request_snapshot.write_bytes(request_bytes)
+            generator_command = [
+                sys.executable,
+                str(generator),
+                str(request_snapshot),
+                str(generated),
+            ]
+            if not _intent_mode:
+                generator_command.extend(["--mode", "evaluate"])
             generation = subprocess.run(
-                [
-                    sys.executable,
-                    str(generator),
-                    str(request_snapshot),
-                    str(generated),
-                    "--mode",
-                    "evaluate",
-                ],
+                generator_command,
                 cwd=root,
                 capture_output=True,
                 text=True,
@@ -451,7 +470,11 @@ def check_formal_geometry(
                 evidence=evidence,
             )
         try:
-            exact_issues = _exact_geometry_issues(request_bytes)
+            exact_issues = (
+                _exact_intent_geometry_issues(request_bytes)
+                if _intent_mode
+                else _exact_geometry_issues(request_bytes)
+            )
         except ExactGeometryRequestError as error:
             return _indeterminate(
                 "exact-geometry-precheck-failed",
@@ -500,3 +523,19 @@ def check_formal_geometry(
 
 
 run_formal_geometry_check = check_formal_geometry
+
+
+def check_formal_geometry_intent(
+    request_path: Path | str,
+    **kwargs: Any,
+) -> FormalGeometryCheckResult:
+    """Fail-closed entry point that cannot accept a caller-authored policy."""
+    result = check_formal_geometry(request_path, _intent_mode=True, **kwargs)
+    code_map = {
+        "geometry-policy-satisfied": "geometry-intent-satisfied",
+        "geometry-policy-rejected": "geometry-intent-rejected",
+        "exact-geometry-policy-rejected": "exact-geometry-intent-rejected",
+        "trusted-geometry-input-invalid": "trusted-geometry-intent-invalid",
+        "exact-geometry-policy-invalid": "exact-geometry-intent-invalid",
+    }
+    return replace(result, code=code_map.get(result.code, result.code))

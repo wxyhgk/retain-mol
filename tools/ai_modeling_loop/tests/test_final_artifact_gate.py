@@ -17,6 +17,7 @@ from tools.ai_modeling_loop.artifact_contracts import (
 )
 from tools.ai_modeling_loop.chemistry import load_sdf, write_sdf
 from tools.ai_modeling_loop.final_artifact_gate import (
+    build_geometry_intent_request,
     build_geometry_request,
     verify_final_artifact,
 )
@@ -38,6 +39,7 @@ class FinalArtifactGateTests(unittest.TestCase):
         self.receipt = self.root / "execution.json"
         self.effect = self.root / "expected-effect.json"
         self.plan = self.root / "enforced-plan.json"
+        self.initial = self.root / "initial-molecule.json"
         self.out = self.root / "verification"
         self.snapshot.write_text(json.dumps({
             "schemaVersion": 1,
@@ -57,6 +59,22 @@ class FinalArtifactGateTests(unittest.TestCase):
                 {"rowIndex": 2, "atomId": "O", "symbol": "O"},
             ],
             "bondRows": [{"rowIndex": 1, "bondId": "CO", "atomId1": "C", "atomId2": "O", "order": 2}],
+        }))
+        self.initial.write_text(json.dumps({
+            "schemaVersion": 1,
+            "objectId": "object-a",
+            "fixedAtomIds": [],
+            "molecule": {
+                "name": "carbon monoxide",
+                "atoms": [
+                    {"id": "C", "symbol": "C", "x": -0.1, "y": 0, "z": 0},
+                    {"id": "O", "symbol": "O", "x": 1.2, "y": 0, "z": 0},
+                ],
+                "bonds": [{
+                    "id": "CO", "atomId1": "C", "atomId2": "O", "order": 1,
+                    "aromatic": False,
+                }],
+            },
         }))
         editable = Chem.RWMol()
         editable.AddAtom(Chem.Atom("C"))
@@ -124,7 +142,35 @@ class FinalArtifactGateTests(unittest.TestCase):
                 },
             ],
         }
-        self.effect.write_text(json.dumps({"status": "compiled", **expected_receipt}))
+        canonical_atom = lambda atom_id, symbol, x: {
+            "id": atom_id,
+            "symbol": symbol,
+            "x": x,
+            "y": 0,
+            "z": 0,
+            "charge": None,
+            "radical": None,
+        }
+        self.effect.write_text(json.dumps({
+            "status": "compiled",
+            **expected_receipt,
+            "baseSnapshot": {
+                "name": "carbon monoxide",
+                "atoms": [canonical_atom("C", "C", -0.1), canonical_atom("O", "O", 1.2)],
+                "bonds": [{
+                    "id": "CO", "atomId1": "C", "atomId2": "O", "order": 1,
+                    "aromatic": False,
+                }],
+            },
+            "finalSnapshot": {
+                "name": "carbon monoxide",
+                "atoms": [canonical_atom("C", "C", 0), canonical_atom("O", "O", 1.2)],
+                "bonds": [{
+                    "id": "CO", "atomId1": "C", "atomId2": "O", "order": 2,
+                    "aromatic": False,
+                }],
+            },
+        }))
         self.receipt.write_text(json.dumps({
             "schemaVersion": 1,
             "status": "completed",
@@ -169,6 +215,7 @@ class FinalArtifactGateTests(unittest.TestCase):
             execution_receipt_path=self.receipt,
             expected_effect_path=self.effect,
             enforced_plan_path=self.plan,
+            initial_molecule_path=self.initial,
             evaluation=evaluation,
             output_dir=self.out,
             **kwargs,
@@ -182,7 +229,7 @@ class FinalArtifactGateTests(unittest.TestCase):
         )
         envelope = self.verify()
         self.assertEqual(envelope.status, VerificationStatus.PASS)
-        self.assertEqual(envelope.verifier_version, "retainmol-final-artifact-v2")
+        self.assertEqual(envelope.verifier_version, "retainmol-final-artifact-v4")
         self.assertEqual(envelope.publication_status(self.out / "final-snapshot.json"), VerificationStatus.PASS)
         contexts = {axis.verification_context_sha256 for axis in envelope.axes.values()}
         self.assertEqual(contexts, {envelope.verification_context_sha256})
@@ -217,6 +264,102 @@ class FinalArtifactGateTests(unittest.TestCase):
             "atomIds": ["C", "O"],
             "maxSquaredDistanceDelta": 25,
         }])
+
+    def test_geometry_intent_binds_commands_and_omits_caller_thresholds(self) -> None:
+        effect = json.loads(self.effect.read_text())
+        plan = json.loads(self.plan.read_text())
+        plan["constraints"] = {
+            "fixedAtomPositions": ["O"],
+            "protectedAtomIds": ["C"],
+        }
+        initial = json.loads(self.initial.read_text())
+        builder = json.loads(self.snapshot.read_text())
+        spec = GeometryPolicySpec(
+            policy_id="case-a-core-v1",
+            fixed_atom_ids=("C",),
+            orientation_checks=(),
+            rigid_atom_groups=(RigidGroupSpec(
+                atom_ids=("C", "O"),
+                max_squared_distance_delta=25,
+            ),),
+        )
+
+        request = build_geometry_intent_request(
+            effect, plan, initial, builder, builder, spec,
+        )
+
+        self.assertEqual(request["projectionVersion"], "expected-effect-v1-to-lean-v1")
+        self.assertEqual(
+            [command["commandId"] for command in request["intent"]["commands"]],
+            ["move-carbon", "set-co-order"],
+        )
+        self.assertEqual(request["intent"]["before"]["atoms"][0]["positionUnits"], [-100, 0, 0])
+        self.assertEqual(request["intent"]["protectedAnchorIds"], ["C", "O"])
+        self.assertEqual(request["intent"]["rigidAtomGroups"], [{"atomIds": ["C", "O"]}])
+        self.assertNotIn("maxSquaredDistanceDelta", json.dumps(request["intent"]))
+        self.assertNotIn("policy", request)
+
+    @patch("tools.ai_modeling_loop.final_artifact_gate.check_formal_geometry")
+    def test_forged_expected_base_is_indeterminate_before_lean(self, check) -> None:
+        effect = json.loads(self.effect.read_text())
+        # This rounds to the same -100 coordinate units. The source binding must
+        # still reject it before projection so quantization cannot hide forgery.
+        effect["baseSnapshot"]["atoms"][0]["x"] = -0.1004
+        self.effect.write_text(json.dumps(effect))
+        receipt = json.loads(self.receipt.read_text())
+        receipt["expectedEffectSha256"] = self.sha256(self.effect)
+        self.receipt.write_text(json.dumps(receipt))
+
+        envelope = self.verify()
+
+        self.assertEqual(envelope.axes["safety"].status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(envelope.axes["safety"].code, "geometry-intent-request-invalid")
+        check.assert_not_called()
+
+    @patch("tools.ai_modeling_loop.final_artifact_gate.check_formal_geometry")
+    def test_builder_snapshot_must_equal_expected_effect_final_snapshot(self, check) -> None:
+        builder = json.loads(self.snapshot.read_text())
+        builder["molecule"]["atoms"][1]["position"] = [1.3, 0, 0]
+        self.snapshot.write_text(json.dumps(builder))
+
+        envelope = self.verify()
+
+        self.assertEqual(envelope.axes["safety"].status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(envelope.axes["safety"].code, "geometry-intent-request-invalid")
+        check.assert_not_called()
+
+    @patch("tools.ai_modeling_loop.final_artifact_gate.check_formal_geometry")
+    def test_missing_expected_effect_snapshot_is_indeterminate_before_lean(self, check) -> None:
+        effect = json.loads(self.effect.read_text())
+        del effect["baseSnapshot"]
+        self.effect.write_text(json.dumps(effect))
+        receipt = json.loads(self.receipt.read_text())
+        receipt["expectedEffectSha256"] = self.sha256(self.effect)
+        self.receipt.write_text(json.dumps(receipt))
+
+        envelope = self.verify()
+
+        self.assertEqual(envelope.axes["safety"].status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(envelope.axes["safety"].code, "geometry-intent-request-invalid")
+        check.assert_not_called()
+
+    @patch("tools.ai_modeling_loop.final_artifact_gate.check_formal_geometry")
+    def test_unsupported_plan_command_is_indeterminate_before_lean(self, check) -> None:
+        plan = json.loads(self.plan.read_text())
+        plan["commands"] = [{
+            "commandId": "attach-fragment",
+            "kind": "fragment.attach",
+            "atomId": "C",
+            "fragmentId": "benzene",
+        }]
+        self.plan.write_text(json.dumps(plan))
+        self.refresh_plan_binding()
+
+        envelope = self.verify()
+
+        self.assertEqual(envelope.axes["safety"].status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(envelope.axes["safety"].code, "geometry-intent-request-invalid")
+        check.assert_not_called()
 
     @patch("tools.ai_modeling_loop.final_artifact_gate.check_formal_geometry")
     def test_final_gate_freezes_geometry_policy_from_run_spec(self, check) -> None:
@@ -265,10 +408,11 @@ class FinalArtifactGateTests(unittest.TestCase):
         envelope = self.verify(run_spec_path=run_spec)
 
         self.assertEqual(envelope.status, VerificationStatus.PASS)
-        self.assertEqual(envelope.verifier_version, "retainmol-final-artifact-v3")
+        self.assertEqual(envelope.verifier_version, "retainmol-final-artifact-v4")
         request = json.loads((self.out / "geometry-request.json").read_text())
-        self.assertEqual(request["policy"]["policyId"], "case-a-core-v1")
-        self.assertEqual(request["policy"]["fixedAtomIds"], ["C", "O"])
+        self.assertNotIn("policy", request)
+        self.assertEqual(request["intent"]["protectedAnchorIds"], ["C", "O"])
+        self.assertEqual(request["intent"]["rigidAtomGroups"], [{"atomIds": ["C", "O"]}])
         context = json.loads((self.out / "verification-context.json").read_text())
         self.assertEqual(context["runSpecSha256"], self.sha256(run_spec))
 
@@ -613,6 +757,7 @@ class FinalArtifactGateTests(unittest.TestCase):
             execution_receipt_path=self.receipt,
             expected_effect_path=self.effect,
             enforced_plan_path=self.plan,
+            initial_molecule_path=self.initial,
             evaluation=evaluation,
             output_dir=self.out,
         )
