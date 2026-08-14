@@ -15,7 +15,7 @@ import pytest
 
 from software.backend.jobs import JobService
 from software.backend.jobs.execution import JobExecutionError, run_persisted_job
-from software.backend.jobs.service import InvalidJobOperationError
+from software.backend.jobs import InvalidJobOperationError
 
 
 def _database(tmp_path: Path) -> Path:

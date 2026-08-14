@@ -3,20 +3,13 @@
 from __future__ import annotations
 
 import os
-import secrets
 from collections.abc import Mapping
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from .artifact_manager import ArtifactManager
 from .artifact_storage import ArtifactStorage
 from .dispatching import JobDispatchCoordinator
-from .errors import (
-    InvalidJobInputError,
-    InvalidJobOperationError,
-    JobNotFoundError,
-)
 from .input_resolution import JobInputResolver
 from .lifecycle import JobLifecycle
 from .models import (
@@ -39,9 +32,11 @@ from .job_operations import JobOperationsManager
 from .job_queries import JobQueryManager
 from .job_runtime import JobRuntimeManager
 from .job_workspace import JobWorkspace
+from .legacy_inputs import LegacyJobInputManager
 from .molecule_assets import MoleculeAssetManager
 from .workflow_definitions import WorkflowDefinitionManager
 from .workflow_runtime import WorkflowRuntimeCoordinator
+from .workflow_templates import WorkflowTemplateManager
 
 DEFAULT_DATA_ROOT = Path(
     os.getenv(
@@ -52,7 +47,7 @@ DEFAULT_DATA_ROOT = Path(
 
 
 class JobService:
-    """Creates jobs and keeps SQLite records and filesystem snapshots in sync."""
+    """Stable route-facing facade over focused Job domain managers."""
 
     def __init__(self, data_root: str | Path | None = None) -> None:
         self.data_root = Path(data_root) if data_root is not None else DEFAULT_DATA_ROOT
@@ -64,7 +59,8 @@ class JobService:
         self.artifact_manager = ArtifactManager(
             self.repository,
             self.artifact_storage,
-            self.workspace.root,
+            self.workspace,
+            self.job_queries.get,
         )
         self.molecule_assets = MoleculeAssetManager(self.repository)
         self.input_resolver = JobInputResolver(self.repository)
@@ -72,7 +68,7 @@ class JobService:
             self.repository,
             self.input_resolver,
             self.workspace,
-            self.get_job,
+            self.job_queries.get,
         )
         self.lifecycle = JobLifecycle(self.repository)
         self.job_operations = JobOperationsManager(
@@ -80,8 +76,8 @@ class JobService:
             self.lifecycle,
             self.workspace,
             self.input_resolver,
-            self.get_job,
-            self.create_calculation_job,
+            self.job_queries.get,
+            self.job_creation.create_calculation_job,
         )
         self.dispatches = JobDispatchCoordinator(self.repository, self.lifecycle)
         self.job_runtime = JobRuntimeManager(
@@ -89,10 +85,28 @@ class JobService:
             self.lifecycle,
             self.dispatches,
             self.workspace,
-            self.get_job,
+            self.job_queries.get,
         )
-        self.workflow_definitions = WorkflowDefinitionManager(self.repository, self)
-        self.workflow_runtime = WorkflowRuntimeCoordinator(self.repository, self)
+        self.legacy_inputs = LegacyJobInputManager(
+            self.repository,
+            self.workspace,
+            self.job_queries.get,
+        )
+        self.workflow_definitions = WorkflowDefinitionManager(
+            self.repository,
+            self.job_queries,
+        )
+        self.workflow_templates = WorkflowTemplateManager(
+            self.workflow_definitions,
+            self.job_creation.create_calculation_draft,
+            self.job_operations.delete,
+        )
+        self.workflow_runtime = WorkflowRuntimeCoordinator(
+            self.repository,
+            self.job_queries.get,
+            self.job_creation.queue_calculation_job,
+            self.job_operations.cancel,
+        )
 
     def create_molecule_asset(
         self, name: str, *, metadata: dict[str, Any] | None = None
@@ -238,12 +252,7 @@ class JobService:
 
     def add_inputs(self, job_id: str, inputs: Mapping[str, Any]) -> Job:
         """Add a batch of named inputs, as submitted by the jobs HTTP route."""
-        if not isinstance(inputs, Mapping):
-            raise ValueError("inputs must be an object")
-        self._assert_legacy_inputs_mutable(job_id)
-        for name, value in inputs.items():
-            self.add_input(job_id, name, value)
-        return self.get_job(job_id)
+        return self.legacy_inputs.add_many(job_id, inputs)
 
     def list_artifacts(self, job_id: str) -> list[Artifact]:
         """Return every artifact registered for a job."""
@@ -270,57 +279,13 @@ class JobService:
         product_artifact_id: str,
     ) -> tuple[Workflow, Job]:
         """Create the first fixed workflow: two optimized endpoints into a TS draft."""
-        name = _required_text(name, "name")
-        if reactant_job_id == product_job_id:
-            raise InvalidJobInputError(
-                "Reactant and product must come from different jobs"
-            )
-
-        reactant_artifact = self.workflow_definitions.require_structure_artifact(
-            reactant_job_id, reactant_artifact_id, "reactant"
+        return self.workflow_templates.create_ts_preparation(
+            name,
+            reactant_job_id,
+            reactant_artifact_id,
+            product_job_id,
+            product_artifact_id,
         )
-        product_artifact = self.workflow_definitions.require_structure_artifact(
-            product_job_id, product_artifact_id, "product"
-        )
-        target = self.create_calculation_draft(
-            "ts-initial-guess",
-            "retainmol",
-            {"strategy": "double-ended", "schemaVersion": 1},
-            metadata={
-                "name": f"{name} · TS initial guess",
-                "description": "Created from explicit reactant and product artifacts",
-                "workflowRole": "ts-initial-guess",
-            },
-        )
-
-        input_links = [
-            {
-                "sourceJobId": reactant_job_id,
-                "sourceArtifactId": reactant_artifact.artifact_id,
-                "sourceKind": "artifact",
-                "sourceName": reactant_artifact.name,
-                "targetJobId": target.job_id,
-                "targetInputName": "reactant",
-            },
-            {
-                "sourceJobId": product_job_id,
-                "sourceArtifactId": product_artifact.artifact_id,
-                "sourceKind": "artifact",
-                "sourceName": product_artifact.name,
-                "targetJobId": target.job_id,
-                "targetInputName": "product",
-            },
-        ]
-        try:
-            workflow = self.create_workflow(
-                name,
-                [reactant_job_id, product_job_id, target.job_id],
-                input_links,
-            )
-        except Exception:
-            self.delete_job(target.job_id)
-            raise
-        return workflow, target
 
     def list_workflows(self) -> list[Workflow]:
         return self.workflow_definitions.list()
@@ -381,27 +346,12 @@ class JobService:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> JobInput:
-        self._assert_legacy_inputs_mutable(job_id)
-        job_input = JobInput(
-            input_id=f"input-{secrets.token_hex(8)}",
-            job_id=job_id,
-            name=_required_text(name, "name"),
-            value=value,
-            metadata=metadata or {},
-            created_at=_now(),
+        return self.legacy_inputs.add(
+            job_id,
+            name,
+            value,
+            metadata=metadata,
         )
-        self.repository.add_input(job_input)
-        self._touch_job(job_id)
-        self.workspace.write_snapshot(self._require_job(job_id))
-        return job_input
-
-    def _assert_legacy_inputs_mutable(self, job_id: str) -> None:
-        """Keep the legacy input route away from frozen calculation snapshots."""
-        job = self._require_job(job_id)
-        if job.spec_id is not None or job.input_snapshots:
-            raise InvalidJobOperationError(
-                "calculation inputs are immutable; copy the job to change them"
-            )
 
     def add_artifact(
         self,
@@ -421,8 +371,6 @@ class JobService:
             metadata=metadata,
             run_id=run_id,
         )
-        self._touch_job(job_id)
-        self.workspace.write_snapshot(self._require_job(job_id))
         return artifact
 
     def update_status(
@@ -508,17 +456,3 @@ class JobService:
 
     def _require_job(self, job_id: str) -> Job:
         return self.get_job(job_id)
-
-    def _touch_job(self, job_id: str) -> None:
-        if not self.repository.touch_job(job_id, _now()):
-            raise JobNotFoundError(job_id)
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)
-
-
-def _required_text(value: str, field_name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} must be a non-empty string")
-    return value

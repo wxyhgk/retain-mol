@@ -19,7 +19,7 @@ from .workflows import validate_workflow_dag
 class WorkflowJobReader(Protocol):
     """Read-only Job access required while defining a workflow."""
 
-    def get_job(self, job_id: str) -> Job: ...
+    def get(self, job_id: str) -> Job: ...
 
 
 class WorkflowDefinitionManager:
@@ -91,7 +91,7 @@ class WorkflowDefinitionManager:
         artifact_id: str,
         role: str,
     ) -> Artifact:
-        job = self.jobs.get_job(job_id)
+        job = self.jobs.get(job_id)
         if job.status != "succeeded":
             raise InvalidJobInputError(
                 f"{role.capitalize()} job '{job_id}' must be succeeded"
@@ -134,7 +134,7 @@ class WorkflowDefinitionManager:
         created_at: datetime | None = None,
     ) -> Workflow:
         for job_id in job_ids:
-            self.jobs.get_job(job_id)
+            self.jobs.get(job_id)
         now = _now()
         input_links = [
             WorkflowInputLink(
@@ -167,7 +167,7 @@ class WorkflowDefinitionManager:
         )
 
     def _validate_input_link_source(self, link: WorkflowInputLink) -> None:
-        self.jobs.get_job(link.source_job_id)
+        self.jobs.get(link.source_job_id)
         if link.source_artifact_id is None:
             return
         artifact = next(

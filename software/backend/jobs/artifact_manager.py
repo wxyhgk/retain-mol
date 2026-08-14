@@ -5,12 +5,16 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from .artifact_storage import ArtifactStorage
 from .errors import InvalidJobOperationError, JobNotFoundError
-from .models import Artifact
+from .job_workspace import JobWorkspace
+from .models import Artifact, Job
 from .repository import JobRepository
+
+JobLoader = Callable[[str], Job]
 
 
 class ArtifactManager:
@@ -20,11 +24,14 @@ class ArtifactManager:
         self,
         repository: JobRepository,
         storage: ArtifactStorage,
-        tasks_root: Path,
+        workspace: JobWorkspace,
+        load_job: JobLoader,
     ) -> None:
         self.repository = repository
         self.storage = storage
-        self.tasks_root = tasks_root
+        self.workspace = workspace
+        self.tasks_root = workspace.root
+        self.load_job = load_job
 
     def list(self, job_id: str) -> list[Artifact]:
         self._require_job(job_id)
@@ -63,7 +70,11 @@ class ArtifactManager:
             metadata=normalized_metadata,
             created_at=_now(),
         )
-        return self.repository.add_artifact(artifact)
+        persisted = self.repository.add_artifact(artifact)
+        if not self.repository.touch_job(job_id, _now()):
+            raise JobNotFoundError(job_id)
+        self.workspace.write_snapshot(self.load_job(job_id))
+        return persisted
 
     def _validate_run(self, job_id: str, run_id: str | None) -> None:
         if run_id is None:

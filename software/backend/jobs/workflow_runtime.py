@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Mapping, Protocol
+from collections.abc import Callable
 
 from .errors import (
     InvalidJobInputError,
@@ -27,21 +27,9 @@ from .repository import JobRepository
 from .workflows import validate_workflow_dag, workflow_predecessors
 
 
-class WorkflowJobPort(Protocol):
-    """The only Job operations available to the workflow runtime."""
-
-    def get_job(self, job_id: str) -> Job: ...
-
-    def queue_calculation_job(
-        self,
-        job_id: str,
-        inputs: Mapping[str, Any] | None = None,
-        *,
-        workflow_id: str | None = None,
-        require_active_workflow: bool = False,
-    ) -> Job: ...
-
-    def cancel_job(self, job_id: str) -> Job: ...
+JobLoader = Callable[[str], Job]
+QueueCalculationJob = Callable[..., Job]
+CancelJob = Callable[[str], Job]
 
 
 @dataclass(frozen=True)
@@ -107,10 +95,14 @@ class WorkflowRuntimeCoordinator:
     def __init__(
         self,
         repository: JobRepository,
-        jobs: WorkflowJobPort,
+        load_job: JobLoader,
+        queue_calculation_job: QueueCalculationJob,
+        cancel_job: CancelJob,
     ) -> None:
         self.repository = repository
-        self.jobs = jobs
+        self.load_job = load_job
+        self.queue_calculation_job = queue_calculation_job
+        self.cancel_job = cancel_job
 
     def start(self, workflow: Workflow) -> WorkflowSchedule:
         now = _now()
@@ -185,7 +177,7 @@ class WorkflowRuntimeCoordinator:
                 )
 
         for job_id in workflow.job_ids:
-            job = self.jobs.get_job(job_id)
+            job = self.load_job(job_id)
             if job.status not in CANCELLABLE_JOB_STATUSES:
                 continue
             other_active_workflows = [
@@ -196,7 +188,7 @@ class WorkflowRuntimeCoordinator:
             if other_active_workflows:
                 continue
             try:
-                self.jobs.cancel_job(job_id)
+                self.cancel_job(job_id)
             except InvalidJobOperationError:
                 # A worker may reach a terminal state after the status read.
                 pass
@@ -206,7 +198,7 @@ class WorkflowRuntimeCoordinator:
         execution = self._require_execution(workflow.workflow_id)
         ordered_job_ids = validate_workflow_dag(workflow.job_ids, workflow.input_links)
         predecessors = workflow_predecessors(workflow.job_ids, workflow.input_links)
-        jobs = {job_id: self.jobs.get_job(job_id) for job_id in ordered_job_ids}
+        jobs = {job_id: self.load_job(job_id) for job_id in ordered_job_ids}
         if execution.status == "cancelled":
             return self._cancelled_schedule(execution, ordered_job_ids, jobs)
 
@@ -324,7 +316,7 @@ class WorkflowRuntimeCoordinator:
             return job, None
         try:
             return (
-                self.jobs.queue_calculation_job(
+                self.queue_calculation_job(
                     job.job_id,
                     workflow_id=workflow.workflow_id,
                     require_active_workflow=True,
@@ -339,7 +331,7 @@ class WorkflowRuntimeCoordinator:
                 raise
             return job, "execution_changed"
         except (InvalidJobInputError, InvalidJobTransitionError) as exc:
-            refreshed = self.jobs.get_job(job.job_id)
+            refreshed = self.load_job(job.job_id)
             return refreshed, str(exc) if refreshed.status == "created" else None
 
     def _finish_execution_if_resolved(
