@@ -71,6 +71,11 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
 - 移动原子不改变键表、增加键不改变原子表的 frame condition。
 - `GeometryIntent V1` 只接收起始快照、基础命令、完整预期快照和保护锚点；policy 由 Lean
   侧编译，成功时证明命令结果精确、锚点保持、生成策略合法且可自验证。
+- 实验性的 `SpatialRelation V1` 定义局部端口坐标系、带有向体积见证的 proper rigid region，
+  以及删除轴键后由精确连通分量确定移动侧的 rotatable joint；角度通过点积、叉积和有理闭区间
+  转换为整数多项式不等式，不依赖 Lean 内的浮点三角函数。
+- `SpatialRelation V1` 的严格 JSON 桥固定坐标尺度与所有裕量，当前只接受系统生成的离散角集合
+  `0/30/45/60/90/120/135/150/180` 度及其符号；调用方不能注入阈值。
 
 未形式化的内容：
 
@@ -81,11 +86,58 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
 - 连续浮点优化过程；
 - 量子化学能量、力和收敛性；
 - 同位素、完整立体标记和金属配位位点语义；
-- 键角、二面角、平面性和 attachment local frame；
+- 通用键角、任意十进制二面角、平面性和已接入生产命令的 attachment local frame；
 - 元素相关的范德华半径和周期边界条件。
 
 因此当前结论只能表述为“最终候选满足该版本化 GeometryPolicy”，不能表述为“Lean 已证明
 图片中的分子绝对正确”。最终候选经过 xTB 等任何坐标修改后必须重新验证，旧 verdict 失效。
+
+`SpatialRelation V1` 同样不能表述为“Lean 证明了连续实数空间中恰好旋转任意角度”。它证明的
+是量化分子快照满足系统生成的有限关系证书。退化坐标、无法观察角度、当前离散角集合之外的
+请求以及证据落在数值灰区时，运行时必须返回 `indeterminate`，不能降级为通过。
+
+## 空间关系执行架构
+
+```text
+AI / 人类意图
+      |
+      v
+高层命令（连接、并环、旋转）
+      |
+      v
+关系编译器 ---- 从完整化学图推导端口、固定侧与移动侧
+      |
+      +---- 结构非法：reject
+      +---- 证据不足：indeterminate
+      v
+数值算法生成坐标候选
+      |
+      v
+TypeScript 运行时验证器 ---- 浮点快检、系统容差、独立 Rodrigues 复算
+      |
+      v
+严格关系 JSON ---- 固定 scale / 固定 policy / 禁止原始 Lean 注入
+      |
+      v
+Lean 内核 ---- 有限图、刚体、方向和角度区间判定
+```
+
+第一条生产前纵向切片是内部 `geometry.rotateGroup` 关系验证器。它要求旋转轴为真实的非芳香
+单键，删除该键后必须断开图，调用命令中的原子集合必须恰好等于其中一个完整分量。固定侧、
+两个轴端点、全部移动侧原子对距离、同一有符号角度和完整非坐标字段都必须保持相应关系。
+这套验证器目前没有接入 `ExpectedEffect V1` 或执行器，因此不会改变现有用户交互。
+
+模板连接、边并环和高阶刚性片段放置目前仍未激活：它们必须先编译为同一类关系证书，不能
+直接信任 AI 给出的世界坐标。三类结果的含义固定为：
+
+- `pass`：当前证据在该版本策略内充分；
+- `reject`：已发现明确的拓扑或几何违反；
+- `indeterminate`：证据、数值稳定性或当前关系语言能力不足，必须重规划或升级证书。
+
+内部 TypeScript 编译器和验证器已经执行三态规则，并对超出可靠浮点包络的坐标主动返回
+`indeterminate`。当前生成的 Lean 关系文档仍只输出 `pass/reject`：低于系统几何裕量的证据会
+保守地落入 `reject`。因此该桥仍是实验性证明切片，尚不能直接作为生产三态门禁；下一版必须
+在 Lean 内区分“结构反例”和“数值证据不足”。
 
 ## 运行
 
@@ -122,23 +174,28 @@ formal/geometry/
 │   ├── Command.lean       # 基础命令、精确回执轨迹与 soundness 定理
 │   ├── Certificate.lean   # policy、结构化问题与几何判定
 │   ├── Intent.lean        # GeometryIntent V1 policy 编译器与 soundness
+│   ├── SpatialRelation.lean # 端口、proper rigid region 与可旋转关节
 │   └── Examples.lean      # 正例与反例
 ├── examples/
 │   ├── anchored-core.json # B/N 固定母核示例
 │   ├── primitive-command-trace.json # 基础命令回执示例
-│   └── primitive-intent.json # 严格意图桥示例
+│   ├── primitive-intent.json # 严格意图桥示例
+│   └── quarter-turn-relation.json # 90 度关节关系示例
 ├── tools/
 │   ├── json_to_lean.py    # 最终几何策略桥接器
 │   ├── command_trace_to_lean.py # 命令回执桥接器
-│   └── intent_json_to_lean.py # 生产 GeometryIntent 严格桥
+│   ├── intent_json_to_lean.py # 生产 GeometryIntent 严格桥
+│   └── relation_json_to_lean.py # SpatialRelation V1 严格桥
 └── verify.sh
 ```
 
 ## 后续扩展顺序
 
 1. 证明 runtime receipt projection 与 Lean 基础命令轨迹逐字段等价；
-2. 建立高阶关系内核：局部端口坐标系、刚性区域、可旋转关节和 `mate` 关系；
-3. 从模板连接、并环和刚性片段旋转命令生成关系意图，不展开成 AI 世界坐标；
+2. 将 Lean 关系结果升级为 `pass/reject/indeterminate`，再把内部 `rotateGroup` 验证器接到
+   严格证书桥；
+3. 建立 `mate` 关系，并从模板连接、并环和刚性片段旋转命令生成关系意图，不展开成 AI
+   世界坐标；
 4. 补充配位、同位素和完整立体语义的 canonical projection；
 5. 用点积和有符号三重积增加键角、二面角 postcondition；
 6. 为大于 316 原子的结构实现可证明完备的空间分桶碰撞枚举；

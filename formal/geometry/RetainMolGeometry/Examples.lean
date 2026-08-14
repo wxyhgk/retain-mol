@@ -391,3 +391,155 @@ private def isolatedAtomIntent : GeometryIntent := {
 
 example : compileGeometryPolicy isolatedAtomIntent = none := by
   decide
+
+/-! Spatial relation V1: an exact quarter-turn around a graph-cut single bond. -/
+
+private def jointReference : MoleculeSnapshot := {
+  atoms := [
+    { atomId := "F", symbol := "C", position := { x := 0, y := 0, z := 0 } },
+    { atomId := "M", symbol := "C", position := { x := 1000, y := 0, z := 0 } },
+    { atomId := "R", symbol := "H", position := { x := 1000, y := 1000, z := 0 } },
+    { atomId := "H", symbol := "H", position := { x := 1000, y := 0, z := 1000 } }
+  ]
+  bonds := [
+    { bondId := "axis", atomId1 := "F", atomId2 := "M", order := .single },
+    { bondId := "M-R", atomId1 := "M", atomId2 := "R", order := .single },
+    { bondId := "M-H", atomId1 := "M", atomId2 := "H", order := .single }
+  ]
+}
+
+private def jointQuarterTurn : MoleculeSnapshot := {
+  jointReference with
+  atoms := [
+    { atomId := "F", symbol := "C", position := { x := 0, y := 0, z := 0 } },
+    { atomId := "M", symbol := "C", position := { x := 1000, y := 0, z := 0 } },
+    { atomId := "R", symbol := "H", position := { x := 1000, y := 0, z := 1000 } },
+    { atomId := "H", symbol := "H", position := { x := 1000, y := -1000, z := 0 } }
+  ]
+}
+
+private def exactZeroRatio : RatioBand := {
+  loNum := 0, loDen := 1, hiNum := 0, hiDen := 1
+}
+
+private def exactOneRatio : RatioBand := {
+  loNum := 1, loDen := 1, hiNum := 1, hiDen := 1
+}
+
+private def quarterTurnJoint : RotatableJoint := {
+  commandId := "rotate-quarter-turn"
+  axisBondId := "axis"
+  fixedAxisAtomId := "F"
+  movingAxisAtomId := "M"
+  movingAtomIds := ["M", "R", "H"]
+  region := {
+    atomIds := ["F", "M", "R", "H"]
+    frame := {
+      originAtomId := "F"
+      axisAtomId := "M"
+      radialAtomId := "R"
+    }
+    handednessAtomId := "H"
+    maxSquaredDistanceDelta := 0
+  }
+  turn := {
+    cosineSign := .nearZero
+    sineSign := .positive
+    cosineSquared := exactZeroRatio
+    sineSquared := exactOneRatio
+  }
+}
+
+example : jointTopologyIsWellFormed jointReference quarterTurnJoint = true := by
+  decide
+
+example : rotatableJointIsSatisfied jointReference jointQuarterTurn quarterTurnJoint = true := by
+  decide
+
+example : RotatableJointSemantics jointReference jointQuarterTurn quarterTurnJoint := by
+  apply rotatableJointIsSatisfied_sound
+  decide
+
+private def mirroredQuarterTurn : MoleculeSnapshot := {
+  jointQuarterTurn with
+  atoms := jointQuarterTurn.atoms.map fun atom =>
+    if atom.atomId == "H" then
+      { atom with position := { x := 1000, y := 1000, z := 0 } }
+    else atom
+}
+
+/-- Same pair distances and turn reference, but the handedness witness flips. -/
+example :
+    rigidAtomGroupIsPreserved jointReference mirroredQuarterTurn
+      (properRigidGroup quarterTurnJoint.region) = true := by
+  decide
+
+example :
+    orientationIsPreserved jointReference mirroredQuarterTurn
+      (properRigidOrientation quarterTurnJoint.region) = false := by
+  decide
+
+example :
+    rotatableJointIsSatisfied jointReference mirroredQuarterTurn quarterTurnJoint = false := by
+  decide
+
+/-- A rigid no-op cannot satisfy a requested positive quarter-turn. -/
+example : rotatableJointIsSatisfied jointReference jointReference quarterTurnJoint = false := by
+  decide
+
+private def incompleteMovingSide : RotatableJoint := {
+  quarterTurnJoint with movingAtomIds := ["M", "R"]
+}
+
+example : jointTopologyIsWellFormed jointReference incompleteMovingSide = false := by
+  decide
+
+private def ringAxisReference : MoleculeSnapshot := {
+  jointReference with
+  bonds := jointReference.bonds ++ [
+    { bondId := "H-F", atomId1 := "H", atomId2 := "F", order := .single }
+  ]
+}
+
+/-- Removing an in-ring axis does not isolate the declared moving side. -/
+example : jointTopologyIsWellFormed ringAxisReference quarterTurnJoint = false := by
+  decide
+
+private def degenerateFrameJoint : RotatableJoint := {
+  quarterTurnJoint with
+  region := {
+    quarterTurnJoint.region with
+    frame := { quarterTurnJoint.region.frame with radialAtomId := "M" }
+  }
+}
+
+example : jointTopologyIsWellFormed jointReference degenerateFrameJoint = false := by
+  decide
+
+private def detachedAngleFrameJoint : RotatableJoint := {
+  quarterTurnJoint with
+  region := {
+    quarterTurnJoint.region with
+    frame := {
+      originAtomId := "M"
+      axisAtomId := "R"
+      radialAtomId := "F"
+    }
+    handednessAtomId := "H"
+  }
+}
+
+/-- The turn frame must be the ordered axis bond, not another valid local frame. -/
+example : jointTopologyIsWellFormed jointReference detachedAngleFrameJoint = false := by
+  decide
+
+private def truncatedFrameCandidate : MoleculeSnapshot := {
+  atoms := jointReference.atoms.take 3
+  bonds := []
+}
+
+/-- A local frame cannot certify an incomplete candidate graph. -/
+example :
+    spatialRelationIsSatisfied jointReference truncatedFrameCandidate
+      (.portFrame quarterTurnJoint.region.frame) = false := by
+  decide

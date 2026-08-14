@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "relationScope": "spatial-relation-v1",
+  "coordinateScale": 1000,
+  "reference": {
+    "atoms": [
+      {"atomId": "F", "symbol": "C", "positionUnits": [0, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "M", "symbol": "C", "positionUnits": [1000, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "R", "symbol": "H", "positionUnits": [1000, 1000, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "H", "symbol": "H", "positionUnits": [1000, 0, 1000], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false}
+    ],
+    "bonds": [
+      {"bondId": "axis", "atomId1": "F", "atomId2": "M", "order": "single"},
+      {"bondId": "M-R", "atomId1": "M", "atomId2": "R", "order": "single"},
+      {"bondId": "M-H", "atomId1": "M", "atomId2": "H", "order": "single"}
+    ]
+  },
+  "candidate": {
+    "atoms": [
+      {"atomId": "F", "symbol": "C", "positionUnits": [0, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "M", "symbol": "C", "positionUnits": [1000, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "R", "symbol": "H", "positionUnits": [1000, 0, 1000], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "H", "symbol": "H", "positionUnits": [1000, -1000, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false}
+    ],
+    "bonds": [
+      {"bondId": "axis", "atomId1": "F", "atomId2": "M", "order": "single"},
+      {"bondId": "M-R", "atomId1": "M", "atomId2": "R", "order": "single"},
+      {"bondId": "M-H", "atomId1": "M", "atomId2": "H", "order": "single"}
+    ]
+  },
+  "relations": [
+    {
+      "kind": "rotatableJoint",
+      "commandId": "rotate-quarter-turn",
+      "axisBondId": "axis",
+      "fixedAxisAtomId": "F",
+      "movingAxisAtomId": "M",
+      "movingAtomIds": ["M", "R", "H"],
+      "region": {
+        "atomIds": ["F", "M", "R", "H"],
+        "frame": {"originAtomId": "F", "axisAtomId": "M", "radialAtomId": "R"},
+        "handednessAtomId": "H"
+      },
+      "angleDegrees": 90
+    }
+  ]
+}

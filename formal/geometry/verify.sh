@@ -19,3 +19,7 @@ lake env lean "$COMMAND_GENERATED"
 INTENT_GENERATED=".lake/generated/PrimitiveIntent.lean"
 python3 tools/intent_json_to_lean.py examples/primitive-intent.json "$INTENT_GENERATED"
 lake env lean "$INTENT_GENERATED"
+
+RELATION_GENERATED=".lake/generated/QuarterTurnRelation.lean"
+python3 tools/relation_json_to_lean.py examples/quarter-turn-relation.json "$RELATION_GENERATED"
+lake env lean "$RELATION_GENERATED"
