@@ -33,6 +33,16 @@ structure GeometryPolicy where
   rigidAtomGroups : List RigidAtomGroup := []
 deriving Repr, DecidableEq, BEq
 
+/--
+A deliberately conservative 0.5 Angstrom hard floor for atoms that are not
+directly bonded. Coordinates use the fixed 1000 units/Angstrom scale.
+This excludes impossible overlaps; it is not a van der Waals model.
+-/
+def minimumNonBondedSquared : Int := 250000
+
+/-- A separate 0.4 Angstrom hard floor for directly bonded atoms. -/
+def minimumBondSquared : Int := 160000
+
 /-- Compatibility name for callers created before the trusted-policy boundary. -/
 abbrev GeometryCertificate := GeometryPolicy
 
@@ -41,11 +51,67 @@ inductive ValidationIssue where
   | candidateTopologyInvalid
   | molecularGraphChanged
   | policyInvalid
+  | bondTooShort (bondId : BondId)
+  | nonBondedCollision (atomId1 atomId2 : AtomId)
   | fixedAtomChanged (atomId : AtomId)
   | distanceOutOfRange (atomId1 atomId2 : AtomId)
   | orientationInvalid (index : Nat)
   | rigidGroupDistorted (index : Nat)
 deriving Repr, DecidableEq, BEq
+
+def unorderedPairs : List α → List (α × α)
+  | [] => []
+  | value :: rest => rest.map (fun other => (value, other)) ++ unorderedPairs rest
+
+def atomsDirectlyBonded
+    (molecule : MoleculeSnapshot)
+    (left right : Atom) : Bool :=
+  molecule.bonds.any fun bond =>
+    (bond.atomId1 == left.atomId && bond.atomId2 == right.atomId) ||
+      (bond.atomId1 == right.atomId && bond.atomId2 == left.atomId)
+
+def nonBondedPairIsSeparated
+    (molecule : MoleculeSnapshot)
+    (pair : Atom × Atom) : Bool :=
+  atomsDirectlyBonded molecule pair.1 pair.2 ||
+    decide (minimumNonBondedSquared ≤
+      Vec3.squaredDistance pair.1.position pair.2.position)
+
+def nonBondedCollisionFree (molecule : MoleculeSnapshot) : Bool :=
+  (unorderedPairs molecule.atoms).all (nonBondedPairIsSeparated molecule)
+
+def bondIsSeparated (molecule : MoleculeSnapshot) (bond : Bond) : Bool :=
+  match findAtom molecule bond.atomId1, findAtom molecule bond.atomId2 with
+  | some atom1, some atom2 =>
+      decide (minimumBondSquared ≤ Vec3.squaredDistance atom1.position atom2.position)
+  | _, _ => false
+
+def NonBondedCollisionSemantics (molecule : MoleculeSnapshot) : Prop :=
+  ∀ pair ∈ unorderedPairs molecule.atoms,
+    nonBondedPairIsSeparated molecule pair = true
+
+private theorem allTrueOfMem
+    (values : List α)
+    (predicate : α → Bool)
+    (hAll : values.all predicate = true)
+    (value : α)
+    (hMem : value ∈ values) :
+    predicate value = true := by
+  induction values with
+  | nil => simp at hMem
+  | cons head tail ih =>
+      simp only [List.all_cons, Bool.and_eq_true] at hAll
+      simp only [List.mem_cons] at hMem
+      rcases hMem with rfl | hTail
+      · exact hAll.1
+      · exact ih hAll.2 hTail
+
+theorem nonBondedCollisionFree_sound
+    (molecule : MoleculeSnapshot)
+    (h : nonBondedCollisionFree molecule = true) :
+    NonBondedCollisionSemantics molecule := by
+  intro pair hPair
+  exact allTrueOfMem _ _ h pair hPair
 
 private def withTwoPositions
     (molecule : MoleculeSnapshot)
@@ -59,7 +125,7 @@ def fixedAtomIsPreserved
     (reference candidate : MoleculeSnapshot)
     (atomId : AtomId) : Bool :=
   match findAtom reference atomId, findAtom candidate atomId with
-  | some expected, some actual => expected.symbol == actual.symbol &&
+  | some expected, some actual => atomIdentityMatches expected actual &&
       expected.position == actual.position
   | _, _ => false
 
@@ -91,10 +157,6 @@ def orientationIsPreserved
         orientationSignAgrees expectedVolume actualVolume
   | _, _ => false
 
-private def allPairs : List α → List (α × α)
-  | [] => []
-  | value :: rest => rest.map (fun other => (value, other)) ++ allPairs rest
-
 private def pairDistanceIsPreserved
     (reference candidate : MoleculeSnapshot)
     (tolerance : Nat)
@@ -112,7 +174,7 @@ def rigidAtomGroupIsPreserved
     (group : RigidAtomGroup) : Bool :=
   decide (2 ≤ group.atomIds.length) &&
     allUnique group.atomIds &&
-    (allPairs group.atomIds).all
+    (unorderedPairs group.atomIds).all
       (pairDistanceIsPreserved reference candidate group.maxSquaredDistanceDelta)
 
 private def distanceBoundIsWellFormed
@@ -171,6 +233,7 @@ def geometryPolicyIsWellFormed
       !policy.orientationChecks.isEmpty ||
       !policy.rigidAtomGroups.isEmpty
   !policy.policyId.isEmpty &&
+    expected.bonds.all (bondIsSeparated expected) &&
     (!policy.requireGeometryConstraints || hasGeometryConstraints) &&
     allUnique policy.fixedAtomIds &&
     policy.fixedAtomIds.all (fun atomId => (findAtom expected atomId).isSome) &&
@@ -201,6 +264,11 @@ def geometryValidationIssues
     issueUnless (topologyIsWellFormed candidate) .candidateTopologyInvalid ++
     issueUnless (molecularGraphIsPreserved expected candidate) .molecularGraphChanged ++
     issueUnless (geometryPolicyIsWellFormed expected policy) .policyInvalid ++
+    candidate.bonds.filterMap (fun bond =>
+      if bondIsSeparated candidate bond then none else some (.bondTooShort bond.bondId)) ++
+    (unorderedPairs candidate.atoms).filterMap (fun pair =>
+      if nonBondedPairIsSeparated candidate pair then none
+      else some (.nonBondedCollision pair.1.atomId pair.2.atomId)) ++
     policy.fixedAtomIds.filterMap (fun atomId =>
       if fixedAtomIsPreserved expected candidate atomId then none
       else some (.fixedAtomChanged atomId)) ++

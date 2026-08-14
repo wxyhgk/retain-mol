@@ -186,7 +186,15 @@ class FinalArtifactGateTests(unittest.TestCase):
         self.assertEqual(envelope.publication_status(self.out / "final-snapshot.json"), VerificationStatus.PASS)
         contexts = {axis.verification_context_sha256 for axis in envelope.axes.values()}
         self.assertEqual(contexts, {envelope.verification_context_sha256})
-        self.assertTrue((self.out / "geometry-request.json").exists())
+        geometry_request = self.out / "geometry-request.json"
+        self.assertTrue(geometry_request.exists())
+        geometry_request_sha256 = self.sha256(geometry_request)
+        context = json.loads((self.out / "verification-context.json").read_text())
+        self.assertEqual(context["geometryRequestSha256"], geometry_request_sha256)
+        self.assertEqual(
+            check.call_args.kwargs["expected_request_sha256"],
+            geometry_request_sha256,
+        )
 
     def test_geometry_request_uses_only_the_trusted_policy_spec(self) -> None:
         snapshot = json.loads(self.snapshot.read_text())

@@ -12,7 +12,9 @@ from typing import Any, Iterable
 
 SCHEMA_VERSION = 2
 COORDINATE_SCALE = 1000
-MAX_ATOMS = 10_000
+# The validator enumerates every unordered atom pair for collision safety.
+# 316 atoms stay below the 50,000-pair proof budget.
+MAX_ATOMS = 316
 MAX_BONDS = 20_000
 MAX_CHECKS = 50_000
 MAX_RIGID_GROUP_ATOMS = 256
@@ -281,6 +283,8 @@ def render_evaluation() -> str:
             '  | .candidateTopologyInvalid => "candidate-topology-invalid"',
             '  | .molecularGraphChanged => "molecular-graph-changed"',
             '  | .policyInvalid => "policy-invalid"',
+            '  | .bondTooShort _ => "bond-too-short"',
+            '  | .nonBondedCollision _ _ => "non-bonded-collision"',
             '  | .fixedAtomChanged _ => "fixed-atom-changed"',
             '  | .distanceOutOfRange _ _ => "distance-out-of-range"',
             '  | .orientationInvalid _ => "orientation-invalid"',

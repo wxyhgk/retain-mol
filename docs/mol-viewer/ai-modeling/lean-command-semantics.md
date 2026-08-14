@@ -74,9 +74,18 @@ condition：移动原子不改变键表，增加键不改变原子表。
 | 连接方向 | 锚点局部 frame 中的向量分量区间 |
 | 刚体不镜像 | 全部两两距离加至少一个有向体积检查 |
 
-最终 policy 不能由 AI 直接提交。应先定义 `GeometryIntent`，再实现
-`compileGeometryPolicy : GeometryIntent -> GeometryPolicy`，并证明编译正确性。否则 AI 可以提交
-一个空 policy 或极宽阈值来自证通过。
+最终 policy 不能由 AI 直接提交。当前 `RetainMolGeometry/Intent.lean` 已实现最小
+`GeometryIntent V1`：起始快照、七种基础命令、完整预期快照和保护锚点。Lean 侧
+`compileGeometryPolicy` 生成全部预期键的保守距离范围，并证明成功编译同时意味着：
+
+- 命令序列精确产生预期快照；
+- 保护锚点保持完整身份和坐标不变，并且任何中间 atom 命令都不能以这些 ID 为目标；
+- policy 由固定编译器生成且 well-formed；
+- 预期快照能通过该 policy 的自验证。
+
+V1 尚未进入生产 JSON gate，也没有表达键角、二面角、平面性和 attachment frame。当前定理
+名称刻意限定为 `compileGeometryPolicy_self_check_sound`：它证明编译输入与生成策略的自洽，
+不声称任意通过策略的 candidate 已满足尚未编码的空间意图。
 
 ## 博弈与选择方法
 
@@ -99,6 +108,8 @@ condition：移动原子不改变键表，增加键不改变原子表。
 1. 从生产 receipt 导出 command trace，并验证 runtime projection 与 Lean trace 字段一致。
 2. 先只把 `atom.move/add/remove` 与 `bond.remove` 作为最高可信命令；其余命令在字段和化学 oracle
    对齐后提升等级。
-3. 定义受信 `GeometryIntent` 及 policy compiler，优先加入碰撞、键角、二面角和 attachment frame。
-4. 修复几何 checker 的单次快照读取和部署信任根，任何预检异常都 fail-closed。
+3. 给已形式化的 `GeometryIntent V1` 增加严格 bridge，再依次加入键角、二面角和平面/attachment
+   frame，所有退化构型 fail-closed。
+4. 继续收紧部署信任根；当前 checker 已单次读取请求、冻结临时快照、核对请求哈希，任何
+   Decimal 预检异常都返回 `INDETERMINATE`。
 5. 建立无参考泄漏的 tournament public/vault 目录和五轮协议。

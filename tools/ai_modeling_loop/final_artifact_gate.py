@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -324,6 +325,7 @@ def verify_final_artifact(
     geometry_request: Mapping[str, Any] = {
         "policy": {"policyId": geometry_policy_version},
     }
+    geometry_request_sha256: str | None = None
     if bridge.final_snapshot is not None:
         expected_snapshot = load_strict_json(builder_snapshot_path)
         geometry_request = build_geometry_request(
@@ -331,7 +333,9 @@ def verify_final_artifact(
             bridge.final_snapshot,
             geometry_policy_spec,
         )
-        geometry_request_path.write_bytes(canonical_json_bytes(geometry_request) + b"\n")
+        geometry_request_bytes = canonical_json_bytes(geometry_request) + b"\n"
+        geometry_request_sha256 = hashlib.sha256(geometry_request_bytes).hexdigest()
+        geometry_request_path.write_bytes(geometry_request_bytes)
 
     policy_sha256 = sha256_json(geometry_request["policy"])
     coordinate_receipt_sha256 = (
@@ -364,7 +368,10 @@ def verify_final_artifact(
             resolved_target_evidence["evaluatorSourceSha256"] = sha256_file(target_evaluator_path)
     formal = None
     if bridge.status is VerificationStatus.PASS and transport_trusted:
-        formal = check_formal_geometry(geometry_request_path)
+        formal = check_formal_geometry(
+            geometry_request_path,
+            expected_request_sha256=geometry_request_sha256,
+        )
     context = {
         "schemaVersion": 1,
         "verifierVersion": verifier_version,
@@ -381,9 +388,7 @@ def verify_final_artifact(
             if run_manifest_path is not None and run_manifest_path.is_file()
             else None
         ),
-        "geometryRequestSha256": (
-            sha256_file(geometry_request_path) if geometry_request_path.is_file() else None
-        ),
+        "geometryRequestSha256": geometry_request_sha256,
         "runSpecSha256": (
             sha256_file(run_spec_path)
             if run_spec_path is not None and run_spec_path.is_file()

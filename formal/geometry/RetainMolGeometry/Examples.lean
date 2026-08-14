@@ -208,6 +208,44 @@ private def orientationOnlyPolicy : GeometryPolicy := {
 example : validateGeometryPolicy validCandidate nearPlanarCenter orientationOnlyPolicy = false := by
   decide
 
+private def overlappingChain : MoleculeSnapshot := {
+  atoms := [
+    { atomId := "A", symbol := "C", position := { x := 0, y := 0, z := 0 } },
+    { atomId := "B", symbol := "C", position := { x := 1500, y := 0, z := 0 } },
+    { atomId := "C", symbol := "C", position := { x := 0, y := 0, z := 0 } }
+  ]
+  bonds := [
+    { bondId := "AB", atomId1 := "A", atomId2 := "B", order := .single },
+    { bondId := "BC", atomId1 := "B", atomId2 := "C", order := .single }
+  ]
+}
+
+example : nonBondedCollisionFree overlappingChain = false := by
+  decide
+
+private def zeroLengthBond : MoleculeSnapshot := {
+  atoms := [
+    { atomId := "A", symbol := "C", position := { x := 0, y := 0, z := 0 } },
+    { atomId := "B", symbol := "C", position := { x := 0, y := 0, z := 0 } }
+  ]
+  bonds := [
+    { bondId := "A-B", atomId1 := "A", atomId2 := "B", order := .single }
+  ]
+}
+
+private def zeroLengthPolicy : GeometryPolicy := {
+  policyId := "zero-length"
+  distanceBounds := [
+    { atomId1 := "A", atomId2 := "B", minSquared := 0, maxSquared := 0 }
+  ]
+}
+
+example : geometryPolicyIsWellFormed zeroLengthBond zeroLengthPolicy = false := by
+  decide
+
+example : validateGeometryPolicy zeroLengthBond zeroLengthBond zeroLengthPolicy = false := by
+  decide
+
 private def commandBase : MoleculeSnapshot := {
   atoms := [
     { atomId := "A", symbol := "C", position := { x := 0, y := 0, z := 0 } },
@@ -284,4 +322,62 @@ private def parallel : Bond := {
 }
 
 example : applyPrimitiveCommand commandBase (.bondAdd parallel) = none := by
+  decide
+
+private def validGeometryIntent : GeometryIntent := {
+  before := commandBase
+  commands := [
+    .atomMove "B" { x := 1400, y := 100, z := 0 },
+    .atomAdd { atomId := "H", symbol := "H", position := { x := 2300, y := 500, z := 0 } },
+    .bondAdd { bondId := "B-H", atomId1 := "B", atomId2 := "H", order := .single }
+  ]
+  expected := commandBonded
+  protectedAnchorIds := ["A"]
+}
+
+example : geometryIntentIsWellFormed validGeometryIntent = true := by
+  decide
+
+example : (compileGeometryPolicy validGeometryIntent).isSome = true := by
+  decide
+
+private def forgedGeometryIntent : GeometryIntent := {
+  validGeometryIntent with
+  expected := { commandBonded with bonds := [] }
+}
+
+example : compileGeometryPolicy forgedGeometryIntent = none := by
+  decide
+
+private def anchorRoundTripIntent : GeometryIntent := {
+  before := commandBase
+  commands := [
+    .atomMove "A" { x := 50, y := 0, z := 0 },
+    .atomMove "A" { x := 0, y := 0, z := 0 }
+  ]
+  expected := commandBase
+  protectedAnchorIds := ["A"]
+}
+
+example : applyPrimitiveCommands anchorRoundTripIntent.before
+    anchorRoundTripIntent.commands = some anchorRoundTripIntent.expected := by
+  decide
+
+example : compileGeometryPolicy anchorRoundTripIntent = none := by
+  decide
+
+private def isolatedAtom : MoleculeSnapshot := {
+  atoms := [
+    { atomId := "He", symbol := "He", position := { x := 0, y := 0, z := 0 } }
+  ]
+  bonds := []
+}
+
+private def isolatedAtomIntent : GeometryIntent := {
+  before := isolatedAtom
+  commands := []
+  expected := isolatedAtom
+}
+
+example : (compileGeometryPolicy isolatedAtomIntent).isSome = true := by
   decide

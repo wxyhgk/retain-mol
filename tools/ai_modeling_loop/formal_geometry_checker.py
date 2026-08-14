@@ -28,6 +28,8 @@ KNOWN_ISSUES = frozenset({
     "candidate-topology-invalid",
     "molecular-graph-changed",
     "policy-invalid",
+    "bond-too-short",
+    "non-bonded-collision",
     "fixed-atom-changed",
     "distance-out-of-range",
     "orientation-invalid",
@@ -184,10 +186,14 @@ def _resolve_lean_compiler(
     return executable.resolve() if executable.is_file() else None
 
 
-def _exact_geometry_issues(request: Path) -> tuple[str, ...] | None:
+class ExactGeometryRequestError(ValueError):
+    """The immutable request snapshot cannot be checked exactly."""
+
+
+def _exact_geometry_issues(request_bytes: bytes) -> tuple[str, ...]:
     try:
         payload = json.loads(
-            request.read_text(encoding="utf-8"),
+            request_bytes.decode("utf-8", errors="strict"),
             parse_float=Decimal,
             parse_int=Decimal,
             object_pairs_hook=_reject_duplicate_keys,
@@ -202,6 +208,35 @@ def _exact_geometry_issues(request: Path) -> tuple[str, ...] | None:
             for atom in payload["candidate"]["atoms"]
         }
         issues: list[str] = []
+        direct_bonds = {
+            frozenset((bond["atomId1"], bond["atomId2"]))
+            for bond in payload["candidate"]["bonds"]
+        }
+        candidate_atoms = payload["candidate"]["atoms"]
+        minimum_bond_squared = Decimal("0.4") ** 2
+        minimum_non_bonded_squared = Decimal("0.5") ** 2
+        for bond in payload["expected"]["bonds"]:
+            left = expected_positions[bond["atomId1"]]
+            right = expected_positions[bond["atomId2"]]
+            squared = sum((a - b) ** 2 for a, b in zip(left, right))
+            if squared < minimum_bond_squared:
+                issues.append("policy-invalid")
+        for bond in payload["candidate"]["bonds"]:
+            left = candidate_positions[bond["atomId1"]]
+            right = candidate_positions[bond["atomId2"]]
+            squared = sum((a - b) ** 2 for a, b in zip(left, right))
+            if squared < minimum_bond_squared:
+                issues.append("bond-too-short")
+        for left_index, left_atom in enumerate(candidate_atoms):
+            for right_atom in candidate_atoms[left_index + 1:]:
+                atom_pair = frozenset((left_atom["atomId"], right_atom["atomId"]))
+                if atom_pair in direct_bonds:
+                    continue
+                left = candidate_positions[left_atom["atomId"]]
+                right = candidate_positions[right_atom["atomId"]]
+                squared = sum((a - b) ** 2 for a, b in zip(left, right))
+                if squared < minimum_non_bonded_squared:
+                    issues.append("non-bonded-collision")
         for bound in payload["policy"]["distanceBounds"]:
             left = candidate_positions[bound["atomId1"]]
             right = candidate_positions[bound["atomId2"]]
@@ -269,13 +304,14 @@ def _exact_geometry_issues(request: Path) -> tuple[str, ...] | None:
             if distorted:
                 issues.append("rigid-group-distorted")
         return tuple(dict.fromkeys(issues))
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidOperation):
-        return None
+    except (UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidOperation) as error:
+        raise ExactGeometryRequestError(str(error)) from error
 
 
 def check_formal_geometry(
     request_path: Path | str,
     *,
+    expected_request_sha256: str | None = None,
     lean_command: Sequence[str] | str | Path = DEFAULT_LEAN_COMMAND,
     geometry_root: Path | str = DEFAULT_GEOMETRY_ROOT,
     timeout_seconds: float = 30.0,
@@ -293,6 +329,17 @@ def check_formal_geometry(
     if not root.is_dir() or not generator.is_file():
         return _indeterminate("generator-unavailable", "formal geometry generator is unavailable")
     try:
+        request_bytes = request.read_bytes()
+    except OSError as error:
+        return _indeterminate("request-unavailable", str(error))
+    request_sha256 = hashlib.sha256(request_bytes).hexdigest()
+    if expected_request_sha256 is not None and expected_request_sha256 != request_sha256:
+        return _indeterminate(
+            "request-trust-mismatch",
+            "request SHA-256 does not match the frozen caller snapshot",
+            evidence={"requestSha256": request_sha256},
+        )
+    try:
         command = _normalize_command(lean_command)
         timeout = float(timeout_seconds)
         if not math.isfinite(timeout) or timeout <= 0:
@@ -303,23 +350,40 @@ def check_formal_geometry(
     command = _resolved_command(command)
     if command is None:
         return _indeterminate("lean-unavailable", "Lean command could not be resolved")
-    launcher_sha256 = _sha256(Path(command[0]))
+    try:
+        launcher_sha256 = _sha256(Path(command[0]))
+    except OSError as error:
+        return _indeterminate(
+            "checker-evidence-unavailable",
+            str(error),
+            evidence={"requestSha256": request_sha256},
+        )
     compiler = _resolve_lean_compiler(command, cwd=root, timeout=timeout)
     if compiler is None:
         return _indeterminate("lean-compiler-unavailable", "Lean compiler could not be resolved")
-    lean_sha256 = _sha256(compiler)
+    try:
+        lean_sha256 = _sha256(compiler)
+        generator_sha256 = _sha256(generator)
+        formal_source_tree_sha256 = _source_tree_sha256(root)
+    except OSError as error:
+        return _indeterminate(
+            "checker-evidence-unavailable",
+            str(error),
+            evidence={"requestSha256": request_sha256},
+        )
     trusted_digest = trusted_lean_sha256 or os.environ.get("RETAINMOL_TRUSTED_LEAN_SHA256")
     trusted_launcher_digest = (
         trusted_launcher_sha256
         or os.environ.get("RETAINMOL_TRUSTED_LEAN_LAUNCHER_SHA256")
     )
     evidence = {
+        "requestSha256": request_sha256,
         "leanLauncher": command[0],
         "leanLauncherSha256": launcher_sha256,
         "leanExecutable": str(compiler),
         "leanExecutableSha256": lean_sha256,
-        "generatorSha256": _sha256(generator),
-        "formalSourceTreeSha256": _source_tree_sha256(root),
+        "generatorSha256": generator_sha256,
+        "formalSourceTreeSha256": formal_source_tree_sha256,
     }
     if not trusted_digest:
         return _indeterminate(
@@ -346,14 +410,21 @@ def check_formal_geometry(
             evidence=evidence,
         )
 
-    with tempfile.TemporaryDirectory(prefix="retainmol_formal_geometry_") as directory:
+    try:
+        temporary_directory = tempfile.TemporaryDirectory(prefix="retainmol_formal_geometry_")
+    except OSError as error:
+        return _indeterminate("temporary-directory-unavailable", str(error), evidence=evidence)
+
+    with temporary_directory as directory:
+        request_snapshot = Path(directory) / "geometry-request.json"
         generated = Path(directory) / "EvaluateGeometry.lean"
         try:
+            request_snapshot.write_bytes(request_bytes)
             generation = subprocess.run(
                 [
                     sys.executable,
                     str(generator),
-                    str(request),
+                    str(request_snapshot),
                     str(generated),
                     "--mode",
                     "evaluate",
@@ -371,21 +442,22 @@ def check_formal_geometry(
             return _indeterminate("generator-failed", "formal geometry generator output is invalid")
         if generation.returncode != 0 or not generated.is_file():
             return _indeterminate("generator-failed", "request schema or generation failed")
-        exact_issues = _exact_geometry_issues(request)
-        if exact_issues:
-            if "policy-invalid" in exact_issues:
-                return _indeterminate(
-                    "exact-geometry-policy-invalid",
-                    *exact_issues,
-                    evidence={**evidence, "generatedLeanSha256": _sha256(generated)},
-                )
-            return FormalGeometryCheckResult(
-                status=VerificationStatus.REJECT,
-                code="exact-geometry-policy-rejected",
-                issues=exact_issues,
-                evidence={**evidence, "generatedLeanSha256": _sha256(generated)},
+        try:
+            result_evidence = {**evidence, "generatedLeanSha256": _sha256(generated)}
+        except OSError as error:
+            return _indeterminate(
+                "checker-evidence-unavailable",
+                str(error),
+                evidence=evidence,
             )
-
+        try:
+            exact_issues = _exact_geometry_issues(request_bytes)
+        except ExactGeometryRequestError as error:
+            return _indeterminate(
+                "exact-geometry-precheck-failed",
+                str(error),
+                evidence=result_evidence,
+            )
         try:
             evaluation = subprocess.run(
                 [*command, str(generated)],
@@ -404,9 +476,24 @@ def check_formal_geometry(
             return _indeterminate("lean-failed", "Lean evaluation failed")
         try:
             result = parse_lean_evaluation_output(evaluation.stdout)
+            if result.status is VerificationStatus.INDETERMINATE:
+                return replace(result, evidence=result_evidence)
+            if exact_issues:
+                if "policy-invalid" in exact_issues:
+                    return _indeterminate(
+                        "exact-geometry-policy-invalid",
+                        *exact_issues,
+                        evidence=result_evidence,
+                    )
+                return FormalGeometryCheckResult(
+                    status=VerificationStatus.REJECT,
+                    code="exact-geometry-policy-rejected",
+                    issues=exact_issues,
+                    evidence=result_evidence,
+                )
             return replace(
                 result,
-                evidence={**evidence, "generatedLeanSha256": _sha256(generated)},
+                evidence=result_evidence,
             )
         except (json.JSONDecodeError, ValueError, TypeError):
             return _indeterminate("lean-output-invalid", "Lean result marker could not be parsed")

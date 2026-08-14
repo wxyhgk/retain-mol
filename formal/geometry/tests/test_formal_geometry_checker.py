@@ -10,12 +10,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 FORMAL_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = FORMAL_ROOT.parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ai_modeling_loop"))
 
+import formal_geometry_checker  # noqa: E402
 from formal_geometry_checker import check_formal_geometry  # noqa: E402
 from formal_verdict import VerificationStatus  # noqa: E402
 
@@ -45,20 +47,150 @@ class FormalGeometryCheckerTests(unittest.TestCase):
     def check_payload(self, payload: dict):
         with tempfile.TemporaryDirectory() as directory:
             request = Path(directory) / "request.json"
-            request.write_text(json.dumps(payload), encoding="utf-8")
+            request_bytes = json.dumps(payload).encode("utf-8")
+            request.write_bytes(request_bytes)
             return check_formal_geometry(
                 request,
+                expected_request_sha256=hashlib.sha256(request_bytes).hexdigest(),
                 geometry_root=FORMAL_ROOT,
                 lean_command=(self.lake, "env", "lean"),
                 trusted_lean_sha256=self.lean_sha256,
                 trusted_launcher_sha256=self.lake_sha256,
             )
 
+    def non_bonded_pair_payload(self, position: list[float]) -> dict:
+        payload = copy.deepcopy(self.valid)
+        payload["expected"] = {
+            "atoms": [
+                {"atomId": "A", "symbol": "C", "position": [0, 0, 0]},
+                {"atomId": "B", "symbol": "C", "position": position},
+            ],
+            "bonds": [],
+        }
+        payload["candidate"] = copy.deepcopy(payload["expected"])
+        payload["policy"] = {
+            "policyId": "non-bonded-boundary",
+            "requireGeometryConstraints": False,
+            "requireAllBondDistances": False,
+            "fixedAtomIds": [],
+            "distanceBounds": [],
+            "orientationChecks": [],
+            "rigidAtomGroups": [],
+        }
+        return payload
+
     def test_valid_candidate_passes(self) -> None:
         result = self.check_payload(copy.deepcopy(self.valid))
         self.assertEqual(result.status, VerificationStatus.PASS)
         self.assertEqual(result.code, "geometry-policy-satisfied")
         self.assertEqual(result.issues, ())
+
+    def test_evidence_identifies_the_consumed_request_bytes(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        encoded = json.dumps(payload).encode("utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            request = Path(directory) / "request.json"
+            request.write_bytes(encoded)
+            result = check_formal_geometry(
+                request,
+                expected_request_sha256=hashlib.sha256(encoded).hexdigest(),
+                geometry_root=FORMAL_ROOT,
+                lean_command=(self.lake, "env", "lean"),
+                trusted_lean_sha256=self.lean_sha256,
+                trusted_launcher_sha256=self.lake_sha256,
+            )
+
+        self.assertEqual(result.status, VerificationStatus.PASS)
+        self.assertEqual(result.evidence["requestSha256"], hashlib.sha256(encoded).hexdigest())
+
+    def test_exact_precheck_failure_is_indeterminate(self) -> None:
+        with mock.patch.object(
+            formal_geometry_checker,
+            "_exact_geometry_issues",
+            side_effect=formal_geometry_checker.ExactGeometryRequestError("forced failure"),
+        ):
+            result = self.check_payload(copy.deepcopy(self.valid))
+
+        self.assertEqual(result.status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(result.code, "exact-geometry-precheck-failed")
+
+    def test_original_request_mutation_does_not_change_the_consumed_snapshot(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        encoded = json.dumps(payload).encode("utf-8")
+        original_run = formal_geometry_checker.subprocess.run
+        with tempfile.TemporaryDirectory() as directory:
+            request = Path(directory) / "request.json"
+            request.write_bytes(encoded)
+
+            def mutate_original_before_generation(*args, **kwargs):
+                command = args[0]
+                if len(command) >= 2 and command[1].endswith("json_to_lean.py"):
+                    request.write_text("{}", encoding="utf-8")
+                return original_run(*args, **kwargs)
+
+            with mock.patch.object(
+                formal_geometry_checker.subprocess,
+                "run",
+                side_effect=mutate_original_before_generation,
+            ):
+                result = check_formal_geometry(
+                    request,
+                    expected_request_sha256=hashlib.sha256(encoded).hexdigest(),
+                    geometry_root=FORMAL_ROOT,
+                    lean_command=(self.lake, "env", "lean"),
+                    trusted_lean_sha256=self.lean_sha256,
+                    trusted_launcher_sha256=self.lake_sha256,
+                )
+
+        self.assertEqual(result.status, VerificationStatus.PASS)
+        self.assertEqual(result.evidence["requestSha256"], hashlib.sha256(encoded).hexdigest())
+
+    def test_request_hash_mismatch_is_indeterminate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            request = Path(directory) / "request.json"
+            request.write_text(json.dumps(self.valid), encoding="utf-8")
+            result = check_formal_geometry(
+                request,
+                expected_request_sha256="0" * 64,
+                geometry_root=FORMAL_ROOT,
+            )
+
+        self.assertEqual(result.status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(result.code, "request-trust-mismatch")
+
+    def test_evidence_hash_failure_is_indeterminate(self) -> None:
+        with mock.patch.object(
+            formal_geometry_checker,
+            "_sha256",
+            side_effect=OSError("forced evidence failure"),
+        ):
+            result = self.check_payload(copy.deepcopy(self.valid))
+
+        self.assertEqual(result.status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(result.code, "checker-evidence-unavailable")
+
+    def test_temporary_directory_failure_is_indeterminate(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        request_bytes = json.dumps(payload).encode("utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            request = Path(directory) / "request.json"
+            request.write_bytes(request_bytes)
+            with mock.patch.object(
+                formal_geometry_checker.tempfile,
+                "TemporaryDirectory",
+                side_effect=OSError("forced temporary directory failure"),
+            ):
+                result = check_formal_geometry(
+                    request,
+                    expected_request_sha256=hashlib.sha256(request_bytes).hexdigest(),
+                    geometry_root=FORMAL_ROOT,
+                    lean_command=(self.lake, "env", "lean"),
+                    trusted_lean_sha256=self.lean_sha256,
+                    trusted_launcher_sha256=self.lake_sha256,
+                )
+
+        self.assertEqual(result.status, VerificationStatus.INDETERMINATE)
+        self.assertEqual(result.code, "temporary-directory-unavailable")
 
     def test_graph_change_is_a_candidate_reject(self) -> None:
         payload = copy.deepcopy(self.valid)
@@ -80,6 +212,85 @@ class FormalGeometryCheckerTests(unittest.TestCase):
         result = self.check_payload(payload)
         self.assertEqual(result.status, VerificationStatus.REJECT)
         self.assertIn("distance-out-of-range", result.issues)
+
+    def test_non_bonded_overlap_is_rejected_even_when_bond_lengths_are_valid(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        payload["expected"] = {
+            "atoms": [
+                {"atomId": "A", "symbol": "C", "position": [0, 0, 0]},
+                {"atomId": "B", "symbol": "C", "position": [1.5, 0, 0]},
+                {"atomId": "C", "symbol": "C", "position": [0, 0, 0]},
+            ],
+            "bonds": [
+                {"bondId": "AB", "atomId1": "A", "atomId2": "B", "order": "single"},
+                {"bondId": "BC", "atomId1": "B", "atomId2": "C", "order": "single"},
+            ],
+        }
+        payload["candidate"] = copy.deepcopy(payload["expected"])
+        payload["policy"] = {
+            "policyId": "overlap-attack",
+            "requireGeometryConstraints": True,
+            "requireAllBondDistances": True,
+            "fixedAtomIds": [],
+            "distanceBounds": [
+                {"atomId1": "A", "atomId2": "B", "minAngstrom": 1.4, "maxAngstrom": 1.6},
+                {"atomId1": "B", "atomId2": "C", "minAngstrom": 1.4, "maxAngstrom": 1.6},
+            ],
+            "orientationChecks": [],
+            "rigidAtomGroups": [],
+        }
+
+        result = self.check_payload(payload)
+
+        self.assertEqual(result.status, VerificationStatus.REJECT)
+        self.assertIn("non-bonded-collision", result.issues)
+
+    def test_directly_bonded_overlap_is_not_exempt_from_the_hard_floor(self) -> None:
+        payload = copy.deepcopy(self.valid)
+        payload["expected"] = {
+            "atoms": [
+                {"atomId": "A", "symbol": "C", "position": [0, 0, 0]},
+                {"atomId": "B", "symbol": "C", "position": [0, 0, 0]},
+            ],
+            "bonds": [
+                {"bondId": "AB", "atomId1": "A", "atomId2": "B", "order": "single"},
+            ],
+        }
+        payload["candidate"] = copy.deepcopy(payload["expected"])
+        payload["policy"] = {
+            "policyId": "bond-overlap",
+            "requireGeometryConstraints": True,
+            "requireAllBondDistances": True,
+            "fixedAtomIds": [],
+            "distanceBounds": [
+                {"atomId1": "A", "atomId2": "B", "minAngstrom": 0, "maxAngstrom": 0},
+            ],
+            "orientationChecks": [],
+            "rigidAtomGroups": [],
+        }
+
+        result = self.check_payload(payload)
+
+        self.assertEqual(result.status, VerificationStatus.INDETERMINATE)
+        self.assertIn("policy-invalid", result.issues)
+
+    def test_quantized_non_bonded_collision_is_conservatively_rejected(self) -> None:
+        result = self.check_payload(self.non_bonded_pair_payload([0.35449, 0.35349, 0]))
+
+        self.assertEqual(result.status, VerificationStatus.REJECT)
+        self.assertIn("non-bonded-collision", result.issues)
+
+    def test_decimal_non_bonded_collision_is_conservatively_rejected(self) -> None:
+        result = self.check_payload(self.non_bonded_pair_payload([0.3535, 0.3535, 0]))
+
+        self.assertEqual(result.status, VerificationStatus.REJECT)
+        self.assertEqual(result.code, "exact-geometry-policy-rejected")
+        self.assertIn("non-bonded-collision", result.issues)
+
+    def test_exact_non_bonded_hard_floor_is_accepted(self) -> None:
+        result = self.check_payload(self.non_bonded_pair_payload([0.5, 0, 0]))
+
+        self.assertEqual(result.status, VerificationStatus.PASS)
 
     def test_missing_lean_is_indeterminate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -239,7 +450,7 @@ class FormalGeometryCheckerTests(unittest.TestCase):
         result = self.check_payload(payload)
 
         self.assertEqual(result.status, VerificationStatus.INDETERMINATE)
-        self.assertEqual(result.code, "exact-geometry-policy-invalid")
+        self.assertEqual(result.code, "trusted-geometry-input-invalid")
         self.assertIn("policy-invalid", result.issues)
 
     def test_untrusted_lean_binary_cannot_report_pass(self) -> None:
