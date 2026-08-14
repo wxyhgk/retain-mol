@@ -26,6 +26,8 @@ BOND_ORDERS = {
     "aromatic": ".aromatic",
 }
 
+EVALUATION_PREFIX = "RETAINMOL_GEOMETRY_RESULT:"
+
 
 def reject_duplicate_keys(pairs: Iterable[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
@@ -271,7 +273,32 @@ def render_policy(policy: Any) -> str:
     )
 
 
-def render_document(payload: Any) -> str:
+def render_evaluation() -> str:
+    return "\n".join(
+        [
+            "private def validationIssueCode : ValidationIssue → String",
+            '  | .expectedTopologyInvalid => "expected-topology-invalid"',
+            '  | .candidateTopologyInvalid => "candidate-topology-invalid"',
+            '  | .molecularGraphChanged => "molecular-graph-changed"',
+            '  | .policyInvalid => "policy-invalid"',
+            '  | .fixedAtomChanged _ => "fixed-atom-changed"',
+            '  | .distanceOutOfRange _ _ => "distance-out-of-range"',
+            '  | .orientationInvalid _ => "orientation-invalid"',
+            '  | .rigidGroupDistorted _ => "rigid-group-distorted"',
+            "",
+            "private def evaluationPayload : String :=",
+            "  let issues := geometryValidationIssues expected candidate policy",
+            '  let status := if issues.isEmpty then "pass" else "reject"',
+            "  let encodedIssues := String.intercalate \",\" (issues.map fun issue =>",
+            '    "\\\"" ++ validationIssueCode issue ++ "\\\"")',
+            '  "{\\\"status\\\":\\\"" ++ status ++ "\\\",\\\"issues\\\":[" ++ encodedIssues ++ "]}"',
+            "",
+            f'#eval IO.println ("{EVALUATION_PREFIX}" ++ evaluationPayload)',
+        ]
+    )
+
+
+def render_document(payload: Any, *, mode: str = "proof") -> str:
     payload = strict_object(
         payload,
         "document",
@@ -281,6 +308,19 @@ def render_document(payload: Any) -> str:
         raise ValueError(f"schemaVersion must be {SCHEMA_VERSION}")
     if checked_int(payload["coordinateScale"], "coordinateScale") != COORDINATE_SCALE:
         raise ValueError(f"coordinateScale must be fixed at {COORDINATE_SCALE}")
+    if mode not in {"proof", "evaluate"}:
+        raise ValueError("mode must be 'proof' or 'evaluate'")
+    conclusion = (
+        "\n".join(
+            [
+                "#eval geometryValidationIssues expected candidate policy",
+                "example : validateGeometryPolicy expected candidate policy = true := by",
+                "  decide",
+            ]
+        )
+        if mode == "proof"
+        else render_evaluation()
+    )
     return "\n".join(
         [
             "-- Generated from strict JSON data. Do not edit by hand.",
@@ -291,9 +331,7 @@ def render_document(payload: Any) -> str:
             render_molecule("expected", payload["expected"]),
             render_molecule("candidate", payload["candidate"]),
             render_policy(payload["policy"]),
-            "#eval geometryValidationIssues expected candidate policy",
-            "example : validateGeometryPolicy expected candidate policy = true := by",
-            "  decide",
+            conclusion,
             "",
         ]
     )
@@ -303,9 +341,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--mode", choices=("proof", "evaluate"), default="proof")
     args = parser.parse_args()
 
-    rendered = render_document(load_payload(args.input))
+    rendered = render_document(load_payload(args.input), mode=args.mode)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(rendered, encoding="utf-8")
 

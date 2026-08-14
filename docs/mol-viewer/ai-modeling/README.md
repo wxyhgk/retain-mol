@@ -39,7 +39,8 @@
 对于固定母核、刚性片段和手性/朝向等三维要求，`EditPlan` dry-run 后还可以进入独立的
 [Lean 形式化几何验证层](./formal-geometry-verification.md)。它使用可信策略检查锚点、距离和
 朝向，不替代 builder command 或数值优化器；多代理提案、反驳与机器裁决的边界见
-[对抗式形式化验证循环](./adversarial-formal-loop.md)。
+[对抗式形式化验证循环](./adversarial-formal-loop.md)。最终 SDF、稳定 ID、ExpectedEffect 与
+三轴发布门的完整证据链见[最终产物验证 V2](./final-artifact-verification-v2.md)。
 
 ## 公共入口
 
@@ -174,6 +175,11 @@ if (!preview.ok) {
 - 模板：在原子上连接模板、用两个锚点桥接刚性模板、把环模板并到目标键。
 - 几何：设置键长、键角、二面角，以及绕指定轴刚性旋转一组原子。
 - 安全：严格 JSON schema、稳定调用方 ID、选区限制、锁定对象检查、revision 并发保护、原子化失败、单步 undo。
+
+这里的“支持”表示生产 builder 能执行。独立 `ExpectedEffect V1` 目前只为以下七种原子操作
+定义了可复核语义：`atom.add`、`atom.replace`、`atom.remove`、`atom.move`、`bond.add`、
+`bond.remove`、`bond.setOrder`。包含其他命令的计划仍可执行和预览，但不能进入 verified
+artifact 索引，验证状态必须是 `INDETERMINATE`。
 
 高阶命令示例：
 

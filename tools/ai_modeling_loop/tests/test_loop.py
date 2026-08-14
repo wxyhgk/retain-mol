@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,16 +24,152 @@ from tools.ai_modeling_loop.chemistry import (
     write_sdf,
 )
 from tools.ai_modeling_loop.contracts import list_cases, load_case
+from tools.ai_modeling_loop.artifact_contracts import sha256_file, sha256_json
 from tools.ai_modeling_loop.evaluator import evaluate_candidate
 from tools.ai_modeling_loop.runner import (
+    _rebuild_verified_index,
     _refine_conformer_ensemble,
     _refine_with_xtb_fallback,
+    archive_run,
     record_run,
 )
 from tools.ai_modeling_loop.workspace import prepare_task_bundle
 
 
 class LoopContractsTest(unittest.TestCase):
+    def _write_verified_run(
+        self,
+        root: Path,
+        name: str,
+        *,
+        verification_status: str = "pass",
+        evaluation_passed: bool = True,
+    ) -> Path:
+        run_dir = root / name
+        verification_dir = run_dir / "verification"
+        verification_dir.mkdir(parents=True)
+
+        evidence = {
+            "builder-snapshot.json": {"kind": "builder", "run": name},
+            "identity-map.json": {"kind": "identity", "run": name},
+            "execution.json": {"kind": "execution", "run": name},
+            "expected-effect.json": {"kind": "expected-effect", "run": name},
+            "enforced-plan.json": {"kind": "plan", "run": name},
+            "coordinate-transport.json": {"kind": "coordinate", "run": name},
+        }
+        for relative_path, value in evidence.items():
+            (run_dir / relative_path).write_text(json.dumps(value) + "\n")
+        (run_dir / "edit-plan.json").write_text(
+            json.dumps({"schemaVersion": 1, "planId": name, "commands": []}) + "\n"
+        )
+        (run_dir / "candidate.sdf").write_text(f"candidate:{name}\n")
+        final_snapshot = verification_dir / "final-snapshot.json"
+        final_snapshot.write_text(json.dumps({"run": name}) + "\n")
+        geometry_request = {"policy": {"policyId": "test-policy-v1"}}
+        (verification_dir / "geometry-request.json").write_text(
+            json.dumps(geometry_request) + "\n"
+        )
+
+        evaluation = {
+            "case_id": "case-a",
+            "score": 1.0 if evaluation_passed else 0.0,
+            "passed": evaluation_passed,
+            "failures": [] if evaluation_passed else ["failed"],
+        }
+        (run_dir / "target-reference.sdf").write_bytes(b"reference")
+        (run_dir / "target-evaluator.py").write_text("# archived evaluator\n")
+        reference_digest = sha256_file(run_dir / "target-reference.sdf")
+        evaluator_digest = sha256_file(run_dir / "target-evaluator.py")
+        coordinate_digest = sha256_file(run_dir / "coordinate-transport.json")
+        run_manifest = {
+            "schemaVersion": 1,
+            "runId": name,
+            "createdAt": "2026-08-14T00:00:00+00:00",
+            "caseId": "case-a",
+            "gitCommit": None,
+            "gitDirty": None,
+            "executor": "test-executor",
+            "editPlanSha256": sha256_file(run_dir / "edit-plan.json"),
+            "referenceSdfSha256": reference_digest,
+            "evaluatorSourceSha256": evaluator_digest,
+        }
+        (run_dir / "run-manifest.json").write_text(json.dumps(run_manifest) + "\n")
+        context = {
+            "schemaVersion": 1,
+            "verifierVersion": "test-v1",
+            "geometryPolicyVersion": "test-policy-v1",
+            "builderSnapshotSha256": sha256_file(run_dir / "builder-snapshot.json"),
+            "identityMapSha256": sha256_file(run_dir / "identity-map.json"),
+            "finalSdfSha256": sha256_file(run_dir / "candidate.sdf"),
+            "executionReceiptSha256": sha256_file(run_dir / "execution.json"),
+            "expectedEffectSha256": sha256_file(run_dir / "expected-effect.json"),
+            "enforcedPlanSha256": sha256_file(run_dir / "enforced-plan.json"),
+            "executorOutputSha256": sha256_file(run_dir / "candidate.sdf"),
+            "runManifestSha256": sha256_file(run_dir / "run-manifest.json"),
+            "geometryRequestSha256": sha256_file(verification_dir / "geometry-request.json"),
+            "transportEvidence": {
+                "kind": "direct-no-refinement",
+                "coordinateTransportReceiptSha256": coordinate_digest,
+            },
+            "coordinateTransportReceiptSha256": coordinate_digest,
+            "evaluationSha256": sha256_json(evaluation),
+            "targetEvidence": {
+                "referenceSdfSha256": reference_digest,
+                "evaluatorSourceSha256": evaluator_digest,
+            },
+            "formalCheckerEvidence": {"checker": "test"},
+        }
+        (verification_dir / "verification-context.json").write_text(
+            json.dumps(context) + "\n"
+        )
+        artifact_digest = sha256_file(final_snapshot)
+        context_digest = sha256_json(context)
+        axis_statuses = {
+            "execution": verification_status,
+            "safety": "pass" if verification_status == "pass" else "indeterminate",
+            "target": "pass" if evaluation_passed else "reject",
+        }
+        axes = {
+            axis: {
+                "status": status,
+                "code": f"{axis}-{status}",
+                "checker": f"{axis}-checker",
+                "artifactSha256": artifact_digest,
+                "policySha256": sha256_json(geometry_request["policy"]),
+                "verificationContextSha256": context_digest,
+                "witness": None,
+            }
+            for axis, status in axis_statuses.items()
+        }
+        verification = {
+            "schemaVersion": 2,
+            "status": verification_status,
+            "artifactSha256": artifact_digest,
+            "policySha256": sha256_json(geometry_request["policy"]),
+            "expectedGraphSha256": context["builderSnapshotSha256"],
+            "enforcedPlanSha256": context["enforcedPlanSha256"],
+            "verifierVersion": "test-v1",
+            "verificationContextSha256": context_digest,
+            "axes": axes,
+        }
+        (verification_dir / "verification.json").write_text(json.dumps(verification) + "\n")
+        (run_dir / "run.json").write_text(json.dumps({
+            "runId": name,
+            "createdAt": "2026-08-14T00:00:00+00:00",
+            "gitCommit": None,
+            "gitDirty": None,
+            "executor": "test-executor",
+            "editPlanSha256": sha256_file(run_dir / "edit-plan.json"),
+            "verification": verification,
+            "evaluation": evaluation,
+            "candidateSha256": context["finalSdfSha256"],
+            "executionReceiptSha256": context["executionReceiptSha256"],
+            "coordinateTransportReceiptSha256": coordinate_digest,
+            "referenceSdfSha256": reference_digest,
+            "evaluatorSourceSha256": evaluator_digest,
+        }))
+        return run_dir
+
     def _write_reference_bundle(self, molecule: Chem.Mol, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)
         write_sdf(molecule, directory / "reference.sdf")
@@ -48,8 +186,20 @@ class LoopContractsTest(unittest.TestCase):
         return plan
 
     def _successful_executor(self, case, candidate_source: Path):
-        def execute(*, initial, edit_plan, candidate, metadata, receipt):
-            del initial, edit_plan
+        def execute(
+            *,
+            initial,
+            edit_plan,
+            candidate,
+            metadata,
+            receipt,
+            snapshot,
+            identity_map,
+            coordinate_transport_receipt,
+            expected_effect,
+            enforced_plan,
+        ):
+            del initial, edit_plan, snapshot, identity_map, coordinate_transport_receipt, expected_effect, enforced_plan
             candidate.write_bytes(candidate_source.read_bytes())
             metadata.write_text(json.dumps({
                 "builder": "retainmol-edit-plan",
@@ -138,7 +288,7 @@ class LoopContractsTest(unittest.TestCase):
         case = load_case("GDG1476")
         molecule = embed_distance_geometry(case, 43)
         with tempfile.TemporaryDirectory() as directory:
-            fake = Path(directory) / "fake-xtb"
+            fake = Path(directory) / "fake xtb"
             fake.write_text(
                 f"#!{sys.executable}\n"
                 "import pathlib, sys\n"
@@ -159,6 +309,8 @@ class LoopContractsTest(unittest.TestCase):
                 fixed_atom_indices=(anchor.atom_index for anchor in case.anchors),
                 xtb=str(fake),
             )
+            self.assertEqual(result.command[0], str(fake.resolve()))
+            self.assertEqual(result.executable_sha256, hashlib.sha256(fake.read_bytes()).hexdigest())
             self.assertGreater(result.anchor_rmsd_before_projection, 0.0)
             for anchor in case.anchors:
                 expected = molecule.GetConformer().GetAtomPosition(anchor.atom_index - 1)
@@ -166,6 +318,54 @@ class LoopContractsTest(unittest.TestCase):
                 self.assertAlmostEqual(actual.x, expected.x, places=9)
                 self.assertAlmostEqual(actual.y, expected.y, places=9)
                 self.assertAlmostEqual(actual.z, expected.z, places=9)
+
+    def test_xtb_adapter_rejects_multi_token_wrapper_without_executing_it(self) -> None:
+        case = load_case("GDG1476")
+        molecule = embed_distance_geometry(case, 47)
+        with tempfile.TemporaryDirectory() as directory:
+            wrapper = Path(directory) / "wrapper.py"
+            marker = Path(directory) / "wrapper-ran"
+            wrapper.write_text(
+                "import pathlib\n"
+                f"pathlib.Path({str(marker)!r}).write_text('executed')\n"
+            )
+
+            with self.assertRaisesRegex(ValueError, "single executable path"):
+                optimize_with_xtb(
+                    molecule,
+                    charge=0,
+                    multiplicity=1,
+                    fixed_atom_indices=(),
+                    xtb=f"{sys.executable} {wrapper}",
+                )
+
+            self.assertFalse(marker.exists())
+
+    def test_xtb_adapter_rejects_executable_changed_during_run(self) -> None:
+        case = load_case("GDG1476")
+        molecule = embed_distance_geometry(case, 53)
+        with tempfile.TemporaryDirectory() as directory:
+            fake = Path(directory) / "mutable-xtb"
+            fake.write_text(
+                f"#!{sys.executable}\n"
+                "import pathlib, sys\n"
+                "script = pathlib.Path(__file__)\n"
+                "source = pathlib.Path(sys.argv[1]).read_text()\n"
+                "pathlib.Path('xtbopt.xyz').write_text(source)\n"
+                "script.write_text(script.read_text() + '# changed\\n')\n"
+                "print('TOTAL ENERGY -1.0 Eh')\n"
+                "print('GEOMETRY OPTIMIZATION CONVERGED AFTER 1 ITERATIONS')\n"
+            )
+            os.chmod(fake, 0o755)
+
+            with self.assertRaisesRegex(RuntimeError, "changed while the calculation was running"):
+                optimize_with_xtb(
+                    molecule,
+                    charge=0,
+                    multiplicity=1,
+                    fixed_atom_indices=(),
+                    xtb=str(fake),
+                )
 
     def test_evaluator_exact_match_passes_for_non_clashing_3d(self) -> None:
         case = load_case("GDG1476")
@@ -260,8 +460,20 @@ class LoopContractsTest(unittest.TestCase):
             self._write_reference_bundle(molecule, reference_dir)
             plan = self._write_plan(root, case.case_id)
 
-            def invalid_executor(*, initial, edit_plan, candidate, metadata, receipt):
-                del initial, edit_plan, metadata
+            def invalid_executor(
+                *,
+                initial,
+                edit_plan,
+                candidate,
+                metadata,
+                receipt,
+                snapshot,
+                identity_map,
+                coordinate_transport_receipt,
+                expected_effect,
+                enforced_plan,
+            ):
+                del initial, edit_plan, metadata, snapshot, identity_map, coordinate_transport_receipt, expected_effect, enforced_plan
                 candidate.write_text("not an sdf\n")
                 receipt.write_text(json.dumps({"status": "completed"}))
                 return subprocess.CompletedProcess(["node"], 0, "", "")
@@ -269,7 +481,7 @@ class LoopContractsTest(unittest.TestCase):
             with patch("tools.ai_modeling_loop.runner._execute_edit_plan", invalid_executor):
                 run_dir, result = record_run(case, plan, work_dir=root)
 
-            self.assertEqual(result.failures, ("candidate-invalid",))
+            self.assertEqual(result.failures, ("candidate-invalid", "formal-indeterminate"))
             self.assertEqual(result.score, 0.0)
             self.assertTrue((run_dir / "run.json").exists())
             self.assertTrue((run_dir / "report.md").exists())
@@ -290,6 +502,12 @@ class LoopContractsTest(unittest.TestCase):
                 return_code=0,
                 log_tail="ok",
                 anchor_rmsd_before_projection=0.02,
+                executable_sha256="a" * 64,
+                input_xyz_sha256=hashlib.sha256(b"input xyz").hexdigest(),
+                output_xyz_sha256=hashlib.sha256(b"output xyz").hexdigest(),
+                input_xyz_text="input xyz",
+                output_xyz_text="output xyz",
+                input_molecule=molecule,
             )
 
             with patch(
@@ -298,6 +516,9 @@ class LoopContractsTest(unittest.TestCase):
             ) as optimize, patch(
                 "tools.ai_modeling_loop.runner._execute_edit_plan",
                 self._successful_executor(case, case.reference_sdf),
+            ), patch(
+                "tools.ai_modeling_loop.runner._write_coordinate_transport_receipt",
+                return_value="a" * 64,
             ):
                 run_dir, _ = record_run(
                     case,
@@ -311,8 +532,217 @@ class LoopContractsTest(unittest.TestCase):
             self.assertTrue((run_dir / "candidate.sdf").exists())
             self.assertEqual(record["refinement"]["status"], "completed")
             self.assertEqual(record["refinement"]["energyEh"], -12.5)
+            self.assertEqual(record["verification"]["status"], "indeterminate")
+            self.assertEqual(record["verification"]["code"], "verification-artifacts-missing")
+            self.assertIn("formal-indeterminate", record["evaluation"]["failures"])
             fixed_indices = tuple(optimize.call_args.kwargs["fixed_atom_indices"])
             self.assertEqual(fixed_indices, tuple(anchor.atom_index for anchor in case.anchors))
+
+    def test_runner_records_verifier_failure_as_indeterminate(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+
+            def evidence_executor(
+                *,
+                initial,
+                edit_plan,
+                candidate,
+                metadata,
+                receipt,
+                snapshot,
+                identity_map,
+                coordinate_transport_receipt,
+                expected_effect,
+                enforced_plan,
+            ):
+                del initial, edit_plan
+                candidate.write_bytes(case.reference_sdf.read_bytes())
+                metadata.write_text(json.dumps({
+                    "builder": "retainmol-edit-plan",
+                    "anchorAtomIndices": {
+                        anchor.anchor_id: anchor.atom_index for anchor in case.anchors
+                    },
+                }))
+                for path in (
+                    receipt,
+                    snapshot,
+                    identity_map,
+                    coordinate_transport_receipt,
+                    expected_effect,
+                    enforced_plan,
+                ):
+                    path.write_text("{}\n")
+                return subprocess.CompletedProcess(["node"], 0, "", "")
+
+            with patch(
+                "tools.ai_modeling_loop.runner._execute_edit_plan",
+                evidence_executor,
+            ), patch(
+                "tools.ai_modeling_loop.runner.verify_final_artifact",
+                side_effect=RuntimeError("Lean tool unavailable"),
+            ):
+                run_dir, result = record_run(case, plan, work_dir=root)
+
+            record = json.loads((run_dir / "run.json").read_text())
+            self.assertFalse(result.passed)
+            self.assertIn("formal-indeterminate", result.failures)
+            self.assertEqual(record["verification"]["status"], "indeterminate")
+            self.assertEqual(record["verification"]["code"], "verification-tool-failed")
+
+    def test_archive_verified_index_contains_only_formally_verified_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+
+            archive_run(self._write_verified_run(root, "pass-run"), history)
+            archive_run(self._write_verified_run(
+                root,
+                "reject-run",
+                verification_status="reject",
+                evaluation_passed=False,
+            ), history)
+            archive_run(self._write_verified_run(
+                root,
+                "fake-pass-run",
+                evaluation_passed=False,
+            ), history)
+
+            all_runs = json.loads((history / "index.json").read_text())["runs"]
+            verified_runs = json.loads((history / "verified" / "index.json").read_text())["runs"]
+            self.assertEqual(len(all_runs), 3)
+            self.assertEqual([row["runId"] for row in verified_runs], ["pass-run"])
+
+    def test_concurrent_archives_publish_one_complete_index(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            first = self._write_verified_run(root, "parallel-a")
+            second = self._write_verified_run(root, "parallel-b")
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                list(executor.map(lambda run: archive_run(run, history), (first, second)))
+
+            index = json.loads((history / "verified" / "index.json").read_text())
+            self.assertEqual(
+                {row["runId"] for row in index["runs"]},
+                {"parallel-a", "parallel-b"},
+            )
+            self.assertEqual(index["errors"], [])
+
+    def test_verified_index_rejects_modified_geometry_request(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            archived = archive_run(self._write_verified_run(root, "geometry-drift"), history)
+            request = archived / "verification" / "geometry-request.json"
+            value = json.loads(request.read_text())
+            value["unexpected"] = True
+            request.write_text(json.dumps(value) + "\n")
+
+            _rebuild_verified_index(history)
+
+            index = json.loads((history / "verified" / "index.json").read_text())
+            self.assertEqual(index["runs"], [])
+            self.assertIn("geometry request hash mismatch", index["errors"][0]["error"])
+
+    def test_verified_index_rejects_modified_run_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            archived = archive_run(self._write_verified_run(root, "manifest-drift"), history)
+            record_path = archived / "run.json"
+            record = json.loads(record_path.read_text())
+            record["createdAt"] = "2099-01-01T00:00:00+00:00"
+            record_path.write_text(json.dumps(record) + "\n")
+
+            _rebuild_verified_index(history)
+
+            index = json.loads((history / "verified" / "index.json").read_text())
+            self.assertEqual(index["runs"], [])
+            self.assertIn("run record metadata differs", index["errors"][0]["error"])
+
+    def test_verified_index_rejects_modified_edit_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            archived = archive_run(self._write_verified_run(root, "edit-plan-drift"), history)
+            edit_plan = archived / "edit-plan.json"
+            value = json.loads(edit_plan.read_text())
+            value["commands"].append({"type": "unexpected"})
+            edit_plan.write_text(json.dumps(value) + "\n")
+
+            _rebuild_verified_index(history)
+
+            index = json.loads((history / "verified" / "index.json").read_text())
+            self.assertEqual(index["runs"], [])
+            self.assertIn("edit-plan.json", index["errors"][0]["error"])
+
+    def test_verified_index_rejects_pass_with_missing_upstream_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            run_dir = self._write_verified_run(root, "missing-receipt")
+            (run_dir / "execution.json").unlink()
+
+            archive_run(run_dir, history)
+
+            index = json.loads((history / "verified" / "index.json").read_text())
+            self.assertEqual(index["runs"], [])
+            self.assertIn("missing archived evidence", index["errors"][0]["error"])
+
+    def test_verified_index_rejects_pass_without_archived_target_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            run_dir = self._write_verified_run(root, "missing-target-evidence")
+            (run_dir / "target-reference.sdf").unlink()
+
+            archive_run(run_dir, history)
+
+            index = json.loads((history / "verified" / "index.json").read_text())
+            self.assertEqual(index["runs"], [])
+            self.assertIn("target-reference.sdf", index["errors"][0]["error"])
+
+    def test_verified_index_malformed_record_clears_stale_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            archived = archive_run(self._write_verified_run(root, "valid-pass"), history)
+            stale_index = history / "verified" / "index.json"
+            self.assertEqual(len(json.loads(stale_index.read_text())["runs"]), 1)
+            malformed = json.loads((archived / "run.json").read_text())
+            del malformed["runId"]
+            (archived / "run.json").write_text(json.dumps(malformed))
+
+            _rebuild_verified_index(history)
+
+            index = json.loads(stale_index.read_text())
+            self.assertEqual(index["runs"], [])
+            self.assertIn("run record metadata differs", index["errors"][0]["error"])
+
+    def test_archive_skips_corrupt_history_and_rebuilds_indexes_without_new_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            corrupt = history / "case-a" / "broken" / "run.json"
+            corrupt.parent.mkdir(parents=True)
+            corrupt.write_text("{broken")
+
+            from tools.ai_modeling_loop.runner import archive_existing_runs
+
+            archived = archive_existing_runs(root / "empty-work", history)
+
+            self.assertEqual(archived, [])
+            history_index = json.loads((history / "index.json").read_text())
+            verified_index = json.loads((history / "verified" / "index.json").read_text())
+            self.assertEqual(history_index["runs"], [])
+            self.assertEqual(verified_index["runs"], [])
+            self.assertEqual(len(history_index["errors"]), 1)
+            self.assertEqual(len(verified_index["errors"]), 1)
 
     def test_refinement_falls_back_to_gfnff_and_hot_gfn2(self) -> None:
         case = load_case("GDG1476")

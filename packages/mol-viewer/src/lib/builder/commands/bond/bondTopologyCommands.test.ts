@@ -56,6 +56,27 @@ describe('bond topology commands', () => {
     }).ok).toBe(false)
   })
 
+  it.each([
+    ['B', 'B'],
+    ['B', 'N'],
+    ['B', 'O'],
+  ] as const)('rejects unsupported %s-%s double bonds on add and setOrder', (symbol1, symbol2) => {
+    const atom1 = newAtom(symbol1, 0, 0, 0)
+    const atom2 = newAtom(symbol2, 1.5, 0, 0)
+    const bond = newBond(atom1.id, atom2.id, 1)
+
+    expect(runAddBondCommand({ atoms: [atom1, atom2], bonds: [] }, {
+      atomId1: atom1.id,
+      atomId2: atom2.id,
+      order: 2,
+    }).ok).toBe(false)
+    expect(runSetBondOrderCommand(
+      { atoms: [atom1, atom2], bonds: [bond] },
+      bond.id,
+      2,
+    )).toEqual({ ok: true, changed: false })
+  })
+
   it('cycles bond order only through supported orders', () => {
     const c1 = newAtom('C', 0, 0, 0)
     const c2 = newAtom('C', 1.54, 0, 0)

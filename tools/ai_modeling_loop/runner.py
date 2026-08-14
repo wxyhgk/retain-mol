@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import shutil
 import subprocess
 from dataclasses import replace
@@ -15,12 +16,30 @@ from .chemistry import (
     with_explicit_hydrogens,
     write_sdf,
 )
-from .contracts import BenchmarkCase, DEFAULT_HISTORY_DIR, DEFAULT_WORK_DIR
-from .evaluator import EvaluationResult, candidate_anchor_indices, evaluate_candidate
+from .artifact_contracts import (
+    CoordinateTransportAtomRow,
+    coordinate_transport_atom_rows_json,
+    coordinate_transport_atom_row_mapping_sha256,
+    load_identity_map,
+    sha256_file,
+)
+from .contracts import BenchmarkCase, DEFAULT_WORK_DIR
+from .evaluator import EvaluationResult, candidate_anchor_indices
+from .final_artifact_gate import verify_final_artifact
+from .history_index import (
+    _is_archivable_attempt,
+    _rebuild_history_index,
+    _rebuild_verified_index,
+    archive_existing_runs,
+    archive_run,
+)
+from .target_evaluation import archive_target_evidence, evaluate_archived_target
 from .workspace import prepare_task_bundle
 
 
 RETAINMOL_EXECUTOR = Path(__file__).with_name("retainmol_executor.mjs")
+XTB_ROW_ORDER_CONTRACT = "xtb-preserves-input-row-order-v1"
+XTB_POST_PROCESSING = "fixed-anchor-frame-projection-v1"
 
 
 def _git_commit() -> str | None:
@@ -37,66 +56,89 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _rebuild_history_index(history_dir: Path) -> None:
-    rows = []
-    for path in sorted(history_dir.glob("*/*/run.json")):
-        value = json.loads(path.read_text())
-        evaluation = value["evaluation"]
-        rows.append({
-            "runId": value["runId"],
-            "caseId": evaluation["case_id"],
-            "createdAt": value["createdAt"],
-            "score": evaluation["score"],
-            "passed": evaluation["passed"],
-            "failures": evaluation["failures"],
-            "path": str(path.parent.relative_to(history_dir)),
-        })
-    history_dir.mkdir(parents=True, exist_ok=True)
-    (history_dir / "index.json").write_text(
-        json.dumps({"schemaVersion": 1, "runs": rows}, ensure_ascii=False, indent=2) + "\n"
+def _write_json_atomic(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+    os.replace(temporary, path)
+
+
+def _write_coordinate_transport_receipt(
+    *,
+    path: Path,
+    builder_snapshot_path: Path,
+    identity_map_path: Path,
+    final_sdf_path: Path,
+    source_sdf_path: Path | None = None,
+    input_xyz_path: Path | None = None,
+    output_xyz_path: Path | None = None,
+    executable_sha256: str | None = None,
+    fixed_atom_rows: tuple[int, ...] = (),
+) -> str:
+    """Bind final serialized coordinates to the stable builder atom rows.
+
+    This helper is only valid when the transport adapter has preserved the
+    input SDF row order. Any atom insertion, removal, or row permutation fails
+    closed before a receipt is published.
+    """
+    identity = load_identity_map(identity_map_path)
+    molecule = load_sdf(final_sdf_path)
+    if molecule.GetNumAtoms() != len(identity.atom_rows):
+        raise ValueError(
+            "coordinate transport changed atom count; stable atom IDs cannot be proven"
+        )
+    conformer = molecule.GetConformer()
+    rows: list[CoordinateTransportAtomRow] = []
+    for index, identity_row in enumerate(identity.atom_rows):
+        atom = molecule.GetAtomWithIdx(index)
+        if atom.GetSymbol() != identity_row.symbol:
+            raise ValueError(
+                f"coordinate transport changed atom row {index + 1}: "
+                f"{atom.GetSymbol()} != {identity_row.symbol}"
+            )
+        position = conformer.GetAtomPosition(index)
+        rows.append(CoordinateTransportAtomRow(
+            row_index=identity_row.row_index,
+            atom_id=identity_row.atom_id,
+            symbol=identity_row.symbol,
+            position=(float(position.x), float(position.y), float(position.z)),
+        ))
+    payload = {
+        "schemaVersion": 1,
+        "kind": "stable-atom-coordinate-transport",
+        "builderSnapshotSha256": sha256_file(builder_snapshot_path),
+        "identityMapSha256": sha256_file(identity_map_path),
+        "finalSdfSha256": sha256_file(final_sdf_path),
+        "atomRowMappingSha256": coordinate_transport_atom_row_mapping_sha256(rows),
+        "atomRows": coordinate_transport_atom_rows_json(rows),
+    }
+    provenance_values = (
+        source_sdf_path,
+        input_xyz_path,
+        output_xyz_path,
+        executable_sha256,
     )
-
-
-def archive_run(run_dir: Path, history_dir: Path = DEFAULT_HISTORY_DIR) -> Path:
-    record_path = run_dir / "run.json"
-    record = json.loads(record_path.read_text())
-    case_id = record["evaluation"]["case_id"]
-    target = history_dir / case_id / run_dir.name
-    record["archiveRelativePath"] = str(target.relative_to(history_dir))
-    record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-    if target.exists():
-        shutil.rmtree(target)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(run_dir, target)
-    _rebuild_history_index(history_dir)
-    return target
-
-
-def _is_archivable_attempt(run_dir: Path) -> bool:
-    if (run_dir / "edit-plan.json").exists():
-        return True
-    metadata = run_dir / "candidate.json"
-    if not metadata.exists():
-        return False
-    try:
-        builder = str(json.loads(metadata.read_text()).get("builder", ""))
-    except (json.JSONDecodeError, OSError):
-        return False
-    return bool(builder) and builder != "reference-self-check"
-
-
-def archive_existing_runs(
-    work_dir: Path = DEFAULT_WORK_DIR,
-    history_dir: Path = DEFAULT_HISTORY_DIR,
-) -> list[Path]:
-    archived = []
-    for run_dir in sorted((work_dir / "runs").iterdir() if (work_dir / "runs").exists() else ()):
-        if not (run_dir / "run.json").exists():
-            continue
-        if not _is_archivable_attempt(run_dir):
-            continue
-        archived.append(archive_run(run_dir, history_dir))
-    return archived
+    if any(value is not None for value in provenance_values):
+        if not all(value is not None for value in provenance_values):
+            raise ValueError("xTB coordinate provenance must be complete")
+        assert source_sdf_path is not None
+        assert input_xyz_path is not None
+        assert output_xyz_path is not None
+        assert executable_sha256 is not None
+        if not source_sdf_path.is_file() or not input_xyz_path.is_file() or not output_xyz_path.is_file():
+            raise ValueError("xTB coordinate provenance files are missing")
+        payload["transportProvenance"] = {
+            "kind": "xtb-coordinate-transport",
+            "sourceSdfSha256": sha256_file(source_sdf_path),
+            "inputXyzSha256": sha256_file(input_xyz_path),
+            "outputXyzSha256": sha256_file(output_xyz_path),
+            "executableSha256": executable_sha256,
+            "rowOrderContract": XTB_ROW_ORDER_CONTRACT,
+            "postProcessing": XTB_POST_PROCESSING,
+            "fixedAtomRows": list(fixed_atom_rows),
+        }
+    _write_json_atomic(path, payload)
+    return sha256_file(path)
 
 
 def _invalid_result(case: BenchmarkCase, error: Exception) -> EvaluationResult:
@@ -116,18 +158,46 @@ def _invalid_result(case: BenchmarkCase, error: Exception) -> EvaluationResult:
     )
 
 
+def _indeterminate_verification(code: str, error: str, missing: list[str] | None = None) -> dict:
+    return {
+        "schemaVersion": 2,
+        "status": "indeterminate",
+        "code": code,
+        "error": error,
+        "missingArtifacts": missing or [],
+        "axes": {},
+    }
+
+
+def _with_formal_indeterminate(
+    result: EvaluationResult,
+    diagnostic: str,
+) -> EvaluationResult:
+    failures = result.failures
+    if "formal-indeterminate" not in failures:
+        failures = (*failures, "formal-indeterminate")
+    return replace(
+        result,
+        passed=False,
+        failures=failures,
+        diagnostics=(*result.diagnostics, diagnostic),
+    )
+
+
 def _evaluate_or_invalid(
     case: BenchmarkCase,
     candidate: Path,
     metadata: Path | None,
-    work_dir: Path,
+    archived_reference: Path,
+    archived_evaluator: Path,
 ) -> EvaluationResult:
     try:
-        return evaluate_candidate(
+        return evaluate_archived_target(
             case,
             candidate,
             candidate_metadata=metadata,
-            work_dir=work_dir,
+            archived_reference=archived_reference,
+            archived_evaluator=archived_evaluator,
         )
     except Exception as error:
         return _invalid_result(case, error)
@@ -284,6 +354,11 @@ def _execute_edit_plan(
     candidate: Path,
     metadata: Path,
     receipt: Path,
+    snapshot: Path,
+    identity_map: Path,
+    coordinate_transport_receipt: Path,
+    expected_effect: Path,
+    enforced_plan: Path,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -293,6 +368,11 @@ def _execute_edit_plan(
             "--output", str(candidate),
             "--metadata", str(metadata),
             "--receipt", str(receipt),
+            "--snapshot", str(snapshot),
+            "--identity-map", str(identity_map),
+            "--coordinate-transport-receipt", str(coordinate_transport_receipt),
+            "--expected-effect", str(expected_effect),
+            "--enforced-plan", str(enforced_plan),
         ],
         capture_output=True,
         text=True,
@@ -321,6 +401,27 @@ def record_run(
     if builder_notes and builder_notes.exists():
         shutil.copy2(builder_notes, run_dir / "builder-notes.json")
 
+    reference_source = work_dir / "references" / case.case_id / "reference.sdf"
+    archived_reference, archived_evaluator = archive_target_evidence(
+        reference_source=reference_source,
+        run_dir=run_dir,
+    )
+    created_at = datetime.now(UTC).isoformat()
+    run_manifest = run_dir / "run-manifest.json"
+    run_manifest_value = {
+        "schemaVersion": 1,
+        "runId": run_dir.name,
+        "createdAt": created_at,
+        "caseId": case.case_id,
+        "gitCommit": _git_commit(),
+        "gitDirty": _git_dirty(),
+        "executor": "@retainmol/mol-viewer/modeling",
+        "editPlanSha256": _sha256(copied_plan),
+        "referenceSdfSha256": _sha256(archived_reference),
+        "evaluatorSourceSha256": _sha256(archived_evaluator),
+    }
+    _write_json_atomic(run_manifest, run_manifest_value)
+
     task_dir = work_dir / "tasks" / case.case_id
     initial = task_dir / "initial-molecule.json"
     if not initial.exists():
@@ -328,15 +429,31 @@ def record_run(
     copied_candidate = run_dir / ("candidate.raw.sdf" if refine else "candidate.sdf")
     copied_metadata = run_dir / "candidate.json"
     receipt = run_dir / "execution.json"
+    builder_snapshot = run_dir / "builder-snapshot.json"
+    identity_map = run_dir / "identity-map.json"
+    coordinate_transport_receipt = run_dir / "coordinate-transport.json"
+    expected_effect = run_dir / "expected-effect.json"
+    enforced_plan = run_dir / "enforced-plan.json"
     execution = _execute_edit_plan(
         initial=initial,
         edit_plan=copied_plan,
         candidate=copied_candidate,
         metadata=copied_metadata,
         receipt=receipt,
+        snapshot=builder_snapshot,
+        identity_map=identity_map,
+        coordinate_transport_receipt=coordinate_transport_receipt,
+        expected_effect=expected_effect,
+        enforced_plan=enforced_plan,
     )
     if execution.returncode == 0:
-        raw_result = _evaluate_or_invalid(case, copied_candidate, copied_metadata, work_dir)
+        raw_result = _evaluate_or_invalid(
+            case,
+            copied_candidate,
+            copied_metadata,
+            archived_reference,
+            archived_evaluator,
+        )
     else:
         error = RuntimeError(
             "RetainMol EditPlan 执行失败：" + (execution.stderr.strip() or execution.stdout.strip())
@@ -345,6 +462,10 @@ def record_run(
     result = raw_result
     evaluated_candidate = copied_candidate
     refinement = None
+    transport_evidence: dict | None = None
+    xtb_input_sdf: Path | None = None
+    xtb_input_xyz: Path | None = None
+    xtb_output_xyz: Path | None = None
     if refine and execution.returncode == 0 and "candidate-invalid" not in raw_result.failures:
         try:
             molecule = with_explicit_hydrogens(load_sdf(copied_candidate))
@@ -368,7 +489,43 @@ def record_run(
                 )
             evaluated_candidate = run_dir / "candidate.sdf"
             write_sdf(xtb_result.molecule, evaluated_candidate)
-            result = _evaluate_or_invalid(case, evaluated_candidate, copied_metadata, work_dir)
+            xtb_input_sdf = run_dir / "xtb-input.sdf"
+            xtb_input_xyz = run_dir / "xtb-input.xyz"
+            xtb_output_xyz = run_dir / "xtb-output.xyz"
+            if (
+                xtb_result.input_molecule is None
+                or xtb_result.input_xyz_text is None
+                or xtb_result.output_xyz_text is None
+                or xtb_result.executable_sha256 is None
+                or xtb_result.input_xyz_sha256 is None
+                or xtb_result.output_xyz_sha256 is None
+            ):
+                raise ValueError("xTB adapter did not return complete coordinate provenance")
+            write_sdf(xtb_result.input_molecule, xtb_input_sdf)
+            xtb_input_xyz.write_text(xtb_result.input_xyz_text, encoding="utf-8")
+            xtb_output_xyz.write_text(xtb_result.output_xyz_text, encoding="utf-8")
+            if sha256_file(xtb_input_xyz) != xtb_result.input_xyz_sha256:
+                raise ValueError("archived xTB input XYZ hash mismatch")
+            if sha256_file(xtb_output_xyz) != xtb_result.output_xyz_sha256:
+                raise ValueError("archived xTB output XYZ hash mismatch")
+            coordinate_receipt_sha256 = _write_coordinate_transport_receipt(
+                path=coordinate_transport_receipt,
+                builder_snapshot_path=builder_snapshot,
+                identity_map_path=identity_map,
+                final_sdf_path=evaluated_candidate,
+                source_sdf_path=xtb_input_sdf,
+                input_xyz_path=xtb_input_xyz,
+                output_xyz_path=xtb_output_xyz,
+                executable_sha256=xtb_result.executable_sha256,
+                fixed_atom_rows=fixed_indices,
+            )
+            result = _evaluate_or_invalid(
+                case,
+                evaluated_candidate,
+                copied_metadata,
+                archived_reference,
+                archived_evaluator,
+            )
             refinement = {
                 "method": "GFN2-xTB",
                 "status": "completed" if xtb_result.converged else "not-converged",
@@ -380,6 +537,25 @@ def record_run(
                 "strategy": "conformer-ensemble" if conformer_seeds else "direct-with-fallback",
                 "conformerSeeds": list(conformer_seeds),
                 "selectedSource": selected_source,
+            }
+            trusted_digest = os.environ.get("RETAINMOL_TRUSTED_XTB_SHA256")
+            transport_evidence = {
+                "kind": "xtb-coordinate-transport",
+                "trusted": bool(
+                    trusted_digest
+                    and xtb_result.executable_sha256
+                    and trusted_digest == xtb_result.executable_sha256
+                ),
+                "executableSha256": xtb_result.executable_sha256,
+                "expectedExecutableSha256Configured": bool(trusted_digest),
+                "command": list(xtb_result.command),
+                "inputXyzSha256": xtb_result.input_xyz_sha256,
+                "outputXyzSha256": xtb_result.output_xyz_sha256,
+                "sourceSdfSha256": sha256_file(xtb_input_sdf),
+                "rowOrderContract": XTB_ROW_ORDER_CONTRACT,
+                "postProcessing": XTB_POST_PROCESSING,
+                "fixedAtomRows": list(fixed_indices),
+                "coordinateTransportReceiptSha256": coordinate_receipt_sha256,
             }
             if not xtb_result.converged:
                 result = replace(
@@ -400,24 +576,101 @@ def record_run(
                 failures=(*raw_result.failures, "xtb-failed"),
                 diagnostics=(*raw_result.diagnostics, f"GFN2-xTB 精修失败：{error}"),
             )
+            transport_evidence = {
+                "kind": "xtb-coordinate-transport",
+                "trusted": False,
+                "error": f"{type(error).__name__}: {error}",
+            }
+    verification = None
+    required_verification_files = (
+        builder_snapshot,
+        identity_map,
+        evaluated_candidate,
+        receipt,
+        expected_effect,
+        enforced_plan,
+        coordinate_transport_receipt,
+    )
+    if execution.returncode == 0:
+        missing = [path.name for path in required_verification_files if not path.is_file()]
+        if missing:
+            verification = _indeterminate_verification(
+                "verification-artifacts-missing",
+                "执行器未生成完整的最终产物验证证据。",
+                missing,
+            )
+            result = _with_formal_indeterminate(
+                result,
+                f"最终产物验证证据缺失：{', '.join(missing)}。",
+            )
+        else:
+            try:
+                envelope = verify_final_artifact(
+                    builder_snapshot_path=builder_snapshot,
+                    identity_map_path=identity_map,
+                    final_sdf_path=evaluated_candidate,
+                    executor_output_path=copied_candidate,
+                    execution_receipt_path=receipt,
+                    expected_effect_path=expected_effect,
+                    enforced_plan_path=enforced_plan,
+                    evaluation=result.to_json(),
+                    output_dir=run_dir / "verification",
+                    coordinate_transport_receipt_path=coordinate_transport_receipt,
+                    transport_evidence=transport_evidence,
+                    transport_source_sdf_path=xtb_input_sdf,
+                    transport_input_xyz_path=xtb_input_xyz,
+                    transport_output_xyz_path=xtb_output_xyz,
+                    target_evidence={
+                        "caseId": case.case_id,
+                        "evaluator": "retainmol-benchmark-evaluator-v1",
+                    },
+                    target_reference_path=archived_reference,
+                    target_evaluator_path=archived_evaluator,
+                    run_manifest_path=run_manifest,
+                )
+                verification = envelope.to_json()
+                if envelope.status.value != "pass":
+                    result = replace(
+                        result,
+                        passed=False,
+                        failures=(*result.failures, f"formal-{envelope.status.value}"),
+                        diagnostics=(
+                            *result.diagnostics,
+                            f"最终产物三轴验证结果：{envelope.status.value}。",
+                        ),
+                    )
+            except Exception as error:
+                verification = _indeterminate_verification(
+                    "verification-tool-failed",
+                    f"{type(error).__name__}: {error}",
+                )
+                result = _with_formal_indeterminate(
+                    result,
+                    f"最终产物验证器失败：{type(error).__name__}: {error}",
+                )
     record = {
         "schemaVersion": 1,
-        "runId": run_dir.name,
-        "createdAt": datetime.now(UTC).isoformat(),
-        "gitCommit": _git_commit(),
-        "gitDirty": _git_dirty(),
-        "executor": "@retainmol/mol-viewer/modeling",
+        "runId": run_manifest_value["runId"],
+        "createdAt": run_manifest_value["createdAt"],
+        "gitCommit": run_manifest_value["gitCommit"],
+        "gitDirty": run_manifest_value["gitDirty"],
+        "executor": run_manifest_value["executor"],
         "executorReturnCode": execution.returncode,
         "executorStderr": execution.stderr.strip() or None,
-        "editPlanSha256": _sha256(copied_plan),
+        "editPlanSha256": run_manifest_value["editPlanSha256"],
         "executionReceiptSha256": _sha256(receipt) if receipt.exists() else None,
+        "coordinateTransportReceiptSha256": (
+            _sha256(coordinate_transport_receipt)
+            if coordinate_transport_receipt.exists()
+            else None
+        ),
         "candidateSha256": _sha256(evaluated_candidate) if evaluated_candidate.exists() else None,
         "rawCandidateSha256": _sha256(copied_candidate) if copied_candidate.exists() else None,
-        "referenceSdfSha256": _sha256(
-            work_dir / "references" / case.case_id / "reference.sdf"
-        ),
+        "referenceSdfSha256": run_manifest_value["referenceSdfSha256"],
+        "evaluatorSourceSha256": run_manifest_value["evaluatorSourceSha256"],
         "rawEvaluation": raw_result.to_json(),
         "refinement": refinement,
+        "verification": verification,
         "evaluation": result.to_json(),
     }
     (run_dir / "run.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")

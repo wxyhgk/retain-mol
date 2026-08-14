@@ -17,17 +17,25 @@ AxisVerdict = formal_verdict.AxisVerdict
 VerificationEnvelope = formal_verdict.VerificationEnvelope
 VerificationStatus = formal_verdict.VerificationStatus
 combine_axis_statuses = formal_verdict.combine_axis_statuses
+parse_verification_envelope = formal_verdict.parse_verification_envelope
 sha256_file = formal_verdict.sha256_file
 
 
 class FormalVerdictTests(unittest.TestCase):
-    def axis(self, status: VerificationStatus, artifact: str = "artifact", policy: str = "policy"):
+    def axis(
+        self,
+        status: VerificationStatus,
+        artifact: str = "artifact",
+        policy: str = "policy",
+        context: str = "context",
+    ):
         return AxisVerdict(
             status=status,
             code=f"test-{status.value}",
             checker="test",
             artifact_sha256=artifact,
             policy_sha256=policy,
+            verification_context_sha256=context,
         )
 
     def test_all_three_axes_must_explicitly_pass(self):
@@ -59,6 +67,7 @@ class FormalVerdictTests(unittest.TestCase):
                 expected_graph_sha256="expected",
                 enforced_plan_sha256="plan",
                 verifier_version="test-v1",
+                verification_context_sha256="context",
                 axes=axes,
             )
             self.assertEqual(envelope.publication_status(artifact), VerificationStatus.PASS)
@@ -84,12 +93,106 @@ class FormalVerdictTests(unittest.TestCase):
                 expected_graph_sha256="expected",
                 enforced_plan_sha256="plan",
                 verifier_version="test-v1",
+                verification_context_sha256="context",
                 axes=axes,
             )
             self.assertEqual(
                 envelope.publication_status(artifact),
                 VerificationStatus.INDETERMINATE,
             )
+
+    def test_axis_context_mismatch_is_indeterminate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "candidate.sdf"
+            artifact.write_text("final")
+            digest = sha256_file(artifact)
+            axes = {
+                "execution": self.axis(VerificationStatus.PASS, artifact=digest),
+                "safety": self.axis(
+                    VerificationStatus.PASS,
+                    artifact=digest,
+                    context="different-context",
+                ),
+                "target": self.axis(VerificationStatus.PASS, artifact=digest),
+            }
+            envelope = VerificationEnvelope(
+                artifact_sha256=digest,
+                policy_sha256="policy",
+                expected_graph_sha256="expected",
+                enforced_plan_sha256="plan",
+                verifier_version="test-v2",
+                verification_context_sha256="context",
+                axes=axes,
+            )
+            self.assertEqual(
+                envelope.publication_status(artifact),
+                VerificationStatus.INDETERMINATE,
+            )
+
+    def test_envelope_round_trip_uses_strict_schema(self):
+        axes = {
+            name: self.axis(VerificationStatus.PASS)
+            for name in ("execution", "safety", "target")
+        }
+        envelope = VerificationEnvelope(
+            artifact_sha256="artifact",
+            policy_sha256="policy",
+            expected_graph_sha256="expected",
+            enforced_plan_sha256="plan",
+            verifier_version="test-v2",
+            verification_context_sha256="context",
+            axes=axes,
+        )
+        parsed = parse_verification_envelope(envelope.to_json())
+        self.assertEqual(parsed.to_json(), envelope.to_json())
+
+    def test_envelope_rejects_status_axis_mismatch(self):
+        axes = {
+            name: self.axis(VerificationStatus.PASS)
+            for name in ("execution", "safety", "target")
+        }
+        value = VerificationEnvelope(
+            artifact_sha256="artifact",
+            policy_sha256="policy",
+            expected_graph_sha256="expected",
+            enforced_plan_sha256="plan",
+            verifier_version="test-v2",
+            verification_context_sha256="context",
+            axes=axes,
+        ).to_json()
+        value["status"] = "reject"
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            parse_verification_envelope(value)
+
+    def test_envelope_rejects_coerced_axis_fields_and_unknown_fields(self):
+        axes = {
+            name: self.axis(VerificationStatus.PASS)
+            for name in ("execution", "safety", "target")
+        }
+        value = VerificationEnvelope(
+            artifact_sha256="artifact",
+            policy_sha256="policy",
+            expected_graph_sha256="expected",
+            enforced_plan_sha256="plan",
+            verifier_version="test-v2",
+            verification_context_sha256="context",
+            axes=axes,
+        ).to_json()
+        value["axes"]["execution"]["checker"] = 7
+        with self.assertRaisesRegex(ValueError, "non-empty strings"):
+            parse_verification_envelope(value)
+        value = VerificationEnvelope(
+            artifact_sha256="artifact",
+            policy_sha256="policy",
+            expected_graph_sha256="expected",
+            enforced_plan_sha256="plan",
+            verifier_version="test-v2",
+            verification_context_sha256="context",
+            axes=axes,
+        ).to_json()
+        value["untrustedExtra"] = True
+        with self.assertRaisesRegex(ValueError, "invalid schema"):
+            parse_verification_envelope(value)
 
 
 if __name__ == "__main__":

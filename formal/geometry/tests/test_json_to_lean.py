@@ -31,6 +31,16 @@ class JsonToLeanTests(unittest.TestCase):
         self.assertIn("private def policy : GeometryPolicy", rendered)
         self.assertIn("geometryValidationIssues", rendered)
 
+    def test_evaluate_mode_emits_machine_result_without_pass_proof(self):
+        rendered = json_to_lean.render_document(self.valid_payload(), mode="evaluate")
+        self.assertIn(json_to_lean.EVALUATION_PREFIX, rendered)
+        self.assertIn("evaluationPayload", rendered)
+        self.assertNotIn("example : validateGeometryPolicy", rendered)
+
+    def test_proof_mode_remains_the_default(self):
+        rendered = json_to_lean.render_document(self.valid_payload())
+        self.assertIn("example : validateGeometryPolicy", rendered)
+
     def test_duplicate_json_field_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "duplicate JSON field"):
             self.load_text('{"schemaVersion": 2, "schemaVersion": 2}')

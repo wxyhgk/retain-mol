@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import re
+import hashlib
 import json
+import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -30,6 +32,13 @@ class XtbResult:
     return_code: int
     log_tail: str
     anchor_rmsd_before_projection: float
+    command: tuple[str, ...] = ()
+    executable_sha256: str | None = None
+    input_xyz_sha256: str | None = None
+    output_xyz_sha256: str | None = None
+    input_xyz_text: str | None = None
+    output_xyz_text: str | None = None
+    input_molecule: Chem.Mol | None = None
 
 
 def project_to_fixed_frame(
@@ -163,12 +172,45 @@ def load_graph_xyz(graph_path: Path, xyz_path: Path) -> Chem.Mol:
     return molecule
 
 
-def _xtb_command(explicit: str | None = None) -> list[str]:
-    if explicit:
-        return shlex.split(explicit)
+def _resolve_executable_file(candidate: str) -> Path:
+    try:
+        path = Path(candidate).expanduser()
+        if not path.is_file():
+            located = shutil.which(candidate)
+            if located is None:
+                raise FileNotFoundError(f"xTB executable was not found: {candidate}")
+            path = Path(located)
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise FileNotFoundError(f"xTB executable was not found: {candidate}") from error
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        raise PermissionError(f"xTB executable is not an executable file: {resolved}")
+    return resolved
+
+
+def _parse_explicit_xtb_executable(explicit: str) -> Path:
+    if "\x00" in explicit:
+        raise ValueError("xTB executable path contains a null byte")
+    direct_path = Path(explicit).expanduser()
+    if direct_path.is_file():
+        return _resolve_executable_file(explicit)
+    try:
+        parts = shlex.split(explicit)
+    except ValueError as error:
+        raise ValueError("xTB must be a single executable path, not a command string") from error
+    if len(parts) != 1:
+        raise ValueError(
+            "xTB must be a single executable path; launchers, wrappers, and arguments are not trusted"
+        )
+    return _resolve_executable_file(parts[0])
+
+
+def _resolve_xtb_executable(explicit: str | None = None) -> Path:
+    if explicit is not None:
+        return _parse_explicit_xtb_executable(explicit)
     executable = shutil.which("xtb")
     if executable:
-        return [executable]
+        return _resolve_executable_file(executable)
     conda = shutil.which("conda")
     if conda:
         probe = subprocess.run(
@@ -177,8 +219,14 @@ def _xtb_command(explicit: str | None = None) -> list[str]:
             text=True,
         )
         if probe.returncode == 0:
-            return [conda, "run", "-n", "retainmol-backend", "xtb"]
+            candidates = [line.strip() for line in probe.stdout.splitlines() if line.strip()]
+            if len(candidates) == 1:
+                return _resolve_executable_file(candidates[0])
     raise FileNotFoundError("xtb was not found; install or activate the retainmol-backend environment")
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _read_xyz_into(molecule: Chem.Mol, path: Path) -> Chem.Mol:
@@ -229,8 +277,10 @@ def optimize_with_xtb(
             "gfn1": ["--gfn", "1"],
             "gfnff": ["--gfnff"],
         }[method]
+        xtb_executable = _resolve_xtb_executable(xtb)
+        executable_sha256 = _file_sha256(xtb_executable)
         command = [
-            *_xtb_command(xtb),
+            str(xtb_executable),
             str(input_xyz),
             "--opt",
             "normal",
@@ -255,6 +305,8 @@ def optimize_with_xtb(
             text=True,
             timeout=timeout_seconds,
         )
+        if _file_sha256(xtb_executable) != executable_sha256:
+            raise RuntimeError("xTB executable changed while the calculation was running")
         log = process.stdout + process.stderr
         output = work / "xtbopt.xyz"
         if not output.exists():
@@ -271,6 +323,18 @@ def optimize_with_xtb(
             return_code=process.returncode,
             log_tail=log[-2000:],
             anchor_rmsd_before_projection=anchor_rmsd,
+            command=tuple(
+                "<input.xyz>" if part == str(input_xyz)
+                else "<xcontrol.inp>" if part == str(control)
+                else part
+                for part in command
+            ),
+            executable_sha256=executable_sha256,
+            input_xyz_sha256=_file_sha256(input_xyz),
+            output_xyz_sha256=_file_sha256(output),
+            input_xyz_text=input_xyz.read_text(encoding="utf-8"),
+            output_xyz_text=output.read_text(encoding="utf-8"),
+            input_molecule=Chem.Mol(molecule),
         )
 
 

@@ -26,8 +26,12 @@ function isBondOrder(order: number): order is BondOrder {
 
 function supportedBondOrders(atom1: Atom, atom2: Atom): readonly BondOrder[] {
   return BOND_ORDERS.filter(
-    order => lookupBondLengthByOrder(atom1.symbol, atom2.symbol, order) !== null,
+    order => isBondOrderSupported(atom1, atom2, order),
   )
+}
+
+function isBondOrderSupported(atom1: Atom, atom2: Atom, order: BondOrder): boolean {
+  return lookupBondLengthByOrder(atom1.symbol, atom2.symbol, order) !== null
 }
 
 export function canBond(
@@ -69,7 +73,7 @@ export function runSetBondOrderCommand(
   const atom1 = molecule.atoms.find(atom => atom.id === bond.atomId1)
   const atom2 = molecule.atoms.find(atom => atom.id === bond.atomId2)
   if (!atom1 || !atom2) return editUnchanged()
-  if (!supportedBondOrders(atom1, atom2).includes(order)) return editUnchanged()
+  if (!isBondOrderSupported(atom1, atom2, order)) return editUnchanged()
   if (bond.order === order && bond.aromatic !== true) return editUnchanged()
 
   return editChanged({
@@ -87,6 +91,7 @@ export function runAddBondCommand(
   const atom1 = molecule.atoms.find(atom => atom.id === input.atomId1)
   const atom2 = molecule.atoms.find(atom => atom.id === input.atomId2)
   if (!atom1 || !atom2) return editFailed('原子不存在')
+  if (!isBondOrderSupported(atom1, atom2, order)) return editFailed('不支持该键级')
 
   const check = new ValencePolicy(new GraphIndex(molecule)).canAddBond(atom1, atom2, order)
   if (!check.ok) return editFailed(check.reason ?? '无法成键')
