@@ -41,18 +41,22 @@ flowchart TD
 | 多模态 provider | 图片、文本、当前选择 | 图提案与 `EditPlan` | 识别和规划 |
 | `mol-viewer/modeling` | `EditPlan` | dry-run Molecule | 命令语义、价态和事务 |
 | 几何/优化器 | 初始 Molecule、约束 | 候选坐标 | 连续数值求解 |
-| Lean 验证器 | 参考快照、候选快照、证书 | true/false | 精确离散与几何不变量 |
+| Lean 验证器 | expected 快照、最终候选、可信 policy | issue 列表 | 精确离散与几何不变量 |
 | xTB/Psi4 等 | 已验证结构 | 能量、力、波函数产物 | 计算化学结果 |
 
 Lean 必须位于 builder dry-run 之后。它不允许绕过现有命令直接制造 SDF，也不把通用价态
 判断复制成另一套规则。
 
-## 证书设计
+## Policy 设计
 
-证书不是“证明这个分子绝对正确”，而是声明本轮编辑必须保持的性质：
+policy 不是“证明这个分子绝对正确”，而是由可信编排器声明本轮编辑必须保持的性质。AI
+不能提交或删减 policy：
 
 ```json
 {
+  "policyId": "anchored-core-v2",
+  "requireGeometryConstraints": true,
+  "requireAllBondDistances": true,
   "fixedAtomIds": ["B:core", "N:left", "N:right"],
   "distanceBounds": [
     {
@@ -62,9 +66,11 @@ Lean 必须位于 builder dry-run 之后。它不允许绕过现有命令直接�
       "maxAngstrom": 1.517
     }
   ],
-  "orientationChecks": [
-    { "atomIds": ["B:core", "N:left", "N:right", "C:center"] }
-  ]
+  "orientationChecks": [{
+    "atomIds": ["B:core", "N:left", "N:right", "C:center"],
+    "minAbsVolume6": 100000000
+  }],
+  "rigidAtomGroups": []
 }
 ```
 
@@ -86,12 +92,14 @@ missing-bond-endpoint(bond-42, atom-99)
 
 ## 当前实现
 
-第一阶段位于 `formal/geometry`，已经固定 Lean 4.33.0，并提供：
+第二版位于 `formal/geometry`，固定 Lean 4.33.0，并提供：
 
 - 精确整数 `Vec3`；
 - 平移保持距离和朝向的定理；
-- 分子拓扑、固定锚点、距离区间和朝向验证；
+- 完整 canonical chemical graph、固定锚点、距离区间、刚性组和朝向验证；
 - 受限 JSON 到 Lean 数据的桥接；
-- B/N 母核正例，以及移动锚点、翻转朝向的反例。
+- 结构化 issue，以及删键、改电荷、平行键、空 policy、移动锚点和扭曲刚体反例。
 
-下一阶段应从 `replayEditPlan` 的候选 Molecule 自动导出证书，而不是继续手写示例。
+当前只证明最终候选符合 policy，不证明图片识别正确或 builder 实现正确。下一阶段必须先从规范化
+EditPlan 独立编译 expected effect，再把最终 artifact hash、policy hash 和 verifier version 绑定为
+三态 verification envelope；不能从 observed candidate 反推“允许发生什么”。

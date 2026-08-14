@@ -37,8 +37,9 @@
 5. 一份计划只产生一个 undo 步骤。
 
 对于固定母核、刚性片段和手性/朝向等三维要求，`EditPlan` dry-run 后还可以进入独立的
-[Lean 形式化几何验证层](./formal-geometry-verification.md)。它使用精确整数证书检查锚点、
-距离和朝向，不替代 builder command 或数值优化器。
+[Lean 形式化几何验证层](./formal-geometry-verification.md)。它使用可信策略检查锚点、距离和
+朝向，不替代 builder command 或数值优化器；多代理提案、反驳与机器裁决的边界见
+[对抗式形式化验证循环](./adversarial-formal-loop.md)。
 
 ## 公共入口
 

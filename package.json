@@ -17,8 +17,8 @@
     "ai-loop:propose-regions": "python3 -m tools.ai_modeling_loop propose-regions",
     "ai-loop:plan-region-tree": "python3 -m tools.ai_modeling_loop plan-region-tree",
     "ai-loop:archive": "python3 -m tools.ai_modeling_loop archive-runs",
-    "verify:formal-geometry": "bash formal/geometry/verify.sh",
-    "verify": "npm run check:secrets && npm run check:boundaries && npm run lint && npm run typecheck && npm test && npm run build && npm run api:check --workspace @retainmol/mol-viewer && npm run test:pack --workspace @retainmol/mol-viewer"
+    "verify:formal-geometry": "bash formal/geometry/verify.sh && python3 tools/ai_modeling_loop/tests/test_formal_verdict.py",
+    "verify": "npm run check:secrets && npm run verify:formal-geometry && npm run check:boundaries && npm run lint && npm run typecheck && npm test && npm run build && npm run api:check --workspace @retainmol/mol-viewer && npm run test:pack --workspace @retainmol/mol-viewer"
   },
   "workspaces": [
     "packages/*",
