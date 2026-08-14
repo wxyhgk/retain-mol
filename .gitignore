@@ -8,6 +8,7 @@ dist/
 packages/mol-viewer/node_modules
 packages/mol-viewer/temp/
 .retainmol-loop/
+**/.lake/
 
 # Local credentials and private keys
 .env

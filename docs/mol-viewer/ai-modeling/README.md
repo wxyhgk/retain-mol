@@ -36,6 +36,10 @@
 4. 提交前再次校验 revision，防止 AI 基于旧结构覆盖用户的新编辑。
 5. 一份计划只产生一个 undo 步骤。
 
+对于固定母核、刚性片段和手性/朝向等三维要求，`EditPlan` dry-run 后还可以进入独立的
+[Lean 形式化几何验证层](./formal-geometry-verification.md)。它使用精确整数证书检查锚点、
+距离和朝向，不替代 builder command 或数值优化器。
+
 ## 公共入口
 
 只从以下子路径接入：

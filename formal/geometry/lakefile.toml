@@ -1,0 +1,6 @@
+name = "retainmol_geometry"
+version = "0.1.0"
+defaultTargets = ["RetainMolGeometry"]
+
+[[lean_lib]]
+name = "RetainMolGeometry"
