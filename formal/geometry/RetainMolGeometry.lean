@@ -1,3 +1,4 @@
 import RetainMolGeometry.Vec3
 import RetainMolGeometry.Molecule
+import RetainMolGeometry.Command
 import RetainMolGeometry.Certificate

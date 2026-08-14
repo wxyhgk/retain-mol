@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "coordinateScale": 1000,
+  "before": {
+    "atoms": [
+      {"atomId": "A", "symbol": "C", "position": [0, 0, 0]},
+      {"atomId": "B", "symbol": "C", "position": [1.5, 0, 0]}
+    ],
+    "bonds": [
+      {"bondId": "A-B", "atomId1": "A", "atomId2": "B", "order": "single"}
+    ]
+  },
+  "steps": [
+    {
+      "command": {"kind": "atom.move", "atomId": "B", "position": [1.4, 0.1, 0]},
+      "after": {
+        "atoms": [
+          {"atomId": "A", "symbol": "C", "position": [0, 0, 0]},
+          {"atomId": "B", "symbol": "C", "position": [1.4, 0.1, 0]}
+        ],
+        "bonds": [
+          {"bondId": "A-B", "atomId1": "A", "atomId2": "B", "order": "single"}
+        ]
+      }
+    },
+    {
+      "command": {
+        "kind": "atom.add",
+        "atom": {"atomId": "H", "symbol": "H", "position": [2.3, 0.5, 0]}
+      },
+      "after": {
+        "atoms": [
+          {"atomId": "A", "symbol": "C", "position": [0, 0, 0]},
+          {"atomId": "B", "symbol": "C", "position": [1.4, 0.1, 0]},
+          {"atomId": "H", "symbol": "H", "position": [2.3, 0.5, 0]}
+        ],
+        "bonds": [
+          {"bondId": "A-B", "atomId1": "A", "atomId2": "B", "order": "single"}
+        ]
+      }
+    },
+    {
+      "command": {
+        "kind": "bond.add",
+        "bond": {"bondId": "B-H", "atomId1": "B", "atomId2": "H", "order": "single"}
+      },
+      "after": {
+        "atoms": [
+          {"atomId": "A", "symbol": "C", "position": [0, 0, 0]},
+          {"atomId": "B", "symbol": "C", "position": [1.4, 0.1, 0]},
+          {"atomId": "H", "symbol": "H", "position": [2.3, 0.5, 0]}
+        ],
+        "bonds": [
+          {"bondId": "A-B", "atomId1": "A", "atomId2": "B", "order": "single"},
+          {"bondId": "B-H", "atomId1": "B", "atomId2": "H", "order": "single"}
+        ]
+      }
+    }
+  ]
+}

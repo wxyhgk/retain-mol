@@ -207,3 +207,81 @@ private def orientationOnlyPolicy : GeometryPolicy := {
 
 example : validateGeometryPolicy validCandidate nearPlanarCenter orientationOnlyPolicy = false := by
   decide
+
+private def commandBase : MoleculeSnapshot := {
+  atoms := [
+    { atomId := "A", symbol := "C", position := { x := 0, y := 0, z := 0 } },
+    { atomId := "B", symbol := "C", position := { x := 1500, y := 0, z := 0 } }
+  ]
+  bonds := [
+    { bondId := "A-B", atomId1 := "A", atomId2 := "B", order := .single }
+  ]
+}
+
+private def commandMoved : MoleculeSnapshot := {
+  commandBase with
+  atoms := commandBase.atoms.map fun atom =>
+    if atom.atomId == "B" then
+      { atom with position := { x := 1400, y := 100, z := 0 } }
+    else atom
+}
+
+private def commandAdded : MoleculeSnapshot := {
+  commandMoved with
+  atoms := commandMoved.atoms ++ [
+    { atomId := "H", symbol := "H", position := { x := 2300, y := 500, z := 0 } }
+  ]
+}
+
+private def commandBonded : MoleculeSnapshot := {
+  commandAdded with
+  bonds := commandAdded.bonds ++ [
+    { bondId := "B-H", atomId1 := "B", atomId2 := "H", order := .single }
+  ]
+}
+
+private def validCommandTrace : List PrimitiveCommandStep := [
+  { command := .atomMove "B" { x := 1400, y := 100, z := 0 }, after := commandMoved },
+  { command := .atomAdd
+      { atomId := "H", symbol := "H", position := { x := 2300, y := 500, z := 0 } },
+    after := commandAdded },
+  { command := .bondAdd
+      { bondId := "B-H", atomId1 := "B", atomId2 := "H", order := .single },
+    after := commandBonded }
+]
+
+example : primitiveCommandTraceIsValid commandBase validCommandTrace = true := by
+  decide
+
+example : PrimitiveCommandTraceSemantics commandBase validCommandTrace := by
+  apply primitiveCommandTraceIsValid_sound
+  decide
+
+private def forgedMoved : MoleculeSnapshot := {
+  commandMoved with bonds := []
+}
+
+example :
+    primitiveCommandStepIsValid commandBase
+      { command := .atomMove "B" { x := 1400, y := 100, z := 0 }, after := forgedMoved } = false := by
+  decide
+
+private def selfLoop : Bond := {
+  bondId := "self"
+  atomId1 := "A"
+  atomId2 := "A"
+  order := .single
+}
+
+example : applyPrimitiveCommand commandBase (.bondAdd selfLoop) = none := by
+  decide
+
+private def parallel : Bond := {
+  bondId := "parallel"
+  atomId1 := "B"
+  atomId2 := "A"
+  order := .double
+}
+
+example : applyPrimitiveCommand commandBase (.bondAdd parallel) = none := by
+  decide

@@ -40,7 +40,8 @@
 [Lean 形式化几何验证层](./formal-geometry-verification.md)。它使用可信策略检查锚点、距离和
 朝向，不替代 builder command 或数值优化器；多代理提案、反驳与机器裁决的边界见
 [对抗式形式化验证循环](./adversarial-formal-loop.md)。最终 SDF、稳定 ID、ExpectedEffect 与
-三轴发布门的完整证据链见[最终产物验证 V2](./final-artifact-verification-v2.md)。
+三轴发布门的完整证据链见[最终产物验证 V2](./final-artifact-verification-v2.md)。基础命令回执
+如何进入 Lean，以及为何仍需受信几何意图编译器，见[Lean 命令语义](./lean-command-semantics.md)。
 
 ## 公共入口
 

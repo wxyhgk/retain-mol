@@ -55,12 +55,15 @@ EditPlan -> schema -> builder dry-run -> 候选 Molecule
 - 刚性组只保持内部度量，本身不能区分镜像；需要同时声明四点有向体积才能拒绝镜像翻转；
 - 返回结构化 `ValidationIssue`，空策略在要求几何约束时直接拒绝；
 - 证明整体平移保持平方距离和有向体积。
+- 七种 ExpectedEffect V1 基础命令的精确图效果，以及完整回执轨迹的 Prop 级 soundness；
+- 移动原子不改变键表、增加键不改变原子表的 frame condition。
 
 未形式化的内容：
 
 - 元素价态和构键规则，仍由生产 builder command 负责；
 - 图片所表达的目标分子是否被 AI 正确识别；
 - builder 是否正确实现了 `EditPlan` 语义；
+- runtime receipt 到 Lean 命令轨迹的字段投影等价；
 - 连续浮点优化过程；
 - 量子化学能量、力和收敛性；
 - 同位素、完整立体标记和金属配位位点语义；
@@ -98,19 +101,24 @@ formal/geometry/
 ├── RetainMolGeometry/
 │   ├── Vec3.lean          # 精确三维向量与刚体不变量证明
 │   ├── Molecule.lean      # 分子快照与通用图不变量
+│   ├── Command.lean       # 基础命令、精确回执轨迹与 soundness 定理
 │   ├── Certificate.lean   # policy、结构化问题与几何判定
 │   └── Examples.lean      # 正例与反例
 ├── examples/
-│   └── anchored-core.json # B/N 固定母核示例
+│   ├── anchored-core.json # B/N 固定母核示例
+│   └── primitive-command-trace.json # 基础命令回执示例
 ├── tools/
-│   └── json_to_lean.py    # 受限数据桥接器
+│   ├── json_to_lean.py    # 最终几何策略桥接器
+│   └── command_trace_to_lean.py # 命令回执桥接器
 └── verify.sh
 ```
 
 ## 后续扩展顺序
 
-1. 由候选图完备枚举所有成键距离和非键碰撞 pair；
-2. 从高阶 builder command 独立生成刚性组、朝向与自由度策略；
-3. 补充配位、同位素和立体语义的 canonical projection；
-4. 用点积和有符号三重积增加键角、二面角 postcondition；
-5. 把结构化失败映射为局部重规划提示。
+1. 证明 runtime receipt projection 与 Lean 基础命令轨迹一致；
+2. 定义独立 `GeometryIntent`，由受信 compiler 生成 policy 并证明编译正确性；
+3. 由候选图完备枚举所有成键距离和非键碰撞 pair；
+4. 从高阶 builder command 独立生成刚性组、朝向与自由度策略；
+5. 补充配位、同位素和立体语义的 canonical projection；
+6. 用点积和有符号三重积增加键角、二面角 postcondition；
+7. 把结构化失败映射为局部重规划提示。
