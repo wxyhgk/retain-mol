@@ -47,8 +47,20 @@ flowchart LR
 - 不把工具缺失、超时和未知 schema 记作候选错误；它们属于 `INDETERMINATE`。
 - 当前不把 verified artifact 直接写入实时 molecule store。
 
-## 下一轮
+## 当前落地状态
 
-下一轮重点是独立 `ExpectedEffect` 编译器和最终 artifact formal bridge。前者从规范化 EditPlan、
-模板 manifest 和 command semantics 生成预期变化；builder receipt 只是待核验 witness，不能定义
-什么变化是正确的。
+第二轮已经加入独立 `ExpectedEffect V1`、最终 SDF bridge、统一 verification context 和三轴发布门。
+生产 builder 的回执仍只是 witness；预期变化由不依赖 builder command 的纯语义编译器产生。
+
+当前可信范围故意很窄：
+
+- 只形式化七种确定性原子/键命令；高阶模板和几何命令返回 `INDETERMINATE`；
+- 只允许中性闭壳层 H/B/C/N/O/F 普通共价结构；
+- 只接受单、双、三键和显式 Kekule 图；
+- 不接受芳香标记、同位素、立体标记、金属配位或断开的多组分结构；
+- xTB 坐标回传只有在可执行文件 SHA-256 与运行时信任配置一致，输入 SDF 与 input XYZ 逐行一致，
+  output XYZ 经固定锚点投影可重建最终 SDF，并且行顺序契约与摘要链完整时，才可通过 safety 轴。
+
+全部尝试继续进入普通 history；只有 evaluator 与三轴验证都显式 PASS，且归档中的目标参考 SDF、
+评估器源码、不可变 run manifest、完整 geometry request 和全部上游证据重新计算摘要后仍一致的运行，
+才进入 `history/verified/index.json`；索引发布由文件锁串行化。

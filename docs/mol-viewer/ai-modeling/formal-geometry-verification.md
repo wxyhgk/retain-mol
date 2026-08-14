@@ -100,6 +100,11 @@ missing-bond-endpoint(bond-42, atom-99)
 - 受限 JSON 到 Lean 数据的桥接；
 - 结构化 issue，以及删键、改电荷、平行键、空 policy、移动锚点和扭曲刚体反例。
 
-当前只证明最终候选符合 policy，不证明图片识别正确或 builder 实现正确。下一阶段必须先从规范化
-EditPlan 独立编译 expected effect，再把最终 artifact hash、policy hash 和 verifier version 绑定为
-三态 verification envelope；不能从 observed candidate 反推“允许发生什么”。
+当前 Lean 层只证明最终候选符合编码后的有限 policy，不证明图片识别正确，也不直接证明 builder
+实现正确。第二轮已经增加独立 ExpectedEffect 和最终 artifact bridge，把最终产物、policy、计划、
+执行回执、身份映射和 transport evidence 的 SHA-256 绑定到同一个 verification context。完整流程见
+[最终产物验证 V2](./final-artifact-verification-v2.md)。
+
+运行时还必须分别提供可信 `lake` 启动器与实际 Lean 编译器的 SHA-256。当前自动 gate 的精确
+十进制预检覆盖它实际生成的键长区间；朝向和刚性组虽已能在 Lean policy 中表达，但在进入自动
+PASS 域前仍需补齐量化边界攻击测试。

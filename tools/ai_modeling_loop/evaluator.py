@@ -12,6 +12,10 @@ from rdkit.Chem import rdMolDescriptors
 
 from .chemistry import load_sdf, with_explicit_hydrogens
 from .contracts import BenchmarkCase, DEFAULT_WORK_DIR
+from .artifact_contracts import sha256_file
+
+
+EVALUATOR_LOADED_SOURCE_SHA256 = sha256_file(Path(__file__))
 
 
 @dataclass(frozen=True)
@@ -137,11 +141,12 @@ def evaluate_candidate(
     *,
     candidate_metadata: Path | None = None,
     work_dir: Path = DEFAULT_WORK_DIR,
+    reference_sdf_path: Path | None = None,
 ) -> EvaluationResult:
     reference_dir = work_dir / "references" / case.case_id
-    reference_sdf = reference_dir / "reference.sdf"
+    reference_sdf = reference_sdf_path or reference_dir / "reference.sdf"
     if not reference_sdf.exists():
-        raise FileNotFoundError(f"Reference 3D SDF is not prepared: {reference_dir}")
+        raise FileNotFoundError(f"Reference 3D SDF is not prepared: {reference_sdf}")
     reference = with_explicit_hydrogens(load_sdf(reference_sdf))
     candidate = with_explicit_hydrogens(load_sdf(candidate_path))
     formula_match = rdMolDescriptors.CalcMolFormula(reference) == rdMolDescriptors.CalcMolFormula(candidate)

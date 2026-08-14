@@ -8,7 +8,9 @@ export function runMoveAtomCommand(
   y: number,
   z: number,
 ): EditCommandResult {
-  if (!molecule.atoms.some(atom => atom.id === atomId)) return editUnchanged()
+  const atom = molecule.atoms.find(candidate => candidate.id === atomId)
+  if (!atom) return editUnchanged()
+  if (atom.x === x && atom.y === y && atom.z === z) return editUnchanged()
   return editChanged({
     ...molecule,
     atoms: molecule.atoms.map(atom => atom.id === atomId ? { ...atom, x, y, z } : atom),
