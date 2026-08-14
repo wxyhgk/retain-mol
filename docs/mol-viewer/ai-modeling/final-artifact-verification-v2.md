@@ -33,6 +33,25 @@ flowchart LR
     G --> V
 ```
 
+## 运行管线边界
+
+一次建模尝试按以下阶段执行，各阶段只接收显式输入并产出可归档证据：
+
+1. `prepare`：原子化分配 run 目录，冻结初始 Molecule、EditPlan、目标证据与运行参数；
+2. `execute`：生产 builder 执行冻结后的输入，生成候选结构和逐命令执行证据；
+3. `refine`：可选的构象生成与 xTB 精修，只在临时文件中工作；
+4. `verify`：检查执行输入摘要、证据完整性及三轴最终产物 envelope；
+5. `record`：原子化写入 `run.json` 与人工可读报告，再按发布规则进入历史索引。
+
+`run-manifest.json` V2 额外绑定 `inputs/initial-molecule.json` 与 `run-spec.json` 的 SHA-256。
+因此任务目录在运行中被修改，也不会改变已经开始的尝试。执行回执的 `inputSha256` 必须与冻结输入
+一致，否则验证直接 REJECT。精修后的 SDF 只有在坐标来源、摘要和目标评估全部完成后才从 staging
+原子化发布为 `candidate.sdf`；失败时保留原始候选与诊断，不能留下半完成的最终候选。
+
+`runner.py` 仅负责阶段编排与旧调用接口兼容。准备、精修、验证、记录分别位于
+`run_preparation.py`、`refinement_stage.py`、`verification_stage.py` 和 `run_recording.py`，后续扩展
+某一算法时不应重新把化学策略、文件发布和验证策略混回 orchestrator。
+
 ## ExpectedEffect V1 范围
 
 | 状态 | 命令 |
@@ -112,3 +131,8 @@ export RETAINMOL_TRUSTED_LEAN_SHA256="$(shasum -a 256 "$(lake env which lean)" |
 Lean 证明的是“给定有限整数化 policy，候选满足这些不变量”。它不证明量子化学正确性，不证明
 二维图片识别无误，也不证明当前七种命令之外的高阶编辑语义。扩域必须先增加独立语义、反例和
 攻击测试，再允许进入 PASS。
+
+当前仍未闭合的信任边界包括：执行回执除输入摘要外的完整 V3 字段绑定、Lean proof mode 与源码
+闭包认证、以及 publication gate 对 verdict 生成来源和 case metadata 的可重放认证。它们完成前，
+不能把现有 PASS 宣称为“AI 已经理解三维结构”或“结果具备完整数学正确性”；现有结论仅覆盖文档
+明确列出的离散几何与证据一致性不变量。

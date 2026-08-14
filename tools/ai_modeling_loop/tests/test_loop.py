@@ -33,6 +33,7 @@ from tools.ai_modeling_loop.runner import (
     archive_run,
     record_run,
 )
+from tools.ai_modeling_loop.run_manifest import load_run_manifest
 from tools.ai_modeling_loop.workspace import prepare_task_bundle
 
 
@@ -199,7 +200,7 @@ class LoopContractsTest(unittest.TestCase):
             expected_effect,
             enforced_plan,
         ):
-            del initial, edit_plan, snapshot, identity_map, coordinate_transport_receipt, expected_effect, enforced_plan
+            del edit_plan, snapshot, identity_map, coordinate_transport_receipt, expected_effect, enforced_plan
             candidate.write_bytes(candidate_source.read_bytes())
             metadata.write_text(json.dumps({
                 "builder": "retainmol-edit-plan",
@@ -207,7 +208,10 @@ class LoopContractsTest(unittest.TestCase):
                     anchor.anchor_id: anchor.atom_index for anchor in case.anchors
                 },
             }))
-            receipt.write_text(json.dumps({"status": "completed"}))
+            receipt.write_text(json.dumps({
+                "status": "completed",
+                "inputSha256": hashlib.sha256(initial.read_bytes()).hexdigest(),
+            }))
             return subprocess.CompletedProcess(["node"], 0, "", "")
         return execute
 
@@ -559,7 +563,7 @@ class LoopContractsTest(unittest.TestCase):
                 expected_effect,
                 enforced_plan,
             ):
-                del initial, edit_plan
+                del edit_plan
                 candidate.write_bytes(case.reference_sdf.read_bytes())
                 metadata.write_text(json.dumps({
                     "builder": "retainmol-edit-plan",
@@ -576,6 +580,9 @@ class LoopContractsTest(unittest.TestCase):
                     enforced_plan,
                 ):
                     path.write_text("{}\n")
+                receipt.write_text(json.dumps({
+                    "inputSha256": hashlib.sha256(initial.read_bytes()).hexdigest(),
+                }))
                 return subprocess.CompletedProcess(["node"], 0, "", "")
 
             with patch(
@@ -592,6 +599,164 @@ class LoopContractsTest(unittest.TestCase):
             self.assertIn("formal-indeterminate", result.failures)
             self.assertEqual(record["verification"]["status"], "indeterminate")
             self.assertEqual(record["verification"]["code"], "verification-tool-failed")
+
+    def test_runner_freezes_initial_molecule_inside_run(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+            prepare_task_bundle(case, root)
+            shared_initial = root / "tasks" / case.case_id / "initial-molecule.json"
+            original = shared_initial.read_bytes()
+            observed_initial: list[Path] = []
+
+            def executor(**kwargs):
+                initial = kwargs["initial"]
+                observed_initial.append(initial)
+                shared_initial.write_text('{"mutated": true}\n')
+                self._successful_executor(case, case.reference_sdf)(**kwargs)
+                return subprocess.CompletedProcess(["node"], 0, "", "")
+
+            with patch("tools.ai_modeling_loop.runner._execute_edit_plan", executor):
+                run_dir, _ = record_run(case, plan, work_dir=root)
+
+            frozen = run_dir / "inputs" / "initial-molecule.json"
+            manifest = json.loads((run_dir / "run-manifest.json").read_text())
+            self.assertEqual(observed_initial, [frozen])
+            self.assertEqual(frozen.read_bytes(), original)
+            self.assertEqual(manifest["schemaVersion"], 2)
+            self.assertEqual(manifest["initialMoleculeSha256"], hashlib.sha256(original).hexdigest())
+
+            malformed = dict(manifest)
+            malformed["initialMoleculeSha256"] = 123
+            (run_dir / "run-manifest.json").write_text(json.dumps(malformed) + "\n")
+            with self.assertRaisesRegex(ValueError, "initialMoleculeSha256"):
+                load_run_manifest(run_dir / "run-manifest.json")
+
+            (run_dir / "run-manifest.json").write_text(json.dumps(manifest) + "\n")
+            frozen.write_text('{"tampered": true}\n')
+            with self.assertRaisesRegex(ValueError, "initialMoleculeSha256"):
+                load_run_manifest(run_dir / "run-manifest.json")
+
+    def test_concurrent_runs_allocate_distinct_directories(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+            prepare_task_bundle(case, root)
+
+            with patch(
+                "tools.ai_modeling_loop.runner._execute_edit_plan",
+                self._successful_executor(case, case.reference_sdf),
+            ):
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    completed = list(executor.map(
+                        lambda _: record_run(case, plan, work_dir=root)[0],
+                        range(2),
+                    ))
+
+            self.assertEqual(len(set(completed)), 2)
+            self.assertTrue(all((run_dir / "run.json").is_file() for run_dir in completed))
+
+    def test_runner_rejects_execution_from_unfrozen_input(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+
+            def executor(**kwargs):
+                self._successful_executor(case, case.reference_sdf)(**kwargs)
+                kwargs["receipt"].write_text(json.dumps({"inputSha256": "0" * 64}))
+                for name in (
+                    "snapshot", "identity_map", "coordinate_transport_receipt",
+                    "expected_effect", "enforced_plan",
+                ):
+                    kwargs[name].write_text("{}\n")
+                return subprocess.CompletedProcess(["node"], 0, "", "")
+
+            with patch("tools.ai_modeling_loop.runner._execute_edit_plan", executor), patch(
+                "tools.ai_modeling_loop.runner.verify_final_artifact"
+            ) as verifier:
+                run_dir, result = record_run(case, plan, work_dir=root)
+
+            record = json.loads((run_dir / "run.json").read_text())
+            self.assertFalse(result.passed)
+            self.assertIn("formal-reject", result.failures)
+            self.assertEqual(record["verification"]["code"], "execution-input-binding-reject")
+            verifier.assert_not_called()
+
+    def test_runner_rejects_manifest_snapshot_drift_before_final_verifier(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+
+            def executor(**kwargs):
+                self._successful_executor(case, case.reference_sdf)(**kwargs)
+                for name in (
+                    "snapshot", "identity_map", "coordinate_transport_receipt",
+                    "expected_effect", "enforced_plan",
+                ):
+                    kwargs[name].write_text("{}\n")
+                frozen = kwargs["initial"]
+                frozen.write_text('{"replaced": true}\n')
+                manifest_path = frozen.parents[1] / "run-manifest.json"
+                manifest = json.loads(manifest_path.read_text())
+                manifest["initialMoleculeSha256"] = hashlib.sha256(frozen.read_bytes()).hexdigest()
+                manifest_path.write_text(json.dumps(manifest) + "\n")
+                kwargs["receipt"].write_text(json.dumps({
+                    "inputSha256": manifest["initialMoleculeSha256"],
+                }))
+                return subprocess.CompletedProcess(["node"], 0, "", "")
+
+            with patch("tools.ai_modeling_loop.runner._execute_edit_plan", executor), patch(
+                "tools.ai_modeling_loop.runner.verify_final_artifact"
+            ) as verifier:
+                run_dir, result = record_run(case, plan, work_dir=root)
+
+            record = json.loads((run_dir / "run.json").read_text())
+            self.assertFalse(result.passed)
+            self.assertIn("formal-indeterminate", result.failures)
+            self.assertEqual(
+                record["verification"]["code"],
+                "execution-input-binding-unavailable",
+            )
+            verifier.assert_not_called()
+
+    def test_failed_refinement_does_not_publish_partial_final_candidate(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+            incomplete = XtbResult(molecule, -1.0, True, 0, "missing provenance", 0.0)
+
+            with patch(
+                "tools.ai_modeling_loop.runner._execute_edit_plan",
+                self._successful_executor(case, case.reference_sdf),
+            ), patch(
+                "tools.ai_modeling_loop.runner.optimize_with_xtb",
+                return_value=incomplete,
+            ):
+                run_dir, result = record_run(case, plan, work_dir=root, refine=True)
+
+            record = json.loads((run_dir / "run.json").read_text())
+            self.assertIn("xtb-failed", result.failures)
+            self.assertFalse((run_dir / "candidate.sdf").exists())
+            self.assertFalse((run_dir / ".candidate.refined.sdf.tmp").exists())
+            self.assertEqual(
+                record["candidateSha256"],
+                hashlib.sha256((run_dir / "candidate.raw.sdf").read_bytes()).hexdigest(),
+            )
 
     def test_archive_verified_index_contains_only_formally_verified_passes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
