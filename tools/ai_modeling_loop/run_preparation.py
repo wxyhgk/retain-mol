@@ -29,6 +29,7 @@ class RunPaths:
     executor_coordinate_transport_receipt: Path
     expected_effect: Path
     enforced_plan: Path
+    relation_certificate_manifest: Path
     final_candidate: Path
     xtb_input_sdf: Path
     xtb_input_xyz: Path
@@ -148,6 +149,7 @@ def prepare_run(
         executor_coordinate_transport_receipt=run_dir / "coordinate-transport.raw.json",
         expected_effect=run_dir / "expected-effect.json",
         enforced_plan=run_dir / "enforced-plan.json",
+        relation_certificate_manifest=run_dir / "relation-certificate-manifest.json",
         final_candidate=run_dir / "candidate.sdf",
         xtb_input_sdf=run_dir / "xtb-input.sdf",
         xtb_input_xyz=run_dir / "xtb-input.xyz",

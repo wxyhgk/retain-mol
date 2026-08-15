@@ -40,6 +40,21 @@ def with_formal_indeterminate(
     )
 
 
+def with_formal_reject(
+    result: EvaluationResult,
+    diagnostic: str,
+) -> EvaluationResult:
+    failures = result.failures
+    if "formal-reject" not in failures:
+        failures = (*failures, "formal-reject")
+    return replace(
+        result,
+        passed=False,
+        failures=failures,
+        diagnostics=(*result.diagnostics, diagnostic),
+    )
+
+
 def verify_completed_run(
     *,
     case_id: str,

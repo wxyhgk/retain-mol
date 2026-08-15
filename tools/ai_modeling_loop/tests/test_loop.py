@@ -45,6 +45,7 @@ class LoopContractsTest(unittest.TestCase):
         *,
         verification_status: str = "pass",
         evaluation_passed: bool = True,
+        executor_return_code: int = 0,
     ) -> Path:
         run_dir = root / name
         verification_dir = run_dir / "verification"
@@ -160,6 +161,7 @@ class LoopContractsTest(unittest.TestCase):
             "gitCommit": None,
             "gitDirty": None,
             "executor": "test-executor",
+            "executorReturnCode": executor_return_code,
             "editPlanSha256": sha256_file(run_dir / "edit-plan.json"),
             "verification": verification,
             "evaluation": evaluation,
@@ -490,6 +492,79 @@ class LoopContractsTest(unittest.TestCase):
             self.assertTrue((run_dir / "run.json").exists())
             self.assertTrue((run_dir / "report.md").exists())
 
+    def test_runner_records_relation_certificate_without_publishing_it(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+            successful = self._successful_executor(case, case.reference_sdf)
+
+            def relation_executor(**kwargs):
+                successful(**kwargs)
+                return subprocess.CompletedProcess(["node"], 4, "", "relation pending")
+
+            relation_verification = {
+                "schemaVersion": 1,
+                "status": "pass",
+                "code": "lean-relation-satisfied",
+                "projectionVersion": "runtime-rotate-relation-trace-v1",
+                "manifestSha256": "a" * 64,
+                "evidence": {},
+            }
+            with patch(
+                "tools.ai_modeling_loop.runner._execute_edit_plan",
+                relation_executor,
+            ), patch(
+                "tools.ai_modeling_loop.runner.certify_relation_execution",
+                return_value=relation_verification,
+            ) as certify:
+                run_dir, result = record_run(case, plan, work_dir=root)
+
+            record = json.loads((run_dir / "run.json").read_text())
+            certify.assert_called_once()
+            self.assertEqual(record["executorReturnCode"], 4)
+            self.assertEqual(record["schemaVersion"], 2)
+            self.assertEqual(record["relationVerification"], relation_verification)
+            self.assertIsNone(record["verification"])
+            self.assertFalse(result.passed)
+            self.assertIn("formal-indeterminate", result.failures)
+            self.assertNotIn("candidate-invalid", result.failures)
+
+    def test_runner_preserves_relation_reject_semantics(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+            successful = self._successful_executor(case, case.reference_sdf)
+
+            def relation_executor(**kwargs):
+                successful(**kwargs)
+                return subprocess.CompletedProcess(["node"], 4, "", "relation pending")
+
+            with patch(
+                "tools.ai_modeling_loop.runner._execute_edit_plan",
+                relation_executor,
+            ), patch(
+                "tools.ai_modeling_loop.runner.certify_relation_execution",
+                return_value={
+                    "schemaVersion": 1,
+                    "status": "reject",
+                    "code": "relation-projection-failed",
+                    "projectionVersion": None,
+                    "manifestSha256": None,
+                    "evidence": {},
+                },
+            ):
+                _, result = record_run(case, plan, work_dir=root)
+
+            self.assertFalse(result.passed)
+            self.assertIn("formal-reject", result.failures)
+            self.assertNotIn("formal-indeterminate", result.failures)
+
     def test_runner_records_raw_and_refined_evaluations(self) -> None:
         case = load_case("GDG1476")
         with tempfile.TemporaryDirectory() as directory:
@@ -790,6 +865,19 @@ class LoopContractsTest(unittest.TestCase):
             verified_runs = json.loads((history / "verified" / "index.json").read_text())["runs"]
             self.assertEqual(len(all_runs), 3)
             self.assertEqual([row["runId"] for row in verified_runs], ["pass-run"])
+
+    def test_archive_verified_index_excludes_nonzero_executor_return_code(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / "history"
+            archive_run(self._write_verified_run(
+                root,
+                "relation-staging-run",
+                executor_return_code=4,
+            ), history)
+
+            verified = json.loads((history / "verified" / "index.json").read_text())
+            self.assertEqual(verified["runs"], [])
 
     def test_concurrent_archives_publish_one_complete_index(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

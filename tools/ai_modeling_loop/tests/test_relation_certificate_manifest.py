@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from tools.ai_modeling_loop.artifact_contracts import ArtifactContractError, sha256_file
+from tools.ai_modeling_loop.artifact_contracts import (
+    ArtifactContractError,
+    canonical_json_bytes,
+    sha256_file,
+)
 from tools.ai_modeling_loop.relation_certificate_manifest import (
     build_relation_certificate_manifest,
     classify_relation_capability,
@@ -37,6 +42,27 @@ class RelationCertificateManifestTests(unittest.TestCase):
         write_json(relation_dir / "relation-trace-request.json", {"schemaVersion": 1})
         lean_path = relation_dir / "GeneratedRelationTrace.lean"
         lean_path.write_text("example : True := by trivial\n", encoding="utf-8")
+        components = {
+            "nodeExecutableSha256": "1" * 64,
+            "pythonExecutableSha256": "2" * 64,
+            "leanLauncherSha256": "3" * 64,
+            "leanExecutableSha256": "4" * 64,
+            "projectorSha256": "5" * 64,
+            "projectorIoSha256": "6" * 64,
+            "strictJsonSha256": "7" * 64,
+            "modelingPackageSha256": "8" * 64,
+            "modelingDistTreeSha256": "9" * 64,
+            "nodeDependencyTreeSha256": "a" * 64,
+            "formalSourceTreeSha256": "b" * 64,
+        }
+        bound_inputs = {
+            "runManifestSha256": sha256_file(run_dir / "run-manifest.json"),
+            "initialMoleculeSha256": sha256_file(
+                run_dir / "inputs" / "initial-molecule.json"
+            ),
+            "enforcedPlanSha256": sha256_file(run_dir / "enforced-plan.json"),
+            "executionReceiptSha256": sha256_file(run_dir / "execution.json"),
+        }
         write_json(relation_dir / "formal-verdict.json", {
             "schemaVersion": 1,
             "status": "pass",
@@ -52,18 +78,17 @@ class RelationCertificateManifestTests(unittest.TestCase):
                     relation_dir / "relation-trace-request.json"
                 ),
                 "nodeExecutable": "/usr/bin/node",
-                "nodeExecutableSha256": "1" * 64,
-                "projectorSha256": "2" * 64,
-                "projectorIoSha256": "3" * 64,
-                "strictJsonSha256": "4" * 64,
-                "modelingRuntimeSha256": "5" * 64,
+                "pythonExecutable": "/usr/bin/python3",
+                **components,
+                "modelingRuntimeSha256": "c" * 64,
                 "leanLauncher": "/usr/bin/lake",
-                "leanLauncherSha256": "6" * 64,
                 "leanExecutable": "/usr/bin/lean",
-                "leanExecutableSha256": "7" * 64,
-                "generatorSha256": "8" * 64,
-                "formalSourceTreeSha256": "9" * 64,
+                "generatorSha256": "d" * 64,
+                "checkerClosureSha256": hashlib.sha256(
+                    canonical_json_bytes(components)
+                ).hexdigest(),
                 "generatedLeanSha256": sha256_file(lean_path),
+                **bound_inputs,
             },
         })
 
@@ -183,6 +208,34 @@ class RelationCertificateManifestTests(unittest.TestCase):
             verdict["relationTraceSha256"] = "0" * 64
             write_json(verdict_path, verdict)
             with self.assertRaisesRegex(ArtifactContractError, "not bound"):
+                build_relation_certificate_manifest(
+                    run_dir,
+                    projection_version="runtime-rotate-relation-trace-v1",
+                )
+
+    def test_rejects_checker_evidence_rebound_to_other_initial_molecule(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = self.create_run(Path(directory), "geometry.rotateGroup")
+            self.create_relation_artifacts(run_dir)
+            verdict_path = run_dir / "relation" / "formal-verdict.json"
+            verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
+            verdict["checkerEvidence"]["initialMoleculeSha256"] = "0" * 64
+            write_json(verdict_path, verdict)
+            with self.assertRaisesRegex(ArtifactContractError, "not bound"):
+                build_relation_certificate_manifest(
+                    run_dir,
+                    projection_version="runtime-rotate-relation-trace-v1",
+                )
+
+    def test_rejects_checker_evidence_with_forged_closure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = self.create_run(Path(directory), "geometry.rotateGroup")
+            self.create_relation_artifacts(run_dir)
+            verdict_path = run_dir / "relation" / "formal-verdict.json"
+            verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
+            verdict["checkerEvidence"]["checkerClosureSha256"] = "0" * 64
+            write_json(verdict_path, verdict)
+            with self.assertRaisesRegex(ArtifactContractError, "closure hash"):
                 build_relation_certificate_manifest(
                     run_dir,
                     projection_version="runtime-rotate-relation-trace-v1",

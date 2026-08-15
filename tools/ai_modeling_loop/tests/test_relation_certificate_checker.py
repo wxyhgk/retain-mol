@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from tools.ai_modeling_loop.artifact_contracts import sha256_file
 from tools.ai_modeling_loop.relation_certificate_checker import (
     PROJECTION_VERSION,
+    relation_checker_runtime_evidence,
     run_relation_certificate_check,
 )
 from tools.ai_modeling_loop.relation_certificate_manifest import (
@@ -20,7 +19,6 @@ from tools.ai_modeling_loop.relation_certificate_manifest import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXECUTOR = REPO_ROOT / "tools" / "ai_modeling_loop" / "retainmol_executor.mjs"
-GEOMETRY_ROOT = REPO_ROOT / "formal" / "geometry"
 MODELING_DIST = REPO_ROOT / "packages" / "mol-viewer" / "dist" / "public" / "modeling.js"
 
 
@@ -107,21 +105,8 @@ class RelationCertificateCheckerTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 4, completed.stderr)
         return run_dir
 
-    def trusted_lean_hashes(self) -> tuple[str, str] | None:
-        lake = shutil.which("lake")
-        if lake is None:
-            return None
-        completed = subprocess.run(
-            [lake, "env", "which", "lean"],
-            cwd=GEOMETRY_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        lean = Path(completed.stdout.strip())
-        if completed.returncode != 0 or not lean.is_file():
-            return None
-        return sha256_file(lean), sha256_file(Path(lake))
+    def trusted_runtime(self) -> dict[str, str] | None:
+        return relation_checker_runtime_evidence(30)
 
     def test_non_relation_plan_is_not_applicable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -129,9 +114,11 @@ class RelationCertificateCheckerTests(unittest.TestCase):
                 "commandId": "replace-1",
                 "kind": "atom.replace",
             }])
+            stale = run_dir / "relation" / "formal-verdict.json"
+            write_json(stale, {"status": "pass"})
             result = run_relation_certificate_check(run_dir)
             self.assertEqual(result.status, "not-applicable")
-            self.assertFalse((run_dir / "relation").exists())
+            self.assertFalse(stale.exists())
 
     def test_unimplemented_relation_plan_is_indeterminate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -139,23 +126,24 @@ class RelationCertificateCheckerTests(unittest.TestCase):
                 "commandId": "attach-1",
                 "kind": "fragment.attach",
             }])
+            stale = run_dir / "relation" / "formal-verdict.json"
+            write_json(stale, {"status": "pass"})
             result = run_relation_certificate_check(run_dir)
             self.assertEqual(result.status, "indeterminate")
             self.assertEqual(result.code, "relation-command-set-unsupported")
-            self.assertFalse((run_dir / "relation" / "formal-verdict.json").exists())
+            self.assertFalse(stale.exists())
 
     def test_rotate_execution_is_reprojected_and_proved_by_lean(self) -> None:
         if not MODELING_DIST.is_file():
             self.skipTest("build @retainmol/mol-viewer before relation checker integration")
-        trusted = self.trusted_lean_hashes()
+        trusted = self.trusted_runtime()
         if trusted is None:
             self.skipTest("Lean toolchain is unavailable")
         with tempfile.TemporaryDirectory() as directory:
             run_dir = self.create_executed_rotate_run(Path(directory))
             result = run_relation_certificate_check(
                 run_dir,
-                trusted_lean_sha256=trusted[0],
-                trusted_launcher_sha256=trusted[1],
+                trusted_checker_closure_sha256=trusted["checkerClosureSha256"],
             )
             self.assertEqual(result.status, "pass", result)
             self.assertEqual(result.projection_version, PROJECTION_VERSION)
@@ -171,23 +159,22 @@ class RelationCertificateCheckerTests(unittest.TestCase):
     def test_failed_recheck_removes_stale_pass_verdict(self) -> None:
         if not MODELING_DIST.is_file():
             self.skipTest("build @retainmol/mol-viewer before relation checker integration")
-        trusted = self.trusted_lean_hashes()
+        trusted = self.trusted_runtime()
         if trusted is None:
             self.skipTest("Lean toolchain is unavailable")
         with tempfile.TemporaryDirectory() as directory:
             run_dir = self.create_executed_rotate_run(Path(directory))
             passed = run_relation_certificate_check(
                 run_dir,
-                trusted_lean_sha256=trusted[0],
-                trusted_launcher_sha256=trusted[1],
+                trusted_checker_closure_sha256=trusted["checkerClosureSha256"],
             )
             self.assertEqual(passed.status, "pass", passed)
             verdict = run_dir / "relation" / "formal-verdict.json"
             self.assertTrue(verdict.is_file())
             failed = run_relation_certificate_check(
                 run_dir,
+                trusted_checker_closure_sha256=trusted["checkerClosureSha256"],
                 trusted_lean_sha256="0" * 64,
-                trusted_launcher_sha256=trusted[1],
             )
             self.assertEqual(failed.status, "indeterminate")
             self.assertEqual(failed.code, "lean-trust-mismatch")

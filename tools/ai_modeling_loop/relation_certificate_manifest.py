@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any, Mapping
 
-from .artifact_contracts import ArtifactContractError, load_strict_json, sha256_file
+from .artifact_contracts import (
+    ArtifactContractError,
+    canonical_json_bytes,
+    load_strict_json,
+    sha256_file,
+)
 
 
 RELATION_CERTIFICATE_SCHEMA_VERSION = 1
@@ -52,17 +58,27 @@ CHECKER_EVIDENCE_FIELDS = frozenset({
     "requestSha256",
     "nodeExecutable",
     "nodeExecutableSha256",
+    "pythonExecutable",
+    "pythonExecutableSha256",
     "projectorSha256",
     "projectorIoSha256",
     "strictJsonSha256",
     "modelingRuntimeSha256",
+    "modelingPackageSha256",
+    "modelingDistTreeSha256",
+    "nodeDependencyTreeSha256",
     "leanLauncher",
     "leanLauncherSha256",
     "leanExecutable",
     "leanExecutableSha256",
     "generatorSha256",
     "formalSourceTreeSha256",
+    "checkerClosureSha256",
     "generatedLeanSha256",
+    "runManifestSha256",
+    "initialMoleculeSha256",
+    "enforcedPlanSha256",
+    "executionReceiptSha256",
 })
 BOUND_RUN_ARTIFACTS = {
     "runManifestSha256": Path("run-manifest.json"),
@@ -200,19 +216,50 @@ def _validate_formal_verdict(run_dir: Path, manifest: Mapping[str, Any]) -> None
         raise ArtifactContractError("checker evidence generatedLeanSha256 is not bound to verdict")
     for field in (
         "nodeExecutableSha256",
+        "pythonExecutableSha256",
         "projectorSha256",
         "projectorIoSha256",
         "strictJsonSha256",
         "modelingRuntimeSha256",
+        "modelingPackageSha256",
+        "modelingDistTreeSha256",
+        "nodeDependencyTreeSha256",
         "leanLauncherSha256",
         "leanExecutableSha256",
         "generatorSha256",
         "formalSourceTreeSha256",
+        "checkerClosureSha256",
+        "runManifestSha256",
+        "initialMoleculeSha256",
+        "enforcedPlanSha256",
+        "executionReceiptSha256",
     ):
         _sha256(evidence[field], f"checker evidence {field}")
-    for field in ("nodeExecutable", "leanLauncher", "leanExecutable"):
+    for field in ("nodeExecutable", "pythonExecutable", "leanLauncher", "leanExecutable"):
         if not isinstance(evidence[field], str) or not evidence[field]:
             raise ArtifactContractError(f"checker evidence {field} must be a non-empty string")
+    for field in BOUND_RUN_ARTIFACTS:
+        if evidence[field] != manifest[field]:
+            raise ArtifactContractError(f"checker evidence {field} is not bound to manifest")
+    closure_components = {
+        field: evidence[field]
+        for field in (
+            "nodeExecutableSha256",
+            "pythonExecutableSha256",
+            "leanLauncherSha256",
+            "leanExecutableSha256",
+            "projectorSha256",
+            "projectorIoSha256",
+            "strictJsonSha256",
+            "modelingPackageSha256",
+            "modelingDistTreeSha256",
+            "nodeDependencyTreeSha256",
+            "formalSourceTreeSha256",
+        )
+    }
+    expected_closure = hashlib.sha256(canonical_json_bytes(closure_components)).hexdigest()
+    if evidence["checkerClosureSha256"] != expected_closure:
+        raise ArtifactContractError("checker evidence closure hash is invalid")
 
 
 def load_relation_certificate_manifest(path: Path) -> Mapping[str, Any]:

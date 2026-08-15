@@ -29,10 +29,15 @@ from .refinement_stage import (
     refine_conformer_ensemble,
     refine_with_xtb_fallback,
 )
+from .relation_stage import certify_relation_execution
 from .run_preparation import prepare_run
 from .run_recording import write_run_record
 from .target_evaluation import evaluate_archived_target
-from .verification_stage import verify_completed_run
+from .verification_stage import (
+    verify_completed_run,
+    with_formal_indeterminate,
+    with_formal_reject,
+)
 from .workspace import prepare_task_bundle
 
 
@@ -268,8 +273,13 @@ def record_run(
         expected_effect=paths.expected_effect,
         enforced_plan=paths.enforced_plan,
     )
-    if execution.returncode == 0:
-        if refine and paths.coordinate_transport_receipt.is_file():
+    relation_verification = None
+    materialized_execution = execution.returncode in {0, 4} and paths.raw_candidate.is_file()
+    if execution.returncode == 4:
+        relation_verification = certify_relation_execution(prepared)
+
+    if materialized_execution:
+        if execution.returncode == 0 and refine and paths.coordinate_transport_receipt.is_file():
             paths.executor_coordinate_transport_receipt.write_bytes(
                 paths.coordinate_transport_receipt.read_bytes()
             )
@@ -322,6 +332,26 @@ def record_run(
         transport_input_xyz = outcome.transport_input_xyz
         transport_output_xyz = outcome.transport_output_xyz
 
+    if execution.returncode == 4:
+        relation_status = (
+            relation_verification.get("status")
+            if isinstance(relation_verification, dict)
+            else "indeterminate"
+        )
+        relation_code = (
+            relation_verification.get("code")
+            if isinstance(relation_verification, dict)
+            else "relation-check-missing"
+        )
+        relation_diagnostic = (
+            "空间关系证书阶段结果为 "
+            f"{relation_status} ({relation_code})；最终发布门尚未接入该证书。"
+        )
+        if relation_status == "reject":
+            result = with_formal_reject(result, relation_diagnostic)
+        else:
+            result = with_formal_indeterminate(result, relation_diagnostic)
+
     verification = None
     if execution.returncode == 0:
         result, verification = verify_completed_run(
@@ -343,6 +373,7 @@ def record_run(
         result=result,
         evaluated_candidate=evaluated_candidate,
         refinement=refinement,
+        relation_verification=relation_verification,
         verification=verification,
         sha256=_sha256,
         write_json_atomic=_write_json_atomic,

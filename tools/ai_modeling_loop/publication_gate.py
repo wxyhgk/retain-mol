@@ -50,6 +50,9 @@ def archived_publication_status(
 ) -> VerificationStatus:
     """Revalidate every archived file that contributed to a PASS envelope."""
 
+    if record.get("executorReturnCode") != 0:
+        return VerificationStatus.INDETERMINATE
+
     evaluation = _mapping(record.get("evaluation"), "run.evaluation")
     if evaluation.get("passed") is not True:
         return VerificationStatus.INDETERMINATE

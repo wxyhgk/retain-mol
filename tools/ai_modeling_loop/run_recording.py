@@ -16,6 +16,7 @@ def write_run_record(
     result: EvaluationResult,
     evaluated_candidate: Path,
     refinement: dict | None,
+    relation_verification: dict | None,
     verification: dict | None,
     sha256: Callable[[Path], str],
     write_json_atomic: Callable[[Path, dict], None],
@@ -47,6 +48,9 @@ def write_run_record(
         "verification": verification,
         "evaluation": result.to_json(),
     }
+    if relation_verification is not None:
+        record["schemaVersion"] = 2
+        record["relationVerification"] = relation_verification
     if manifest["schemaVersion"] == 2:
         record.update({
             "initialMoleculeSha256": manifest["initialMoleculeSha256"],
