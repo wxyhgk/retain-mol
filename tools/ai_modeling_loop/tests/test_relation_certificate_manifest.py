@@ -54,6 +54,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             "modelingDistTreeSha256": "9" * 64,
             "nodeDependencyTreeSha256": "a" * 64,
             "formalSourceTreeSha256": "b" * 64,
+            "checkerSourceTreeSha256": "e" * 64,
         }
         bound_inputs = {
             "runManifestSha256": sha256_file(run_dir / "run-manifest.json"),

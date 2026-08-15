@@ -25,7 +25,7 @@ from tools.ai_modeling_loop.chemistry import (
 )
 from tools.ai_modeling_loop.contracts import list_cases, load_case
 from tools.ai_modeling_loop.artifact_contracts import sha256_file, sha256_json
-from tools.ai_modeling_loop.evaluator import evaluate_candidate
+from tools.ai_modeling_loop.evaluator import EvaluationResult, evaluate_candidate
 from tools.ai_modeling_loop.runner import (
     _rebuild_verified_index,
     _refine_conformer_ensemble,
@@ -527,7 +527,11 @@ class LoopContractsTest(unittest.TestCase):
             self.assertEqual(record["executorReturnCode"], 4)
             self.assertEqual(record["schemaVersion"], 2)
             self.assertEqual(record["relationVerification"], relation_verification)
-            self.assertIsNone(record["verification"])
+            self.assertEqual(record["verification"]["status"], "indeterminate")
+            self.assertEqual(
+                record["verification"]["code"],
+                "relation-verification-artifacts-missing",
+            )
             self.assertFalse(result.passed)
             self.assertIn("formal-indeterminate", result.failures)
             self.assertNotIn("candidate-invalid", result.failures)
@@ -563,6 +567,71 @@ class LoopContractsTest(unittest.TestCase):
 
             self.assertFalse(result.passed)
             self.assertIn("formal-reject", result.failures)
+            self.assertNotIn("formal-indeterminate", result.failures)
+
+    def test_runner_keeps_target_pass_after_relation_final_gate_passes(self) -> None:
+        case = load_case("GDG1476")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = Chem.SDMolSupplier(str(case.reference_sdf), removeHs=False)[0]
+            self._write_reference_bundle(molecule, root / "references" / case.case_id)
+            plan = self._write_plan(root, case.case_id)
+            successful = self._successful_executor(case, case.reference_sdf)
+
+            def relation_executor(**kwargs):
+                successful(**kwargs)
+                return subprocess.CompletedProcess(["node"], 4, "", "relation pending")
+
+            relation_verification = {
+                "schemaVersion": 1,
+                "status": "pass",
+                "code": "lean-relation-satisfied",
+                "projectionVersion": "runtime-rotate-relation-trace-v1",
+                "manifestSha256": "a" * 64,
+                "evidence": {},
+            }
+            final_verification = {
+                "schemaVersion": 2,
+                "status": "pass",
+                "verifierVersion": "retainmol-relation-final-artifact-v1",
+            }
+            target_pass = EvaluationResult(
+                case_id=case.case_id,
+                passed=True,
+                score=100.0,
+                formula_match=True,
+                topology_match=True,
+                anchor_max_displacement=0.0,
+                core_rmsd=0.0,
+                heavy_atom_rmsd=0.0,
+                severe_clashes=0,
+                disconnected_components=1,
+                failures=(),
+                diagnostics=(),
+            )
+
+            def accept_relation(**kwargs):
+                return kwargs["result"], final_verification
+
+            with patch(
+                "tools.ai_modeling_loop.runner._execute_edit_plan",
+                relation_executor,
+            ), patch(
+                "tools.ai_modeling_loop.runner._evaluate_or_invalid",
+                return_value=target_pass,
+            ), patch(
+                "tools.ai_modeling_loop.runner.certify_relation_execution",
+                return_value=relation_verification,
+            ), patch(
+                "tools.ai_modeling_loop.runner.verify_relation_completed_run",
+                side_effect=accept_relation,
+            ) as verify_relation:
+                run_dir, result = record_run(case, plan, work_dir=root)
+
+            record = json.loads((run_dir / "run.json").read_text())
+            verify_relation.assert_called_once()
+            self.assertTrue(result.passed)
+            self.assertEqual(record["verification"], final_verification)
             self.assertNotIn("formal-indeterminate", result.failures)
 
     def test_runner_records_raw_and_refined_evaluations(self) -> None:

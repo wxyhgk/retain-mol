@@ -73,6 +73,7 @@ CHECKER_EVIDENCE_FIELDS = frozenset({
     "leanExecutableSha256",
     "generatorSha256",
     "formalSourceTreeSha256",
+    "checkerSourceTreeSha256",
     "checkerClosureSha256",
     "generatedLeanSha256",
     "runManifestSha256",
@@ -228,6 +229,7 @@ def _validate_formal_verdict(run_dir: Path, manifest: Mapping[str, Any]) -> None
         "leanExecutableSha256",
         "generatorSha256",
         "formalSourceTreeSha256",
+        "checkerSourceTreeSha256",
         "checkerClosureSha256",
         "runManifestSha256",
         "initialMoleculeSha256",
@@ -255,6 +257,7 @@ def _validate_formal_verdict(run_dir: Path, manifest: Mapping[str, Any]) -> None
             "modelingDistTreeSha256",
             "nodeDependencyTreeSha256",
             "formalSourceTreeSha256",
+            "checkerSourceTreeSha256",
         )
     }
     expected_closure = hashlib.sha256(canonical_json_bytes(closure_components)).hexdigest()

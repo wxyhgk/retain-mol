@@ -17,11 +17,36 @@ AxisVerdict = formal_verdict.AxisVerdict
 VerificationEnvelope = formal_verdict.VerificationEnvelope
 VerificationStatus = formal_verdict.VerificationStatus
 combine_axis_statuses = formal_verdict.combine_axis_statuses
+combine_verification_statuses = formal_verdict.combine_verification_statuses
 parse_verification_envelope = formal_verdict.parse_verification_envelope
 sha256_file = formal_verdict.sha256_file
 
 
 class FormalVerdictTests(unittest.TestCase):
+    def test_combined_status_uses_reject_then_indeterminate_precedence(self) -> None:
+        self.assertEqual(
+            combine_verification_statuses([
+                VerificationStatus.PASS,
+                VerificationStatus.REJECT,
+                VerificationStatus.INDETERMINATE,
+            ]),
+            VerificationStatus.REJECT,
+        )
+        self.assertEqual(
+            combine_verification_statuses([
+                VerificationStatus.PASS,
+                VerificationStatus.INDETERMINATE,
+            ]),
+            VerificationStatus.INDETERMINATE,
+        )
+        self.assertEqual(
+            combine_verification_statuses([
+                VerificationStatus.PASS,
+                VerificationStatus.PASS,
+            ]),
+            VerificationStatus.PASS,
+        )
+
     def axis(
         self,
         status: VerificationStatus,

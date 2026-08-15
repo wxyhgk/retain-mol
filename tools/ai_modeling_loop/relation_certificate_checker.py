@@ -42,6 +42,7 @@ MODELING_NODE_DEPENDENCIES = (
 )
 CONVERTER = GEOMETRY_ROOT / "tools" / "relation_trace_json_to_lean.py"
 PROJECTION_VERSION = "runtime-rotate-relation-trace-v1"
+CHECKER_SOURCE_ROOT = REPO_ROOT / "tools" / "ai_modeling_loop"
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,28 @@ def _source_tree_sha256(root: Path) -> str:
     )
     for path in files:
         relative = path.relative_to(root).as_posix().encode("utf-8")
+        content = path.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return digest.hexdigest()
+
+
+def _checker_source_tree_sha256() -> str:
+    digest = hashlib.sha256()
+    files = sorted(
+        path
+        for path in CHECKER_SOURCE_ROOT.rglob("*")
+        if (
+            path.is_file()
+            and "tests" not in path.parts
+            and "__pycache__" not in path.parts
+            and path.suffix in {".py", ".mjs"}
+        )
+    )
+    for path in files:
+        relative = path.relative_to(CHECKER_SOURCE_ROOT).as_posix().encode("utf-8")
         content = path.read_bytes()
         digest.update(len(relative).to_bytes(8, "big"))
         digest.update(relative)
@@ -201,6 +224,7 @@ def relation_checker_runtime_evidence(timeout_seconds: float = 60.0) -> dict[str
                 }
             ),
             "formalSourceTreeSha256": _source_tree_sha256(GEOMETRY_ROOT),
+            "checkerSourceTreeSha256": _checker_source_tree_sha256(),
         }
     except OSError:
         return None
@@ -319,6 +343,7 @@ def run_relation_certificate_check(
                 }
             ),
             "formalSourceTreeSha256": _source_tree_sha256(isolated_geometry),
+            "checkerSourceTreeSha256": _checker_source_tree_sha256(),
         }
         if any(runtime[field] != digest for field, digest in snapshot_hashes.items()):
             return RelationCertificateCheckResult(

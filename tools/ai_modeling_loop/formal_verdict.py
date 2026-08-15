@@ -62,15 +62,20 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def combine_axis_statuses(axes: Mapping[str, AxisVerdict]) -> VerificationStatus:
-    if set(axes) != set(REQUIRED_AXES):
-        return VerificationStatus.INDETERMINATE
-    statuses = [axes[name].status for name in REQUIRED_AXES]
+def combine_verification_statuses(
+    statuses: list[VerificationStatus] | tuple[VerificationStatus, ...],
+) -> VerificationStatus:
     if VerificationStatus.REJECT in statuses:
         return VerificationStatus.REJECT
     if all(status is VerificationStatus.PASS for status in statuses):
         return VerificationStatus.PASS
     return VerificationStatus.INDETERMINATE
+
+
+def combine_axis_statuses(axes: Mapping[str, AxisVerdict]) -> VerificationStatus:
+    if set(axes) != set(REQUIRED_AXES):
+        return VerificationStatus.INDETERMINATE
+    return combine_verification_statuses([axes[name].status for name in REQUIRED_AXES])
 
 
 @dataclass(frozen=True)

@@ -15,6 +15,10 @@ from tools.ai_modeling_loop.relation_certificate_manifest import (
     build_relation_certificate_manifest,
     load_relation_certificate_manifest,
 )
+from tools.ai_modeling_loop.formal_verdict import VerificationStatus
+from tools.ai_modeling_loop.relation_terminal_binding import (
+    verify_relation_terminal_binding,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -155,6 +159,15 @@ class RelationCertificateCheckerTests(unittest.TestCase):
             write_json(manifest_path, manifest)
             loaded = load_relation_certificate_manifest(manifest_path)
             self.assertEqual(loaded["relationMode"], "required")
+            terminal = verify_relation_terminal_binding(
+                relation_trace_path=run_dir / "relation" / "relation-trace.json",
+                execution_receipt_path=run_dir / "execution.json",
+                builder_snapshot_path=run_dir / "builder-snapshot.json",
+                identity_map_path=run_dir / "identity-map.json",
+                coordinate_transport_receipt_path=run_dir / "coordinate-transport.json",
+                final_sdf_path=run_dir / "candidate.sdf",
+            )
+            self.assertEqual(terminal.status, VerificationStatus.PASS, terminal)
 
     def test_failed_recheck_removes_stale_pass_verdict(self) -> None:
         if not MODELING_DIST.is_file():

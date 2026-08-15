@@ -30,11 +30,13 @@ from .refinement_stage import (
     refine_with_xtb_fallback,
 )
 from .relation_stage import certify_relation_execution
+from .relation_final_artifact_gate import verify_relation_final_artifact
 from .run_preparation import prepare_run
 from .run_recording import write_run_record
 from .target_evaluation import evaluate_archived_target
 from .verification_stage import (
     verify_completed_run,
+    verify_relation_completed_run,
     with_formal_indeterminate,
     with_formal_reject,
 )
@@ -332,6 +334,7 @@ def record_run(
         transport_input_xyz = outcome.transport_input_xyz
         transport_output_xyz = outcome.transport_output_xyz
 
+    verification = None
     if execution.returncode == 4:
         relation_status = (
             relation_verification.get("status")
@@ -345,14 +348,20 @@ def record_run(
         )
         relation_diagnostic = (
             "空间关系证书阶段结果为 "
-            f"{relation_status} ({relation_code})；最终发布门尚未接入该证书。"
+            f"{relation_status} ({relation_code})。"
         )
-        if relation_status == "reject":
+        if relation_status == "pass":
+            result, verification = verify_relation_completed_run(
+                prepared=prepared,
+                result=result,
+                evaluated_candidate=evaluated_candidate,
+                verify_relation_final_artifact=verify_relation_final_artifact,
+            )
+        elif relation_status == "reject":
             result = with_formal_reject(result, relation_diagnostic)
         else:
             result = with_formal_indeterminate(result, relation_diagnostic)
 
-    verification = None
     if execution.returncode == 0:
         result, verification = verify_completed_run(
             case_id=case.case_id,

@@ -190,3 +190,70 @@ def verify_completed_run(
             ),
             verification,
         )
+
+
+def verify_relation_completed_run(
+    *,
+    prepared: PreparedRun,
+    result: EvaluationResult,
+    evaluated_candidate: Path,
+    verify_relation_final_artifact: Callable,
+) -> tuple[EvaluationResult, dict]:
+    paths = prepared.paths
+    required = (
+        paths.builder_snapshot,
+        paths.identity_map,
+        evaluated_candidate,
+        paths.execution_receipt,
+        paths.enforced_plan,
+        paths.initial,
+        paths.coordinate_transport_receipt,
+        paths.relation_certificate_manifest,
+        paths.archived_reference,
+        paths.archived_evaluator,
+    )
+    missing = [path.name for path in required if not path.is_file()]
+    if missing:
+        verification = indeterminate_verification(
+            "relation-verification-artifacts-missing",
+            "关系型执行没有生成完整的最终发布证据。",
+            missing,
+        )
+        return (
+            with_formal_indeterminate(
+                result,
+                f"关系型最终验证证据缺失：{', '.join(missing)}。",
+            ),
+            verification,
+        )
+    try:
+        envelope = verify_relation_final_artifact(
+            run_dir=paths.run_dir,
+            builder_snapshot_path=paths.builder_snapshot,
+            identity_map_path=paths.identity_map,
+            final_sdf_path=evaluated_candidate,
+            coordinate_transport_receipt_path=paths.coordinate_transport_receipt,
+            evaluation=result.to_json(),
+            output_dir=paths.run_dir / "verification",
+            target_reference_path=paths.archived_reference,
+            target_evaluator_path=paths.archived_evaluator,
+        )
+        verification = envelope.to_json()
+        if envelope.status.value == "pass":
+            return result, verification
+        diagnostic = f"关系型最终产物三轴验证结果：{envelope.status.value}。"
+        if envelope.status.value == "reject":
+            return with_formal_reject(result, diagnostic), verification
+        return with_formal_indeterminate(result, diagnostic), verification
+    except Exception as error:
+        verification = indeterminate_verification(
+            "relation-verification-tool-failed",
+            f"{type(error).__name__}: {error}",
+        )
+        return (
+            with_formal_indeterminate(
+                result,
+                f"关系型最终验证器失败：{type(error).__name__}: {error}",
+            ),
+            verification,
+        )

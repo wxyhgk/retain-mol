@@ -14,6 +14,10 @@ from .final_artifact_gate import build_geometry_intent_request
 from .geometry_policy_spec import load_run_geometry_policy_spec
 from .coordinate_semantics import verify_xtb_coordinate_chain
 from .run_manifest import load_run_manifest, require_manifest_matches_record
+from .relation_final_artifact_gate import (
+    RELATION_FINAL_VERIFIER_VERSION,
+    archived_relation_publication_status,
+)
 
 
 class PublicationEvidenceError(ValueError):
@@ -49,6 +53,9 @@ def archived_publication_status(
     envelope: VerificationEnvelope,
 ) -> VerificationStatus:
     """Revalidate every archived file that contributed to a PASS envelope."""
+
+    if envelope.verifier_version == RELATION_FINAL_VERIFIER_VERSION:
+        return archived_relation_publication_status(run_dir, record, envelope)
 
     if record.get("executorReturnCode") != 0:
         return VerificationStatus.INDETERMINATE
