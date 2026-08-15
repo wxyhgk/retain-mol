@@ -10,6 +10,7 @@ import {
 import { dryRunEditPlan } from '../planExecutor'
 import {
   computeCanonicalMoleculeDigest,
+  computeCanonicalSnapshotDigest,
   createCanonicalMoleculeSnapshot,
 } from './canonical'
 import { compareExpectedEffect } from './compare'
@@ -186,6 +187,97 @@ describe('ExpectedEffect V1 canonical projection', () => {
     expect(legacyFnv1a32(JSON.stringify(secondSnapshot))).toBe('909d5405')
     expect(computeCanonicalMoleculeDigest(first)).not.toBe(computeCanonicalMoleculeDigest(second))
   })
+
+  it.each([
+    ['non-finite coordinate', {
+      atoms: [{ id: 'a', symbol: 'C', x: Number.NaN, y: 0, z: 0 }],
+      bonds: [],
+    }],
+    ['duplicate atom ID', {
+      atoms: [
+        { id: 'a', symbol: 'C', x: 0, y: 0, z: 0 },
+        { id: 'a', symbol: 'H', x: 1, y: 0, z: 0 },
+      ],
+      bonds: [],
+    }],
+    ['duplicate bond ID', {
+      atoms: [
+        { id: 'a', symbol: 'C', x: 0, y: 0, z: 0 },
+        { id: 'b', symbol: 'C', x: 1, y: 0, z: 0 },
+        { id: 'c', symbol: 'C', x: 2, y: 0, z: 0 },
+      ],
+      bonds: [
+        { id: 'bond', atomId1: 'a', atomId2: 'b', order: 1 },
+        { id: 'bond', atomId1: 'b', atomId2: 'c', order: 1 },
+      ],
+    }],
+    ['dangling bond', {
+      atoms: [{ id: 'a', symbol: 'C', x: 0, y: 0, z: 0 }],
+      bonds: [{ id: 'bond', atomId1: 'a', atomId2: 'missing', order: 1 }],
+    }],
+    ['self bond', {
+      atoms: [{ id: 'a', symbol: 'C', x: 0, y: 0, z: 0 }],
+      bonds: [{ id: 'bond', atomId1: 'a', atomId2: 'a', order: 1 }],
+    }],
+    ['duplicate endpoint pair', {
+      atoms: [
+        { id: 'a', symbol: 'C', x: 0, y: 0, z: 0 },
+        { id: 'b', symbol: 'C', x: 1, y: 0, z: 0 },
+      ],
+      bonds: [
+        { id: 'first', atomId1: 'a', atomId2: 'b', order: 1 },
+        { id: 'second', atomId1: 'b', atomId2: 'a', order: 2 },
+      ],
+    }],
+  ] satisfies readonly (readonly [string, Molecule])[])(
+    'rejects %s instead of hashing an ambiguous graph',
+    (_label, molecule) => {
+      expect(() => computeCanonicalMoleculeDigest(molecule)).toThrow(/Invalid canonical molecule snapshot/)
+    },
+  )
+
+  it('rejects malformed coordination assignments at the digest boundary', () => {
+    const molecule: Molecule = {
+      atoms: [
+        {
+          id: 'metal',
+          symbol: 'Fe',
+          x: 0,
+          y: 0,
+          z: 0,
+          coordinationSites: [{
+            id: 'site-a',
+            label: 'A',
+            direction: [1, 0, 0],
+            bondOrder: 1,
+            equivalenceGroup: 'eq',
+          }],
+        },
+        { id: 'carbon', symbol: 'C', x: 1, y: 0, z: 0 },
+      ],
+      bonds: [{
+        id: 'metal-carbon',
+        atomId1: 'metal',
+        atomId2: 'carbon',
+        order: 1,
+        coordinationSites: [{ atomId: 'metal', siteId: 'missing-site' }],
+      }],
+    }
+
+    expect(() => computeCanonicalMoleculeDigest(molecule)).toThrow(/coordination site does not exist/)
+  })
+
+  it('rejects a hand-crafted snapshot that bypasses canonical ordering and number normalization', () => {
+    const snapshot = createCanonicalMoleculeSnapshot(baseMolecule())
+    const reversed = { ...snapshot, atoms: [...snapshot.atoms].reverse() }
+    expect(() => computeCanonicalSnapshotDigest(reversed)).toThrow(/canonical order/)
+
+    const negativeZero = {
+      ...snapshot,
+      atoms: [{ ...snapshot.atoms[0]!, x: -0 }, ...snapshot.atoms.slice(1)],
+    }
+    expect(() => computeCanonicalSnapshotDigest(negativeZero)).toThrow(/negative zero/)
+  })
 })
 
 describe('compileExpectedEffect', () => {
@@ -246,6 +338,13 @@ describe('compileExpectedEffect', () => {
       coordinationSites: [],
       coordinationNumber: null,
     }))
+    expect(effect.commands[1]?.changes.bonds).toEqual([{
+      id: 'metal-carbon',
+      before: expect.objectContaining({
+        coordinationSites: [{ atomId: 'metal', siteId: 'site-b' }],
+      }),
+      after: expect.objectContaining({ coordinationSites: [] }),
+    }])
 
     expect(effect.commands[2]?.changes.atoms).toEqual([{
       id: 'carbon',
@@ -262,12 +361,12 @@ describe('compileExpectedEffect', () => {
     expect(orderChange?.before).toEqual(expect.objectContaining({
       order: 1,
       aromatic: true,
-      coordinationSites: [{ atomId: 'metal', siteId: 'site-b' }],
+      coordinationSites: [],
     }))
     expect(orderChange?.after).toEqual(expect.objectContaining({
       order: 2,
       aromatic: false,
-      coordinationSites: [{ atomId: 'metal', siteId: 'site-b' }],
+      coordinationSites: [],
     }))
     expect(effect.commands[5]?.changes.bonds[0]).toEqual(expect.objectContaining({
       id: 'carbon-oxygen',

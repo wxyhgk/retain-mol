@@ -91,6 +91,14 @@ export function replaceAtomSymbol(
       } = a
       return { ...plainAtom, symbol: newSymbol }
     }),
+    bonds: mol.bonds.map(bond => {
+      const assignments = bond.coordinationSites?.filter(site => site.atomId !== atomId)
+      if (assignments?.length === bond.coordinationSites?.length) return bond
+      const { coordinationSites: _coordinationSites, ...plainBond } = bond
+      return assignments && assignments.length > 0
+        ? { ...plainBond, coordinationSites: assignments }
+        : plainBond
+    }),
   }
 }
 

@@ -53,6 +53,15 @@ function replaceAtom(atom: Atom, symbol: string): Atom {
   return { ...plainAtom, symbol }
 }
 
+function clearAtomCoordinationAssignments(bond: Bond, atomId: string): Bond {
+  const assignments = bond.coordinationSites?.filter(site => site.atomId !== atomId)
+  if (assignments?.length === bond.coordinationSites?.length) return bond
+  const { coordinationSites: _coordinationSites, ...plainBond } = bond
+  return assignments && assignments.length > 0
+    ? { ...plainBond, coordinationSites: assignments }
+    : plainBond
+}
+
 function setBondOrder(bond: Bond, order: Bond['order']): Bond {
   const { aromatic: _aromatic, ...plainBond } = bond
   return { ...plainBond, order }
@@ -86,10 +95,12 @@ export function applyExpectedEffectCommand(
         },
       }
 
-    case 'atom.replace':
-      if (!molecule.atoms.some(atom => atom.id === command.atomId)) {
+    case 'atom.replace': {
+      const target = molecule.atoms.find(atom => atom.id === command.atomId)
+      if (!target) {
         return invalidInput(`Atom does not exist: ${command.atomId}`)
       }
+      if (target.symbol === command.symbol) return { ok: true, molecule }
       return {
         ok: true,
         molecule: {
@@ -98,8 +109,11 @@ export function applyExpectedEffectCommand(
             atom.id === command.atomId && atom.symbol !== command.symbol
               ? replaceAtom(atom, command.symbol)
               : atom),
+          bonds: molecule.bonds.map(bond =>
+            clearAtomCoordinationAssignments(bond, command.atomId)),
         },
       }
+    }
 
     case 'atom.remove': {
       if (!molecule.atoms.some(atom => atom.id === command.atomId)) {
