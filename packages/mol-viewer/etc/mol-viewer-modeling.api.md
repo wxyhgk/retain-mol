@@ -142,6 +142,9 @@ export function compareExpectedEffect(expected: ExpectedEffectCompileResult, act
 export function compileExpectedEffect(molecule: Molecule, plan: Pick<EditPlan, 'planId' | 'commands'>): ExpectedEffectCompileResult;
 
 // @public (undocumented)
+export function compileFragmentAttachRelation(before: Molecule, command: FragmentAttachCommand): FragmentAttachRelationCompileResult;
+
+// @public (undocumented)
 export function computeCanonicalMoleculeDigest(molecule: Molecule): string;
 
 // @public
@@ -468,6 +471,113 @@ export type ExpectedEffectSupportedCommand = Extract<ModelingCommand, {
 
 // @public (undocumented)
 export type ExpectedEffectSupportedCommandKind = typeof EXPECTED_EFFECT_SUPPORTED_COMMAND_KINDS[number];
+
+// @public (undocumented)
+export interface FragmentAttachAtomIdMapping {
+    // (undocumented)
+    readonly atomId: string;
+    // (undocumented)
+    readonly templateAtomIndex: number;
+}
+
+// @public (undocumented)
+export interface FragmentAttachBondIdMapping {
+    // (undocumented)
+    readonly bondId: string;
+    // (undocumented)
+    readonly templateBondIndex: number;
+}
+
+// @public (undocumented)
+export type FragmentAttachCommand = Extract<ModelingCommand, {
+    readonly kind: 'fragment.attach';
+}>;
+
+// @public
+export interface FragmentAttachRelation {
+    // (undocumented)
+    readonly addedAtomIds: readonly string[];
+    // (undocumented)
+    readonly addedBondIds: readonly string[];
+    // (undocumented)
+    readonly chiralityWitnessAtomIds?: readonly [string, string, string, string];
+    // (undocumented)
+    readonly commandId: string;
+    // (undocumented)
+    readonly deletedHydrogenAtomId: string;
+    // (undocumented)
+    readonly deletedHydrogenBondId: string;
+    // (undocumented)
+    readonly expectedAddedAtoms: readonly Atom[];
+    // (undocumented)
+    readonly expectedAddedBonds: readonly Bond[];
+    // (undocumented)
+    readonly fixedAtomIds: readonly string[];
+    // (undocumented)
+    readonly fixedBondIds: readonly string[];
+    // (undocumented)
+    readonly fragmentDigest: string;
+    // (undocumented)
+    readonly fragmentId: string;
+    // (undocumented)
+    readonly hostAtomId: string;
+    // (undocumented)
+    readonly kind: 'fragment-attach';
+    // (undocumented)
+    readonly linkBondId: string;
+    // (undocumented)
+    readonly linkBondOrder: 1;
+    // (undocumented)
+    readonly templateAtomIdByIndex: readonly FragmentAttachAtomIdMapping[];
+    // (undocumented)
+    readonly templateAttachAtomIndex: number;
+    // (undocumented)
+    readonly templateAttachHydrogenIndex: number;
+    // (undocumented)
+    readonly templateBondIdByIndex: readonly FragmentAttachBondIdMapping[];
+    // (undocumented)
+    readonly torsionAngleDegrees: number;
+}
+
+// @public (undocumented)
+export type FragmentAttachRelationCompileResult = {
+    readonly verdict: 'pass';
+    readonly relation: FragmentAttachRelation;
+} | {
+    readonly verdict: 'reject' | 'indeterminate';
+    readonly diagnostic: FragmentAttachRelationDiagnostic;
+};
+
+// @public (undocumented)
+export interface FragmentAttachRelationDiagnostic {
+    // (undocumented)
+    readonly atomId?: string;
+    // (undocumented)
+    readonly atomId2?: string;
+    // (undocumented)
+    readonly bondId?: string;
+    // (undocumented)
+    readonly code: FragmentAttachRelationDiagnosticCode;
+    // (undocumented)
+    readonly message: string;
+    // (undocumented)
+    readonly templateAtomIndex?: number;
+    // (undocumented)
+    readonly templateBondIndex?: number;
+}
+
+// @public (undocumented)
+export type FragmentAttachRelationDiagnosticCode = 'invalid-before-graph' | 'invalid-command' | 'target-not-terminal-hydrogen' | 'template-not-registered' | 'template-digest-mismatch' | 'invalid-template-attachment' | 'automatic-torsion' | 'unsupported-link-order' | 'degenerate-attachment-axis' | 'degenerate-orientation-evidence' | 'numeric-uncertainty' | 'resource-limit' | 'graph-rewrite-mismatch' | 'fixed-atom-changed' | 'fixed-bond-changed' | 'new-atom-metadata-mismatch' | 'new-bond-mismatch' | 'link-bond-mismatch' | 'template-distorted' | 'template-mirrored' | 'template-placement-mismatch';
+
+// @public (undocumented)
+export type FragmentAttachVerificationResult = {
+    readonly verdict: 'pass';
+    readonly relation: FragmentAttachRelation;
+} | {
+    readonly verdict: 'reject' | 'indeterminate';
+    readonly diagnostic: FragmentAttachRelationDiagnostic;
+    readonly relation?: FragmentAttachRelation;
+};
 
 // @public
 export function getModelingContext(runtime?: ViewerRuntime): ModelingContext;
@@ -1010,6 +1120,9 @@ export function validateModelingConstraintInvariants(before: Molecule, after: Mo
 
 // @public
 export function validateModelingConstraints(molecule: Molecule, constraints: ModelingConstraints | undefined): readonly ModelingIssue[];
+
+// @public (undocumented)
+export function verifyFragmentAttachRelation(before: Molecule, after: Molecule, command: FragmentAttachCommand): FragmentAttachVerificationResult;
 
 // @public (undocumented)
 export function verifyRotateGroupRelation(before: Molecule, after: Molecule, command: RotateGroupCommand): RotateGroupVerificationResult;

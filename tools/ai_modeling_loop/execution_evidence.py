@@ -10,6 +10,7 @@ _ID_MAX_LENGTH = 128
 _MAX_ENTITY_IDS = 10_000
 _MAX_COMMANDS = 512
 _ELEMENT_SYMBOL = re.compile(r"^[A-Z][a-z]{0,2}$")
+_FRAGMENT_DIGEST = re.compile(r"^fragment-v1-sha256-[0-9a-f]{64}$")
 _SUPPORTED_EFFECT_KINDS = frozenset({
     "atom.add",
     "atom.replace",
@@ -163,7 +164,7 @@ def _validate_command(value: Any, path: str) -> Mapping[str, Any]:
         "bond.remove": ({"commandId", "kind", "bondId"}, set()),
         "bond.setOrder": ({"commandId", "kind", "bondId", "order"}, set()),
         "fragment.attach": (
-            {"commandId", "kind", "atomId", "fragmentId"},
+            {"commandId", "kind", "atomId", "fragmentId", "fragmentDigest"},
             {"torsionAngleDegrees"},
         ),
         "fragment.bridge": (
@@ -200,6 +201,13 @@ def _validate_command(value: Any, path: str) -> Mapping[str, Any]:
     ):
         if field in command:
             _identifier(command[field], f"{path}.{field}")
+    if "fragmentDigest" in command:
+        digest = command["fragmentDigest"]
+        if not isinstance(digest, str) or _FRAGMENT_DIGEST.fullmatch(digest) is None:
+            raise _SchemaError(
+                f"{path}.fragmentDigest",
+                "must be a fragment-v1-sha256 content digest",
+            )
     if "symbol" in command:
         symbol = command["symbol"]
         if not isinstance(symbol, str) or _ELEMENT_SYMBOL.fullmatch(symbol) is None:
