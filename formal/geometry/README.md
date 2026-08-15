@@ -92,7 +92,9 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
   的客体自洽通过；客体模板必须从 attach atom 全连通，其可信局部端口轴还必须与候选的
   guest→host 成键轴对齐，避免只满足投影扭转角却整体倾斜的刚体候选。
 - `RelationTrace` 将受信 plan 身份、精确命令回执列表、逐步完整 before/after 快照和封闭的
-  `rotateGroup`/`FragmentAttachWitness` 绑定在一起。Lean 递归证明每一步快照连续且 witness
+`rotateGroup`/`FragmentAttachWitness` 绑定在一起。可信 `RelationPolicy` 作为与 witness
+平行的外部列表传入，证据不能内联或改写 policy；Lean 同时拒绝 policy 缺失、错序与类型不匹配。
+Lean 递归证明每一步快照连续且 witness
   成立，并拒绝空轨迹、摘要回显、断链快照和 command ID 重绑定。
 
 未形式化的内容：

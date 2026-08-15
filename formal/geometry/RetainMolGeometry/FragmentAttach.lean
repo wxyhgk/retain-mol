@@ -46,58 +46,61 @@ witnesses must belong to the same retained host and added guest region, and the
 candidate must echo the trusted host radial and requested turn.
 -/
 structure FragmentAttachWitness where
-  policy : FragmentAttachPolicy
   mate : AtomPortMate
   torsion : PortTorsion
 deriving Repr, DecidableEq, BEq
 
 def fragmentAttachCrossBindingIsSatisfied
     (reference candidate : MoleculeSnapshot)
+    (policy : FragmentAttachPolicy)
     (witness : FragmentAttachWitness) : Bool :=
-  fragmentAttachPolicyIsWellFormed witness.policy &&
+  fragmentAttachPolicyIsWellFormed policy &&
     witness.torsion.hostAtomId == witness.mate.hostAtomId &&
-    witness.torsion.guestAtomId == witness.policy.atomPortMate.guestAttachAtomId &&
-    witness.torsion.hostFrame == witness.policy.expectedHostFrame &&
-    witness.torsion.guestFrame == witness.policy.expectedGuestFrame &&
-    witness.torsion.turn == witness.policy.expectedTurn &&
-    witness.policy.atomPortMate.guestRegion.frame.originAtomId ==
-      witness.policy.atomPortMate.guestAttachAtomId &&
+    witness.torsion.guestAtomId == policy.atomPortMate.guestAttachAtomId &&
+    witness.torsion.hostFrame == policy.expectedHostFrame &&
+    witness.torsion.guestFrame == policy.expectedGuestFrame &&
+    witness.torsion.turn == policy.expectedTurn &&
+    policy.atomPortMate.guestRegion.frame.originAtomId ==
+      policy.atomPortMate.guestAttachAtomId &&
     witness.torsion.guestFrame.radialAtomId ==
-      witness.policy.atomPortMate.guestRegion.frame.radialAtomId &&
+      policy.atomPortMate.guestRegion.frame.radialAtomId &&
     (findAtom reference witness.torsion.hostFrame.radialAtomId).isSome &&
     !witness.mate.rewrite.removedAtomIds.contains
       witness.torsion.hostFrame.radialAtomId &&
     (componentWithoutBond reference witness.mate.leavingBondId
       witness.mate.hostAtomId).contains witness.torsion.hostFrame.radialAtomId &&
-    witness.policy.atomPortMate.guestRegion.atomIds.contains
+    policy.atomPortMate.guestRegion.atomIds.contains
       witness.torsion.guestFrame.radialAtomId &&
     (witness.mate.rewrite.addedAtoms.any fun atom =>
       atom.atomId == witness.torsion.guestFrame.radialAtomId) &&
     directedSegmentAlignmentIsSatisfied candidate candidate
-      witness.policy.guestPortAlignment
+      policy.guestPortAlignment
 
 def fragmentAttachWitnessIsSatisfied
     (reference candidate : MoleculeSnapshot)
+    (policy : FragmentAttachPolicy)
     (witness : FragmentAttachWitness) : Bool :=
-  fragmentAttachCrossBindingIsSatisfied reference candidate witness &&
-    atomPortMateIsSatisfied reference candidate witness.policy.atomPortMate witness.mate &&
+  fragmentAttachCrossBindingIsSatisfied reference candidate policy witness &&
+    atomPortMateIsSatisfied reference candidate policy.atomPortMate witness.mate &&
     portTorsionIsSatisfied candidate witness.torsion
 
 def FragmentAttachWitnessSemantics
     (reference candidate : MoleculeSnapshot)
+    (policy : FragmentAttachPolicy)
     (witness : FragmentAttachWitness) : Prop :=
-  fragmentAttachCrossBindingIsSatisfied reference candidate witness = true ∧
-    AtomPortMateSemantics reference candidate witness.policy.atomPortMate witness.mate ∧
+  fragmentAttachCrossBindingIsSatisfied reference candidate policy witness = true ∧
+    AtomPortMateSemantics reference candidate policy.atomPortMate witness.mate ∧
     PortTorsionSemantics candidate witness.torsion
 
 theorem fragmentAttachWitnessIsSatisfied_sound
     (reference candidate : MoleculeSnapshot)
+    (policy : FragmentAttachPolicy)
     (witness : FragmentAttachWitness)
-    (h : fragmentAttachWitnessIsSatisfied reference candidate witness = true) :
-    FragmentAttachWitnessSemantics reference candidate witness := by
+    (h : fragmentAttachWitnessIsSatisfied reference candidate policy witness = true) :
+    FragmentAttachWitnessSemantics reference candidate policy witness := by
   simp only [fragmentAttachWitnessIsSatisfied, Bool.and_eq_true] at h
   exact ⟨h.1.1,
-    atomPortMateIsSatisfied_sound reference candidate witness.policy.atomPortMate witness.mate h.1.2,
+    atomPortMateIsSatisfied_sound reference candidate policy.atomPortMate witness.mate h.1.2,
     portTorsionIsSatisfied_sound candidate witness.torsion h.2⟩
 
 end RetainMol.Geometry

@@ -501,7 +501,6 @@ private def attachTorsion : PortTorsion := {
 }
 
 private def attachWitness : FragmentAttachWitness := {
-  policy := attachFragmentPolicy
   mate := attachMate
   torsion := attachTorsion
 }
@@ -510,10 +509,15 @@ example : graphRewriteIsWellFormed attachHost attachRewrite = true := by decide
 example : graphRewriteIsSatisfied attachHost attachCandidate attachRewrite = true := by decide
 example : atomPortMateIsSatisfied attachHost attachCandidate attachPolicy attachMate = true := by decide
 example :
-    fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate attachWitness = true := by
+    fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
+      attachFragmentPolicy attachWitness = true := by
   decide
-example : fragmentAttachWitnessIsSatisfied attachHost attachCandidate attachWitness = true := by decide
-example : FragmentAttachWitnessSemantics attachHost attachCandidate attachWitness := by
+example :
+    fragmentAttachWitnessIsSatisfied attachHost attachCandidate
+      attachFragmentPolicy attachWitness = true := by decide
+example :
+    FragmentAttachWitnessSemantics attachHost attachCandidate
+      attachFragmentPolicy attachWitness := by
   apply fragmentAttachWitnessIsSatisfied_sound
   decide
 
@@ -528,7 +532,7 @@ private def attachAlternativeHostRadial : FragmentAttachWitness := {
 
 example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
-      attachAlternativeHostRadial = false := by
+      attachFragmentPolicy attachAlternativeHostRadial = false := by
   decide
 
 private def attachPositiveQuarterTurn : TurnBand := {
@@ -571,12 +575,22 @@ example :
 
 example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachQuarterTurnCandidate
-      attachSelfReportedQuarterTurn = false := by
+      attachFragmentPolicy attachSelfReportedQuarterTurn = false := by
   decide
 
 example :
     fragmentAttachWitnessIsSatisfied attachHost attachQuarterTurnCandidate
-      attachSelfReportedQuarterTurn = false := by
+      attachFragmentPolicy attachSelfReportedQuarterTurn = false := by
+  decide
+
+/-- Evidence cannot redefine intent; only an explicitly trusted policy can request the turn. -/
+private def attachQuarterTurnPolicy : FragmentAttachPolicy := {
+  attachFragmentPolicy with expectedTurn := attachPositiveQuarterTurn
+}
+
+example :
+    fragmentAttachWitnessIsSatisfied attachHost attachQuarterTurnCandidate
+      attachQuarterTurnPolicy attachSelfReportedQuarterTurn = true := by
   decide
 
 /--
@@ -605,12 +619,12 @@ example :
 
 example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachTiltedGuestCandidate
-      attachWitness = false := by
+      attachFragmentPolicy attachWitness = false := by
   decide
 
 example :
     fragmentAttachWitnessIsSatisfied attachHost attachTiltedGuestCandidate
-      attachWitness = false := by
+      attachFragmentPolicy attachWitness = false := by
   decide
 
 private def attachDisconnectedGuest : MoleculeSnapshot := {
@@ -635,7 +649,7 @@ private def attachRemovedHostRadial : FragmentAttachWitness := {
 
 example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
-      attachRemovedHostRadial = false := by
+      attachFragmentPolicy attachRemovedHostRadial = false := by
   decide
 
 private def attachForeignGuestRadial : FragmentAttachWitness := {
@@ -648,7 +662,7 @@ private def attachForeignGuestRadial : FragmentAttachWitness := {
 
 example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
-      attachForeignGuestRadial = false := by
+      attachFragmentPolicy attachForeignGuestRadial = false := by
   decide
 
 private def attachAlternativeGuestRadial : FragmentAttachWitness := {
@@ -661,7 +675,7 @@ private def attachAlternativeGuestRadial : FragmentAttachWitness := {
 
 example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
-      attachAlternativeGuestRadial = false := by
+      attachFragmentPolicy attachAlternativeGuestRadial = false := by
   decide
 
 private def attachHostWithDisconnectedSpectator : MoleculeSnapshot := {
@@ -681,26 +695,23 @@ private def attachDisconnectedHostRadial : FragmentAttachWitness := {
 
 example :
     fragmentAttachCrossBindingIsSatisfied attachHostWithDisconnectedSpectator
-      attachCandidate attachDisconnectedHostRadial = false := by
+      attachCandidate attachFragmentPolicy attachDisconnectedHostRadial = false := by
   decide
 
-private def attachShiftedGuestFrameOrigin : FragmentAttachWitness := {
-  attachWitness with
-  policy := {
-    attachFragmentPolicy with
-    atomPortMate := {
-      attachPolicy with
-      guestRegion := {
-        attachPolicy.guestRegion with
-        frame := { attachPolicy.guestRegion.frame with originAtomId := "cmd:atom:2" }
-      }
+private def attachShiftedGuestFrameOriginPolicy : FragmentAttachPolicy := {
+  attachFragmentPolicy with
+  atomPortMate := {
+    attachPolicy with
+    guestRegion := {
+      attachPolicy.guestRegion with
+      frame := { attachPolicy.guestRegion.frame with originAtomId := "cmd:atom:2" }
     }
   }
 }
 
 example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
-      attachShiftedGuestFrameOrigin = false := by
+      attachShiftedGuestFrameOriginPolicy attachWitness = false := by
   decide
 
 private def attachMissingAtom : MoleculeSnapshot := {
@@ -1178,25 +1189,25 @@ private def quarterTurnTrace : RelationTrace := {
 }
 
 example :
-    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt]
+    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt] [.rotateGroup]
       quarterTurnTrace = true := by
   decide
 
 example :
-    RelationTraceSemantics quarterTurnTraceIdentity [quarterTurnReceipt]
+    RelationTraceSemantics quarterTurnTraceIdentity [quarterTurnReceipt] [.rotateGroup]
       quarterTurnTrace := by
   apply relationTraceIsSatisfied_sound
   decide
 
 /-- A trusted expected command cannot be satisfied by an empty or truncated trace. -/
 example :
-    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt]
+    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt] [.rotateGroup]
       { quarterTurnTrace with steps := [] } = false := by
   decide
 
 /-- Matching digest text cannot hide that the complete pre-state is disconnected. -/
 example :
-    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt]
+    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt] [.rotateGroup]
       { quarterTurnTrace with base := jointQuarterTurn } = false := by
   decide
 
@@ -1226,7 +1237,7 @@ private def echoedInvalidTrace : RelationTrace := {
 }
 
 example :
-    relationTraceIsSatisfied echoedQuarterTurnIdentity [echoedQuarterTurnReceipt]
+    relationTraceIsSatisfied echoedQuarterTurnIdentity [echoedQuarterTurnReceipt] [.rotateGroup]
       echoedInvalidTrace = false := by
   decide
 
@@ -1236,7 +1247,7 @@ private def reboundQuarterTurnReceipt : RelationCommandReceipt := {
 }
 
 example :
-    relationTraceIsSatisfied quarterTurnTraceIdentity [reboundQuarterTurnReceipt]
+    relationTraceIsSatisfied quarterTurnTraceIdentity [reboundQuarterTurnReceipt] [.rotateGroup]
       { quarterTurnTrace with
         steps := [{
           receipt := reboundQuarterTurnReceipt
@@ -1244,4 +1255,15 @@ example :
           after := jointQuarterTurn
           witness := .rotateGroup quarterTurnJoint
         }] } = false := by
+  decide
+
+/-- Missing, extra, or type-mismatched trusted policies cannot certify a trace. -/
+example :
+    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt] []
+      quarterTurnTrace = false := by
+  decide
+
+example :
+    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt]
+      [.fragmentAttach attachFragmentPolicy] quarterTurnTrace = false := by
   decide

@@ -208,6 +208,16 @@ class RelationTraceJsonToLeanTests(unittest.TestCase):
         self.assertIn(hashlib.sha256(self.request_bytes).hexdigest(), rendered)
         self.assertIn(hashlib.sha256(self.trace_bytes).hexdigest(), rendered)
 
+    def test_generated_source_keeps_trusted_policy_outside_witnesses(self) -> None:
+        rendered = self.render()
+        self.assertIn(
+            "private def expectedPolicies : List RelationPolicy := [.rotateGroup, .rotateGroup]",
+            rendered,
+        )
+        witness_blocks = rendered.split("  witness := ")[1:]
+        self.assertTrue(witness_blocks)
+        self.assertTrue(all("policy :=" not in block.split("\n}", 1)[0] for block in witness_blocks))
+
     def test_generated_certificate_rejects_single_sided_digest_tampering(self) -> None:
         if shutil.which("lake") is None:
             self.skipTest("lake is not installed")

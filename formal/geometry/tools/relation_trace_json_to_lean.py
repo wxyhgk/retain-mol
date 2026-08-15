@@ -140,6 +140,9 @@ def render_document(
         "private def expectedReceipts : List RelationCommandReceipt := "
         + lean_inline_list(receipt_names),
         "",
+        "private def expectedPolicies : List RelationPolicy := "
+        + lean_inline_list([".rotateGroup" for _ in request["expectedReceipts"]]),
+        "",
         render_intent_molecule("base", document["base"]),
         render_intent_molecule("final", document["final"]),
     ])
@@ -175,10 +178,10 @@ def render_document(
         "  trace := trace",
         "}",
         "",
-        "example : relationTraceCertificateIsSatisfied externallyExpectedCertificateIdentity certificate = true := by",
+        "example : relationTraceCertificateIsSatisfied externallyExpectedCertificateIdentity expectedPolicies certificate = true := by",
         "  decide",
         "",
-        "example : RelationTraceCertificateSemantics externallyExpectedCertificateIdentity certificate := by",
+        "example : RelationTraceCertificateSemantics externallyExpectedCertificateIdentity expectedPolicies certificate := by",
         "  apply relationTraceCertificateIsSatisfied_sound",
         "  decide",
         "",
