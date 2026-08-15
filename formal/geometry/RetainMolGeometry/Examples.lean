@@ -409,6 +409,7 @@ private def attachPolicy : AtomPortMatePolicy := {
   expectedCommandId := "attach-fragment-1"
   expectedLeavingHydrogenAtomId := "host:H:leave"
   expectedLeavingBondId := "host:C-H:leave"
+  expectedLinkBondId := "cmd:bond:link"
   guestReference := attachGuest
   guestAttachAtomId := "cmd:atom:1"
   linkDistance := {
@@ -508,6 +509,7 @@ private def attachWitness : FragmentAttachWitness := {
 example : graphRewriteIsWellFormed attachHost attachRewrite = true := by decide
 example : graphRewriteIsSatisfied attachHost attachCandidate attachRewrite = true := by decide
 example : atomPortMateIsSatisfied attachHost attachCandidate attachPolicy attachMate = true := by decide
+example : attachFragmentPolicy.expectedTorsion = attachTorsion := by rfl
 example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
       attachFragmentPolicy attachWitness = true := by
@@ -516,9 +518,8 @@ example :
     fragmentAttachWitnessIsSatisfied attachHost attachCandidate
       attachFragmentPolicy attachWitness = true := by decide
 example :
-    FragmentAttachWitnessSemantics attachHost attachCandidate
-      attachFragmentPolicy attachWitness := by
-  apply fragmentAttachWitnessIsSatisfied_sound
+    FragmentAttachSemantics attachHost attachCandidate attachFragmentPolicy := by
+  apply fragmentAttachWitnessIsSatisfied_sound (witness := attachWitness)
   decide
 
 /-- A same-component host neighbor is not interchangeable with the trusted radial. -/
@@ -534,6 +535,14 @@ example :
     fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
       attachFragmentPolicy attachAlternativeHostRadial = false := by
   decide
+
+/-- Fragment effect semantics cannot distinguish evaluator-only witness payloads. -/
+example :
+    RelationWitnessSemantics attachHost attachCandidate
+        (.fragmentAttach attachFragmentPolicy) (.fragmentAttach attachWitness) =
+      RelationWitnessSemantics attachHost attachCandidate
+        (.fragmentAttach attachFragmentPolicy) (.fragmentAttach attachAlternativeHostRadial) := by
+  rfl
 
 private def attachPositiveQuarterTurn : TurnBand := {
   cosineSign := .nearZero
@@ -865,6 +874,13 @@ private def wrongCommandMate : AtomPortMate := {
 }
 
 example : atomPortMateIsWellFormed attachHost attachPolicy wrongCommandMate = false := by decide
+
+private def wrongLinkBondIdMate : AtomPortMate := {
+  attachMate with linkBondId := "cmd:bond:1"
+}
+
+example : atomPortMateIsWellFormed attachHost attachPolicy wrongLinkBondIdMate = false := by
+  decide
 
 private def siblingHost : MoleculeSnapshot := attachHost
 

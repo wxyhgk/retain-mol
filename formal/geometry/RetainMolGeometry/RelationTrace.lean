@@ -52,8 +52,8 @@ def RelationWitnessSemantics
       policyCommand = witnessCommand ∧
         applyPrimitiveCommand before witnessCommand = some after
   | .rotateGroup, .rotateGroup joint => RotatableJointSemantics before after joint
-  | .fragmentAttach policy, .fragmentAttach witness =>
-      FragmentAttachWitnessSemantics before after policy witness
+  | .fragmentAttach policy, .fragmentAttach _ =>
+      FragmentAttachSemantics before after policy
   | _, _ => False
 
 theorem relationWitnessIsSatisfied_sound

@@ -6,13 +6,15 @@ namespace RetainMol.Geometry
 /--
 System-owned policy for one registered, ID-mapped guest template. The planner
 does not supply this value; a trusted compiler binds it to a command ID,
-template graph, single-link policy, distance interval, and orientation witness.
+template graph, single-link identity and policy, distance interval, and
+orientation constraint.
 -/
 structure AtomPortMatePolicy where
   policyId : String
   expectedCommandId : String
   expectedLeavingHydrogenAtomId : AtomId
   expectedLeavingBondId : BondId
+  expectedLinkBondId : BondId
   guestReference : MoleculeSnapshot
   guestAttachAtomId : AtomId
   linkBondOrder : BondOrder := .single
@@ -111,6 +113,7 @@ def atomPortMatePolicyIsWellFormed (policy : AtomPortMatePolicy) : Bool :=
     !policy.expectedCommandId.isEmpty &&
     !policy.expectedLeavingHydrogenAtomId.isEmpty &&
     !policy.expectedLeavingBondId.isEmpty &&
+    !policy.expectedLinkBondId.isEmpty &&
     topologyIsWellFormed policy.guestReference &&
     policy.linkBondOrder == .single &&
     (match findAtom policy.guestReference policy.guestAttachAtomId with
@@ -138,6 +141,7 @@ def atomPortMateIsWellFormed
     mate.commandId == policy.expectedCommandId &&
     mate.leavingHydrogenAtomId == policy.expectedLeavingHydrogenAtomId &&
     mate.leavingBondId == policy.expectedLeavingBondId &&
+    mate.linkBondId == policy.expectedLinkBondId &&
     graphRewriteIsWellFormed reference mate.rewrite &&
     mate.rewrite.removedAtomIds == [mate.leavingHydrogenAtomId] &&
     mate.rewrite.removedBondIds == [mate.leavingBondId] &&

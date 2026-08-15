@@ -21,6 +21,19 @@ from tools.ai_modeling_loop.formal_verdict import VerificationStatus
 
 
 class ArtifactBridgeTests(unittest.TestCase):
+    def test_coordinate_mapping_digest_matches_javascript_number_canonicalization(self) -> None:
+        rows = (
+            CoordinateTransportAtomRow(1, "F", "C", (0.0, 0.0, 0.0)),
+            CoordinateTransportAtomRow(2, "M", "C", (1.0, 0.0, 0.0)),
+            CoordinateTransportAtomRow(3, "R", "C", (1.0, 0.0, 1.0)),
+            CoordinateTransportAtomRow(4, "H", "C", (1.0, -1.0, 0.0)),
+        )
+
+        self.assertEqual(
+            coordinate_transport_atom_row_mapping_sha256(rows),
+            "c3c85b4fb04ecea247ddb30662796727122070ef981b531cf1e5ae895614a303",
+        )
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

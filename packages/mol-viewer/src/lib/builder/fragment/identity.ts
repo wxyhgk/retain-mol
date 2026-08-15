@@ -13,7 +13,7 @@ function canonicalNumber(value: number): number {
  * coordination semantics. Array order remains significant because atom and
  * bond indices are part of the fragment contract.
  */
-export function computeFragmentDigest(fragment: FragmentDef): string {
+export function serializeCanonicalFragment(fragment: FragmentDef): string {
   const canonical = {
     schemaVersion: 1,
     id: fragment.id,
@@ -63,7 +63,15 @@ export function computeFragmentDigest(fragment: FragmentDef): string {
         }
       : null,
   }
-  return `${FRAGMENT_DIGEST_PREFIX}${sha256Hex(JSON.stringify(canonical))}`
+  return JSON.stringify(canonical)
+}
+
+export function computeFragmentCanonicalBytesSha256(fragment: FragmentDef): string {
+  return sha256Hex(serializeCanonicalFragment(fragment))
+}
+
+export function computeFragmentDigest(fragment: FragmentDef): string {
+  return `${FRAGMENT_DIGEST_PREFIX}${computeFragmentCanonicalBytesSha256(fragment)}`
 }
 
 export function isFragmentDigest(value: string): boolean {

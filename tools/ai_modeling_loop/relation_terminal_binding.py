@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .artifact_bridge import bridge_final_sdf
 from .artifact_contracts import (
     ArtifactContractError,
     load_builder_snapshot,
@@ -16,6 +17,7 @@ from .formal_verdict import VerificationStatus
 
 
 CANONICAL_DIGEST_PREFIX = "canonical-v2-sha256-"
+V2000_COORDINATE_TOLERANCE_ANGSTROM = 5.1e-5
 
 
 @dataclass(frozen=True)
@@ -207,6 +209,66 @@ def canonicalize_runtime_snapshot(
     }
 
 
+def _final_sdf_coordinate_binding(
+    *,
+    runtime_after: Mapping[str, Any],
+    builder_snapshot_path: Path,
+    identity_map_path: Path,
+    coordinate_transport_receipt_path: Path,
+    final_sdf_path: Path,
+) -> tuple[bool, Mapping[str, Any]]:
+    bridge = bridge_final_sdf(
+        builder_snapshot_path=builder_snapshot_path,
+        identity_map_path=identity_map_path,
+        final_sdf_path=final_sdf_path,
+        coordinate_transport_receipt_path=coordinate_transport_receipt_path,
+    )
+    if bridge.status is VerificationStatus.REJECT or bridge.final_snapshot is None:
+        return False, {
+            "artifactBridgeStatus": bridge.status.value,
+            "artifactBridgeCode": bridge.code,
+            "artifactBridgeWitness": dict(bridge.witness),
+        }
+
+    canonical_sdf = canonicalize_builder_snapshot(bridge.final_snapshot)
+    runtime_atoms = {
+        atom["id"]: atom
+        for atom in runtime_after["atoms"]
+    }
+    sdf_atoms = {
+        atom["id"]: atom
+        for atom in canonical_sdf["atoms"]
+    }
+    if runtime_atoms.keys() != sdf_atoms.keys():
+        return False, {
+            "runtimeAtomIds": sorted(runtime_atoms),
+            "finalSdfAtomIds": sorted(sdf_atoms),
+        }
+
+    maximum_deviation = 0.0
+    maximum_atom_id: str | None = None
+    maximum_axis: str | None = None
+    for atom_id in sorted(runtime_atoms):
+        runtime_atom = runtime_atoms[atom_id]
+        sdf_atom = sdf_atoms[atom_id]
+        for axis in ("x", "y", "z"):
+            deviation = abs(float(runtime_atom[axis]) - float(sdf_atom[axis]))
+            if deviation > maximum_deviation:
+                maximum_deviation = deviation
+                maximum_atom_id = atom_id
+                maximum_axis = axis
+
+    witness = {
+        "artifactBridgeStatus": bridge.status.value,
+        "artifactBridgeCode": bridge.code,
+        "coordinateToleranceAngstrom": V2000_COORDINATE_TOLERANCE_ANGSTROM,
+        "maximumCoordinateDeviationAngstrom": maximum_deviation,
+        "maximumDeviationAtomId": maximum_atom_id,
+        "maximumDeviationAxis": maximum_axis,
+    }
+    return maximum_deviation <= V2000_COORDINATE_TOLERANCE_ANGSTROM, witness
+
+
 def verify_relation_terminal_binding(
     *,
     relation_trace_path: Path,
@@ -283,10 +345,28 @@ def verify_relation_terminal_binding(
                 "relation-execution-artifact-binding-mismatch",
                 {"mismatchedFields": mismatches, **artifact_bindings},
             )
+
+        sdf_coordinates_match, sdf_coordinate_witness = _final_sdf_coordinate_binding(
+            runtime_after=runtime_after,
+            builder_snapshot_path=builder_snapshot_path,
+            identity_map_path=identity_map_path,
+            coordinate_transport_receipt_path=coordinate_transport_receipt_path,
+            final_sdf_path=final_sdf_path,
+        )
+        if not sdf_coordinates_match:
+            return RelationTerminalBindingResult(
+                VerificationStatus.REJECT,
+                "relation-terminal-sdf-coordinate-mismatch",
+                sdf_coordinate_witness,
+            )
         return RelationTerminalBindingResult(
             VerificationStatus.PASS,
             "relation-terminal-bound-to-artifact-bundle",
-            {"canonicalFinalDigest": builder_digest, **artifact_bindings},
+            {
+                "canonicalFinalDigest": builder_digest,
+                "finalSdfCoordinateBinding": sdf_coordinate_witness,
+                **artifact_bindings,
+            },
         )
     except (ArtifactContractError, OSError, TypeError, ValueError) as error:
         return RelationTerminalBindingResult(

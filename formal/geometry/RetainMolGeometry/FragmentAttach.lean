@@ -15,6 +15,16 @@ structure FragmentAttachPolicy where
   expectedTurn : TurnBand
 deriving Repr, DecidableEq, BEq
 
+/-- The torsion effect is constructed entirely from trusted policy fields. -/
+def FragmentAttachPolicy.expectedTorsion
+    (policy : FragmentAttachPolicy) : PortTorsion := {
+  hostAtomId := policy.atomPortMate.linkDistance.atomId1
+  guestAtomId := policy.atomPortMate.guestAttachAtomId
+  hostFrame := policy.expectedHostFrame
+  guestFrame := policy.expectedGuestFrame
+  turn := policy.expectedTurn
+}
+
 def fragmentAttachPolicyIsWellFormed
     (policy : FragmentAttachPolicy) : Bool :=
   atomPortMatePolicyIsWellFormed policy.atomPortMate &&
@@ -40,41 +50,44 @@ def fragmentAttachPolicyIsWellFormed
     turnBandIsWellFormed policy.expectedTurn
 
 /--
-One bound fragment-attachment witness. The graph rewrite and the oriented port
-torsion cannot be supplied independently: their host, guest and radial
-witnesses must belong to the same retained host and added guest region, and the
-candidate must echo the trusted host radial and requested turn.
+One fragment-attachment evaluation witness. It supplies a concrete rewrite and
+cached torsion value, but neither value defines the trusted attachment effect.
 -/
 structure FragmentAttachWitness where
   mate : AtomPortMate
   torsion : PortTorsion
 deriving Repr, DecidableEq, BEq
 
+def fragmentAttachPolicyEffectBindingIsSatisfied
+    (reference candidate : MoleculeSnapshot)
+    (policy : FragmentAttachPolicy)
+    (mate : AtomPortMate) : Bool :=
+  fragmentAttachPolicyIsWellFormed policy &&
+    mate.hostAtomId == policy.atomPortMate.linkDistance.atomId1 &&
+    policy.atomPortMate.guestRegion.frame.originAtomId ==
+      policy.atomPortMate.guestAttachAtomId &&
+    policy.expectedGuestFrame.radialAtomId ==
+      policy.atomPortMate.guestRegion.frame.radialAtomId &&
+    (findAtom reference policy.expectedHostFrame.radialAtomId).isSome &&
+    !mate.rewrite.removedAtomIds.contains
+      policy.expectedHostFrame.radialAtomId &&
+    (componentWithoutBond reference policy.atomPortMate.expectedLeavingBondId
+      policy.atomPortMate.linkDistance.atomId1).contains
+        policy.expectedHostFrame.radialAtomId &&
+    policy.atomPortMate.guestRegion.atomIds.contains
+      policy.expectedGuestFrame.radialAtomId &&
+    (mate.rewrite.addedAtoms.any fun atom =>
+      atom.atomId == policy.expectedGuestFrame.radialAtomId) &&
+    directedSegmentAlignmentIsSatisfied candidate candidate
+      policy.guestPortAlignment
+
 def fragmentAttachCrossBindingIsSatisfied
     (reference candidate : MoleculeSnapshot)
     (policy : FragmentAttachPolicy)
     (witness : FragmentAttachWitness) : Bool :=
-  fragmentAttachPolicyIsWellFormed policy &&
-    witness.torsion.hostAtomId == witness.mate.hostAtomId &&
-    witness.torsion.guestAtomId == policy.atomPortMate.guestAttachAtomId &&
-    witness.torsion.hostFrame == policy.expectedHostFrame &&
-    witness.torsion.guestFrame == policy.expectedGuestFrame &&
-    witness.torsion.turn == policy.expectedTurn &&
-    policy.atomPortMate.guestRegion.frame.originAtomId ==
-      policy.atomPortMate.guestAttachAtomId &&
-    witness.torsion.guestFrame.radialAtomId ==
-      policy.atomPortMate.guestRegion.frame.radialAtomId &&
-    (findAtom reference witness.torsion.hostFrame.radialAtomId).isSome &&
-    !witness.mate.rewrite.removedAtomIds.contains
-      witness.torsion.hostFrame.radialAtomId &&
-    (componentWithoutBond reference witness.mate.leavingBondId
-      witness.mate.hostAtomId).contains witness.torsion.hostFrame.radialAtomId &&
-    policy.atomPortMate.guestRegion.atomIds.contains
-      witness.torsion.guestFrame.radialAtomId &&
-    (witness.mate.rewrite.addedAtoms.any fun atom =>
-      atom.atomId == witness.torsion.guestFrame.radialAtomId) &&
-    directedSegmentAlignmentIsSatisfied candidate candidate
-      policy.guestPortAlignment
+  decide (witness.torsion = policy.expectedTorsion) &&
+    fragmentAttachPolicyEffectBindingIsSatisfied reference candidate policy
+      witness.mate
 
 def fragmentAttachWitnessIsSatisfied
     (reference candidate : MoleculeSnapshot)
@@ -84,23 +97,29 @@ def fragmentAttachWitnessIsSatisfied
     atomPortMateIsSatisfied reference candidate policy.atomPortMate witness.mate &&
     portTorsionIsSatisfied candidate witness.torsion
 
-def FragmentAttachWitnessSemantics
+def FragmentAttachSemantics
     (reference candidate : MoleculeSnapshot)
-    (policy : FragmentAttachPolicy)
-    (witness : FragmentAttachWitness) : Prop :=
-  fragmentAttachCrossBindingIsSatisfied reference candidate policy witness = true ∧
-    AtomPortMateSemantics reference candidate policy.atomPortMate witness.mate ∧
-    PortTorsionSemantics candidate witness.torsion
+    (policy : FragmentAttachPolicy) : Prop :=
+  ∃ mate,
+    fragmentAttachPolicyEffectBindingIsSatisfied reference candidate policy mate = true ∧
+      AtomPortMateSemantics reference candidate policy.atomPortMate mate ∧
+      PortTorsionSemantics candidate policy.expectedTorsion
 
 theorem fragmentAttachWitnessIsSatisfied_sound
     (reference candidate : MoleculeSnapshot)
     (policy : FragmentAttachPolicy)
     (witness : FragmentAttachWitness)
     (h : fragmentAttachWitnessIsSatisfied reference candidate policy witness = true) :
-    FragmentAttachWitnessSemantics reference candidate policy witness := by
+    FragmentAttachSemantics reference candidate policy := by
   simp only [fragmentAttachWitnessIsSatisfied, Bool.and_eq_true] at h
-  exact ⟨h.1.1,
-    atomPortMateIsSatisfied_sound reference candidate policy.atomPortMate witness.mate h.1.2,
-    portTorsionIsSatisfied_sound candidate witness.torsion h.2⟩
+  rcases h with ⟨⟨hBinding, hMate⟩, hTorsion⟩
+  simp only [fragmentAttachCrossBindingIsSatisfied, Bool.and_eq_true] at hBinding
+  have hTorsionExact : witness.torsion = policy.expectedTorsion :=
+    of_decide_eq_true hBinding.1
+  refine ⟨witness.mate, hBinding.2,
+    atomPortMateIsSatisfied_sound reference candidate policy.atomPortMate
+      witness.mate hMate, ?_⟩
+  rw [← hTorsionExact]
+  exact portTorsionIsSatisfied_sound candidate witness.torsion hTorsion
 
 end RetainMol.Geometry

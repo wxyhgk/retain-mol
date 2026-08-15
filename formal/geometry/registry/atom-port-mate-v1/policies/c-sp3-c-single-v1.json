@@ -4,6 +4,7 @@
   "expectedCommandId": "attach-c-sp3-1",
   "expectedLeavingHydrogenAtomId": "host:H:leave",
   "expectedLeavingBondId": "host:C-H:leave",
+  "expectedLinkBondId": "attach:host-guest",
   "guestReference": {
     "atoms": [
       {"atomId": "guest:C:attach", "symbol": "C", "positionUnits": [1500, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},

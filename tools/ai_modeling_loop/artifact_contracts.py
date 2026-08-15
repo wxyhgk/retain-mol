@@ -150,12 +150,22 @@ class CoordinateTransportReceipt:
 def coordinate_transport_atom_rows_json(
     atom_rows: Iterable[CoordinateTransportAtomRow],
 ) -> list[dict[str, Any]]:
+    def canonical_coordinate(value: float) -> int | float:
+        if value == 0:
+            return 0
+        if value.is_integer():
+            return int(value)
+        return value
+
     return [
         {
             "rowIndex": row.row_index,
             "atomId": row.atom_id,
             "symbol": row.symbol,
-            "position": [0.0 if value == 0 else value for value in row.position],
+            # JSON has one number type, but Python serializes 0.0 differently
+            # from JavaScript. Normalize integral coordinates so receipts have
+            # one cross-language canonical digest.
+            "position": [canonical_coordinate(value) for value in row.position],
         }
         for row in atom_rows
     ]

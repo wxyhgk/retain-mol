@@ -382,4 +382,85 @@ describe('fragment.attach relation certificate', () => {
     expect(result.verdict).toBe('reject')
     if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('template-mirrored')
   })
+
+  it('does not accept a proper-orientation witness that collapses to zero volume', () => {
+    const nearPlanarId = 'relation-near-planar-template'
+    const nearPlanar: FragmentDef = {
+      id: nearPlanarId,
+      name: 'Near-planar relation witness',
+      short: 'NP',
+      formula: 'C4H',
+      atoms: [
+        { symbol: 'C', x: 0, y: 0, z: 0 },
+        { symbol: 'H', x: 1.09, y: 0, z: 0 },
+        { symbol: 'C', x: -1, y: 0, z: 0 },
+        { symbol: 'C', x: 0, y: 1, z: 0 },
+        { symbol: 'C', x: 0, y: 0, z: 2e-10 },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 0, b: 2, order: 1 },
+        { a: 0, b: 3, order: 1 },
+        { a: 0, b: 4, order: 1 },
+      ],
+      attachIndex: 0,
+      attachHIndex: 1,
+      attachOrder: 1,
+      group: 'group',
+    }
+    registerFragment(nearPlanar)
+    try {
+      const before = hostMolecule()
+      const attachCommand: FragmentAttachCommand = {
+        ...command(),
+        fragmentId: nearPlanarId,
+        fragmentDigest: computeFragmentDigest(nearPlanar),
+      }
+      const execution = dryRunEditPlan(context(before), plan(before, attachCommand))
+      expect(execution.ok).toBe(true)
+      if (!execution.ok) return
+      const compiled = compileFragmentAttachRelation(before, attachCommand)
+      expect(compiled.verdict).toBe('pass')
+      if (compiled.verdict !== 'pass' || !compiled.relation.chiralityWitnessAtomIds) return
+
+      const [originId, firstId, secondId, thirdId] = compiled.relation.chiralityWitnessAtomIds
+      const atoms = new Map(execution.molecule.atoms.map(atom => [atom.id, atom]))
+      const origin = atoms.get(originId)!
+      const first = atoms.get(firstId)!
+      const second = atoms.get(secondId)!
+      const third = atoms.get(thirdId)!
+      const firstVector = [first.x - origin.x, first.y - origin.y, first.z - origin.z] as const
+      const secondVector = [second.x - origin.x, second.y - origin.y, second.z - origin.z] as const
+      const normal = [
+        firstVector[1] * secondVector[2] - firstVector[2] * secondVector[1],
+        firstVector[2] * secondVector[0] - firstVector[0] * secondVector[2],
+        firstVector[0] * secondVector[1] - firstVector[1] * secondVector[0],
+      ] as const
+      const normalSquared = normal[0] ** 2 + normal[1] ** 2 + normal[2] ** 2
+      const thirdVector = [third.x - origin.x, third.y - origin.y, third.z - origin.z] as const
+      const signedHeight = (
+        normal[0] * thirdVector[0]
+        + normal[1] * thirdVector[1]
+        + normal[2] * thirdVector[2]
+      ) / normalSquared
+      const collapsed = {
+        ...third,
+        x: third.x - signedHeight * normal[0],
+        y: third.y - signedHeight * normal[1],
+        z: third.z - signedHeight * normal[2],
+      }
+      const after: Molecule = {
+        ...execution.molecule,
+        atoms: execution.molecule.atoms.map(atom => atom.id === thirdId
+          ? collapsed
+          : atom),
+      }
+
+      const result = verifyFragmentAttachRelation(before, after, attachCommand)
+      expect(result.verdict).toBe('indeterminate')
+      if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('numeric-uncertainty')
+    } finally {
+      unregisterFragment(nearPlanarId)
+    }
+  })
 })

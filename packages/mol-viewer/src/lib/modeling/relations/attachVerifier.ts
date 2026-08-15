@@ -271,7 +271,13 @@ export function verifyFragmentAttachRelation(
       point(afterAtoms.get(secondId)!),
       point(afterAtoms.get(thirdId)!),
     )
-    if (expectedVolume * actualVolume < 0) {
+    if (Math.abs(actualVolume) <= FRAGMENT_ATTACH_RELATION_POLICY.chiralityVolume) {
+      return failure('indeterminate', {
+        code: 'numeric-uncertainty',
+        message: 'Generated template orientation collapsed into the chirality uncertainty band',
+      }, relation)
+    }
+    if (Math.sign(expectedVolume) !== Math.sign(actualVolume)) {
       return failure('reject', {
         code: 'template-mirrored',
         message: 'Generated template preserves distances but reverses a proper-orientation witness',

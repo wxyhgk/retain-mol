@@ -298,6 +298,48 @@ class RelationFinalArtifactGateTests(unittest.TestCase):
                 "relation-terminal-snapshot-mismatch",
             )
 
+    def test_relation_certificate_rejects_self_consistent_final_sdf_coordinate_splice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir, evaluation, manifest = self.create_run(Path(directory))
+            molecule = Chem.SDMolSupplier(
+                str(run_dir / "candidate.sdf"),
+                removeHs=False,
+                sanitize=False,
+            )[0]
+            self.assertIsNotNone(molecule)
+            conformer = molecule.GetConformer()
+            conformer.SetAtomPosition(1, Point3D(2.4, 0.0, 0.0))
+            write_sdf(molecule, run_dir / "candidate.sdf")
+
+            execution = json.loads((run_dir / "execution.json").read_text())
+            execution["outputSha256"] = sha256_file(run_dir / "candidate.sdf")
+            execution["coordinateTransportReceiptSha256"] = sha256_file(
+                run_dir / "coordinate-transport.json"
+            )
+            write_json(run_dir / "execution.json", execution)
+
+            with patch(
+                "tools.ai_modeling_loop.relation_final_artifact_gate._recheck_relation_manifest",
+                return_value=(self.relation_result(), manifest),
+            ):
+                envelope = verify_relation_final_artifact(
+                    run_dir=run_dir,
+                    builder_snapshot_path=run_dir / "builder-snapshot.json",
+                    identity_map_path=run_dir / "identity-map.json",
+                    final_sdf_path=run_dir / "candidate.sdf",
+                    coordinate_transport_receipt_path=run_dir / "coordinate-transport.json",
+                    evaluation=evaluation,
+                    output_dir=run_dir / "verification",
+                    target_reference_path=run_dir / "target-reference.sdf",
+                    target_evaluator_path=run_dir / "target-evaluator.py",
+                )
+
+            self.assertEqual(envelope.axes["execution"].status, VerificationStatus.REJECT)
+            self.assertEqual(
+                envelope.axes["execution"].code,
+                "relation-terminal-sdf-coordinate-mismatch",
+            )
+
     def test_publication_preserves_fresh_relation_reject(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run_dir, evaluation, manifest = self.create_run(Path(directory))

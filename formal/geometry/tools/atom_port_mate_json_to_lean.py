@@ -29,7 +29,7 @@ from json_to_lean import (
 
 SCHEMA_VERSION = 1
 REGISTRY_VERSION = 1
-PROJECTION_VERSION = "atom-port-mate-registry-v1-to-lean-v1"
+PROJECTION_VERSION = "atom-port-mate-registry-v1-to-lean-v2"
 SCOPE = "atom-port-mate-v1"
 MAX_REGION_ATOMS = 64
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -47,7 +47,7 @@ class RegistryRecord:
 POLICY_REGISTRY = {
     "c-sp3-c-single-v1": RegistryRecord(
         "policies/c-sp3-c-single-v1.json",
-        "d82b598d50e6ff68dc2b0be042393e13ca090a90ecc32ddb3bf5834d950a8be4",
+        "2c4b8bd872fea80f32a53e1466be1375616b0076c26dc14e12e66ba81cbad6db",
     ),
 }
 
@@ -195,6 +195,7 @@ def render_policy(value: Any) -> tuple[str, dict[str, Any]]:
     policy = strict_object(value, "policyRegistryEntry", {
         "registryVersion", "policyId", "expectedCommandId",
         "expectedLeavingHydrogenAtomId", "expectedLeavingBondId",
+        "expectedLinkBondId",
         "guestReference", "guestAttachAtomId", "linkBondOrder",
         "linkDistance", "linkDirection", "guestRegion",
     })
@@ -212,6 +213,8 @@ def render_policy(value: Any) -> tuple[str, dict[str, Any]]:
         f"{lean_string(policy['expectedLeavingHydrogenAtomId'], 'policyRegistryEntry.expectedLeavingHydrogenAtomId')}",
         "  expectedLeavingBondId := "
         f"{lean_string(policy['expectedLeavingBondId'], 'policyRegistryEntry.expectedLeavingBondId')}",
+        "  expectedLinkBondId := "
+        f"{lean_string(policy['expectedLinkBondId'], 'policyRegistryEntry.expectedLinkBondId')}",
         "  guestReference := guestReference",
         "  guestAttachAtomId := "
         f"{lean_string(policy['guestAttachAtomId'], 'policyRegistryEntry.guestAttachAtomId')}",

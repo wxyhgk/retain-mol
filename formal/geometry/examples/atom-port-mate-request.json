@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "projectionVersion": "atom-port-mate-registry-v1-to-lean-v1",
+  "projectionVersion": "atom-port-mate-registry-v1-to-lean-v2",
   "coordinateScale": 1000,
   "policyId": "c-sp3-c-single-v1",
-  "policySha256": "d82b598d50e6ff68dc2b0be042393e13ca090a90ecc32ddb3bf5834d950a8be4",
+  "policySha256": "2c4b8bd872fea80f32a53e1466be1375616b0076c26dc14e12e66ba81cbad6db",
   "evidenceId": "c-sp3-c-single-pass-v1",
   "evidenceSha256": "ff8a78b9fb974334ed6cce010762b665bb856117004f13b8b4c8ae7109bb23b5"
 }

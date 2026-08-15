@@ -11,6 +11,7 @@ function cloneFragment(fragment: FragmentDef): FragmentDef {
     ...fragment,
     atoms: fragment.atoms.map(atom => ({ ...atom })),
     bonds: fragment.bonds.map(bond => ({ ...bond })),
+    ...(fragment.attachDirection ? { attachDirection: [...fragment.attachDirection] } : {}),
     ...(fragment.attachBond ? { attachBond: [...fragment.attachBond] } : {}),
     ...(fragment.bridgeAttachment
       ? {
@@ -51,7 +52,11 @@ export function registerFragment(fragment: FragmentDef): FragmentDef {
 }
 
 export function unregisterFragment(id: string): boolean {
-  return registeredFragments.delete(id)
+  const deleted = registeredFragments.delete(id)
+  for (const [digest, fragment] of registeredFragmentsByDigest) {
+    if (fragment.id === id) registeredFragmentsByDigest.delete(digest)
+  }
+  return deleted
 }
 
 export function listFragments(): FragmentDef[] {

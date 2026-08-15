@@ -65,6 +65,7 @@ class AtomPortMateJsonToLeanTests(unittest.TestCase):
         self.assertIn("private def reference : MoleculeSnapshot", rendered)
         self.assertIn("private def candidate : MoleculeSnapshot", rendered)
         self.assertIn("linkBondOrder := .single", rendered)
+        self.assertIn('expectedLinkBondId := "attach:host-guest"', rendered)
         self.assertIn("linkDirection :=", rendered)
         self.assertIn("cosineSquared :=", rendered)
 
