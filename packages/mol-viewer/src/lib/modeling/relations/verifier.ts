@@ -11,6 +11,7 @@ import {
   assessNumericDeviation,
   type NumericAssessment,
 } from './policy'
+import { sortedStrings } from './ordering'
 
 type Vec3 = readonly [number, number, number]
 
@@ -138,7 +139,7 @@ function sameValue(left: unknown, right: unknown): boolean {
 }
 
 function sortedIds(values: readonly { readonly id: string }[]): string[] {
-  return values.map(value => value.id).sort((left, right) => left.localeCompare(right))
+  return sortedStrings(values.map(value => value.id))
 }
 
 function hasValidAfterGraph(molecule: Molecule): boolean {
@@ -168,6 +169,15 @@ export function verifyRotateGroupRelation(
   if (compiled.verdict !== 'pass') return compiled
   const relation = compiled.relation
 
+  if (
+    after.atoms.length > ROTATE_GROUP_RELATION_POLICY.maxCandidateAtoms
+    || after.bonds.length > ROTATE_GROUP_RELATION_POLICY.maxCandidateBonds
+  ) {
+    return failure('indeterminate', {
+      code: 'resource-limit',
+      message: 'After graph exceeds the rotateGroup certificate resource budget',
+    }, relation)
+  }
   if (!hasValidAfterGraph(after)) {
     return failure('reject', {
       code: 'graph-changed',

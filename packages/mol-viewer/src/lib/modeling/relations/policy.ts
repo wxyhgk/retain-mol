@@ -45,6 +45,10 @@ export const ROTATE_GROUP_RELATION_POLICY = Object.freeze({
   certainRadialDistance: 1e-7,
   maxAbsoluteAngleDegrees: 360,
   maxReliableCoordinateMagnitude: 2e12,
+  maxBeforeAtoms: 316,
+  maxBeforeBonds: 1_000,
+  maxCandidateAtoms: 316,
+  maxCandidateBonds: 1_000,
 })
 
 export type NumericAssessment = 'pass' | 'reject' | 'indeterminate'

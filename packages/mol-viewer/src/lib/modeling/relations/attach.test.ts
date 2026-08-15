@@ -122,6 +122,96 @@ afterAll(() => {
 })
 
 describe('fragment.attach relation certificate', () => {
+  it('returns indeterminate before validating a host beyond the certificate budget', () => {
+    const base = hostMolecule()
+    const before: Molecule = {
+      ...base,
+      atoms: [
+        ...base.atoms,
+        ...Array.from({ length: 315 }, (_value, index) => ({
+          id: `spectator-${index}`,
+          symbol: 'He',
+          x: index + 2,
+          y: 0,
+          z: 0,
+        })),
+      ],
+    }
+
+    const result = compileFragmentAttachRelation(before, command())
+    expect(result.verdict).toBe('indeterminate')
+    if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('resource-limit')
+  })
+
+  it('returns indeterminate before validating a template beyond the certificate budget', () => {
+    const oversizedId = 'relation-oversized-template'
+    const oversized: FragmentDef = {
+      ...fragment,
+      id: oversizedId,
+      atoms: Array.from({ length: 65 }, (_value, index) => ({
+        symbol: index === 1 ? 'H' : 'C',
+        x: index,
+        y: index % 2,
+        z: index % 3,
+      })),
+    }
+    registerFragment(oversized)
+    try {
+      const result = compileFragmentAttachRelation(hostMolecule(), {
+        ...command(),
+        fragmentId: oversizedId,
+      })
+      expect(result.verdict).toBe('indeterminate')
+      if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('resource-limit')
+    } finally {
+      unregisterFragment(oversizedId)
+    }
+  })
+
+  it('returns indeterminate when individually bounded inputs exceed the combined candidate budget', () => {
+    const base = hostMolecule()
+    const before: Molecule = {
+      ...base,
+      atoms: [
+        ...base.atoms,
+        ...Array.from({ length: 312 }, (_value, index) => ({
+          id: `spectator-${index}`,
+          symbol: 'He',
+          x: index + 2,
+          y: 1,
+          z: 0,
+        })),
+      ],
+    }
+
+    expect(before.atoms).toHaveLength(314)
+    const result = compileFragmentAttachRelation(before, command())
+    expect(result.verdict).toBe('indeterminate')
+    if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('resource-limit')
+  })
+
+  it('returns indeterminate before validating an actual after graph beyond the candidate budget', () => {
+    const before = hostMolecule()
+    const attached = dryRun(before)
+    const after: Molecule = {
+      ...attached,
+      atoms: [
+        ...attached.atoms,
+        ...Array.from({ length: 312 }, (_value, index) => ({
+          id: `oversized-after-${index}`,
+          symbol: 'He',
+          x: index,
+          y: 0,
+          z: index === 311 ? Number.NaN : 0,
+        })),
+      ],
+    }
+
+    const result = verifyFragmentAttachRelation(before, after, command())
+    expect(result.verdict).toBe('indeterminate')
+    if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('resource-limit')
+  })
+
   it('compiles deterministic template mappings and passes a production dry run', () => {
     const before = hostMolecule()
     const after = dryRun(before)

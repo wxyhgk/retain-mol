@@ -8,6 +8,7 @@ export type RotateGroupCommand = Extract<
 export type SpatialRelationVerdict = 'pass' | 'reject' | 'indeterminate'
 
 export type RotateGroupRelationDiagnosticCode =
+  | 'resource-limit'
   | 'invalid-before-graph'
   | 'invalid-command'
   | 'axis-not-single-bond'

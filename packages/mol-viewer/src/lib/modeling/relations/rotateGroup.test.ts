@@ -55,6 +55,34 @@ function rotateMovingSide(before: Molecule, angleDegrees: number): Molecule {
 }
 
 describe('rotateGroup spatial relation', () => {
+  it('returns indeterminate before validating a before graph beyond the certificate budget', () => {
+    const before: Molecule = {
+      atoms: Array.from({ length: 317 }, (_value, index) =>
+        atom(`oversized-${index}`, index, 0, index === 316 ? Number.NaN : 0)),
+      bonds: [],
+    }
+
+    const result = compileRotateGroupRelation(before, rotateCommand())
+    expect(result.verdict).toBe('indeterminate')
+    if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('resource-limit')
+  })
+
+  it('returns indeterminate before validating an after graph beyond the certificate budget', () => {
+    const before = acyclicMolecule()
+    const after: Molecule = {
+      ...rotateMovingSide(before, 90),
+      atoms: [
+        ...rotateMovingSide(before, 90).atoms,
+        ...Array.from({ length: 312 }, (_value, index) =>
+          atom(`oversized-after-${index}`, index, 0, index === 311 ? Number.NaN : 0)),
+      ],
+    }
+
+    const result = verifyRotateGroupRelation(before, after, rotateCommand())
+    expect(result.verdict).toBe('indeterminate')
+    if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('resource-limit')
+  })
+
   it('compiles a complete moving component and passes an independent positive 90 degree rotation', () => {
     const before = acyclicMolecule()
     const command = rotateCommand()

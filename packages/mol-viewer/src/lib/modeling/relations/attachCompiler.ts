@@ -10,6 +10,7 @@ import type {
   FragmentAttachRelationDiagnostic,
 } from './attachContracts'
 import { FRAGMENT_ATTACH_RELATION_POLICY } from './attachPolicy'
+import { compareUnicodeCodePoints, sortedStrings } from './ordering'
 
 type Vec3 = readonly [number, number, number]
 type Quat = readonly [number, number, number, number]
@@ -19,10 +20,6 @@ function failure(
   diagnostic: FragmentAttachRelationDiagnostic,
 ): FragmentAttachRelationCompileResult {
   return { verdict, diagnostic }
-}
-
-function sorted(values: Iterable<string>): string[] {
-  return [...values].sort((left, right) => left.localeCompare(right))
 }
 
 function subtract(left: Vec3, right: Vec3): Vec3 {
@@ -126,7 +123,7 @@ function validateBeforeGraph(molecule: Molecule): string | null {
     if (bond.atomId1 === bond.atomId2 || !atomIds.has(bond.atomId1) || !atomIds.has(bond.atomId2)) {
       return `Before graph has an invalid bond ${bond.id}`
     }
-    const pair = [bond.atomId1, bond.atomId2].sort().join('\u0000')
+    const pair = [bond.atomId1, bond.atomId2].sort(compareUnicodeCodePoints).join('\u0000')
     if (endpointPairs.has(pair)) return `Before graph has duplicate bonds between ${bond.atomId1} and ${bond.atomId2}`
     endpointPairs.add(pair)
     bondIds.add(bond.id)
@@ -152,19 +149,18 @@ function signedVolume(origin: Vec3, first: Vec3, second: Vec3, third: Vec3): num
 }
 
 function chiralityWitness(atoms: readonly Atom[]): readonly [string, string, string, string] | undefined {
-  for (let originIndex = 0; originIndex < atoms.length; originIndex += 1) {
-    for (let firstIndex = 0; firstIndex < atoms.length; firstIndex += 1) {
-      for (let secondIndex = firstIndex + 1; secondIndex < atoms.length; secondIndex += 1) {
-        for (let thirdIndex = secondIndex + 1; thirdIndex < atoms.length; thirdIndex += 1) {
-          if ([firstIndex, secondIndex, thirdIndex].includes(originIndex)) continue
-          const origin = atoms[originIndex]
-          const first = atoms[firstIndex]
-          const second = atoms[secondIndex]
-          const third = atoms[thirdIndex]
-          if (!origin || !first || !second || !third) continue
-          if (Math.abs(signedVolume(point(origin), point(first), point(second), point(third))) > FRAGMENT_ATTACH_RELATION_POLICY.chiralityVolume) {
-            return [origin.id, first.id, second.id, third.id]
-          }
+  const orderedAtoms = [...atoms].sort((left, right) => compareUnicodeCodePoints(left.id, right.id))
+  const origin = orderedAtoms[0]
+  if (!origin) return undefined
+  for (let firstIndex = 1; firstIndex < orderedAtoms.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < orderedAtoms.length; secondIndex += 1) {
+      for (let thirdIndex = secondIndex + 1; thirdIndex < orderedAtoms.length; thirdIndex += 1) {
+        const first = orderedAtoms[firstIndex]
+        const second = orderedAtoms[secondIndex]
+        const third = orderedAtoms[thirdIndex]
+        if (!first || !second || !third) continue
+        if (Math.abs(signedVolume(point(origin), point(first), point(second), point(third))) > FRAGMENT_ATTACH_RELATION_POLICY.chiralityVolume) {
+          return [origin.id, first.id, second.id, third.id]
         }
       }
     }
@@ -205,6 +201,15 @@ export function compileFragmentAttachRelation(
   before: Molecule,
   command: FragmentAttachCommand,
 ): FragmentAttachRelationCompileResult {
+  if (
+    before.atoms.length > FRAGMENT_ATTACH_RELATION_POLICY.maxBeforeAtoms
+    || before.bonds.length > FRAGMENT_ATTACH_RELATION_POLICY.maxBeforeBonds
+  ) {
+    return failure('indeterminate', {
+      code: 'resource-limit',
+      message: 'Before graph exceeds the fragment.attach certificate resource budget',
+    })
+  }
   const invalidGraphReason = validateBeforeGraph(before)
   if (invalidGraphReason) {
     return failure('indeterminate', { code: 'invalid-before-graph', message: invalidGraphReason })
@@ -269,6 +274,15 @@ export function compileFragmentAttachRelation(
       message: `Fragment template ${command.fragmentId} is not registered`,
     })
   }
+  if (
+    fragment.atoms.length > FRAGMENT_ATTACH_RELATION_POLICY.maxTemplateAtoms
+    || fragment.bonds.length > FRAGMENT_ATTACH_RELATION_POLICY.maxTemplateBonds
+  ) {
+    return failure('indeterminate', {
+      code: 'resource-limit',
+      message: `Fragment template ${command.fragmentId} exceeds the relation certificate resource budget`,
+    })
+  }
   const templateIssues = validateFragmentDef(fragment)
   const attachAtom = fragment.atoms[fragment.attachIndex]
   const attachHydrogen = fragment.atoms[fragment.attachHIndex]
@@ -292,6 +306,21 @@ export function compileFragmentAttachRelation(
     return failure('reject', {
       code: 'invalid-template-attachment',
       message: templateIssues[0]?.message ?? 'Registered fragment must have one valid attach H bonded to its heavy attach atom',
+    })
+  }
+  const retainedTemplateAtomCount = fragment.atoms.length - 1
+  const retainedTemplateBondCount = fragment.bonds.filter(bond => (
+    bond.a !== fragment.attachHIndex && bond.b !== fragment.attachHIndex
+  )).length
+  const candidateAtomCount = before.atoms.length - 1 + retainedTemplateAtomCount
+  const candidateBondCount = before.bonds.length + retainedTemplateBondCount
+  if (
+    candidateAtomCount > FRAGMENT_ATTACH_RELATION_POLICY.maxCandidateAtoms
+    || candidateBondCount > FRAGMENT_ATTACH_RELATION_POLICY.maxCandidateBonds
+  ) {
+    return failure('indeterminate', {
+      code: 'resource-limit',
+      message: 'Attached candidate exceeds the relation certificate resource budget',
     })
   }
 
@@ -448,8 +477,8 @@ export function compileFragmentAttachRelation(
       ? { ...bond, coordinationSites: [{ atomId: coordinationAtomId, siteId: templateBond.coordinationSiteId }] }
       : bond
   })
-  const fixedAtomIds = sorted(before.atoms.filter(atom => atom.id !== targetHydrogen.id).map(atom => atom.id))
-  const fixedBondIds = sorted(before.bonds.filter(bond => bond.id !== targetBond.id).map(bond => bond.id))
+  const fixedAtomIds = sortedStrings(before.atoms.filter(atom => atom.id !== targetHydrogen.id).map(atom => atom.id))
+  const fixedBondIds = sortedStrings(before.bonds.filter(bond => bond.id !== targetBond.id).map(bond => bond.id))
   const expectedAddedBonds = [linkBond, ...expectedInternalBonds]
   const orientationWitness = chiralityWitness(expectedAddedAtoms)
   const relation: FragmentAttachRelation = {

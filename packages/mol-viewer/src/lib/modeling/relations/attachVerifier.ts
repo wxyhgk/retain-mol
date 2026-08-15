@@ -10,6 +10,7 @@ import {
   assessFragmentAttachDeviation,
   FRAGMENT_ATTACH_RELATION_POLICY,
 } from './attachPolicy'
+import { compareUnicodeCodePoints, sortedStrings } from './ordering'
 
 type Vec3 = readonly [number, number, number]
 
@@ -71,12 +72,15 @@ function atomMetadata(atom: Atom): unknown {
 function normalizedAssignments(bond: Bond): readonly unknown[] {
   return [...(bond.coordinationSites ?? [])]
     .map(assignment => ({ atomId: assignment.atomId, siteId: assignment.siteId }))
-    .sort((left, right) => `${left.atomId}\u0000${left.siteId}`.localeCompare(`${right.atomId}\u0000${right.siteId}`))
+    .sort((left, right) => compareUnicodeCodePoints(
+      `${left.atomId}\u0000${left.siteId}`,
+      `${right.atomId}\u0000${right.siteId}`,
+    ))
 }
 
 function sameBond(left: Bond, right: Bond): boolean {
-  const leftEndpoints = [left.atomId1, left.atomId2].sort()
-  const rightEndpoints = [right.atomId1, right.atomId2].sort()
+  const leftEndpoints = [left.atomId1, left.atomId2].sort(compareUnicodeCodePoints)
+  const rightEndpoints = [right.atomId1, right.atomId2].sort(compareUnicodeCodePoints)
   return left.id === right.id
     && sameValue(leftEndpoints, rightEndpoints)
     && left.order === right.order
@@ -91,7 +95,7 @@ function hasValidGraph(molecule: Molecule): boolean {
   const pairs = new Set<string>()
   for (const bond of molecule.bonds) {
     if (bond.atomId1 === bond.atomId2 || !atomIds.has(bond.atomId1) || !atomIds.has(bond.atomId2)) return false
-    const pair = [bond.atomId1, bond.atomId2].sort().join('\u0000')
+    const pair = [bond.atomId1, bond.atomId2].sort(compareUnicodeCodePoints).join('\u0000')
     if (pairs.has(pair)) return false
     pairs.add(pair)
   }
@@ -99,8 +103,8 @@ function hasValidGraph(molecule: Molecule): boolean {
 }
 
 function sameIds(actual: readonly { readonly id: string }[], expected: readonly string[]): boolean {
-  const actualIds = actual.map(value => value.id).sort((left, right) => left.localeCompare(right))
-  return sameValue(actualIds, [...expected].sort((left, right) => left.localeCompare(right)))
+  const actualIds = sortedStrings(actual.map(value => value.id))
+  return sameValue(actualIds, sortedStrings(expected))
 }
 
 function maximumCoordinateMagnitude(atoms: readonly Atom[]): number {
@@ -121,6 +125,15 @@ export function verifyFragmentAttachRelation(
   if (compiled.verdict !== 'pass') return compiled
   const relation = compiled.relation
 
+  if (
+    after.atoms.length > FRAGMENT_ATTACH_RELATION_POLICY.maxCandidateAtoms
+    || after.bonds.length > FRAGMENT_ATTACH_RELATION_POLICY.maxCandidateBonds
+  ) {
+    return failure('indeterminate', {
+      code: 'resource-limit',
+      message: 'After graph exceeds the fragment.attach certificate resource budget',
+    }, relation)
+  }
   if (!hasValidGraph(after)) {
     return failure('reject', {
       code: 'graph-rewrite-mismatch',

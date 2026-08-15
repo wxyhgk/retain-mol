@@ -29,6 +29,12 @@ export const FRAGMENT_ATTACH_RELATION_POLICY = Object.freeze({
   chiralityVolume: 1e-10,
   maxAbsoluteTorsionDegrees: 360,
   maxReliableCoordinateMagnitude: 2e12,
+  maxBeforeAtoms: 316,
+  maxBeforeBonds: 1_000,
+  maxCandidateAtoms: 316,
+  maxCandidateBonds: 1_000,
+  maxTemplateAtoms: 64,
+  maxTemplateBonds: 256,
 })
 
 export type FragmentAttachNumericAssessment = 'pass' | 'reject' | 'indeterminate'

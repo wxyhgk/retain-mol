@@ -17,6 +17,7 @@ export type FragmentAttachRelationDiagnosticCode =
   | 'degenerate-attachment-axis'
   | 'degenerate-orientation-evidence'
   | 'numeric-uncertainty'
+  | 'resource-limit'
   | 'graph-rewrite-mismatch'
   | 'fixed-atom-changed'
   | 'fixed-bond-changed'

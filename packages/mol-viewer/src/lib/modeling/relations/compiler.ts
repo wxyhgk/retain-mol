@@ -5,16 +5,13 @@ import type {
   RotateGroupRelationDiagnostic,
 } from './contracts'
 import { ROTATE_GROUP_RELATION_POLICY } from './policy'
+import { compareUnicodeCodePoints, sortedStrings } from './ordering'
 
 function failure(
   verdict: 'reject' | 'indeterminate',
   diagnostic: RotateGroupRelationDiagnostic,
 ): RotateGroupRelationCompileResult {
   return { verdict, diagnostic }
-}
-
-function sorted(values: Iterable<string>): string[] {
-  return [...values].sort((left, right) => left.localeCompare(right))
 }
 
 function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
@@ -42,7 +39,7 @@ function validateBeforeGraph(molecule: Molecule): string | null {
     ) {
       return `Before graph has an invalid bond ${bond.id}`
     }
-    const pair = [bond.atomId1, bond.atomId2].sort().join('\u0000')
+    const pair = [bond.atomId1, bond.atomId2].sort(compareUnicodeCodePoints).join('\u0000')
     if (endpointPairs.has(pair)) return `Before graph has duplicate bonds between ${bond.atomId1} and ${bond.atomId2}`
     endpointPairs.add(pair)
     bondIds.add(bond.id)
@@ -105,6 +102,15 @@ export function compileRotateGroupRelation(
   before: Molecule,
   command: RotateGroupCommand,
 ): RotateGroupRelationCompileResult {
+  if (
+    before.atoms.length > ROTATE_GROUP_RELATION_POLICY.maxBeforeAtoms
+    || before.bonds.length > ROTATE_GROUP_RELATION_POLICY.maxBeforeBonds
+  ) {
+    return failure('indeterminate', {
+      code: 'resource-limit',
+      message: 'Before graph exceeds the rotateGroup certificate resource budget',
+    })
+  }
   const invalidGraphReason = validateBeforeGraph(before)
   if (invalidGraphReason) {
     return failure('indeterminate', {
@@ -219,7 +225,7 @@ export function compileRotateGroupRelation(
     axisDy / axisLength,
     axisDz / axisLength,
   ]
-  const radialCandidates = sorted(movingSide)
+  const radialCandidates = sortedStrings(movingSide)
     .filter(atomId => atomId !== movingAxisAtom.id)
     .map(atomId => ({
       atomId,
@@ -243,8 +249,8 @@ export function compileRotateGroupRelation(
     })
   }
 
-  const movingAtomIds = sorted(movingSide)
-  const fixedAtomIds = sorted(before.atoms
+  const movingAtomIds = sortedStrings(movingSide)
+  const fixedAtomIds = sortedStrings(before.atoms
     .map(atom => atom.id)
     .filter(atomId => !movingSide.has(atomId)))
   return {

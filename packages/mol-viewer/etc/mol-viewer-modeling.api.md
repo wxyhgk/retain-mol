@@ -987,7 +987,7 @@ export interface RotateGroupRelationDiagnostic {
 }
 
 // @public (undocumented)
-export type RotateGroupRelationDiagnosticCode = 'invalid-before-graph' | 'invalid-command' | 'axis-not-single-bond' | 'axis-not-bridge' | 'moving-side-incomplete' | 'moving-side-ambiguous' | 'degenerate-axis' | 'no-radial-witness' | 'numeric-uncertainty' | 'graph-changed' | 'non-coordinate-field-changed' | 'fixed-side-moved' | 'axis-endpoint-moved' | 'moving-side-not-rigid' | 'rotation-mismatch' | 'angle-mismatch';
+export type RotateGroupRelationDiagnosticCode = 'resource-limit' | 'invalid-before-graph' | 'invalid-command' | 'axis-not-single-bond' | 'axis-not-bridge' | 'moving-side-incomplete' | 'moving-side-ambiguous' | 'degenerate-axis' | 'no-radial-witness' | 'numeric-uncertainty' | 'graph-changed' | 'non-coordinate-field-changed' | 'fixed-side-moved' | 'axis-endpoint-moved' | 'moving-side-not-rigid' | 'rotation-mismatch' | 'angle-mismatch';
 
 // @public (undocumented)
 export type RotateGroupVerificationResult = {
