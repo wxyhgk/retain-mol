@@ -156,22 +156,27 @@ function createCoordinateTransportReceipt({
   }
 }
 
-function createProductionEffectReceipt(initialMolecule, plan, objectId) {
+function createProductionEffectReceipt(initialMolecule, finalMolecule, plan, objectId) {
   const baseSnapshot = createCanonicalMoleculeSnapshot(initialMolecule)
   const commands = []
   let previousMolecule = initialMolecule
   for (let commandIndex = 0; commandIndex < plan.commands.length; commandIndex += 1) {
-    const prefixPlan = {
-      ...plan,
-      expectedRevision: undefined,
-      commands: plan.commands.slice(0, commandIndex + 1),
-    }
-    const prefixResult = replayEditPlan(initialMolecule, prefixPlan, { objectId })
-    if (!prefixResult.ok) {
-      throw new Error(`无法为命令 ${commandIndex + 1} 生成 production effect receipt`)
+    const isFinalCommand = commandIndex === plan.commands.length - 1
+    let nextMolecule = finalMolecule
+    if (!isFinalCommand) {
+      const prefixPlan = {
+        ...plan,
+        expectedRevision: undefined,
+        commands: plan.commands.slice(0, commandIndex + 1),
+      }
+      const prefixResult = replayEditPlan(initialMolecule, prefixPlan, { objectId })
+      if (!prefixResult.ok) {
+        throw new Error(`无法为命令 ${commandIndex + 1} 生成 production effect receipt`)
+      }
+      nextMolecule = prefixResult.molecule
     }
     const before = createCanonicalMoleculeSnapshot(previousMolecule)
-    const after = createCanonicalMoleculeSnapshot(prefixResult.molecule)
+    const after = createCanonicalMoleculeSnapshot(nextMolecule)
     const command = plan.commands[commandIndex]
     commands.push({
       commandId: command.commandId,
@@ -180,9 +185,9 @@ function createProductionEffectReceipt(initialMolecule, plan, objectId) {
       postDigest: computeCanonicalSnapshotDigest(after),
       changes: createCanonicalEffectChanges(before, after),
     })
-    previousMolecule = prefixResult.molecule
+    previousMolecule = nextMolecule
   }
-  const finalSnapshot = createCanonicalMoleculeSnapshot(previousMolecule)
+  const finalSnapshot = createCanonicalMoleculeSnapshot(finalMolecule)
   return {
     schemaVersion: 1,
     planId: plan.planId,
@@ -268,12 +273,34 @@ async function main() {
     return
   }
 
+  const expectedEffectText = `${JSON.stringify(expectedEffect, null, 2)}\n`
+  const actualEffectReceipt = createProductionEffectReceipt(
+    initial.molecule,
+    result.molecule,
+    plan,
+    initial.objectId,
+  )
+  const productionResultDigest = computeCanonicalSnapshotDigest(
+    createCanonicalMoleculeSnapshot(result.molecule),
+  )
+  if (actualEffectReceipt.finalDigest !== productionResultDigest) {
+    throw new Error(
+      `逐命令 production receipt 与最终执行结果不一致：${actualEffectReceipt.finalDigest} != ${productionResultDigest}`,
+    )
+  }
+
+  await mkdir(path.dirname(args['expected-effect']), { recursive: true })
+  await mkdir(path.dirname(args['enforced-plan']), { recursive: true })
+  await writeFile(args['expected-effect'], expectedEffectText)
+  await writeFile(args['enforced-plan'], enforcedPlanText)
+
   if (expectedEffect.status === 'indeterminate') {
     const indeterminateReceipt = {
       ...receipt,
       status: 'indeterminate',
       expectedEffectStatus: expectedEffect.status,
-      expectedEffectSha256: sha256(`${JSON.stringify(expectedEffect, null, 2)}\n`),
+      expectedEffectSha256: sha256(expectedEffectText),
+      actualEffectReceipt,
       effectComparison: {
         verdict: 'indeterminate',
         reason: expectedEffect.reason,
@@ -287,19 +314,6 @@ async function main() {
     return
   }
 
-  const actualEffectReceipt = createProductionEffectReceipt(
-    initial.molecule,
-    plan,
-    initial.objectId,
-  )
-  const productionResultDigest = computeCanonicalSnapshotDigest(
-    createCanonicalMoleculeSnapshot(result.molecule),
-  )
-  if (actualEffectReceipt.finalDigest !== productionResultDigest) {
-    throw new Error(
-      `逐命令 production receipt 与最终执行结果不一致：${actualEffectReceipt.finalDigest} != ${productionResultDigest}`,
-    )
-  }
   const effectComparison = compareExpectedEffect(expectedEffect, actualEffectReceipt)
 
   if (effectComparison.verdict !== 'pass') {
@@ -307,7 +321,7 @@ async function main() {
       ...receipt,
       status: effectComparison.verdict === 'reject' ? 'rejected' : 'indeterminate',
       expectedEffectStatus: expectedEffect.status,
-      expectedEffectSha256: sha256(`${JSON.stringify(expectedEffect, null, 2)}\n`),
+      expectedEffectSha256: sha256(expectedEffectText),
       actualEffectReceipt,
       effectComparison,
     }
@@ -357,8 +371,6 @@ async function main() {
   await writeFile(args.snapshot, builderSnapshotText)
   await writeFile(args['identity-map'], identityMapText)
   await writeFile(args['coordinate-transport-receipt'], coordinateTransportReceiptText)
-  await writeFile(args['expected-effect'], `${JSON.stringify(expectedEffect, null, 2)}\n`)
-  await writeFile(args['enforced-plan'], enforcedPlanText)
   await writeFile(args.metadata, `${JSON.stringify(metadata, null, 2)}\n`)
   await writeFile(args.receipt, `${JSON.stringify({
     ...receipt,
@@ -367,7 +379,7 @@ async function main() {
     identityMapSha256: sha256(identityMapText),
     coordinateTransportReceiptSha256: sha256(coordinateTransportReceiptText),
     expectedEffectStatus: expectedEffect.status,
-    expectedEffectSha256: sha256(`${JSON.stringify(expectedEffect, null, 2)}\n`),
+    expectedEffectSha256: sha256(expectedEffectText),
     actualEffectReceipt,
     effectComparison,
     atomCount: result.molecule.atoms.length,

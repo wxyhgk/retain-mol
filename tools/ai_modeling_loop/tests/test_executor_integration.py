@@ -183,8 +183,38 @@ class RetainMolExecutorIntegrationTests(unittest.TestCase):
             execution = json.loads(paths["receipt"].read_text())
             self.assertEqual(execution["status"], "indeterminate")
             self.assertEqual(execution["effectComparison"]["verdict"], "indeterminate")
+            expected = json.loads(paths["expected-effect"].read_text())
+            enforced_plan = json.loads(paths["enforced-plan"].read_text())
+            self.assertEqual(expected["status"], "indeterminate")
+            self.assertEqual(enforced_plan["planId"], "unsupported-effect-plan")
+            self.assertEqual(
+                execution["actualEffectReceipt"]["planId"],
+                "unsupported-effect-plan",
+            )
+            self.assertEqual(
+                execution["actualEffectReceipt"]["finalDigest"],
+                execution["actualEffectReceipt"]["commands"][0]["postDigest"],
+            )
+            self.assertEqual(
+                execution["actualEffectReceipt"]["baseDigest"],
+                execution["actualEffectReceipt"]["commands"][0]["preDigest"],
+            )
+            self.assertEqual(
+                [
+                    command["commandId"]
+                    for command in execution["actualEffectReceipt"]["commands"]
+                ],
+                ["set-charge"],
+            )
+            self.assertNotEqual(
+                execution["actualEffectReceipt"]["finalDigest"],
+                execution["actualEffectReceipt"]["baseDigest"],
+            )
             self.assertFalse(paths["output"].exists())
+            self.assertFalse(paths["metadata"].exists())
             self.assertFalse(paths["snapshot"].exists())
+            self.assertFalse(paths["identity-map"].exists())
+            self.assertFalse(paths["coordinate-transport-receipt"].exists())
 
 
 if __name__ == "__main__":
