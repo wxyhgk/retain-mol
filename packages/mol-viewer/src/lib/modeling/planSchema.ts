@@ -5,6 +5,7 @@ const idSchema = z.string().trim().min(1).max(128)
 const finiteNumberSchema = z.number().finite()
 const elementSymbolSchema = z.string().regex(/^[A-Z][a-z]{0,2}$/).max(3)
 const bondOrderSchema = z.number().int().min(1).max(3).transform(value => value as 1 | 2 | 3)
+const fragmentDigestSchema = z.string().regex(/^fragment-v1-sha256-[0-9a-f]{64}$/)
 const positionSchema = z.object({
   x: finiteNumberSchema,
   y: finiteNumberSchema,
@@ -107,6 +108,7 @@ export const modelingCommandSchema = z.discriminatedUnion('kind', [
     kind: z.literal('fragment.attach'),
     atomId: idSchema,
     fragmentId: idSchema,
+    fragmentDigest: fragmentDigestSchema,
     torsionAngleDegrees: finiteNumberSchema.min(-360).max(360).optional(),
   }).strict(),
   z.object({

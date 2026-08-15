@@ -322,6 +322,7 @@ export const editPlanSchema: z.ZodObject<{
         kind: z.ZodLiteral<"fragment.attach">;
         atomId: z.ZodString;
         fragmentId: z.ZodString;
+        fragmentDigest: z.ZodString;
         torsionAngleDegrees: z.ZodOptional<z.ZodNumber>;
         commandId: z.ZodString;
     }, z.core.$strict>, z.ZodObject<{
@@ -599,6 +600,7 @@ export type ModelingCommand = (ModelingCommandBase & {
     readonly kind: 'fragment.attach';
     readonly atomId: string;
     readonly fragmentId: string;
+    readonly fragmentDigest: string;
     readonly torsionAngleDegrees?: number;
 }) | (ModelingCommandBase & {
     readonly kind: 'fragment.bridge';
@@ -724,6 +726,7 @@ export const modelingCommandSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     kind: z.ZodLiteral<"fragment.attach">;
     atomId: z.ZodString;
     fragmentId: z.ZodString;
+    fragmentDigest: z.ZodString;
     torsionAngleDegrees: z.ZodOptional<z.ZodNumber>;
     commandId: z.ZodString;
 }, z.core.$strict>, z.ZodObject<{

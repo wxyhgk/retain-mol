@@ -116,7 +116,9 @@ export type { ElementLike } from './lib/chemistry'
 export {
   listFragments,
   listFragmentSummaries,
+  computeFragmentDigest,
   getFragment,
+  getFragmentDigest,
   getFragment as getReadonlyFragment,
   getFragmentSummary,
 } from './public/fragments'

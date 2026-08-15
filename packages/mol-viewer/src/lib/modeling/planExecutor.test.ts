@@ -8,6 +8,13 @@ import {
 } from './contracts'
 import { dryRunEditPlan } from './planExecutor'
 import { computeMoleculeRevision } from './revision'
+import { getFragmentDigest } from '../builder/fragment/registry'
+
+function fragmentDigest(fragmentId: string): string {
+  const digest = getFragmentDigest(fragmentId)
+  if (!digest) throw new Error(`Missing test fragment: ${fragmentId}`)
+  return digest
+}
 
 function molecule(): Molecule {
   return {
@@ -353,6 +360,7 @@ describe('dryRunEditPlan', () => {
       kind: 'fragment.attach',
       atomId: 'host-c',
       fragmentId: 'benzene',
+      fragmentDigest: fragmentDigest('benzene'),
       torsionAngleDegrees: 45,
     }], host)
 
@@ -366,6 +374,28 @@ describe('dryRunEditPlan', () => {
     expect(first.changes.addedAtomIds.length).toBeGreaterThan(0)
     expect(first.changes.addedAtomIds.every(id => id.startsWith('attach-benzene:atom:'))).toBe(true)
     expect(first.changes.addedBondIds.every(id => id.startsWith('attach-benzene:bond:'))).toBe(true)
+  })
+
+  it('rejects a fragment attach command whose immutable content is unavailable', () => {
+    const host: Molecule = {
+      name: 'host',
+      atoms: [{ id: 'host-c', symbol: 'C', x: 0, y: 0, z: 0 }],
+      bonds: [],
+    }
+    const result = dryRunEditPlan(context(host), plan([{
+      commandId: 'attach-unknown-content',
+      kind: 'fragment.attach',
+      atomId: 'host-c',
+      fragmentId: 'benzene',
+      fragmentDigest: `fragment-v1-sha256-${'0'.repeat(64)}`,
+    }], host))
+
+    expect(result.ok).toBe(false)
+    expect(result.issues.at(-1)).toMatchObject({
+      code: 'command-failed',
+      commandId: 'attach-unknown-content',
+    })
+    expect(result.issues.at(-1)?.message).toContain('模板内容身份无效')
   })
 
   it('attaches rigid fluorene and closes its second C9 site in one replayable plan', () => {
@@ -383,6 +413,7 @@ describe('dryRunEditPlan', () => {
         kind: 'fragment.attach',
         atomId: 'host-left',
         fragmentId: 'fluorene-9h-site-a',
+        fragmentDigest: fragmentDigest('fluorene-9h-site-a'),
         torsionAngleDegrees: 30,
       },
       {
@@ -495,6 +526,7 @@ describe('dryRunEditPlan', () => {
           kind: 'fragment.attach',
           atomId: 'host-c',
           fragmentId: 'benzene',
+          fragmentDigest: fragmentDigest('benzene'),
         },
         {
           commandId: 'adjust-generated-atom',

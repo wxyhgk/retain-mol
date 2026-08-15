@@ -11,6 +11,7 @@ export type FragmentAttachRelationDiagnosticCode =
   | 'invalid-command'
   | 'target-not-terminal-hydrogen'
   | 'template-not-registered'
+  | 'template-digest-mismatch'
   | 'invalid-template-attachment'
   | 'automatic-torsion'
   | 'unsupported-link-order'
@@ -53,6 +54,7 @@ export interface FragmentAttachRelation {
   readonly kind: 'fragment-attach'
   readonly commandId: string
   readonly fragmentId: string
+  readonly fragmentDigest: string
   readonly torsionAngleDegrees: number
   readonly hostAtomId: string
   readonly deletedHydrogenAtomId: string

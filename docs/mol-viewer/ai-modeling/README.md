@@ -193,6 +193,7 @@ commands: [
     kind: 'fragment.attach',
     atomId: 'host-c',
     fragmentId: 'benzene',
+    fragmentDigest: getFragmentDigest('benzene'),
     torsionAngleDegrees: 35,
   },
   {

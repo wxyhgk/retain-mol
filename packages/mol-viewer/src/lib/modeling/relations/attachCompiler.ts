@@ -1,6 +1,6 @@
 import { lookupBondLengthByOrder } from '../../../config/geometry.config'
 import type { Atom, Bond, Molecule } from '../../molecule'
-import { getFragment } from '../../builder/fragment/registry'
+import { getFragmentByDigest } from '../../builder/fragment/registry'
 import type { FragmentDef } from '../../builder/fragment/model'
 import { validateFragmentDef } from '../../builder/kernel/FragmentValidator'
 import type {
@@ -220,7 +220,13 @@ export function compileFragmentAttachRelation(
       message: 'Before coordinates exceed the reliable floating-point envelope',
     })
   }
-  if (command.kind !== 'fragment.attach' || !command.commandId || !command.atomId || !command.fragmentId) {
+  if (
+    command.kind !== 'fragment.attach'
+    || !command.commandId
+    || !command.atomId
+    || !command.fragmentId
+    || !command.fragmentDigest
+  ) {
     return failure('reject', {
       code: 'invalid-command',
       message: 'fragment.attach requires command, target atom, and registered fragment IDs',
@@ -267,11 +273,17 @@ export function compileFragmentAttachRelation(
     })
   }
 
-  const fragment = getFragment(command.fragmentId)
+  const fragment = getFragmentByDigest(command.fragmentDigest)
   if (!fragment) {
     return failure('reject', {
       code: 'template-not-registered',
-      message: `Fragment template ${command.fragmentId} is not registered`,
+      message: `Fragment template digest ${command.fragmentDigest} is not registered`,
+    })
+  }
+  if (fragment.id !== command.fragmentId) {
+    return failure('reject', {
+      code: 'template-digest-mismatch',
+      message: `Fragment template digest does not identify ${command.fragmentId}`,
     })
   }
   if (
@@ -485,6 +497,7 @@ export function compileFragmentAttachRelation(
     kind: 'fragment-attach',
     commandId: command.commandId,
     fragmentId: fragment.id,
+    fragmentDigest: command.fragmentDigest,
     torsionAngleDegrees: command.torsionAngleDegrees,
     hostAtomId: host.id,
     deletedHydrogenAtomId: targetHydrogen.id,

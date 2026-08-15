@@ -1,8 +1,10 @@
 import { validateFragmentDef } from '../kernel/FragmentValidator'
 import { FRAGMENTS } from './catalog'
+import { computeFragmentDigest } from './identity'
 import type { FragmentDef } from './model'
 
 const registeredFragments = new Map<string, FragmentDef>()
+const registeredFragmentsByDigest = new Map<string, FragmentDef>()
 
 function cloneFragment(fragment: FragmentDef): FragmentDef {
   return {
@@ -40,7 +42,11 @@ export function registerFragment(fragment: FragmentDef): FragmentDef {
   const issues = validateFragmentDef(fragment)
   if (issues.length > 0) throw new Error(issues.map(issue => issue.message).join('；'))
   const stored = cloneFragment(fragment)
+  const digest = computeFragmentDigest(stored)
   registeredFragments.set(stored.id, stored)
+  if (!registeredFragmentsByDigest.has(digest)) {
+    registeredFragmentsByDigest.set(digest, stored)
+  }
   return cloneFragment(stored)
 }
 
@@ -58,3 +64,21 @@ export function getFragment(id: string): FragmentDef | undefined {
   const fragment = registeredFragments.get(id) ?? FRAGMENTS.find(candidate => candidate.id === id)
   return fragment ? cloneFragment(fragment) : undefined
 }
+
+export function getFragmentDigest(id: string): string | undefined {
+  const fragment = registeredFragments.get(id) ?? FRAGMENTS.find(candidate => candidate.id === id)
+  return fragment ? computeFragmentDigest(fragment) : undefined
+}
+
+/**
+ * Resolve immutable content selected by a plan. Re-registering the same display
+ * id cannot silently redirect an already-authored command to different bytes.
+ */
+export function getFragmentByDigest(digest: string): FragmentDef | undefined {
+  const registered = registeredFragmentsByDigest.get(digest)
+  if (registered) return cloneFragment(registered)
+  const bundled = FRAGMENTS.find(fragment => computeFragmentDigest(fragment) === digest)
+  return bundled ? cloneFragment(bundled) : undefined
+}
+
+export { computeFragmentDigest }

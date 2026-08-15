@@ -1,5 +1,7 @@
 import {
+  computeFragmentDigest as computeInternalFragmentDigest,
   getFragment as getInternalFragment,
+  getFragmentDigest as getInternalFragmentDigest,
   listFragments as listInternalFragments,
   registerFragment as registerInternalFragment,
   unregisterFragment as unregisterInternalFragment,
@@ -111,6 +113,16 @@ export function listFragmentSummaries(): readonly FragmentSummary[] {
 export function getFragment(id: string): PublicFragmentDef | undefined {
   const fragment = getInternalFragment(id)
   return fragment ? toPublicFragment(fragment) : undefined
+}
+
+/** Immutable content identity for plans that execute a registered fragment later. */
+export function getFragmentDigest(id: string): string | undefined {
+  return getInternalFragmentDigest(id)
+}
+
+/** Compute the same identity before registering an authored fragment. */
+export function computeFragmentDigest(fragment: PublicFragmentDef): string {
+  return computeInternalFragmentDigest(fragment as FragmentDef)
 }
 
 export function getFragmentSummary(id: string): FragmentSummary | undefined {

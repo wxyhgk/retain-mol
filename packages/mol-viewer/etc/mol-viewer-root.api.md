@@ -250,6 +250,9 @@ export interface ClipboardBond {
 // @public (undocumented)
 export const COMMON_ELEMENT_SYMBOLS: string[];
 
+// @public
+export function computeFragmentDigest(fragment: PublicFragmentDef): string;
+
 // @public (undocumented)
 export type CoordinationBondOrder = 1 | 2 | 3;
 
@@ -642,6 +645,9 @@ export function getElementConfig(symbol: string): ElementConfig;
 function getFragment(id: string): PublicFragmentDef | undefined;
 export { getFragment }
 export { getFragment as getReadonlyFragment }
+
+// @public
+export function getFragmentDigest(id: string): string | undefined;
 
 // @public (undocumented)
 export function getFragmentSummary(id: string): FragmentSummary | undefined;

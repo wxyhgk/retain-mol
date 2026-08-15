@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  computeFragmentDigest,
   getFragment,
+  getFragmentByDigest,
+  getFragmentDigest,
   listFragments,
   registerFragment,
   unregisterFragment,
@@ -55,6 +58,33 @@ describe('runtime fragment registration', () => {
     expect(getFragment(valid.id)).toMatchObject({
       name: valid.name,
       atoms: [{ symbol: 'C' }, { symbol: 'H' }],
+    })
+  })
+
+  it('retains immutable content when the same display id is re-registered', () => {
+    const original = registerFragment(valid)
+    const originalDigest = getFragmentDigest(valid.id)!
+    const replacement = {
+      ...valid,
+      name: 'Replacement geometry',
+      atoms: [
+        { symbol: 'C', x: 0, y: 0, z: 0 },
+        { symbol: 'H', x: 1.2, y: 0, z: 0 },
+      ],
+    } satisfies FragmentDef
+    registerFragment(replacement)
+    const replacementDigest = getFragmentDigest(valid.id)!
+
+    expect(originalDigest).toBe(computeFragmentDigest(original))
+    expect(replacementDigest).toBe(computeFragmentDigest(replacement))
+    expect(replacementDigest).not.toBe(originalDigest)
+    expect(getFragmentByDigest(originalDigest)).toMatchObject({
+      name: valid.name,
+      atoms: [{ symbol: 'C' }, { symbol: 'H', x: 1 }],
+    })
+    expect(getFragmentByDigest(replacementDigest)).toMatchObject({
+      name: replacement.name,
+      atoms: [{ symbol: 'C' }, { symbol: 'H', x: 1.2 }],
     })
   })
 })

@@ -8,7 +8,11 @@ import {
 } from '../contracts'
 import { dryRunEditPlan } from '../planExecutor'
 import { computeMoleculeRevision } from '../revision'
-import { registerFragment, unregisterFragment } from '../../builder/fragment/registry'
+import {
+  computeFragmentDigest,
+  registerFragment,
+  unregisterFragment,
+} from '../../builder/fragment/registry'
 import type { FragmentDef } from '../../builder/fragment/model'
 import type { FragmentAttachCommand } from './attachContracts'
 import { compileFragmentAttachRelation, verifyFragmentAttachRelation } from './index'
@@ -64,6 +68,7 @@ function command(torsionAngleDegrees: number | undefined = 60): FragmentAttachCo
     kind: 'fragment.attach',
     atomId: 'target-h',
     fragmentId: FRAGMENT_ID,
+    fragmentDigest: computeFragmentDigest(fragment),
     ...(torsionAngleDegrees === undefined ? {} : { torsionAngleDegrees }),
   }
 }
@@ -160,6 +165,7 @@ describe('fragment.attach relation certificate', () => {
       const result = compileFragmentAttachRelation(hostMolecule(), {
         ...command(),
         fragmentId: oversizedId,
+        fragmentDigest: computeFragmentDigest(oversized),
       })
       expect(result.verdict).toBe('indeterminate')
       if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('resource-limit')
@@ -222,6 +228,7 @@ describe('fragment.attach relation certificate', () => {
     expect(compiled.relation).toMatchObject({
       kind: 'fragment-attach',
       commandId: 'attach-cert',
+      fragmentDigest: computeFragmentDigest(fragment),
       hostAtomId: 'host-c',
       deletedHydrogenAtomId: 'target-h',
       deletedHydrogenBondId: 'host-target',
@@ -253,6 +260,32 @@ describe('fragment.attach relation certificate', () => {
       { templateBondIndex: 3, bondId: 'attach-cert:bond:4' },
     ])
     expect(verifyFragmentAttachRelation(before, after, command()).verdict).toBe('pass')
+  })
+
+  it('keeps resolving the immutable template selected before an alias changes', () => {
+    const planned = command()
+    registerFragment({
+      ...fragment,
+      atoms: fragment.atoms.map((atom, index) => index === 2 ? { ...atom, y: atom.y + 0.1 } : atom),
+    })
+    try {
+      const result = compileFragmentAttachRelation(hostMolecule(), planned)
+      expect(result.verdict).toBe('pass')
+      if (result.verdict === 'pass') {
+        expect(result.relation.fragmentDigest).toBe(planned.fragmentDigest)
+      }
+    } finally {
+      registerFragment(fragment)
+    }
+  })
+
+  it('rejects an unknown template content digest', () => {
+    const result = compileFragmentAttachRelation(hostMolecule(), {
+      ...command(),
+      fragmentDigest: `fragment-v1-sha256-${'0'.repeat(64)}`,
+    })
+    expect(result.verdict).toBe('reject')
+    if (result.verdict !== 'pass') expect(result.diagnostic.code).toBe('template-not-registered')
   })
 
   it('returns indeterminate for automatic torsion', () => {

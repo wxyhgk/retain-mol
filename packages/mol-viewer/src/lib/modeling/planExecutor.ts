@@ -26,7 +26,7 @@ import {
   runFuseFragmentOnBondCommand,
 } from '../builder/commands/fragment'
 import { runRotateAtomGroupCommand } from '../builder/commands/scene'
-import { getFragment } from '../builder/fragment/registry'
+import { getFragment, getFragmentByDigest } from '../builder/fragment/registry'
 import type {
   CommandSelectionState,
   EditCommandResult,
@@ -369,8 +369,10 @@ function executeCommand(state: WorkingState, command: ModelingCommand): CommandE
         runSetBondOrderCommand(state.molecule, command.bondId, command.order),
       )
     case 'fragment.attach': {
-      const fragment = getFragment(command.fragmentId)
-      if (!fragment) return { ok: false, reason: `模板不存在：${command.fragmentId}` }
+      const fragment = getFragmentByDigest(command.fragmentDigest)
+      if (!fragment || fragment.id !== command.fragmentId) {
+        return { ok: false, reason: `模板内容身份无效：${command.fragmentId}` }
+      }
       const result = runAttachFragmentToAtomCommand(state.molecule, {
         atomId: command.atomId,
         fragment,

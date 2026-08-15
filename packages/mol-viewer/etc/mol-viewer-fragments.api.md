@@ -4,6 +4,9 @@
 
 ```ts
 
+// @public
+export function computeFragmentDigest(fragment: PublicFragmentDef): string;
+
 // @public (undocumented)
 export function createFragmentForAttachmentSite(fragmentId: string, siteId: string): PublicFragmentDef;
 
@@ -36,6 +39,9 @@ export function getFragment(id: string): PublicFragmentDef | undefined;
 
 // @public (undocumented)
 export function getFragmentAttachmentSites(id: string): readonly FragmentAttachmentSite[];
+
+// @public
+export function getFragmentDigest(id: string): string | undefined;
 
 // @public (undocumented)
 export function getFragmentSummary(id: string): FragmentSummary | undefined;

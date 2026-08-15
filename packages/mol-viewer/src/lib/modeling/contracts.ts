@@ -120,6 +120,8 @@ export type ModelingCommand =
       readonly atomId: string
       /** Registered template id. The planner cannot inject an arbitrary fragment payload. */
       readonly fragmentId: string
+      /** Immutable content identity returned by getFragmentDigest(fragmentId). */
+      readonly fragmentDigest: string
       /** Rotation about the newly created single bond. */
       readonly torsionAngleDegrees?: number
     })

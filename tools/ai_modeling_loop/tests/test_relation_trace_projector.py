@@ -364,6 +364,28 @@ class RelationTraceProjectorTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 4, completed.stderr)
             self.assertEqual(json.loads(output.read_text())["code"], "unsupported-command-set")
 
+    def test_rejects_malformed_command_kind_before_command_set_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = {
+                "initial": root / "initial.json",
+                "enforced-plan": root / "plan.json",
+                "receipt": root / "execution.json",
+            }
+            paths["initial"].write_text(json.dumps({
+                "schemaVersion": 1,
+                "objectId": "relation:molecule",
+                "molecule": molecule_payload(),
+            }))
+            plan = rotate_plan()
+            plan["commands"] = [{"commandId": "missing-kind"}]
+            paths["enforced-plan"].write_text(json.dumps(plan))
+            paths["receipt"].write_text(json.dumps({"callerWitness": "must-not-be-consumed"}))
+            output = root / "relation-trace.json"
+            completed = self.project(paths, output)
+            self.assertEqual(completed.returncode, 3, completed.stderr)
+            self.assertEqual(json.loads(output.read_text())["code"], "invalid-plan")
+
     def test_marks_missing_handedness_witness_indeterminate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

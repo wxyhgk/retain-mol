@@ -119,6 +119,27 @@ function parseJson(text, label) {
   }
 }
 
+function classifyPlanCommandSet(rawPlan) {
+  if (!rawPlan || typeof rawPlan !== 'object' || Array.isArray(rawPlan)) {
+    reject('invalid-plan', 'enforced plan 必须是对象')
+  }
+  if (!Array.isArray(rawPlan.commands)) {
+    reject('invalid-plan', 'enforced plan commands 必须是数组')
+  }
+  const commandKinds = rawPlan.commands.map((command, index) => {
+    if (!command || typeof command !== 'object' || Array.isArray(command)) {
+      reject('invalid-plan', `enforced plan commands[${index}] 必须是对象`)
+    }
+    if (typeof command.kind !== 'string' || command.kind.length === 0) {
+      reject('invalid-plan', `enforced plan commands[${index}].kind 必须是非空字符串`)
+    }
+    return command.kind
+  })
+  if (commandKinds.length === 0 || commandKinds.some(kind => kind !== SUPPORTED_KIND)) {
+    indeterminate('unsupported-command-set', 'relation trace v1 只接受非空且全部为 geometry.rotateGroup 的计划')
+  }
+}
+
 function quantizeCoordinate(value, label) {
   if (!Number.isFinite(value)) indeterminate('non-finite-coordinate', `${label} 不是有限数`)
   const scaled = value * RELATION_TRACE_COORDINATE_SCALE
@@ -460,15 +481,14 @@ export async function projectRelationTrace({ initialPath, enforcedPlanPath, exec
   const initial = requireObject(parseJson(initialText, 'initial'), 'initial')
   const objectId = requireNonEmptyString(initial.objectId, 'initial.objectId')
   const molecule = requireObject(initial.molecule, 'initial.molecule')
-  const parsedPlan = parseEditPlan(parseJson(enforcedPlanText, 'enforced plan'))
+  const rawPlan = parseJson(enforcedPlanText, 'enforced plan')
+  classifyPlanCommandSet(rawPlan)
+  const parsedPlan = parseEditPlan(rawPlan)
   if (!parsedPlan.ok) reject('invalid-plan', parsedPlan.issues.map(issue => issue.message).join('; '))
   const plan = parsedPlan.plan
   if (plan.targetObjectId !== objectId) reject('target-mismatch', 'plan targetObjectId 与 initial.objectId 不一致')
   const commandIds = plan.commands.map(command => command.commandId)
   if (new Set(commandIds).size !== commandIds.length) reject('duplicate-command-id', '计划包含重复 commandId')
-  if (plan.commands.length === 0 || plan.commands.some(command => command.kind !== SUPPORTED_KIND)) {
-    indeterminate('unsupported-command-set', 'relation trace v1 只接受非空且全部为 geometry.rotateGroup 的计划')
-  }
   if (plan.commands.length > MAX_TRACE_STEPS) {
     indeterminate('trace-too-large', 'relation trace v1 最多接受 ' + MAX_TRACE_STEPS + ' 个命令')
   }
