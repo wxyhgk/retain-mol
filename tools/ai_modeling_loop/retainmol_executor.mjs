@@ -14,7 +14,7 @@ import {
   createCanonicalEffectChanges,
   createCanonicalMoleculeSnapshot,
   createHeadlessModelingContext,
-  replayEditPlan,
+  replayEditPlanTrace,
 } from '@retainmol/mol-viewer/modeling'
 
 const EXECUTOR_ID = '@retainmol/mol-viewer/modeling'
@@ -156,38 +156,22 @@ function createCoordinateTransportReceipt({
   }
 }
 
-function createProductionEffectReceipt(initialMolecule, finalMolecule, plan, objectId) {
-  const baseSnapshot = createCanonicalMoleculeSnapshot(initialMolecule)
-  const commands = []
-  let previousMolecule = initialMolecule
-  for (let commandIndex = 0; commandIndex < plan.commands.length; commandIndex += 1) {
-    const isFinalCommand = commandIndex === plan.commands.length - 1
-    let nextMolecule = finalMolecule
-    if (!isFinalCommand) {
-      const prefixPlan = {
-        ...plan,
-        expectedRevision: undefined,
-        commands: plan.commands.slice(0, commandIndex + 1),
-      }
-      const prefixResult = replayEditPlan(initialMolecule, prefixPlan, { objectId })
-      if (!prefixResult.ok) {
-        throw new Error(`无法为命令 ${commandIndex + 1} 生成 production effect receipt`)
-      }
-      nextMolecule = prefixResult.molecule
-    }
-    const before = createCanonicalMoleculeSnapshot(previousMolecule)
-    const after = createCanonicalMoleculeSnapshot(nextMolecule)
-    const command = plan.commands[commandIndex]
-    commands.push({
-      commandId: command.commandId,
-      kind: command.kind,
+function createProductionEffectReceipt(trace, plan) {
+  const baseSnapshot = createCanonicalMoleculeSnapshot(
+    trace.steps[0]?.before ?? trace.result.molecule,
+  )
+  const commands = trace.steps.map(step => {
+    const before = createCanonicalMoleculeSnapshot(step.before)
+    const after = createCanonicalMoleculeSnapshot(step.after)
+    return {
+      commandId: step.commandId,
+      kind: step.commandKind,
       preDigest: computeCanonicalSnapshotDigest(before),
       postDigest: computeCanonicalSnapshotDigest(after),
       changes: createCanonicalEffectChanges(before, after),
-    })
-    previousMolecule = nextMolecule
-  }
-  const finalSnapshot = createCanonicalMoleculeSnapshot(finalMolecule)
+    }
+  })
+  const finalSnapshot = createCanonicalMoleculeSnapshot(trace.result.molecule)
   return {
     schemaVersion: 1,
     planId: plan.planId,
@@ -243,7 +227,10 @@ async function main() {
   const plan = withEnforcedConstraints(submittedPlan, fixedAtomIds)
   const enforcedPlanText = `${JSON.stringify(plan, null, 2)}\n`
   const expectedEffect = compileExpectedEffect(initial.molecule, plan)
-  const result = replayEditPlan(initial.molecule, plan, { objectId: initial.objectId })
+  const replayTrace = replayEditPlanTrace(initial.molecule, plan, {
+    objectId: initial.objectId,
+  })
+  const result = replayTrace.result
   const receipt = {
     schemaVersion: EXECUTOR_SCHEMA_VERSION,
     executor: EXECUTOR_ID,
@@ -274,12 +261,7 @@ async function main() {
   }
 
   const expectedEffectText = `${JSON.stringify(expectedEffect, null, 2)}\n`
-  const actualEffectReceipt = createProductionEffectReceipt(
-    initial.molecule,
-    result.molecule,
-    plan,
-    initial.objectId,
-  )
+  const actualEffectReceipt = createProductionEffectReceipt(replayTrace, plan)
   const productionResultDigest = computeCanonicalSnapshotDigest(
     createCanonicalMoleculeSnapshot(result.molecule),
   )

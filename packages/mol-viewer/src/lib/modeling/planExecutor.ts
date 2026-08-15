@@ -33,6 +33,7 @@ import type {
   EditCommandWithSelectionResult,
 } from '../builder/commands/shared'
 import { createModelingChangeSet } from './changeSet'
+import { cloneModelingMolecule } from './context'
 import {
   validateModelingCommandConstraints,
   validateModelingConstraintInvariants,
@@ -51,6 +52,18 @@ import { computeMoleculeRevision } from './revision'
 interface WorkingState {
   readonly molecule: Molecule
   readonly selection: CommandSelectionState
+}
+
+export interface ModelingPlanTraceStep {
+  readonly commandId: string
+  readonly commandKind: ModelingCommand['kind']
+  readonly before: Molecule
+  readonly after: Molecule
+}
+
+export interface ModelingPlanTraceResult {
+  readonly result: ModelingDryRunResult
+  readonly steps: readonly ModelingPlanTraceStep[]
 }
 
 type CommandExecutionResult =
@@ -488,9 +501,10 @@ function invalidResult(
   return { ok: false, changed: false, targetObjectId, baseRevision, issues }
 }
 
-export function dryRunEditPlan(
+function dryRunEditPlanInternal(
   context: ModelingContext,
   input: EditPlan | unknown,
+  traceSteps?: ModelingPlanTraceStep[],
 ): ModelingDryRunResult {
   const parsed = parseEditPlan(input)
   if (parsed.ok === false) return invalidResult(null, null, parsed.issues)
@@ -630,6 +644,7 @@ export function dryRunEditPlan(
     }
     const previousAtomIds = new Set(state.molecule.atoms.map(atom => atom.id))
     const previousBondIds = new Set(state.molecule.bonds.map(bond => bond.id))
+    const before = traceSteps ? cloneModelingMolecule(state.molecule) : null
     const result = executeCommand(state, command)
     if (result.ok === false) {
       const code = result.reason.startsWith('未知元素')
@@ -678,6 +693,14 @@ export function dryRunEditPlan(
     }
     changed ||= result.changed
     state = result.state
+    if (traceSteps && before) {
+      traceSteps.push({
+        commandId: command.commandId,
+        commandKind: command.kind,
+        before,
+        after: cloneModelingMolecule(state.molecule),
+      })
+    }
     for (const atom of state.molecule.atoms) {
       if (!previousAtomIds.has(atom.id)) scopedAtomIds?.add(atom.id)
     }
@@ -700,4 +723,21 @@ export function dryRunEditPlan(
     changes: createModelingChangeSet(target.molecule, state.molecule),
     issues,
   }
+}
+
+export function dryRunEditPlan(
+  context: ModelingContext,
+  input: EditPlan | unknown,
+): ModelingDryRunResult {
+  return dryRunEditPlanInternal(context, input)
+}
+
+/** Internal one-pass execution trace used by trusted headless adapters. */
+export function dryRunEditPlanWithTrace(
+  context: ModelingContext,
+  input: EditPlan | unknown,
+): ModelingPlanTraceResult {
+  const steps: ModelingPlanTraceStep[] = []
+  const result = dryRunEditPlanInternal(context, input, steps)
+  return { result, steps: result.ok ? steps : [] }
 }

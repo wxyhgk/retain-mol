@@ -36,10 +36,12 @@ export {
   modelingConstraintsSchema,
   parseEditPlan,
   replayEditPlan,
+  replayEditPlanTrace,
   isExpectedEffectCommandSupported,
   validateModelingCommandConstraints,
   validateModelingConstraintInvariants,
   validateModelingConstraints,
+  verifyRotateGroupRelation,
 } from '../lib/modeling'
 export type {
   EditPlan,
@@ -63,6 +65,8 @@ export type {
   ExpectedEffectSupportedCommand,
   ExpectedEffectSupportedCommandKind,
   HeadlessModelingOptions,
+  HeadlessModelingTraceResult,
+  HeadlessModelingTraceStep,
   ModelingChangeSet,
   ModelingCommand,
   ModelingCommandBase,
@@ -84,6 +88,11 @@ export type {
   ModelingResultBase,
   ModelingSelectionContext,
   ModelingScope,
+  RotateGroupCommand,
+  RotateGroupRelation,
+  RotateGroupRelationDiagnostic,
+  RotateGroupRelationDiagnosticCode,
+  RotateGroupVerificationResult,
 } from '../lib/modeling'
 export type { Atom, Bond, Molecule } from '../lib/molecule'
 export type {

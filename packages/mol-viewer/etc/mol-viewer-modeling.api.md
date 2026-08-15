@@ -490,6 +490,32 @@ export interface HeadlessModelingOptions {
 }
 
 // @public (undocumented)
+export type HeadlessModelingTraceResult = {
+    readonly ok: true;
+    readonly result: Extract<ModelingDryRunResult, {
+        readonly ok: true;
+    }>;
+    readonly steps: readonly HeadlessModelingTraceStep[];
+} | {
+    readonly ok: false;
+    readonly result: Extract<ModelingDryRunResult, {
+        readonly ok: false;
+    }>;
+};
+
+// @public (undocumented)
+export interface HeadlessModelingTraceStep {
+    // (undocumented)
+    readonly after: Molecule;
+    // (undocumented)
+    readonly before: Molecule;
+    // (undocumented)
+    readonly commandId: string;
+    // (undocumented)
+    readonly commandKind: EditPlan['commands'][number]['kind'];
+}
+
+// @public (undocumented)
 export function isExpectedEffectCommandSupported(kind: ModelingCommandKind): kind is ExpectedEffectSupportedCommand['kind'];
 
 // @public (undocumented)
@@ -923,6 +949,57 @@ export function parseEditPlan(input: unknown): EditPlanParseResult;
 export function replayEditPlan(molecule: Molecule, input: EditPlan | unknown, options?: HeadlessModelingOptions): ModelingDryRunResult;
 
 // @public
+export function replayEditPlanTrace(molecule: Molecule, input: EditPlan | unknown, options?: HeadlessModelingOptions): HeadlessModelingTraceResult;
+
+// @public (undocumented)
+export type RotateGroupCommand = Extract<ModelingCommand, {
+    readonly kind: 'geometry.rotateGroup';
+}>;
+
+// @public
+export interface RotateGroupRelation {
+    // (undocumented)
+    readonly angleDegrees: number;
+    readonly axisAtomIds: readonly [commandOriginAtomId: string, commandDirectionAtomId: string];
+    // (undocumented)
+    readonly commandId: string;
+    readonly fixedAtomIds: readonly string[];
+    // (undocumented)
+    readonly fixedAxisAtomId: string;
+    // (undocumented)
+    readonly kind: 'rotate-group';
+    readonly movingAtomIds: readonly string[];
+    // (undocumented)
+    readonly movingAxisAtomId: string;
+    readonly radialAtomId: string;
+}
+
+// @public (undocumented)
+export interface RotateGroupRelationDiagnostic {
+    // (undocumented)
+    readonly atomId?: string;
+    // (undocumented)
+    readonly atomId2?: string;
+    // (undocumented)
+    readonly code: RotateGroupRelationDiagnosticCode;
+    // (undocumented)
+    readonly message: string;
+}
+
+// @public (undocumented)
+export type RotateGroupRelationDiagnosticCode = 'invalid-before-graph' | 'invalid-command' | 'axis-not-single-bond' | 'axis-not-bridge' | 'moving-side-incomplete' | 'moving-side-ambiguous' | 'degenerate-axis' | 'no-radial-witness' | 'numeric-uncertainty' | 'graph-changed' | 'non-coordinate-field-changed' | 'fixed-side-moved' | 'axis-endpoint-moved' | 'moving-side-not-rigid' | 'rotation-mismatch' | 'angle-mismatch';
+
+// @public (undocumented)
+export type RotateGroupVerificationResult = {
+    readonly verdict: 'pass';
+    readonly relation: RotateGroupRelation;
+} | {
+    readonly verdict: 'reject' | 'indeterminate';
+    readonly diagnostic: RotateGroupRelationDiagnostic;
+    readonly relation?: RotateGroupRelation;
+};
+
+// @public
 export function validateModelingCommandConstraints(command: ModelingCommand, constraints: ModelingConstraints | undefined): ModelingIssue | null;
 
 // @public
@@ -930,6 +1007,9 @@ export function validateModelingConstraintInvariants(before: Molecule, after: Mo
 
 // @public
 export function validateModelingConstraints(molecule: Molecule, constraints: ModelingConstraints | undefined): readonly ModelingIssue[];
+
+// @public (undocumented)
+export function verifyRotateGroupRelation(before: Molecule, after: Molecule, command: RotateGroupCommand): RotateGroupVerificationResult;
 
 // @public (undocumented)
 export interface ViewerRuntime {

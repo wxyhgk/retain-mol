@@ -7,7 +7,8 @@ import {
   type ModelingDryRunResult,
   type ModelingEditorIntentContext,
 } from './contracts'
-import { dryRunEditPlan } from './planExecutor'
+import { cloneModelingMolecule } from './context'
+import { dryRunEditPlan, dryRunEditPlanWithTrace } from './planExecutor'
 import { computeMoleculeRevision } from './revision'
 
 export const HEADLESS_MODELING_OBJECT_ID = 'headless-modeling-object'
@@ -22,26 +23,23 @@ export interface HeadlessModelingOptions {
   readonly editorIntent?: Partial<ModelingEditorIntentContext>
 }
 
-function cloneMolecule(molecule: Molecule): Molecule {
-  return {
-    ...(molecule.name === undefined ? {} : { name: molecule.name }),
-    atoms: molecule.atoms.map(atom => ({
-      ...atom,
-      ...(atom.coordinationDirections
-        ? { coordinationDirections: atom.coordinationDirections.map(direction => [...direction] as const) }
-        : {}),
-      ...(atom.coordinationSites
-        ? { coordinationSites: atom.coordinationSites.map(site => ({ ...site, direction: [...site.direction] as const })) }
-        : {}),
-    })),
-    bonds: molecule.bonds.map(bond => ({
-      ...bond,
-      ...(bond.coordinationSites
-        ? { coordinationSites: bond.coordinationSites.map(site => ({ ...site })) }
-        : {}),
-    })),
-  }
+export interface HeadlessModelingTraceStep {
+  readonly commandId: string
+  readonly commandKind: EditPlan['commands'][number]['kind']
+  readonly before: Molecule
+  readonly after: Molecule
 }
+
+export type HeadlessModelingTraceResult =
+  | {
+      readonly ok: true
+      readonly result: Extract<ModelingDryRunResult, { readonly ok: true }>
+      readonly steps: readonly HeadlessModelingTraceStep[]
+    }
+  | {
+      readonly ok: false
+      readonly result: Extract<ModelingDryRunResult, { readonly ok: false }>
+    }
 
 /**
  * Build the same serializable modeling context used by the viewer without
@@ -51,7 +49,7 @@ export function createHeadlessModelingContext(
   input: Molecule,
   options: HeadlessModelingOptions = {},
 ): ModelingContext {
-  const molecule = cloneMolecule(input)
+  const molecule = cloneModelingMolecule(input)
   const objectId = options.objectId ?? HEADLESS_MODELING_OBJECT_ID
   return {
     schemaVersion: MODELING_SCHEMA_VERSION,
@@ -89,4 +87,22 @@ export function replayEditPlan(
   options: HeadlessModelingOptions = {},
 ): ModelingDryRunResult {
   return dryRunEditPlan(createHeadlessModelingContext(molecule, options), input)
+}
+
+/**
+ * Replay a complete plan and expose the validated state transition produced by
+ * each command. Invalid plans never publish a partial trace.
+ */
+export function replayEditPlanTrace(
+  molecule: Molecule,
+  input: EditPlan | unknown,
+  options: HeadlessModelingOptions = {},
+): HeadlessModelingTraceResult {
+  const traced = dryRunEditPlanWithTrace(
+    createHeadlessModelingContext(molecule, options),
+    input,
+  )
+  const result = traced.result
+  if (result.ok === false) return { ok: false, result }
+  return { ok: true, result, steps: traced.steps }
 }

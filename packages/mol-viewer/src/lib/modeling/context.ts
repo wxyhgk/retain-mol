@@ -9,7 +9,7 @@ import {
 } from './contracts'
 import { computeMoleculeRevision } from './revision'
 
-function cloneMolecule(molecule: Molecule): Molecule {
+export function cloneModelingMolecule(molecule: Molecule): Molecule {
   return {
     ...(molecule.name === undefined ? {} : { name: molecule.name }),
     atoms: molecule.atoms.map(atom => ({
@@ -31,7 +31,7 @@ function cloneMolecule(molecule: Molecule): Molecule {
 }
 
 function toObjectContext(object: SceneObject) {
-  const molecule = cloneMolecule(object.molecule)
+  const molecule = cloneModelingMolecule(object.molecule)
   return {
     objectId: object.id,
     name: object.name,
@@ -76,4 +76,3 @@ export function createModelingContext(
     capabilities: [...MODELING_COMMAND_KINDS],
   }
 }
-
