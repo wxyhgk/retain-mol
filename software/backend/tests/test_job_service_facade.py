@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 
 from software.backend.jobs.service import JobService
+from software.backend.jobs.service_components import JobServiceComponentAccess
 from software.backend.jobs.service_job_data import JobDataServiceApi
 from software.backend.jobs.service_job_definitions import JobDefinitionServiceApi
 from software.backend.jobs.service_job_execution import JobExecutionServiceApi
 from software.backend.jobs.service_job_records import JobRecordServiceApi
 from software.backend.jobs.service_jobs import JobServiceApi
-from software.backend.jobs.service_composition import JobServiceComponentAccess
 from software.backend.jobs.service_molecules import MoleculeServiceApi
 from software.backend.jobs.service_workflows import WorkflowServiceApi
 

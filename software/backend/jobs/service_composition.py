@@ -1,9 +1,9 @@
-"""Dependency composition for the route-facing job service."""
+"""Build the dependency graph used by the route-facing job service."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
 from pathlib import Path
+
 from .artifact_manager import ArtifactManager
 from .artifact_storage import ArtifactStorage
 from .dispatching import JobDispatchCoordinator
@@ -18,60 +18,10 @@ from .legacy_inputs import LegacyJobInputManager
 from .lifecycle import JobLifecycle
 from .molecule_assets import MoleculeAssetManager
 from .repository import JobRepository
+from .service_components import JobServiceComponents
 from .workflow_definitions import WorkflowDefinitionManager
 from .workflow_runtime import WorkflowRuntimeCoordinator
 from .workflow_templates import WorkflowTemplateManager
-
-
-@dataclass(frozen=True)
-class JobServiceComponents:
-    """Concrete managers owned by one :class:`JobService` instance."""
-
-    data_root: Path
-    workspace: JobWorkspace
-    artifact_storage: ArtifactStorage
-    repository: JobRepository
-    job_queries: JobQueryManager
-    artifact_manager: ArtifactManager
-    molecule_assets: MoleculeAssetManager
-    input_resolver: JobInputResolver
-    job_creation: JobCreationManager
-    job_submission: JobSubmissionManager
-    lifecycle: JobLifecycle
-    job_operations: JobOperationsManager
-    dispatches: JobDispatchCoordinator
-    job_runtime: JobRuntimeManager
-    legacy_inputs: LegacyJobInputManager
-    workflow_definitions: WorkflowDefinitionManager
-    workflow_templates: WorkflowTemplateManager
-    workflow_runtime: WorkflowRuntimeCoordinator
-
-
-class JobServiceComponentAccess:
-    """Typed component attributes shared by the service capability mixins."""
-
-    data_root: Path
-    workspace: JobWorkspace
-    artifact_storage: ArtifactStorage
-    repository: JobRepository
-    job_queries: JobQueryManager
-    artifact_manager: ArtifactManager
-    molecule_assets: MoleculeAssetManager
-    input_resolver: JobInputResolver
-    job_creation: JobCreationManager
-    job_submission: JobSubmissionManager
-    lifecycle: JobLifecycle
-    job_operations: JobOperationsManager
-    dispatches: JobDispatchCoordinator
-    job_runtime: JobRuntimeManager
-    legacy_inputs: LegacyJobInputManager
-    workflow_definitions: WorkflowDefinitionManager
-    workflow_templates: WorkflowTemplateManager
-    workflow_runtime: WorkflowRuntimeCoordinator
-
-    def _bind_components(self, components: JobServiceComponents) -> None:
-        for field in fields(components):
-            setattr(self, field.name, getattr(components, field.name))
 
 
 def build_job_service_components(data_root: Path) -> JobServiceComponents:

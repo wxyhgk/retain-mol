@@ -5,10 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .service_composition import (
-    JobServiceComponentAccess,
-    build_job_service_components,
-)
+from .service_components import JobServiceComponentAccess
+from .service_composition import build_job_service_components
 from .service_jobs import JobServiceApi
 from .service_molecules import MoleculeServiceApi
 from .service_workflows import WorkflowServiceApi
