@@ -84,8 +84,15 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
   距离和相对被替换 H 的出键方向满足系统证书，并重新检查完整候选的成键硬下限与非键碰撞。
   可信 policy 还绑定具体 command ID、被替换的终端 H/键和重原子连接端点，防止同一宿主上的
   目标混淆。
+- `PortTorsion V1` 使用宿主和客体各自的离轴径向原子，在共同的宿主到客体轴上验证离散有符号
+  扭转角；它要求候选拓扑良构，并在 V1 禁止非零原始 sign margin，避免证书随坐标尺度漂移。
+- `FragmentAttachPolicy` 在 `AtomPortMate` policy 之外固定可信宿主径向原子和期望离散扭转角；
+  `FragmentAttachWitness` 再将图改写、固定宿主、proper-rigid 客体与 `PortTorsion` 绑定成
+  同一个关系。候选不能改选同连通分量中的另一个宿主径向原子，也不能用自报角度让一个旋转后
+  的客体自洽通过；客体模板必须从 attach atom 全连通，其可信局部端口轴还必须与候选的
+  guest→host 成键轴对齐，避免只满足投影扭转角却整体倾斜的刚体候选。
 - `RelationTrace` 将受信 plan 身份、精确命令回执列表、逐步完整 before/after 快照和封闭的
-  `rotateGroup`/`AtomPortMate` witness 绑定在一起。Lean 递归证明每一步快照连续且 witness
+  `rotateGroup`/`FragmentAttachWitness` 绑定在一起。Lean 递归证明每一步快照连续且 witness
   成立，并拒绝空轨迹、摘要回显、断链快照和 command ID 重绑定。
 
 未形式化的内容：
@@ -99,9 +106,10 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
 - 连续浮点优化过程；
 - 量子化学能量、力和收敛性；
 - 同位素、完整立体标记和金属配位位点语义；
-- 通用键角、任意十进制二面角、平面性和已接入生产命令的完整 attachment local frame；
-- atom-port 的完整扭转角/端口径向对齐；当前第一版证明客体 proper rigid、宿主固定、连接距离和
-  离去键方向对齐，仍不能声称已证明用户期望的唯一绕键构象；
+- 通用键角、任意十进制二面角和平面性；`PortTorsion V1` 只支持系统生成的离散角带，不能证明
+  任意连续实数角，也不能从图片自动判断用户意图的唯一绕键构象；
+- 已接入生产命令和不可变模板 registry 的完整 attachment local frame；Lean 已有组合 witness，
+  但 runtime projector 在模板元数据、零角约定和 registry 摘要进入可信清单前仍不接受 attach；
 - 元素相关的范德华半径和周期边界条件。
 
 因此当前结论只能表述为“最终候选满足该版本化 GeometryPolicy”，不能表述为“Lean 已证明
@@ -168,14 +176,34 @@ receipt 顺序和完整快照链语义。当前已有一条只接受非空、纯
 运行时 projector：它从冻结的 initial、enforced plan 和 execution receipt 独立重放，不接受
 调用方内联 witness，并把每一步完整 canonical before/after、重新计算的摘要和固定 V1 几何
 策略投影给严格 JSON -> Lean 转换器。转换器再次核对运行时快照摘要、整数坐标投影、回执
-顺序、完整快照链及固定阈值，生成 `RelationTraceSemantics` 证明。转换器内部按信任边界拆成
-四层：`relation_trace_io.py` 负责受限文件读取与原子写入，
+顺序、完整快照链及固定阈值，生成 `RelationTraceSemantics` 证明。转换器不再从待证明 trace
+自身生成 `expectedIdentity` 和 `expectedReceipts`；调用它的受信任编排层必须另外提供 certificate
+request，预先固定 trace 原始字节 SHA-256、运行身份与逐命令回执。只篡改 trace、或重算 trace
+内部全部摘要，都会在生成 Lean 前被 request binding 拒绝。request 本身的 SHA-256 仍必须由
+最终 publication gate 或同等受信任的运行清单固定；转换器不把“调用方提供了 request”等同于
+request 已经可信。
+
+生成的 Lean 文件使用 `RelationTraceCertificate`，把 request ID、request 原始字节 SHA-256、
+trace 原始字节 SHA-256、外部期望身份、期望回执和完整 trace 放入同一个检查命题。
+`relationTraceCertificateIsSatisfied` 会拒绝“外部期望摘要”和证书实际摘要不一致的文件，因此
+只修改证书一侧的摘要不能继续通过 `decide`。这仍不是 Lean 内部的 SHA-256 实现：若攻击者同时
+重写生成文件里的期望值和实际值，Lean 无法知道原始文件已经变化。最终 publication gate 必须
+从不可变 run manifest 取得 request 摘要，并对 request/trace 原始字节重新计算摘要后才允许发布。
+
+relation trace、certificate request、initial、enforced plan 和 execution receipt 都采用严格
+UTF-8、无 BOM 的字节协议。Node projector 与 Python converter 均在 JSON 解析前显式拒绝
+`EF BB BF`，避免一端剥离 BOM、另一端将 BOM 计入摘要或拒绝解析的跨运行时歧义。
+
+转换器内部按信任边界拆成五层：`relation_trace_io.py` 负责受限文件读取与原子写入，
 `relation_trace_runtime.py` 负责 canonical runtime 快照、摘要与整数坐标投影，
 `relation_trace_contract.py` 负责 receipt/witness/trace 连续性，入口
+`relation_trace_request.py` 负责外部期望身份和 trace 字节绑定，
 `relation_trace_json_to_lean.py` 只负责编排验证并生成 Lean 文本。
 
 该切片仍未接入最终 publication gate，也不会把 executor 当前的 `indeterminate` 自动升级成
-生产 `pass`；`fragment.attach` 仍不在这条 projector 能力内。开发验证命令：
+生产 `pass`；`fragment.attach` 虽有 Lean 组合关系，但仍不在 runtime projector 能力内。其开放
+前至少要固定宿主径向、模板客体径向、proper-rigid 手性见证、零角约定和 registry/profile 摘要，
+且这些身份必须由外部 certificate request 或不可变 run manifest 绑定。开发验证命令：
 
 ```bash
 node tools/ai_modeling_loop/relation_trace_projector.mjs \
@@ -185,10 +213,38 @@ node tools/ai_modeling_loop/relation_trace_projector.mjs \
   --output relation-trace.json
 
 python3 formal/geometry/tools/relation_trace_json_to_lean.py \
-  relation-trace.json GeneratedRelationTrace.lean
+  relation-trace.json relation-trace-request.json GeneratedRelationTrace.lean \
+  --expected-request-sha256 <immutable-run-manifest 中预先固定的 request SHA-256>
 
 cd formal/geometry
 lake env lean GeneratedRelationTrace.lean
+```
+
+`relation-trace-request.json` 的最小结构如下。该文件不能通过读取 trace 后在同一不受信任步骤中
+临时生成；`requestId` 和 request 文件摘要必须先进入不可变 run manifest，再通过 CLI 的
+`--expected-request-sha256` 传入。转换器在解析 request JSON 前按原始字节校验该摘要：
+
+```json
+{
+  "schemaVersion": 1,
+  "requestId": "run-id:relation-trace",
+  "relationTraceSha256": "<trace 原始字节的 SHA-256>",
+  "expectedIdentity": {
+    "projectionVersion": "runtime-rotate-relation-trace-v1",
+    "planId": "<冻结 plan id>",
+    "enforcedPlanSha256": "<冻结 enforced plan 的 SHA-256>",
+    "baseDigest": "canonical-v2:sha256:<...>",
+    "finalDigest": "canonical-v2:sha256:<...>"
+  },
+  "expectedReceipts": [
+    {
+      "commandId": "<冻结 command id>",
+      "commandKind": "geometry.rotateGroup",
+      "preDigest": "canonical-v2:sha256:<...>",
+      "postDigest": "canonical-v2:sha256:<...>"
+    }
+  ]
+}
 ```
 
 ## 运行

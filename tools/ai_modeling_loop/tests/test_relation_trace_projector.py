@@ -11,6 +11,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXECUTOR = REPO_ROOT / "tools" / "ai_modeling_loop" / "retainmol_executor.mjs"
 PROJECTOR = REPO_ROOT / "tools" / "ai_modeling_loop" / "relation_trace_projector.mjs"
+PROJECTOR_IO = REPO_ROOT / "tools" / "ai_modeling_loop" / "relation_trace_projector_io.mjs"
 MODELING_DIST = REPO_ROOT / "packages" / "mol-viewer" / "dist" / "public" / "modeling.js"
 
 
@@ -230,6 +231,60 @@ class RelationTraceProjectorTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 3, completed.stderr)
             self.assertEqual(json.loads(output.read_text())["code"], "invalid-input-file")
 
+    def test_io_module_parses_cli_arguments_and_rejects_duplicates(self) -> None:
+        script = f"""
+          import {{ parseArgs }} from {json.dumps(PROJECTOR_IO.as_uri())}
+          const parsed = parseArgs([
+            '--initial', 'initial.json',
+            '--enforced-plan', 'plan.json',
+            '--execution-receipt', 'receipt.json',
+            '--output', 'trace.json',
+          ])
+          if (parsed['enforced-plan'] !== 'plan.json') process.exit(2)
+          try {{
+            parseArgs([
+              '--initial', 'first.json', '--initial', 'second.json',
+              '--enforced-plan', 'plan.json',
+              '--execution-receipt', 'receipt.json',
+              '--output', 'trace.json',
+            ])
+            process.exit(3)
+          }} catch (error) {{
+            if (error.message !== '重复参数：--initial') process.exit(4)
+          }}
+        """
+        completed = subprocess.run(
+            ["node", "--input-type=module", "-e", script],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_io_module_rejects_utf8_bom_for_every_projector_input(self) -> None:
+        script = f"""
+          import {{ decodeUtf8, RelationTraceInputFileError }} from {json.dumps(PROJECTOR_IO.as_uri())}
+          const bomDocument = Uint8Array.from([0xef, 0xbb, 0xbf, 0x7b, 0x7d])
+          for (const label of ['initial', 'enforced plan', 'execution receipt']) {{
+            try {{
+              decodeUtf8(bomDocument, label)
+              process.exit(2)
+            }} catch (error) {{
+              if (!(error instanceof RelationTraceInputFileError)) process.exit(3)
+              if (error.code !== 'invalid-utf8') process.exit(4)
+            }}
+          }}
+        """
+        completed = subprocess.run(
+            ["node", "--input-type=module", "-e", script],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
     def test_strict_json_uses_own_fields_and_rejects_unsafe_numbers(self) -> None:
         script = """
           import { parseStrictJson } from './tools/ai_modeling_loop/strict_json.mjs'
@@ -323,6 +378,57 @@ class RelationTraceProjectorTests(unittest.TestCase):
             completed = self.project(paths, output)
             self.assertEqual(completed.returncode, 4, completed.stderr)
             self.assertEqual(json.loads(output.read_text())["code"], "no-handedness-witness")
+
+    def test_marks_coordinate_on_quantization_tie_indeterminate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            molecule = molecule_payload()
+            molecule["atoms"][0]["x"] = 0.0005
+            paths = self.create_executor_artifacts(root, molecule=molecule)
+            output = root / "relation-trace.json"
+            completed = self.project(paths, output)
+            self.assertEqual(completed.returncode, 4, completed.stderr)
+            self.assertEqual(json.loads(output.read_text())["code"], "quantization-boundary")
+
+    def test_rejects_invalid_utf8_before_json_or_digest_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = self.create_executor_artifacts(root)
+            paths["initial"].write_bytes(b"\xff")
+            output = root / "relation-trace.json"
+            completed = self.project(paths, output)
+            self.assertEqual(completed.returncode, 3, completed.stderr)
+            self.assertEqual(json.loads(output.read_text())["code"], "invalid-utf8")
+
+    def test_rejects_oversized_molecule_before_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initial = root / "initial.json"
+            plan = root / "plan.json"
+            receipt = root / "receipt.json"
+            initial.write_text(json.dumps({
+                "schemaVersion": 1,
+                "objectId": "relation:molecule",
+                "molecule": {
+                    "atoms": [
+                        {"id": f"A{index}", "symbol": "C", "x": index, "y": 0, "z": 0}
+                        for index in range(317)
+                    ],
+                    "bonds": [],
+                },
+            }))
+            plan.write_text(json.dumps(rotate_plan()))
+            receipt.write_text("{}")
+            output = root / "relation-trace.json"
+            completed = subprocess.run([
+                "node", str(PROJECTOR),
+                "--initial", str(initial),
+                "--enforced-plan", str(plan),
+                "--execution-receipt", str(receipt),
+                "--output", str(output),
+            ], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10)
+            self.assertEqual(completed.returncode, 4, completed.stderr)
+            self.assertEqual(json.loads(output.read_text())["code"], "resource-limit")
 
 
 if __name__ == "__main__":

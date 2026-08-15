@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash, randomBytes } from 'node:crypto'
-import { constants } from 'node:fs'
-import { mkdir, open, rename, stat, unlink } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -16,16 +14,25 @@ import {
   verifyRotateGroupRelation,
 } from '@retainmol/mol-viewer/modeling'
 import { StrictJsonError, parseStrictJson } from './strict_json.mjs'
+import {
+  RelationTraceInputFileError,
+  assertOutputIsNotInput,
+  decodeUtf8,
+  parseArgs,
+  readBoundedRegularBytes,
+  writeBoundedAtomic,
+} from './relation_trace_projector_io.mjs'
 
 export const RELATION_TRACE_PROJECTION_VERSION = 'runtime-rotate-relation-trace-v1'
 export const RELATION_TRACE_COORDINATE_SCALE = 1000
 
 const SUPPORTED_KIND = 'geometry.rotateGroup'
-const MAX_INPUT_BYTES = 16 * 1024 * 1024
-const MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 const MAX_RELATION_ATOMS = 316
+const MAX_RELATION_BONDS = 1000
 const MAX_TRACE_STEPS = 512
+const MAX_TRACE_ATOM_STEPS = 50_000
 const MAX_SAFE_COORDINATE_UNIT = 1_000_000_000
+const QUANTIZATION_TIE_GUARD = 1e-9
 const MIN_AXIS_SQUARED = 100_000n
 const MIN_AREA_SQUARED = 10_000_000_000n
 const MIN_ABS_VOLUME6 = 100_000_000n
@@ -112,85 +119,14 @@ function parseJson(text, label) {
   }
 }
 
-async function readBoundedRegularFile(filePath, label) {
-  let handle
-  try {
-    handle = await open(filePath, constants.O_RDONLY | constants.O_NONBLOCK)
-    const metadata = await handle.stat()
-    if (!metadata.isFile()) reject('invalid-input-file', label + ' 必须是普通文件')
-    if (metadata.size > MAX_INPUT_BYTES) {
-      reject('input-too-large', label + ' 超过 ' + MAX_INPUT_BYTES + ' 字节')
-    }
-    const chunks = []
-    let total = 0
-    while (total <= MAX_INPUT_BYTES) {
-      const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, MAX_INPUT_BYTES + 1 - total))
-      const { bytesRead } = await handle.read(chunk, 0, chunk.length, null)
-      if (bytesRead === 0) break
-      chunks.push(chunk.subarray(0, bytesRead))
-      total += bytesRead
-    }
-    if (total > MAX_INPUT_BYTES) {
-      reject('input-too-large', label + ' 超过 ' + MAX_INPUT_BYTES + ' 字节')
-    }
-    return Buffer.concat(chunks, total).toString('utf8')
-  } catch (error) {
-    if (error instanceof RelationTraceProjectionError) throw error
-    reject(
-      'invalid-input-file',
-      label + ' 无法安全读取：' + (error instanceof Error ? error.message : error),
-    )
-  } finally {
-    await handle?.close()
-  }
-}
-
-async function assertOutputIsNotInput(outputPath, inputPaths) {
-  let outputIdentity
-  try {
-    outputIdentity = await stat(outputPath)
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error
-    return
-  }
-  for (const inputPath of inputPaths) {
-    const inputIdentity = await stat(inputPath)
-    if (outputIdentity.dev === inputIdentity.dev && outputIdentity.ino === inputIdentity.ino) {
-      throw new Error('--output 不得覆盖或别名引用任何输入文件')
-    }
-  }
-}
-
-async function writeBoundedAtomic(outputPath, value) {
-  const encoded = Buffer.from(JSON.stringify(value, null, 2) + '\n')
-  if (encoded.byteLength > MAX_OUTPUT_BYTES) {
-    throw new Error('relation trace 输出超过 ' + MAX_OUTPUT_BYTES + ' 字节')
-  }
-  await mkdir(path.dirname(outputPath), { recursive: true })
-  const temporaryPath = path.join(
-    path.dirname(outputPath),
-    '.' + path.basename(outputPath) + '.' + process.pid + '.'
-      + randomBytes(8).toString('hex') + '.tmp',
-  )
-  let handle
-  try {
-    handle = await open(temporaryPath, 'wx', 0o600)
-    await handle.writeFile(encoded)
-    await handle.sync()
-    await handle.close()
-    handle = undefined
-    await rename(temporaryPath, outputPath)
-  } finally {
-    await handle?.close()
-    await unlink(temporaryPath).catch(error => {
-      if (error?.code !== 'ENOENT') throw error
-    })
-  }
-}
-
 function quantizeCoordinate(value, label) {
   if (!Number.isFinite(value)) indeterminate('non-finite-coordinate', `${label} 不是有限数`)
-  const units = Math.round(value * RELATION_TRACE_COORDINATE_SCALE)
+  const scaled = value * RELATION_TRACE_COORDINATE_SCALE
+  const distanceToTie = Math.abs((scaled - Math.floor(scaled)) - 0.5)
+  if (distanceToTie <= QUANTIZATION_TIE_GUARD) {
+    indeterminate('quantization-boundary', `${label} 位于坐标量化边界的灰区`)
+  }
+  const units = Math.round(scaled)
   if (!Number.isSafeInteger(units) || Math.abs(units) > MAX_SAFE_COORDINATE_UNIT) {
     indeterminate('coordinate-out-of-range', `${label} 超出形式化投影的安全整数范围`)
   }
@@ -475,8 +411,8 @@ function validateReceipt(
   receipt,
   expected,
   expectedBaseRevision,
-  initialText,
-  enforcedPlanText,
+  initialBytes,
+  enforcedPlanBytes,
   initial,
   plan,
 ) {
@@ -490,8 +426,8 @@ function validateReceipt(
   ) {
     reject('receipt-status-mismatch', 'rotate-only V1 必须来自未发布产物的 indeterminate 执行回执')
   }
-  if (receipt.inputSha256 !== sha256(initialText)) reject('input-digest-mismatch', 'initial 文件摘要与回执不一致')
-  if (receipt.enforcedPlanSha256 !== sha256(enforcedPlanText)) reject('plan-digest-mismatch', 'enforced plan 文件摘要与回执不一致')
+  if (receipt.inputSha256 !== sha256(initialBytes)) reject('input-digest-mismatch', 'initial 文件摘要与回执不一致')
+  if (receipt.enforcedPlanSha256 !== sha256(enforcedPlanBytes)) reject('plan-digest-mismatch', 'enforced plan 文件摘要与回执不一致')
   if (receipt.targetObjectId !== initial.objectId || plan.targetObjectId !== initial.objectId) {
     reject('target-mismatch', 'initial、plan 与执行回执的目标对象不一致')
   }
@@ -502,11 +438,25 @@ function validateReceipt(
 }
 
 export async function projectRelationTrace({ initialPath, enforcedPlanPath, executionReceiptPath }) {
-  const [initialText, enforcedPlanText, receiptText] = await Promise.all([
-    readBoundedRegularFile(initialPath, 'initial'),
-    readBoundedRegularFile(enforcedPlanPath, 'enforced plan'),
-    readBoundedRegularFile(executionReceiptPath, 'execution receipt'),
-  ])
+  let initialBytes
+  let enforcedPlanBytes
+  let receiptBytes
+  let initialText
+  let enforcedPlanText
+  let receiptText
+  try {
+    [initialBytes, enforcedPlanBytes, receiptBytes] = await Promise.all([
+      readBoundedRegularBytes(initialPath, 'initial'),
+      readBoundedRegularBytes(enforcedPlanPath, 'enforced plan'),
+      readBoundedRegularBytes(executionReceiptPath, 'execution receipt'),
+    ])
+    initialText = decodeUtf8(initialBytes, 'initial')
+    enforcedPlanText = decodeUtf8(enforcedPlanBytes, 'enforced plan')
+    receiptText = decodeUtf8(receiptBytes, 'execution receipt')
+  } catch (error) {
+    if (error instanceof RelationTraceInputFileError) reject(error.code, error.message)
+    throw error
+  }
   const initial = requireObject(parseJson(initialText, 'initial'), 'initial')
   const objectId = requireNonEmptyString(initial.objectId, 'initial.objectId')
   const molecule = requireObject(initial.molecule, 'initial.molecule')
@@ -523,7 +473,21 @@ export async function projectRelationTrace({ initialPath, enforcedPlanPath, exec
     indeterminate('trace-too-large', 'relation trace v1 最多接受 ' + MAX_TRACE_STEPS + ' 个命令')
   }
 
-  const initialAtomIds = new Set(requireArray(molecule.atoms, 'initial.molecule.atoms').map(atom => atom.id))
+  const initialAtoms = requireArray(molecule.atoms, 'initial.molecule.atoms')
+  const initialBonds = requireArray(molecule.bonds, 'initial.molecule.bonds')
+  if (initialAtoms.length > MAX_RELATION_ATOMS || initialBonds.length > MAX_RELATION_BONDS) {
+    indeterminate(
+      'resource-limit',
+      `relation trace v1 最多接受 ${MAX_RELATION_ATOMS} 个原子和 ${MAX_RELATION_BONDS} 根键`,
+    )
+  }
+  if (initialAtoms.length * (plan.commands.length + 1) > MAX_TRACE_ATOM_STEPS) {
+    indeterminate(
+      'resource-limit',
+      `relation trace v1 原子-步骤预算不得超过 ${MAX_TRACE_ATOM_STEPS}`,
+    )
+  }
+  const initialAtomIds = new Set(initialAtoms.map(atom => atom.id))
   const fixedAtomIds = requireArray(initial.fixedAtomIds ?? [], 'initial.fixedAtomIds')
   if (new Set(fixedAtomIds).size !== fixedAtomIds.length) reject('duplicate-fixed-atom', 'initial.fixedAtomIds 包含重复项')
   for (const atomId of fixedAtomIds) {
@@ -546,8 +510,8 @@ export async function projectRelationTrace({ initialPath, enforcedPlanPath, exec
     externalReceipt,
     expectedReceipt,
     replay.result.baseRevision,
-    initialText,
-    enforcedPlanText,
+    initialBytes,
+    enforcedPlanBytes,
     initial,
     plan,
   )
@@ -599,7 +563,7 @@ export async function projectRelationTrace({ initialPath, enforcedPlanPath, exec
   const identity = {
     projectionVersion: RELATION_TRACE_PROJECTION_VERSION,
     planId: plan.planId,
-    enforcedPlanSha256: sha256(enforcedPlanText),
+    enforcedPlanSha256: sha256(enforcedPlanBytes),
     baseDigest: expectedReceipt.baseDigest,
     finalDigest: expectedReceipt.finalDigest,
   }
@@ -613,27 +577,6 @@ export async function projectRelationTrace({ initialPath, enforcedPlanPath, exec
     final: steps.at(-1).after,
     steps,
   }
-}
-
-function parseArgs(argv) {
-  const allowed = new Set(['initial', 'enforced-plan', 'execution-receipt', 'output'])
-  const values = new Map()
-  for (let index = 0; index < argv.length; index += 1) {
-    const name = argv[index]
-    const value = argv[index + 1]
-    if (!name?.startsWith('--') || !value || value.startsWith('--')) {
-      throw new Error(`无效参数：${name ?? ''}`)
-    }
-    const key = name.slice(2)
-    if (!allowed.has(key)) throw new Error('未知参数：--' + key)
-    if (values.has(key)) throw new Error('重复参数：--' + key)
-    values.set(key, value)
-    index += 1
-  }
-  for (const required of ['initial', 'enforced-plan', 'execution-receipt', 'output']) {
-    if (!values.has(required)) throw new Error(`缺少参数：--${required}`)
-  }
-  return Object.fromEntries(values)
 }
 
 async function main() {

@@ -22,6 +22,7 @@ from json_to_lean import (
 
 COORDINATE_SCALE = 1000
 MAX_ABS_COORDINATE_UNITS = 1_000_000_000
+QUANTIZATION_TIE_GUARD = 1e-9
 CANONICAL_DIGEST_PREFIX = "canonical-v2-sha256-"
 MAX_SAFE_INTEGER = (1 << 53) - 1
 
@@ -269,6 +270,14 @@ def _math_round(value: float) -> int:
     return math.floor(value + 0.5)
 
 
+def _quantize_coordinate(value: float, field: str) -> int:
+    scaled = value * COORDINATE_SCALE
+    distance_to_tie = abs((scaled - math.floor(scaled)) - 0.5)
+    if distance_to_tie <= QUANTIZATION_TIE_GUARD:
+        raise ValueError(f"{field} is inside the coordinate quantization boundary")
+    return _math_round(scaled)
+
+
 def project_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     aromatic_ids = {
         atom_id
@@ -277,7 +286,10 @@ def project_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
     atoms = []
     for atom in snapshot["atoms"]:
-        units = [_math_round(atom[axis] * COORDINATE_SCALE) for axis in ("x", "y", "z")]
+        units = [
+            _quantize_coordinate(atom[axis], f"runtime atom {atom['id']}.{axis}")
+            for axis in ("x", "y", "z")
+        ]
         if any(abs(value) > MAX_ABS_COORDINATE_UNITS for value in units):
             raise ValueError(f"runtime atom {atom['id']} exceeds formal coordinate limits")
         atoms.append({

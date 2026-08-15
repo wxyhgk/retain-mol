@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +14,18 @@ from json_to_lean import (
     lean_string,
 )
 from relation_trace_contract import validate_document
-from relation_trace_io import MAX_TRACE_BYTES, load_trace_payload, write_trace_output
+from relation_trace_io import (
+    MAX_TRACE_BYTES,
+    load_trace_document,
+    load_trace_payload,
+    parse_strict_json_bytes,
+    write_trace_output,
+)
+from relation_trace_request import (
+    load_trusted_request_document,
+    validate_request,
+    validate_request_digest,
+)
 
 
 def load_payload(path: Path) -> Any:
@@ -69,15 +81,45 @@ def render_witness(item: dict[str, Any], field: str) -> str:
     )
 
 
-def render_document(payload: Any) -> str:
+def render_document(
+    trace_bytes: bytes,
+    request_bytes: bytes,
+    expected_request_sha256: str,
+) -> str:
+    validate_request_digest(request_bytes, expected_request_sha256)
+    payload = parse_strict_json_bytes(trace_bytes, label="relation trace")
+    request_payload = parse_strict_json_bytes(
+        request_bytes,
+        label="certificate request",
+    )
     document = validate_document(payload)
-    identity = document["identity"]
+    request = validate_request(
+        request_payload,
+        trace_bytes=trace_bytes,
+        document=document,
+    )
+    identity = request["expectedIdentity"]
+    request_sha256 = hashlib.sha256(request_bytes).hexdigest()
+    trace_sha256 = request["relationTraceSha256"]
+    request_id = request["requestId"]
     receipt_names = [f"receipt{index}" for index in range(len(document["steps"]))]
     lines = [
-        "-- Generated from a strict trusted runtime relation trace. Do not edit by hand.",
+        "-- Generated from a runtime relation trace bound by an external certificate request.",
         "import RetainMolGeometry.RelationTrace",
         "",
         "open RetainMol.Geometry",
+        "",
+        "private def externallyExpectedCertificateIdentity : RelationTraceCertificateIdentity := {",
+        f"  requestId := {lean_string(request_id, 'certificateRequest.requestId')}",
+        f"  requestSha256 := {lean_string(request_sha256, 'certificateRequest.sha256')}",
+        f"  traceSha256 := {lean_string(trace_sha256, 'certificateRequest.relationTraceSha256')}",
+        "}",
+        "",
+        "private def certificateIdentity : RelationTraceCertificateIdentity := {",
+        f"  requestId := {lean_string(request_id, 'certificate.requestId')}",
+        f"  requestSha256 := {lean_string(request_sha256, 'certificate.requestSha256')}",
+        f"  traceSha256 := {lean_string(trace_sha256, 'certificate.traceSha256')}",
+        "}",
         "",
         "private def expectedIdentity : RelationTraceIdentity := {",
         f"  projectionVersion := {lean_string(identity['projectionVersion'], 'identity.projectionVersion')}",
@@ -88,7 +130,7 @@ def render_document(payload: Any) -> str:
         "}",
         "",
     ]
-    for index, item in enumerate(document["expectedReceipts"]):
+    for index, item in enumerate(request["expectedReceipts"]):
         lines.extend([
             f"private def {receipt_names[index]} : RelationCommandReceipt := "
             f"{render_receipt(item, f'expectedReceipts[{index}]')}",
@@ -126,11 +168,18 @@ def render_document(payload: Any) -> str:
         f"  steps := {lean_inline_list(step_names)}",
         "}",
         "",
-        "example : relationTraceIsSatisfied expectedIdentity expectedReceipts trace = true := by",
+        "private def certificate : RelationTraceCertificate := {",
+        "  certificateIdentity := certificateIdentity",
+        "  expectedIdentity := expectedIdentity",
+        "  expectedReceipts := expectedReceipts",
+        "  trace := trace",
+        "}",
+        "",
+        "example : relationTraceCertificateIsSatisfied externallyExpectedCertificateIdentity certificate = true := by",
         "  decide",
         "",
-        "example : RelationTraceSemantics expectedIdentity expectedReceipts trace := by",
-        "  apply relationTraceIsSatisfied_sound",
+        "example : RelationTraceCertificateSemantics externallyExpectedCertificateIdentity certificate := by",
+        "  apply relationTraceCertificateIsSatisfied_sound",
         "  decide",
         "",
     ])
@@ -139,11 +188,26 @@ def render_document(payload: Any) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path)
+    parser.add_argument("trace", type=Path)
+    parser.add_argument("request", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument(
+        "--expected-request-sha256",
+        required=True,
+        help="SHA-256 fixed by the immutable run manifest before request parsing",
+    )
     args = parser.parse_args()
-    rendered = render_document(load_payload(args.input))
-    write_trace_output(args.input, args.output, rendered)
+    trace_bytes, _payload = load_trace_document(args.trace)
+    request_bytes, _request_payload = load_trusted_request_document(
+        args.request,
+        args.expected_request_sha256,
+    )
+    rendered = render_document(
+        trace_bytes,
+        request_bytes,
+        args.expected_request_sha256,
+    )
+    write_trace_output([args.trace, args.request], args.output, rendered)
 
 
 if __name__ == "__main__":
