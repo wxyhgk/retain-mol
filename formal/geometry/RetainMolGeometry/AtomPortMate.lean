@@ -17,6 +17,7 @@ structure AtomPortMatePolicy where
   guestAttachAtomId : AtomId
   linkBondOrder : BondOrder := .single
   linkDistance : DistanceBound
+  linkDirection : DirectedSegmentAlignment
   guestRegion : ProperRigidRegion
 deriving Repr, DecidableEq, BEq
 
@@ -95,6 +96,11 @@ def atomPortMatePolicyIsWellFormed (policy : AtomPortMatePolicy) : Bool :=
       | some atom => atom.symbol != "H"
       | none => false) &&
     policy.linkDistance.atomId2 == policy.guestAttachAtomId &&
+    policy.linkDirection.referenceOriginAtomId == policy.linkDistance.atomId1 &&
+    policy.linkDirection.referenceTipAtomId == policy.expectedLeavingHydrogenAtomId &&
+    policy.linkDirection.candidateOriginAtomId == policy.linkDistance.atomId1 &&
+    policy.linkDirection.candidateTipAtomId == policy.guestAttachAtomId &&
+    directedSegmentAlignmentPolicyIsWellFormed policy.linkDirection &&
     decide (minimumBondSquared ≤ policy.linkDistance.minSquared ∧
       policy.linkDistance.minSquared ≤ policy.linkDistance.maxSquared) &&
     sameAtomIdSet policy.guestRegion.atomIds
@@ -133,6 +139,7 @@ def atomPortMateIsSatisfied
     retainedHostAtomsArePreserved reference candidate mate.rewrite &&
     properRigidRegionIsPreserved policy.guestReference candidate policy.guestRegion &&
     distanceBoundIsSatisfied candidate policy.linkDistance &&
+    directedSegmentAlignmentIsSatisfied reference candidate policy.linkDirection &&
     candidate.bonds.all (bondIsSeparated candidate) &&
     nonBondedCollisionFree candidate
 
@@ -146,6 +153,7 @@ def AtomPortMateSemantics
     retainedHostAtomsArePreserved reference candidate mate.rewrite = true ∧
     ProperRigidRegionSemantics policy.guestReference candidate policy.guestRegion ∧
     distanceBoundIsSatisfied candidate policy.linkDistance = true ∧
+    DirectedSegmentAlignmentSemantics reference candidate policy.linkDirection ∧
     candidate.bonds.all (bondIsSeparated candidate) = true ∧
     nonBondedCollisionFree candidate = true
 
@@ -157,13 +165,14 @@ theorem atomPortMateIsSatisfied_sound
     AtomPortMateSemantics reference candidate policy mate := by
   simp only [atomPortMateIsSatisfied, Bool.and_eq_true] at h
   rcases h with
-    ⟨⟨⟨⟨⟨⟨hWellFormed, hRewrite⟩, hHost⟩, hGuest⟩, hDistance⟩, hBonds⟩,
-      hCollision⟩
+    ⟨⟨⟨⟨⟨⟨⟨hWellFormed, hRewrite⟩, hHost⟩, hGuest⟩, hDistance⟩,
+      hDirection⟩, hBonds⟩, hCollision⟩
   exact ⟨hWellFormed,
     graphRewriteIsSatisfied_sound _ _ _ hRewrite,
     hHost,
     properRigidRegionIsPreserved_sound _ _ _ hGuest,
     hDistance,
+    directedSegmentAlignmentIsSatisfied_sound _ _ _ hDirection,
     hBonds,
     hCollision⟩
 

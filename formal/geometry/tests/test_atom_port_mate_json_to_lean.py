@@ -65,6 +65,8 @@ class AtomPortMateJsonToLeanTests(unittest.TestCase):
         self.assertIn("private def reference : MoleculeSnapshot", rendered)
         self.assertIn("private def candidate : MoleculeSnapshot", rendered)
         self.assertIn("linkBondOrder := .single", rendered)
+        self.assertIn("linkDirection :=", rendered)
+        self.assertIn("cosineSquared :=", rendered)
 
     def test_registered_c_sp3_c_single_case_passes(self):
         self.assertEqual(self.evaluate_request(self.valid_request()), {
@@ -72,7 +74,7 @@ class AtomPortMateJsonToLeanTests(unittest.TestCase):
             "scope": "atom-port-mate-v1",
         })
 
-    def test_registered_out_of_range_candidate_is_rejected(self):
+    def test_registered_sideways_candidate_is_rejected(self):
         request = self.valid_request()
         request["evidenceId"] = "c-sp3-c-single-reject-v1"
         request["evidenceSha256"] = atom_port_mate_json_to_lean.EVIDENCE_REGISTRY[

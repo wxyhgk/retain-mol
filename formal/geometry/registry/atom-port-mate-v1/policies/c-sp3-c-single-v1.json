@@ -25,6 +25,20 @@
     "minSquared": 2200000,
     "maxSquared": 2300000
   },
+  "linkDirection": {
+    "referenceOriginAtomId": "host:C",
+    "referenceTipAtomId": "host:H:leave",
+    "candidateOriginAtomId": "host:C",
+    "candidateTipAtomId": "guest:C:attach",
+    "cosineSign": "positive",
+    "signMargin": 0,
+    "cosineSquared": {
+      "loNum": 99,
+      "loDen": 100,
+      "hiNum": 1,
+      "hiDen": 1
+    }
+  },
   "guestRegion": {
     "atomIds": ["guest:C:attach", "guest:C:axis", "guest:C:radial", "guest:H:handed"],
     "frame": {

@@ -17,10 +17,10 @@
     "atoms": [
       {"atomId": "host:C", "symbol": "C", "positionUnits": [0, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
       {"atomId": "host:H:stay", "symbol": "H", "positionUnits": [-1000, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
-      {"atomId": "guest:C:attach", "symbol": "C", "positionUnits": [2500, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
-      {"atomId": "guest:C:axis", "symbol": "C", "positionUnits": [3500, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
-      {"atomId": "guest:C:radial", "symbol": "C", "positionUnits": [2500, 1000, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
-      {"atomId": "guest:H:handed", "symbol": "H", "positionUnits": [2500, 0, 1000], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false}
+      {"atomId": "guest:C:attach", "symbol": "C", "positionUnits": [0, 1500, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "guest:C:axis", "symbol": "C", "positionUnits": [0, 2500, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "guest:C:radial", "symbol": "C", "positionUnits": [-1000, 1500, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "guest:H:handed", "symbol": "H", "positionUnits": [0, 1500, 1000], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false}
     ],
     "bonds": [
       {"bondId": "host:C-H:stay", "atomId1": "host:C", "atomId2": "host:H:stay", "order": "single"},

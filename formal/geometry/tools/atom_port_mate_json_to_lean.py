@@ -47,7 +47,7 @@ class RegistryRecord:
 POLICY_REGISTRY = {
     "c-sp3-c-single-v1": RegistryRecord(
         "policies/c-sp3-c-single-v1.json",
-        "9a3d7c683545c9f9b5eaff8df03f14f394d86880280572d9732837f8755c8db0",
+        "d82b598d50e6ff68dc2b0be042393e13ca090a90ecc32ddb3bf5834d950a8be4",
     ),
 }
 
@@ -58,7 +58,7 @@ EVIDENCE_REGISTRY = {
     ),
     "c-sp3-c-single-reject-v1": RegistryRecord(
         "evidence/c-sp3-c-single-reject-v1.json",
-        "51fb82ec085626b73ebe63ef703cc51cf329858deb24ff49a10a39fc2b4ba64b",
+        "9e02050baa623d739ff934064ae25cf050396608fba32acd13a0a908b9808e86",
     ),
 }
 
@@ -118,6 +118,47 @@ def render_distance_bound(value: Any, field: str) -> str:
     )
 
 
+def render_ratio_band(value: Any, field: str) -> str:
+    band = strict_object(value, field, {"loNum", "loDen", "hiNum", "hiDen"})
+    lo_num = checked_int(band["loNum"], f"{field}.loNum", minimum=0)
+    lo_den = checked_int(band["loDen"], f"{field}.loDen", minimum=1)
+    hi_num = checked_int(band["hiNum"], f"{field}.hiNum", minimum=0)
+    hi_den = checked_int(band["hiDen"], f"{field}.hiDen", minimum=1)
+    if lo_num > lo_den or hi_num > hi_den:
+        raise ValueError(f"{field} bounds must lie in [0, 1]")
+    if lo_num * hi_den > hi_num * lo_den:
+        raise ValueError(f"{field} lower bound must not exceed upper bound")
+    return (
+        f"{{ loNum := {lo_num}, loDen := {lo_den}, "
+        f"hiNum := {hi_num}, hiDen := {hi_den} }}"
+    )
+
+
+def render_direction_alignment(value: Any, field: str) -> str:
+    alignment = strict_object(value, field, {
+        "referenceOriginAtomId", "referenceTipAtomId",
+        "candidateOriginAtomId", "candidateTipAtomId",
+        "cosineSign", "signMargin", "cosineSquared",
+    })
+    cosine_sign = checked_string(alignment["cosineSign"], f"{field}.cosineSign")
+    if cosine_sign not in {"negative", "nearZero", "positive"}:
+        raise ValueError(f"{field}.cosineSign is not supported")
+    return (
+        "{ referenceOriginAtomId := "
+        f"{lean_string(alignment['referenceOriginAtomId'], f'{field}.referenceOriginAtomId')}, "
+        "referenceTipAtomId := "
+        f"{lean_string(alignment['referenceTipAtomId'], f'{field}.referenceTipAtomId')}, "
+        "candidateOriginAtomId := "
+        f"{lean_string(alignment['candidateOriginAtomId'], f'{field}.candidateOriginAtomId')}, "
+        "candidateTipAtomId := "
+        f"{lean_string(alignment['candidateTipAtomId'], f'{field}.candidateTipAtomId')}, "
+        f"cosineSign := .{cosine_sign}, "
+        f"signMargin := {checked_int(alignment['signMargin'], f'{field}.signMargin', minimum=0)}, "
+        "cosineSquared := "
+        f"{render_ratio_band(alignment['cosineSquared'], f'{field}.cosineSquared')} }}"
+    )
+
+
 def render_frame(value: Any, field: str) -> str:
     frame = strict_object(value, field, {
         "originAtomId", "axisAtomId", "radialAtomId",
@@ -155,7 +196,7 @@ def render_policy(value: Any) -> tuple[str, dict[str, Any]]:
         "registryVersion", "policyId", "expectedCommandId",
         "expectedLeavingHydrogenAtomId", "expectedLeavingBondId",
         "guestReference", "guestAttachAtomId", "linkBondOrder",
-        "linkDistance", "guestRegion",
+        "linkDistance", "linkDirection", "guestRegion",
     })
     if checked_int(policy["registryVersion"], "policyRegistryEntry.registryVersion") != REGISTRY_VERSION:
         raise ValueError(f"policy registryVersion must be {REGISTRY_VERSION}")
@@ -176,6 +217,8 @@ def render_policy(value: Any) -> tuple[str, dict[str, Any]]:
         f"{lean_string(policy['guestAttachAtomId'], 'policyRegistryEntry.guestAttachAtomId')}",
         "  linkBondOrder := .single",
         f"  linkDistance := {render_distance_bound(policy['linkDistance'], 'policyRegistryEntry.linkDistance')}",
+        "  linkDirection := "
+        f"{render_direction_alignment(policy['linkDirection'], 'policyRegistryEntry.linkDirection')}",
         f"  guestRegion := {render_region(policy['guestRegion'], 'policyRegistryEntry.guestRegion')}",
         "}",
     ])

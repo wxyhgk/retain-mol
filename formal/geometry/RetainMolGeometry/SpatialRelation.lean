@@ -176,6 +176,93 @@ def signClassMatches (margin : Nat) (expected : SignClass) (value : Int) : Bool 
   | .positive => decide (Int.ofNat margin < value)
 
 /--
+Compare a directed segment in a reference snapshot with a directed segment in
+a candidate snapshot. The atom IDs may differ, which makes the relation useful
+across a graph rewrite such as replacing a terminal H with a fragment port.
+
+The comparison uses the dot-product sign and a rational band for cosine². It
+therefore needs neither floating-point normalisation nor inverse trigonometry.
+-/
+structure DirectedSegmentAlignment where
+  referenceOriginAtomId : AtomId
+  referenceTipAtomId : AtomId
+  candidateOriginAtomId : AtomId
+  candidateTipAtomId : AtomId
+  cosineSign : SignClass := .positive
+  signMargin : Nat := 0
+  cosineSquared : RatioBand
+deriving Repr, DecidableEq, BEq
+
+structure DirectedSegmentAlignmentComponents where
+  dotProduct : Int
+  squaredNormProduct : Int
+deriving Repr, DecidableEq, BEq
+
+def directedSegmentAlignmentPolicyIsWellFormed
+    (alignment : DirectedSegmentAlignment) : Bool :=
+  alignment.referenceOriginAtomId != alignment.referenceTipAtomId &&
+    alignment.candidateOriginAtomId != alignment.candidateTipAtomId &&
+    ratioBandIsWellFormed alignment.cosineSquared
+
+def resolveDirectedSegment
+    (molecule : MoleculeSnapshot)
+    (originAtomId tipAtomId : AtomId) : Option Vec3 := do
+  let origin ← findAtom molecule originAtomId
+  let tip ← findAtom molecule tipAtomId
+  pure (Vec3.sub tip.position origin.position)
+
+def resolveDirectedSegmentAlignmentComponents
+    (reference candidate : MoleculeSnapshot)
+    (alignment : DirectedSegmentAlignment) : Option DirectedSegmentAlignmentComponents := do
+  let referenceSegment ← resolveDirectedSegment reference
+    alignment.referenceOriginAtomId alignment.referenceTipAtomId
+  let candidateSegment ← resolveDirectedSegment candidate
+    alignment.candidateOriginAtomId alignment.candidateTipAtomId
+  pure {
+    dotProduct := Vec3.dot referenceSegment candidateSegment
+    squaredNormProduct :=
+      Vec3.squaredNorm referenceSegment * Vec3.squaredNorm candidateSegment
+  }
+
+def directedSegmentAlignmentIsSatisfied
+    (reference candidate : MoleculeSnapshot)
+    (alignment : DirectedSegmentAlignment) : Bool :=
+  directedSegmentAlignmentPolicyIsWellFormed alignment &&
+    match resolveDirectedSegmentAlignmentComponents reference candidate alignment with
+    | none => false
+    | some components =>
+        signClassMatches alignment.signMargin alignment.cosineSign
+          components.dotProduct &&
+        squaredRatioInBand components.dotProduct components.squaredNormProduct
+          alignment.cosineSquared
+
+def DirectedSegmentAlignmentSemantics
+    (reference candidate : MoleculeSnapshot)
+    (alignment : DirectedSegmentAlignment) : Prop :=
+  directedSegmentAlignmentPolicyIsWellFormed alignment = true ∧
+    ∃ components,
+      resolveDirectedSegmentAlignmentComponents reference candidate alignment =
+        some components ∧
+      signClassMatches alignment.signMargin alignment.cosineSign
+        components.dotProduct = true ∧
+      squaredRatioInBand components.dotProduct components.squaredNormProduct
+        alignment.cosineSquared = true
+
+theorem directedSegmentAlignmentIsSatisfied_sound
+    (reference candidate : MoleculeSnapshot)
+    (alignment : DirectedSegmentAlignment)
+    (h : directedSegmentAlignmentIsSatisfied reference candidate alignment = true) :
+    DirectedSegmentAlignmentSemantics reference candidate alignment := by
+  unfold directedSegmentAlignmentIsSatisfied at h
+  simp only [Bool.and_eq_true] at h
+  rcases h with ⟨hPolicy, hComponents⟩
+  cases hResolve : resolveDirectedSegmentAlignmentComponents reference candidate alignment with
+  | none => simp [hResolve] at hComponents
+  | some components =>
+      simp only [hResolve, Bool.and_eq_true] at hComponents
+      exact ⟨hPolicy, components, hResolve, hComponents.1, hComponents.2⟩
+
+/--
 The requested signed angle as rational bands for squared sine/cosine plus their
 signs. This turns the angle check into integer polynomial inequalities.
 -/

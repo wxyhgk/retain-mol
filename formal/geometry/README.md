@@ -71,17 +71,18 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
 - 移动原子不改变键表、增加键不改变原子表的 frame condition。
 - `GeometryIntent V1` 只接收起始快照、基础命令、完整预期快照和保护锚点；policy 由 Lean
   侧编译，成功时证明命令结果精确、锚点保持、生成策略合法且可自验证。
-- 实验性的 `SpatialRelation V1` 定义局部端口坐标系、带有向体积见证的 proper rigid region，
-  以及删除轴键后由精确连通分量确定移动侧的 rotatable joint；角度通过点积、叉积和有理闭区间
-  转换为整数多项式不等式，不依赖 Lean 内的浮点三角函数。
+- 实验性的 `SpatialRelation V1` 定义局部端口坐标系、跨快照的有向线段对齐、带有向体积见证的
+  proper rigid region，以及删除轴键后由精确连通分量确定移动侧的 rotatable joint；方向和角度
+  通过点积、叉积和有理闭区间转换为整数多项式不等式，不依赖 Lean 内的浮点三角函数。
 - `SpatialRelation V1` 的严格 JSON 桥固定坐标尺度与所有裕量，当前只接受系统生成的离散角集合
   `0/30/45/60/90/120/135/150/180` 度及其符号；调用方不能注入阈值。
 - `GraphRewrite` 显式声明删除和增加的原子/键，要求离去原子的全部关联键都被声明删除，并禁止
   新 ID 与参考图中的任何 ID 冲突；候选图必须与改写后的完整预期图逐字段一致。
 - 第一版 `AtomPortMate` 在 `GraphRewrite` 之上验证一个原子位点连接：宿主保留原子完全不动，
-  客体内部图与稳定 ID 映射精确一致，客体保持 proper rigid（包括拒绝镜像），连接键端点、键级
-  和距离满足系统证书，并重新检查完整候选的成键硬下限与非键碰撞。可信 policy 还绑定具体
-  command ID、被替换的终端 H/键和重原子连接端点，防止同一宿主上的目标混淆。
+  客体内部图与稳定 ID 映射精确一致，客体保持 proper rigid（包括拒绝镜像），连接键端点、键级、
+  距离和相对被替换 H 的出键方向满足系统证书，并重新检查完整候选的成键硬下限与非键碰撞。
+  可信 policy 还绑定具体 command ID、被替换的终端 H/键和重原子连接端点，防止同一宿主上的
+  目标混淆。
 
 未形式化的内容：
 
@@ -92,9 +93,9 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
 - 连续浮点优化过程；
 - 量子化学能量、力和收敛性；
 - 同位素、完整立体标记和金属配位位点语义；
-- 通用键角、任意十进制二面角、平面性和已接入生产命令的 attachment local frame；
-- atom-port 的完整扭转角/端口径向对齐；当前第一版只证明客体 proper rigid、宿主固定及连接距离，
-  不能声称已证明用户期望的唯一绕键构象；
+- 通用键角、任意十进制二面角、平面性和已接入生产命令的完整 attachment local frame；
+- atom-port 的完整扭转角/端口径向对齐；当前第一版证明客体 proper rigid、宿主固定、连接距离和
+  离去键方向对齐，仍不能声称已证明用户期望的唯一绕键构象；
 - 元素相关的范德华半径和周期边界条件。
 
 因此当前结论只能表述为“最终候选满足该版本化 GeometryPolicy”，不能表述为“Lean 已证明
@@ -136,7 +137,8 @@ Lean 内核 ---- 有限图、刚体、方向和角度区间判定
 这套验证器目前没有接入 `ExpectedEffect V1` 或执行器，因此不会改变现有用户交互。
 
 模板连接已有一条固定 registry 驱动的 `AtomPortMate` JSON -> Lean 投影切片，但尚未成为发布
-gate。当前只注册 c-sp3 客体连接碳与 C 宿主替换 H 的单键场景。边并环仍未激活，因为它需要
+gate。当前只注册 c-sp3 客体连接碳与 C 宿主替换 H 的单键场景，并验证新键沿被替换 H 的方向
+接入。边并环仍未激活，因为它需要
 显式端点映射、原子合并和允许的键级改写，不能复用保持完整图不变的旋转关系，也不能直接
 信任 AI 给出的世界坐标。三类结果的含义固定为：
 
@@ -170,7 +172,8 @@ npm run verify:formal-geometry
 2. 检查内置的通过与拒绝示例；
 3. 对重复字段、未知字段、非法 scale 和数值边界运行 fail-closed 测试；
 4. 把 `examples/anchored-core.json` 安全转换成 Lean 数据；
-5. 从固定 registry 投影 c-sp3/C 单键 AtomPortMate，并由 Lean 内核检查 pass/reject 候选。
+5. 从固定 registry 投影 c-sp3/C 单键 AtomPortMate，并由 Lean 内核检查正确候选以及“距离正确、
+   客体刚性正确、但连接方向横置”的 reject 候选。
 
 JSON 转换器不接收任何原始 Lean 源码，只序列化 before、identified commands、expected、
 系统拥有的原子组和 candidate。

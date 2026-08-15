@@ -400,6 +400,19 @@ private def attachPolicy : AtomPortMatePolicy := {
     minSquared := 2200000
     maxSquared := 2300000
   }
+  linkDirection := {
+    referenceOriginAtomId := "host:C"
+    referenceTipAtomId := "host:H:leave"
+    candidateOriginAtomId := "host:C"
+    candidateTipAtomId := "cmd:atom:1"
+    cosineSign := .positive
+    cosineSquared := {
+      loNum := 99
+      loDen := 100
+      hiNum := 1
+      hiDen := 1
+    }
+  }
   guestRegion := {
     atomIds := attachGuest.atoms.map (·.atomId)
     frame := {
@@ -482,6 +495,52 @@ private def attachMirroredGuest : MoleculeSnapshot := {
 }
 
 example : atomPortMateIsSatisfied attachHost attachMirroredGuest attachPolicy attachMate = false := by decide
+
+/--
+The guest is moved by a proper quarter-turn. Its graph, internal distances,
+handedness, and host-link distance all remain valid, but it no longer follows
+the leaving-H direction.
+-/
+private def attachSidewaysGuest : MoleculeSnapshot := {
+  attachCandidate with
+  atoms := attachCandidate.atoms.map fun atom =>
+    if atom.atomId == "cmd:atom:1" then
+      { atom with position := { x := 0, y := 1500, z := 0 } }
+    else if atom.atomId == "cmd:atom:2" then
+      { atom with position := { x := 0, y := 2500, z := 0 } }
+    else if atom.atomId == "cmd:atom:3" then
+      { atom with position := { x := -1000, y := 1500, z := 0 } }
+    else if atom.atomId == "cmd:atom:4" then
+      { atom with position := { x := 0, y := 1500, z := 1000 } }
+    else atom
+}
+
+example :
+    properRigidRegionIsPreserved attachGuest attachSidewaysGuest attachPolicy.guestRegion =
+      true := by decide
+
+example : distanceBoundIsSatisfied attachSidewaysGuest attachPolicy.linkDistance = true := by
+  decide
+
+example : graphRewriteIsSatisfied attachHost attachSidewaysGuest attachRewrite = true := by
+  decide
+
+example : attachSidewaysGuest.bonds.all (bondIsSeparated attachSidewaysGuest) = true := by
+  decide
+
+example : nonBondedCollisionFree attachSidewaysGuest = true := by
+  decide
+
+example :
+    directedSegmentAlignmentIsSatisfied attachHost attachCandidate attachPolicy.linkDirection =
+      true := by decide
+
+example :
+    directedSegmentAlignmentIsSatisfied attachHost attachSidewaysGuest
+      attachPolicy.linkDirection = false := by decide
+
+example : atomPortMateIsSatisfied attachHost attachSidewaysGuest attachPolicy attachMate = false := by
+  decide
 
 private def undeclaredLeavingBondRewrite : GraphRewrite := {
   attachRewrite with removedBondIds := []
