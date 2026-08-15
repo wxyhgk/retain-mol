@@ -383,6 +383,28 @@ def componentWithoutBond
     (seed : AtomId) : List AtomId :=
   expandReachableN molecule excludedBondId molecule.atoms.length [seed]
 
+def neighborAtomIds
+    (molecule : MoleculeSnapshot)
+    (atomId : AtomId) : List AtomId :=
+  molecule.bonds.filterMap fun bond => bondOtherEndpoint bond atomId
+
+def expandConnected
+    (molecule : MoleculeSnapshot)
+    (visited : List AtomId) : List AtomId :=
+  (visited ++ visited.flatMap (neighborAtomIds molecule)).eraseDups
+
+def expandConnectedN
+    (molecule : MoleculeSnapshot) : Nat → List AtomId → List AtomId
+  | 0, visited => visited
+  | steps + 1, visited =>
+      expandConnectedN molecule steps (expandConnected molecule visited)
+
+/-- Complete connected component containing `seed`, without a sentinel bond ID. -/
+def connectedComponent
+    (molecule : MoleculeSnapshot)
+    (seed : AtomId) : List AtomId :=
+  expandConnectedN molecule molecule.atoms.length [seed]
+
 def axisBondMatches
     (molecule : MoleculeSnapshot)
     (axisBondId : BondId)

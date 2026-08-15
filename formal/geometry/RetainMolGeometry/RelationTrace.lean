@@ -1,30 +1,32 @@
-import RetainMolGeometry.AtomPortMate
+import RetainMolGeometry.FragmentAttach
 
 namespace RetainMol.Geometry
 
 /-- The two high-level geometry witnesses currently admitted by the formal gate. -/
 inductive RelationWitness where
   | rotateGroup (joint : RotatableJoint)
-  | atomPortMate (policy : AtomPortMatePolicy) (mate : AtomPortMate)
+  | fragmentAttach (witness : FragmentAttachWitness)
 deriving Repr, DecidableEq, BEq
 
 def RelationWitness.commandId : RelationWitness → String
   | .rotateGroup joint => joint.commandId
-  | .atomPortMate _ mate => mate.commandId
+  | .fragmentAttach witness => witness.mate.commandId
 
 def RelationWitness.commandKind : RelationWitness → String
   | .rotateGroup _ => "geometry.rotateGroup"
-  | .atomPortMate _ _ => "fragment.attach"
+  | .fragmentAttach _ => "fragment.attach"
 
 def relationWitnessIsSatisfied
     (before after : MoleculeSnapshot) : RelationWitness → Bool
   | .rotateGroup joint => rotatableJointIsSatisfied before after joint
-  | .atomPortMate policy mate => atomPortMateIsSatisfied before after policy mate
+  | .fragmentAttach witness =>
+      fragmentAttachWitnessIsSatisfied before after witness
 
 def RelationWitnessSemantics
     (before after : MoleculeSnapshot) : RelationWitness → Prop
   | .rotateGroup joint => RotatableJointSemantics before after joint
-  | .atomPortMate policy mate => AtomPortMateSemantics before after policy mate
+  | .fragmentAttach witness =>
+      FragmentAttachWitnessSemantics before after witness
 
 theorem relationWitnessIsSatisfied_sound
     (before after : MoleculeSnapshot)
@@ -33,7 +35,8 @@ theorem relationWitnessIsSatisfied_sound
     RelationWitnessSemantics before after witness := by
   cases witness with
   | rotateGroup joint => exact rotatableJointIsSatisfied_sound before after joint h
-  | atomPortMate policy mate => exact atomPortMateIsSatisfied_sound before after policy mate h
+  | fragmentAttach witness =>
+      exact fragmentAttachWitnessIsSatisfied_sound before after witness h
 
 /-- Runtime receipt identity independently frozen by the trusted projector. -/
 structure RelationCommandReceipt where
@@ -219,5 +222,55 @@ theorem relationTraceIsSatisfied_sound
   simp only [relationTraceIsSatisfied, Bool.and_eq_true] at h
   exact ⟨relationTraceHeaderIsSatisfied_sound _ _ _ h.1,
     relationTraceChainIsSatisfied_sound _ _ _ _ _ h.2⟩
+
+/-- Raw-byte provenance carried by a formal certificate.
+
+The external publication gate remains responsible for recomputing both SHA-256
+values from the immutable request and trace bytes. Lean proves that the checked
+trace is the one carried by the certificate identity supplied to this theorem.
+-/
+structure RelationTraceCertificateIdentity where
+  requestId : String
+  requestSha256 : String
+  traceSha256 : String
+deriving Repr, DecidableEq, BEq
+
+def relationTraceCertificateIdentityIsWellFormed
+    (identity : RelationTraceCertificateIdentity) : Bool :=
+  !identity.requestId.isEmpty &&
+    decide (identity.requestSha256.length = 64) &&
+    decide (identity.traceSha256.length = 64)
+
+structure RelationTraceCertificate where
+  certificateIdentity : RelationTraceCertificateIdentity
+  expectedIdentity : RelationTraceIdentity
+  expectedReceipts : List RelationCommandReceipt
+  trace : RelationTrace
+deriving Repr, DecidableEq, BEq
+
+def relationTraceCertificateIsSatisfied
+    (externallyExpectedIdentity : RelationTraceCertificateIdentity)
+    (certificate : RelationTraceCertificate) : Bool :=
+  relationTraceCertificateIdentityIsWellFormed externallyExpectedIdentity &&
+    decide (certificate.certificateIdentity = externallyExpectedIdentity) &&
+    relationTraceIsSatisfied certificate.expectedIdentity
+      certificate.expectedReceipts certificate.trace
+
+def RelationTraceCertificateSemantics
+    (externallyExpectedIdentity : RelationTraceCertificateIdentity)
+    (certificate : RelationTraceCertificate) : Prop :=
+  relationTraceCertificateIdentityIsWellFormed externallyExpectedIdentity = true ∧
+    certificate.certificateIdentity = externallyExpectedIdentity ∧
+    RelationTraceSemantics certificate.expectedIdentity
+      certificate.expectedReceipts certificate.trace
+
+theorem relationTraceCertificateIsSatisfied_sound
+    (externallyExpectedIdentity : RelationTraceCertificateIdentity)
+    (certificate : RelationTraceCertificate)
+    (h : relationTraceCertificateIsSatisfied externallyExpectedIdentity certificate = true) :
+    RelationTraceCertificateSemantics externallyExpectedIdentity certificate := by
+  simp only [relationTraceCertificateIsSatisfied, Bool.and_eq_true] at h
+  exact ⟨h.1.1, of_decide_eq_true h.1.2,
+    relationTraceIsSatisfied_sound _ _ _ h.2⟩
 
 end RetainMol.Geometry

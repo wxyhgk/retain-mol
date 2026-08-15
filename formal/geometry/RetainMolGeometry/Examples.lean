@@ -361,12 +361,15 @@ private def attachHost : MoleculeSnapshot := {
   atoms := [
     { atomId := "host:C", symbol := "C", position := { x := 0, y := 0, z := 0 } },
     { atomId := "host:H:leave", symbol := "H", position := { x := 1000, y := 0, z := 0 } },
-    { atomId := "host:H:stay", symbol := "H", position := { x := -1000, y := 0, z := 0 } }
+    { atomId := "host:H:stay", symbol := "H", position := { x := -1000, y := 0, z := 0 } },
+    { atomId := "host:H:radial", symbol := "H", position := { x := 0, y := 1000, z := 0 } }
   ]
   bonds := [
     { bondId := "host:C-H:leave", atomId1 := "host:C", atomId2 := "host:H:leave",
       order := .single },
     { bondId := "host:C-H:stay", atomId1 := "host:C", atomId2 := "host:H:stay",
+      order := .single },
+    { bondId := "host:C-H:radial", atomId1 := "host:C", atomId2 := "host:H:radial",
       order := .single }
   ]
 }
@@ -451,9 +454,254 @@ private def attachMate : AtomPortMate := {
   linkBondId := "cmd:bond:link"
 }
 
+private def attachZeroTurn : TurnBand := {
+  cosineSign := .positive
+  sineSign := .nearZero
+  cosineSquared := { loNum := 1, loDen := 1, hiNum := 1, hiDen := 1 }
+  sineSquared := { loNum := 0, loDen := 1, hiNum := 0, hiDen := 1 }
+}
+
+private def attachFragmentPolicy : FragmentAttachPolicy := {
+  atomPortMate := attachPolicy
+  expectedHostFrame := {
+    originAtomId := "host:C"
+    axisAtomId := "cmd:atom:1"
+    radialAtomId := "host:H:radial"
+  }
+  expectedGuestFrame := {
+    originAtomId := "cmd:atom:1"
+    axisAtomId := "host:C"
+    radialAtomId := "cmd:atom:3"
+  }
+  guestPortAlignment := {
+    referenceOriginAtomId := "cmd:atom:1"
+    referenceTipAtomId := "cmd:atom:2"
+    candidateOriginAtomId := "cmd:atom:1"
+    candidateTipAtomId := "host:C"
+    cosineSign := .negative
+    cosineSquared := { loNum := 1, loDen := 1, hiNum := 1, hiDen := 1 }
+  }
+  expectedTurn := attachZeroTurn
+}
+
+private def attachTorsion : PortTorsion := {
+  hostAtomId := "host:C"
+  guestAtomId := "cmd:atom:1"
+  hostFrame := {
+    originAtomId := "host:C"
+    axisAtomId := "cmd:atom:1"
+    radialAtomId := "host:H:radial"
+  }
+  guestFrame := {
+    originAtomId := "cmd:atom:1"
+    axisAtomId := "host:C"
+    radialAtomId := "cmd:atom:3"
+  }
+  turn := attachZeroTurn
+}
+
+private def attachWitness : FragmentAttachWitness := {
+  policy := attachFragmentPolicy
+  mate := attachMate
+  torsion := attachTorsion
+}
+
 example : graphRewriteIsWellFormed attachHost attachRewrite = true := by decide
 example : graphRewriteIsSatisfied attachHost attachCandidate attachRewrite = true := by decide
 example : atomPortMateIsSatisfied attachHost attachCandidate attachPolicy attachMate = true := by decide
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate attachWitness = true := by
+  decide
+example : fragmentAttachWitnessIsSatisfied attachHost attachCandidate attachWitness = true := by decide
+example : FragmentAttachWitnessSemantics attachHost attachCandidate attachWitness := by
+  apply fragmentAttachWitnessIsSatisfied_sound
+  decide
+
+/-- A same-component host neighbor is not interchangeable with the trusted radial. -/
+private def attachAlternativeHostRadial : FragmentAttachWitness := {
+  attachWitness with
+  torsion := {
+    attachTorsion with
+    hostFrame := { attachTorsion.hostFrame with radialAtomId := "host:H:stay" }
+  }
+}
+
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
+      attachAlternativeHostRadial = false := by
+  decide
+
+private def attachPositiveQuarterTurn : TurnBand := {
+  cosineSign := .nearZero
+  sineSign := .positive
+  cosineSquared := { loNum := 0, loDen := 1, hiNum := 0, hiDen := 1 }
+  sineSquared := { loNum := 1, loDen := 1, hiNum := 1, hiDen := 1 }
+}
+
+/--
+This candidate is a proper quarter-turn of the guest about the host--guest
+axis. Its graph rewrite and rigid guest geometry remain valid, and a witness
+that self-reports the same quarter-turn satisfies the standalone torsion
+checker. The fragment policy still rejects it because the requested turn was
+the trusted zero-turn intent.
+-/
+private def attachQuarterTurnCandidate : MoleculeSnapshot := {
+  attachCandidate with
+  atoms := attachCandidate.atoms.map fun atom =>
+    if atom.atomId == "cmd:atom:3" then
+      { atom with position := { x := 1500, y := 0, z := 1000 } }
+    else if atom.atomId == "cmd:atom:4" then
+      { atom with position := { x := 1500, y := -1000, z := 0 } }
+    else atom
+}
+
+private def attachSelfReportedQuarterTurn : FragmentAttachWitness := {
+  attachWitness with
+  torsion := { attachTorsion with turn := attachPositiveQuarterTurn }
+}
+
+example :
+    atomPortMateIsSatisfied attachHost attachQuarterTurnCandidate attachPolicy attachMate = true := by
+  decide
+
+example :
+    portTorsionIsSatisfied attachQuarterTurnCandidate
+      attachSelfReportedQuarterTurn.torsion = true := by
+  decide
+
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHost attachQuarterTurnCandidate
+      attachSelfReportedQuarterTurn = false := by
+  decide
+
+example :
+    fragmentAttachWitnessIsSatisfied attachHost attachQuarterTurnCandidate
+      attachSelfReportedQuarterTurn = false := by
+  decide
+
+/--
+A proper rigid 3-4-5 rotation can preserve the projected zero torsion while
+tilting the guest's local attachment axis. The standalone mate and torsion
+checks remain true, but the trusted guest-port alignment rejects the result.
+-/
+private def attachTiltedGuestCandidate : MoleculeSnapshot := {
+  attachCandidate with
+  atoms := attachCandidate.atoms.map fun atom =>
+    if atom.atomId == "cmd:atom:2" then
+      { atom with position := { x := 2100, y := 800, z := 0 } }
+    else if atom.atomId == "cmd:atom:3" then
+      { atom with position := { x := 700, y := 600, z := 0 } }
+    else atom
+}
+
+example :
+    atomPortMateIsSatisfied attachHost attachTiltedGuestCandidate attachPolicy
+      attachMate = true := by
+  decide
+
+example :
+    portTorsionIsSatisfied attachTiltedGuestCandidate attachTorsion = true := by
+  decide
+
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHost attachTiltedGuestCandidate
+      attachWitness = false := by
+  decide
+
+example :
+    fragmentAttachWitnessIsSatisfied attachHost attachTiltedGuestCandidate
+      attachWitness = false := by
+  decide
+
+private def attachDisconnectedGuest : MoleculeSnapshot := {
+  attachGuest with
+  bonds := attachGuest.bonds.filter (fun bond => bond.bondId != "cmd:bond:2")
+}
+
+private def attachDisconnectedGuestPolicy : AtomPortMatePolicy := {
+  attachPolicy with guestReference := attachDisconnectedGuest
+}
+
+example : atomPortMatePolicyIsWellFormed attachDisconnectedGuestPolicy = false := by
+  decide
+
+private def attachRemovedHostRadial : FragmentAttachWitness := {
+  attachWitness with
+  torsion := {
+    attachTorsion with
+    hostFrame := { attachTorsion.hostFrame with radialAtomId := "host:H:leave" }
+  }
+}
+
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
+      attachRemovedHostRadial = false := by
+  decide
+
+private def attachForeignGuestRadial : FragmentAttachWitness := {
+  attachWitness with
+  torsion := {
+    attachTorsion with
+    guestFrame := { attachTorsion.guestFrame with radialAtomId := "host:H:radial" }
+  }
+}
+
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
+      attachForeignGuestRadial = false := by
+  decide
+
+private def attachAlternativeGuestRadial : FragmentAttachWitness := {
+  attachWitness with
+  torsion := {
+    attachTorsion with
+    guestFrame := { attachTorsion.guestFrame with radialAtomId := "cmd:atom:4" }
+  }
+}
+
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
+      attachAlternativeGuestRadial = false := by
+  decide
+
+private def attachHostWithDisconnectedSpectator : MoleculeSnapshot := {
+  attachHost with
+  atoms := attachHost.atoms ++ [
+    { atomId := "host:H:spectator", symbol := "H", position := { x := 0, y := 0, z := 2000 } }
+  ]
+}
+
+private def attachDisconnectedHostRadial : FragmentAttachWitness := {
+  attachWitness with
+  torsion := {
+    attachTorsion with
+    hostFrame := { attachTorsion.hostFrame with radialAtomId := "host:H:spectator" }
+  }
+}
+
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHostWithDisconnectedSpectator
+      attachCandidate attachDisconnectedHostRadial = false := by
+  decide
+
+private def attachShiftedGuestFrameOrigin : FragmentAttachWitness := {
+  attachWitness with
+  policy := {
+    attachFragmentPolicy with
+    atomPortMate := {
+      attachPolicy with
+      guestRegion := {
+        attachPolicy.guestRegion with
+        frame := { attachPolicy.guestRegion.frame with originAtomId := "cmd:atom:2" }
+      }
+    }
+  }
+}
+
+example :
+    fragmentAttachCrossBindingIsSatisfied attachHost attachCandidate
+      attachShiftedGuestFrameOrigin = false := by
+  decide
 
 private def attachMissingAtom : MoleculeSnapshot := {
   attachCandidate with

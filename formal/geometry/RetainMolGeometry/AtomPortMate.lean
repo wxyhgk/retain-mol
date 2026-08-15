@@ -126,6 +126,8 @@ def atomPortMatePolicyIsWellFormed (policy : AtomPortMatePolicy) : Bool :=
       policy.linkDistance.minSquared ≤ policy.linkDistance.maxSquared) &&
     sameAtomIdSet policy.guestRegion.atomIds
       (policy.guestReference.atoms.map (·.atomId)) &&
+    sameAtomIdSet policy.guestRegion.atomIds
+      (connectedComponent policy.guestReference policy.guestAttachAtomId) &&
     properRigidRegionIsWellFormed policy.guestReference policy.guestRegion
 
 def atomPortMateIsWellFormed

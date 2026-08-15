@@ -6,5 +6,7 @@ import RetainMolGeometry.Intent
 import RetainMolGeometry.SpatialRelation
 import RetainMolGeometry.GraphRewrite
 import RetainMolGeometry.AtomPortMate
+import RetainMolGeometry.PortTorsion
+import RetainMolGeometry.FragmentAttach
 import RetainMolGeometry.RelationEvaluation
 import RetainMolGeometry.RelationTrace
