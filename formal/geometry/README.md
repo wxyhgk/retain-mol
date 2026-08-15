@@ -164,8 +164,32 @@ candidate、rewrite 或任何阈值。投影器同时校验请求摘要、代码
 动态生产证据必须进入同等可信、不可由请求内联覆盖的内容寻址存储。AtomPortMate 的 Lean
 evaluation value 和输出 envelope 会保留命令 ID、投影版本及上述 registry 身份与摘要，避免
 匿名 PASS 跨证据串线。实验性的 `RelationTrace` 已给出正式 gate 所需的封闭 witness、精确
-receipt 顺序和完整快照链语义；运行时 projector 与 executor 尚未接入，所以它还不会提升
-`fragment.attach` 或 `geometry.rotateGroup` 的生产 verdict。
+receipt 顺序和完整快照链语义。当前已有一条只接受非空、纯 `geometry.rotateGroup` 计划的
+运行时 projector：它从冻结的 initial、enforced plan 和 execution receipt 独立重放，不接受
+调用方内联 witness，并把每一步完整 canonical before/after、重新计算的摘要和固定 V1 几何
+策略投影给严格 JSON -> Lean 转换器。转换器再次核对运行时快照摘要、整数坐标投影、回执
+顺序、完整快照链及固定阈值，生成 `RelationTraceSemantics` 证明。转换器内部按信任边界拆成
+四层：`relation_trace_io.py` 负责受限文件读取与原子写入，
+`relation_trace_runtime.py` 负责 canonical runtime 快照、摘要与整数坐标投影，
+`relation_trace_contract.py` 负责 receipt/witness/trace 连续性，入口
+`relation_trace_json_to_lean.py` 只负责编排验证并生成 Lean 文本。
+
+该切片仍未接入最终 publication gate，也不会把 executor 当前的 `indeterminate` 自动升级成
+生产 `pass`；`fragment.attach` 仍不在这条 projector 能力内。开发验证命令：
+
+```bash
+node tools/ai_modeling_loop/relation_trace_projector.mjs \
+  --initial initial.json \
+  --enforced-plan enforced-plan.json \
+  --execution-receipt execution.json \
+  --output relation-trace.json
+
+python3 formal/geometry/tools/relation_trace_json_to_lean.py \
+  relation-trace.json GeneratedRelationTrace.lean
+
+cd formal/geometry
+lake env lean GeneratedRelationTrace.lean
+```
 
 ## 运行
 

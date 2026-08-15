@@ -78,6 +78,10 @@ def checked_list(value: Any, field: str, *, maximum: int = MAX_CHECKS) -> list[A
 def checked_string(value: Any, field: str, *, allow_empty: bool = False) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{field} must be a string")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ValueError(f"{field} contains an isolated Unicode surrogate") from error
     if not allow_empty and not value:
         raise ValueError(f"{field} must not be empty")
     if len(value) > MAX_ID_LENGTH:
