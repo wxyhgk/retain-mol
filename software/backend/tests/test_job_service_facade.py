@@ -10,9 +10,18 @@ from software.backend.jobs.service_job_definitions import JobDefinitionServiceAp
 from software.backend.jobs.service_job_execution import JobExecutionServiceApi
 from software.backend.jobs.service_job_records import JobRecordServiceApi
 from software.backend.jobs.service_jobs import JobServiceApi
+from software.backend.jobs.service_composition import JobServiceComponentAccess
+from software.backend.jobs.service_molecules import MoleculeServiceApi
+from software.backend.jobs.service_workflows import WorkflowServiceApi
 
 
 def test_job_service_facade_composes_focused_capabilities() -> None:
+    assert JobService.__bases__ == (
+        JobServiceComponentAccess,
+        MoleculeServiceApi,
+        JobServiceApi,
+        WorkflowServiceApi,
+    )
     assert JobServiceApi.__bases__ == (
         JobDefinitionServiceApi,
         JobRecordServiceApi,
@@ -39,3 +48,12 @@ def test_job_service_method_remains_owned_by_capability(
     owner: type[object],
 ) -> None:
     assert getattr(JobService, method_name) is getattr(owner, method_name)
+
+
+def test_job_service_binds_one_consistent_component_graph(tmp_path) -> None:
+    service = JobService(tmp_path / "data")
+
+    assert service.job_queries.repository is service.repository
+    assert service.input_resolver.repository is service.repository
+    assert service.lifecycle.repository is service.repository
+    assert service.artifact_manager.storage is service.artifact_storage
