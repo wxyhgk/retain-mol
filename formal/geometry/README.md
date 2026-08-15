@@ -67,7 +67,8 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
 - 所有直接成键原子对另有 0.4 Å 硬下限，旧 policy 也不能用零距离 bound 放行重合键；
 - 返回结构化 `ValidationIssue`，空策略在要求几何约束时直接拒绝；
 - 证明整体平移保持平方距离和有向体积。
-- 七种 ExpectedEffect V1 基础命令的精确图效果，以及完整回执轨迹的 Prop 级 soundness；
+- 七种 ExpectedEffect V1 基础命令的精确图效果，以及完整回执轨迹的 Prop 级 soundness；发布边界
+  使用非空轨迹判定，内部允许的空 no-op 不能伪装成执行证据；
 - 移动原子不改变键表、增加键不改变原子表的 frame condition。
 - `GeometryIntent V1` 只接收起始快照、基础命令、完整预期快照和保护锚点；policy 由 Lean
   侧编译，成功时证明命令结果精确、锚点保持、生成策略合法且可自验证。
@@ -83,6 +84,9 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
   距离和相对被替换 H 的出键方向满足系统证书，并重新检查完整候选的成键硬下限与非键碰撞。
   可信 policy 还绑定具体 command ID、被替换的终端 H/键和重原子连接端点，防止同一宿主上的
   目标混淆。
+- `RelationTrace` 将受信 plan 身份、精确命令回执列表、逐步完整 before/after 快照和封闭的
+  `rotateGroup`/`AtomPortMate` witness 绑定在一起。Lean 递归证明每一步快照连续且 witness
+  成立，并拒绝空轨迹、摘要回显、断链快照和 command ID 重绑定。
 
 未形式化的内容：
 
@@ -90,6 +94,8 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
 - 图片所表达的目标分子是否被 AI 正确识别；
 - builder 是否正确实现了 `EditPlan` 语义；
 - runtime receipt 到 Lean 命令轨迹的字段投影等价；
+- runtime canonical JSON 的 SHA-256 与 Lean `MoleculeSnapshot` 的序列化等价；当前摘要由受信
+  projector 重新计算，Lean 证明摘要身份和完整快照连续性，但不在内核中重新实现 SHA-256；
 - 连续浮点优化过程；
 - 量子化学能量、力和收敛性；
 - 同位素、完整立体标记和金属配位位点语义；
@@ -157,7 +163,9 @@ candidate、rewrite 或任何阈值。投影器同时校验请求摘要、代码
 摘要；任一不一致都在生成 Lean 前拒绝。固定 evidence registry 只用于这条可回放切片，未来
 动态生产证据必须进入同等可信、不可由请求内联覆盖的内容寻址存储。AtomPortMate 的 Lean
 evaluation value 和输出 envelope 会保留命令 ID、投影版本及上述 registry 身份与摘要，避免
-匿名 PASS 跨证据串线；这还不等于运行时 `preDigest/postDigest` 已接入正式发布 gate。
+匿名 PASS 跨证据串线。实验性的 `RelationTrace` 已给出正式 gate 所需的封闭 witness、精确
+receipt 顺序和完整快照链语义；运行时 projector 与 executor 尚未接入，所以它还不会提升
+`fragment.attach` 或 `geometry.rotateGroup` 的生产 verdict。
 
 ## 运行
 
@@ -204,6 +212,7 @@ formal/geometry/
 │   ├── SpatialRelation.lean # 端口、proper rigid region 与可旋转关节
 │   ├── GraphRewrite.lean  # 显式原子/键增删及完整预期图
 │   ├── AtomPortMate.lean  # 图改写后的原子端口连接关系
+│   ├── RelationTrace.lean # 高阶关系回执、完整快照链与 soundness
 │   ├── RelationEvaluation.lean # pass/reject/indeterminate 关系求值
 │   └── Examples.lean      # 正例与反例
 ├── examples/

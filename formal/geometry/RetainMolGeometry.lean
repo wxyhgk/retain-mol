@@ -7,3 +7,4 @@ import RetainMolGeometry.SpatialRelation
 import RetainMolGeometry.GraphRewrite
 import RetainMolGeometry.AtomPortMate
 import RetainMolGeometry.RelationEvaluation
+import RetainMolGeometry.RelationTrace

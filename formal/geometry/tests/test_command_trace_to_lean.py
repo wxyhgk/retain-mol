@@ -31,8 +31,8 @@ class CommandTraceToLeanTests(unittest.TestCase):
 
     def test_proof_document_contains_prop_level_trace_proof(self):
         rendered = command_trace_to_lean.render_document(self.valid_payload())
-        self.assertIn("PrimitiveCommandTraceSemantics before commandTrace", rendered)
-        self.assertIn("primitiveCommandTraceIsValid_sound", rendered)
+        self.assertIn("NonemptyPrimitiveCommandTraceSemantics before commandTrace", rendered)
+        self.assertIn("nonemptyPrimitiveCommandTraceIsValid_sound", rendered)
 
     def test_evaluate_mode_has_no_proof_claim(self):
         rendered = command_trace_to_lean.render_document(
@@ -40,6 +40,12 @@ class CommandTraceToLeanTests(unittest.TestCase):
         )
         self.assertIn(command_trace_to_lean.EVALUATION_PREFIX, rendered)
         self.assertNotIn("example : PrimitiveCommandTraceSemantics", rendered)
+
+    def test_empty_trace_is_rejected(self):
+        payload = self.valid_payload()
+        payload["steps"] = []
+        with self.assertRaisesRegex(ValueError, "at least one command receipt"):
+            command_trace_to_lean.render_document(payload)
 
     def test_unknown_command_is_rejected(self):
         payload = self.valid_payload()

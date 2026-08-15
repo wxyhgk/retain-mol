@@ -35,8 +35,10 @@ flowchart LR
 高阶模板连接、桥接、并环和刚体旋转必须先由独立编译器 lowering 为基础命令轨迹，再进入
 这一边界。它们不能各自偷偷实现一套原子/键修改逻辑。
 
-对每一步，回执必须包含完整 post-state。`primitiveCommandTraceIsValid` 是可执行 Bool 判定器；
-定理 `primitiveCommandTraceIsValid_sound` 把通过结果提升为
+对每一步，回执必须包含完整 post-state。`primitiveCommandTraceIsValid` 是允许内部 no-op 的
+基础 Bool 判定器；发布证据必须使用 `nonemptyPrimitiveCommandTraceIsValid`，因此空步骤列表
+不能通过。定理 `nonemptyPrimitiveCommandTraceIsValid_sound` 把通过结果提升为
+`NonemptyPrimitiveCommandTraceSemantics`，其内部包含
 `PrimitiveCommandTraceSemantics` 命题，逐步保存精确状态转移证据。当前还证明了两个基础 frame
 condition：移动原子不改变键表，增加键不改变原子表。
 
@@ -47,6 +49,12 @@ condition：移动原子不改变键表，增加键不改变原子表。
 - 只序列化数据，不接受调用方提供 Lean 源码；
 - proof 模式生成可由 Lean 内核检查的具体命题证明。
 
+高阶关系不复用基础命令的开放 union。`RelationTrace` 首版只允许 `rotateGroup` 和
+`AtomPortMate` 两种封闭 witness，并要求受信编排器另行提供 plan 身份及精确 receipt 列表。
+每一步同时携带完整 before/after 快照；递归语义要求上一状态与下一步 before 完全相等，不能
+只比较 `preDigest/postDigest` 字符串。因此相同摘要回显、命令重排、截断和旧 verdict 复用均
+不能构成证明。
+
 ## V1 明确不证明什么
 
 命令模块当前证明的是**图效果语义**，不是完整化学合法性。特别是：
@@ -56,6 +64,8 @@ condition：移动原子不改变键表，增加键不改变原子表。
 - `bond.add` 的元素价态、剩余价态和元素对规则仍依赖生产 builder；
 - charge/radical/add-H 尚未解决所有生成 ID 的确定性；
 - 高阶命令还没有经证明的 lowering compiler。
+- canonical SHA-256 仍由受信 projector 重算；Lean 当前验证摘要身份和完整快照链，不证明
+  TypeScript canonical JSON、SHA-256 与 Lean 快照之间的序列化等价。
 
 因此 V1 结论应写成“该回执与已编码的基础效果语义一致”，不能写成“Lean 证明该编辑化学正确”。
 
@@ -105,7 +115,8 @@ V1 尚未进入生产 JSON gate，也没有表达键角、二面角、平面性�
 
 ## 下一轮实施顺序
 
-1. 从生产 receipt 导出 command trace，并验证 runtime projection 与 Lean trace 字段一致。
+1. 从生产 receipt 导出非空 command trace，并将受信 projector 接到 `RelationTrace`；projector
+   必须从实际回放取得完整 before/after，不能接受 receipt 自报快照或摘要。
 2. 先只把 `atom.move/add/remove` 与 `bond.remove` 作为最高可信命令；其余命令在字段和化学 oracle
    对齐后提升等级。
 3. 给已形式化的 `GeometryIntent V1` 增加严格 bridge，再依次加入键角、二面角和平面/attachment

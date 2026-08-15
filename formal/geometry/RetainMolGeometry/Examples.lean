@@ -295,6 +295,20 @@ example : PrimitiveCommandTraceSemantics commandBase validCommandTrace := by
   apply primitiveCommandTraceIsValid_sound
   decide
 
+example : nonemptyPrimitiveCommandTraceIsValid commandBase validCommandTrace = true := by
+  decide
+
+example : NonemptyPrimitiveCommandTraceSemantics commandBase validCommandTrace := by
+  apply nonemptyPrimitiveCommandTraceIsValid_sound
+  decide
+
+/-- An identity transition remains valid internally but cannot become a publication receipt. -/
+example : primitiveCommandTraceIsValid commandBase [] = true := by
+  decide
+
+example : nonemptyPrimitiveCommandTraceIsValid commandBase [] = false := by
+  decide
+
 private def forgedMoved : MoleculeSnapshot := {
   commandMoved with bonds := []
 }
@@ -884,4 +898,102 @@ private def truncatedFrameCandidate : MoleculeSnapshot := {
 example :
     spatialRelationIsSatisfied jointReference truncatedFrameCandidate
       (.portFrame quarterTurnJoint.region.frame) = false := by
+  decide
+
+/-! A relation receipt trace binds command order, complete snapshots, and geometry. -/
+
+private def quarterTurnReceipt : RelationCommandReceipt := {
+  commandId := quarterTurnJoint.commandId
+  commandKind := "geometry.rotateGroup"
+  preDigest := "canonical-v2-sha256-reference"
+  postDigest := "canonical-v2-sha256-quarter-turn"
+}
+
+private def quarterTurnTraceIdentity : RelationTraceIdentity := {
+  projectionVersion := "relation-trace-v1"
+  planId := "plan-quarter-turn"
+  enforcedPlanSha256 := "plan-sha256-quarter-turn"
+  baseDigest := quarterTurnReceipt.preDigest
+  finalDigest := quarterTurnReceipt.postDigest
+}
+
+private def quarterTurnTrace : RelationTrace := {
+  identity := quarterTurnTraceIdentity
+  base := jointReference
+  final := jointQuarterTurn
+  steps := [{
+    receipt := quarterTurnReceipt
+    before := jointReference
+    after := jointQuarterTurn
+    witness := .rotateGroup quarterTurnJoint
+  }]
+}
+
+example :
+    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt]
+      quarterTurnTrace = true := by
+  decide
+
+example :
+    RelationTraceSemantics quarterTurnTraceIdentity [quarterTurnReceipt]
+      quarterTurnTrace := by
+  apply relationTraceIsSatisfied_sound
+  decide
+
+/-- A trusted expected command cannot be satisfied by an empty or truncated trace. -/
+example :
+    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt]
+      { quarterTurnTrace with steps := [] } = false := by
+  decide
+
+/-- Matching digest text cannot hide that the complete pre-state is disconnected. -/
+example :
+    relationTraceIsSatisfied quarterTurnTraceIdentity [quarterTurnReceipt]
+      { quarterTurnTrace with base := jointQuarterTurn } = false := by
+  decide
+
+/-- Digest echo cannot turn a geometrically invalid no-op into a quarter-turn. -/
+private def echoedQuarterTurnReceipt : RelationCommandReceipt := {
+  quarterTurnReceipt with
+  preDigest := "x"
+  postDigest := "x"
+}
+
+private def echoedQuarterTurnIdentity : RelationTraceIdentity := {
+  quarterTurnTraceIdentity with
+  baseDigest := "x"
+  finalDigest := "x"
+}
+
+private def echoedInvalidTrace : RelationTrace := {
+  identity := echoedQuarterTurnIdentity
+  base := jointReference
+  final := jointReference
+  steps := [{
+    receipt := echoedQuarterTurnReceipt
+    before := jointReference
+    after := jointReference
+    witness := .rotateGroup quarterTurnJoint
+  }]
+}
+
+example :
+    relationTraceIsSatisfied echoedQuarterTurnIdentity [echoedQuarterTurnReceipt]
+      echoedInvalidTrace = false := by
+  decide
+
+/-- Receipt identity cannot be rebound to a different witness command. -/
+private def reboundQuarterTurnReceipt : RelationCommandReceipt := {
+  quarterTurnReceipt with commandId := "another-command"
+}
+
+example :
+    relationTraceIsSatisfied quarterTurnTraceIdentity [reboundQuarterTurnReceipt]
+      { quarterTurnTrace with
+        steps := [{
+          receipt := reboundQuarterTurnReceipt
+          before := jointReference
+          after := jointQuarterTurn
+          witness := .rotateGroup quarterTurnJoint
+        }] } = false := by
   decide

@@ -111,6 +111,12 @@ def primitiveCommandTraceIsValid :
       primitiveCommandStepIsValid molecule step &&
         primitiveCommandTraceIsValid step.after rest
 
+/-- Publication receipts must contain at least one state transition. -/
+def nonemptyPrimitiveCommandTraceIsValid
+    (before : MoleculeSnapshot)
+    (steps : List PrimitiveCommandStep) : Bool :=
+  !steps.isEmpty && primitiveCommandTraceIsValid before steps
+
 /-- Prop-level meaning of a complete primitive-command receipt trace. -/
 inductive PrimitiveCommandTraceSemantics :
     MoleculeSnapshot → List PrimitiveCommandStep → Prop where
@@ -125,6 +131,12 @@ inductive PrimitiveCommandTraceSemantics :
       (stepExact : applyPrimitiveCommand before step.command = some step.after)
       (tailExact : PrimitiveCommandTraceSemantics step.after rest) :
       PrimitiveCommandTraceSemantics before (step :: rest)
+
+/-- Prop-level contract for a command receipt accepted at the publication boundary. -/
+def NonemptyPrimitiveCommandTraceSemantics
+    (before : MoleculeSnapshot)
+    (steps : List PrimitiveCommandStep) : Prop :=
+  steps ≠ [] ∧ PrimitiveCommandTraceSemantics before steps
 
 theorem acceptWellFormed_sound
     (candidate accepted : MoleculeSnapshot)
@@ -189,6 +201,17 @@ theorem primitiveCommandTraceIsValid_sound
       exact .cons before step rest
         (primitiveCommandStepIsValid_sound before step both.1)
         (inductionHypothesis step.after both.2)
+
+theorem nonemptyPrimitiveCommandTraceIsValid_sound
+    (before : MoleculeSnapshot)
+    (steps : List PrimitiveCommandStep)
+    (valid : nonemptyPrimitiveCommandTraceIsValid before steps = true) :
+    NonemptyPrimitiveCommandTraceSemantics before steps := by
+  simp only [nonemptyPrimitiveCommandTraceIsValid, Bool.and_eq_true] at valid
+  refine ⟨?_, primitiveCommandTraceIsValid_sound before steps valid.2⟩
+  intro empty
+  subst steps
+  simp at valid
 
 /-- Successful command sequences always finish with a well-formed graph. -/
 theorem applyPrimitiveCommands_sound

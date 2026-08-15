@@ -91,6 +91,8 @@ def render_document(payload: Any, *, mode: str = "proof") -> str:
         raise ValueError("mode must be 'proof' or 'evaluate'")
 
     steps = checked_list(payload["steps"], "steps", maximum=MAX_STEPS)
+    if not steps:
+        raise ValueError("steps must contain at least one command receipt")
     after_definitions: list[str] = []
     rendered_steps: list[str] = []
     for index, step_value in enumerate(steps):
@@ -109,17 +111,17 @@ def render_document(payload: Any, *, mode: str = "proof") -> str:
     )
     if mode == "proof":
         conclusion = "\n".join([
-            "example : primitiveCommandTraceIsValid before commandTrace = true := by",
+            "example : nonemptyPrimitiveCommandTraceIsValid before commandTrace = true := by",
             "  decide",
             "",
-            "example : PrimitiveCommandTraceSemantics before commandTrace := by",
-            "  apply primitiveCommandTraceIsValid_sound",
+            "example : NonemptyPrimitiveCommandTraceSemantics before commandTrace := by",
+            "  apply nonemptyPrimitiveCommandTraceIsValid_sound",
             "  decide",
         ])
     else:
         conclusion = "\n".join([
             "private def traceStatus : String :=",
-            '  if primitiveCommandTraceIsValid before commandTrace then "pass" else "reject"',
+            '  if nonemptyPrimitiveCommandTraceIsValid before commandTrace then "pass" else "reject"',
             f'#eval IO.println ("{EVALUATION_PREFIX}" ++ traceStatus)',
         ])
 
