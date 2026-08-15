@@ -308,12 +308,31 @@ def validate_supported_profile(policy: dict[str, Any], evidence: dict[str, Any])
         raise ValueError("AtomPortMate V1 only supports a c-sp3 C guest attach atom")
 
 
-def render_evaluation() -> str:
+def render_evaluation(request: dict[str, Any]) -> str:
     return "\n".join([
+        "private def evaluationIdentity : AtomPortMateEvaluationIdentity := {",
+        f"  projectionVersion := {lean_string(PROJECTION_VERSION, 'projectionVersion')}",
+        f"  scope := {lean_string(SCOPE, 'scope')}",
+        "  commandId := mate.commandId",
+        f"  policyId := {lean_string(request['policyId'], 'policyId')}",
+        f"  policySha256 := {lean_string(request['policySha256'], 'policySha256')}",
+        f"  evidenceId := {lean_string(request['evidenceId'], 'evidenceId')}",
+        f"  evidenceSha256 := {lean_string(request['evidenceSha256'], 'evidenceSha256')}",
+        "}",
+        "",
         "private def evaluationPayload : String :=",
-        "  let status := if atomPortMateIsSatisfied reference candidate policy mate",
+        "  let evaluation := evaluateAtomPortMate evaluationIdentity reference candidate policy mate",
+        "  let identity := evaluation.identity",
+        "  let status := if evaluation.passed",
         '    then "pass" else "reject"',
-        f'  "{{\\\"status\\\":\\\"" ++ status ++ "\\\",\\\"scope\\\":\\\"{SCOPE}\\\"}}"',
+        '  "{\\\"status\\\":\\\"" ++ status ++',
+        '    "\\\",\\\"scope\\\":\\\"" ++ identity.scope ++',
+        '    "\\\",\\\"projectionVersion\\\":\\\"" ++ identity.projectionVersion ++',
+        '    "\\\",\\\"commandId\\\":\\\"" ++ identity.commandId ++',
+        '    "\\\",\\\"policyId\\\":\\\"" ++ identity.policyId ++',
+        '    "\\\",\\\"policySha256\\\":\\\"" ++ identity.policySha256 ++',
+        '    "\\\",\\\"evidenceId\\\":\\\"" ++ identity.evidenceId ++',
+        '    "\\\",\\\"evidenceSha256\\\":\\\"" ++ identity.evidenceSha256 ++ "\\\"}"',
         "",
         f'#eval IO.println ("{EVALUATION_PREFIX}" ++ evaluationPayload)',
     ])
@@ -355,7 +374,7 @@ def render_document(payload: Any) -> str:
         "",
         evidence_rendered,
         "",
-        render_evaluation(),
+        render_evaluation(request),
         "",
     ])
 

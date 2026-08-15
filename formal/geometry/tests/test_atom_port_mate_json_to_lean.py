@@ -69,9 +69,16 @@ class AtomPortMateJsonToLeanTests(unittest.TestCase):
         self.assertIn("cosineSquared :=", rendered)
 
     def test_registered_c_sp3_c_single_case_passes(self):
-        self.assertEqual(self.evaluate_request(self.valid_request()), {
+        request = self.valid_request()
+        self.assertEqual(self.evaluate_request(request), {
             "status": "pass",
             "scope": "atom-port-mate-v1",
+            "projectionVersion": request["projectionVersion"],
+            "commandId": "attach-c-sp3-1",
+            "policyId": request["policyId"],
+            "policySha256": request["policySha256"],
+            "evidenceId": request["evidenceId"],
+            "evidenceSha256": request["evidenceSha256"],
         })
 
     def test_registered_sideways_candidate_is_rejected(self):
@@ -83,6 +90,12 @@ class AtomPortMateJsonToLeanTests(unittest.TestCase):
         self.assertEqual(self.evaluate_request(request), {
             "status": "reject",
             "scope": "atom-port-mate-v1",
+            "projectionVersion": request["projectionVersion"],
+            "commandId": "attach-c-sp3-1",
+            "policyId": request["policyId"],
+            "policySha256": request["policySha256"],
+            "evidenceId": request["evidenceId"],
+            "evidenceSha256": request["evidenceSha256"],
         })
 
     def test_external_request_cannot_supply_trusted_bodies_or_thresholds(self):

@@ -35,6 +35,27 @@ structure AtomPortMate where
   linkBondId : BondId
 deriving Repr, DecidableEq, BEq
 
+/--
+Identity copied into the Lean value before evaluation. The trusted projector
+checks the referenced registry bytes against these digests; Lean then proves
+that a PASS result still carries exactly this identity instead of emitting an
+anonymous Boolean that can be reassociated with another registry entry.
+-/
+structure AtomPortMateEvaluationIdentity where
+  projectionVersion : String
+  scope : String
+  commandId : String
+  policyId : String
+  policySha256 : String
+  evidenceId : String
+  evidenceSha256 : String
+deriving Repr, DecidableEq, BEq
+
+structure AtomPortMateEvaluation where
+  identity : AtomPortMateEvaluationIdentity
+  passed : Bool
+deriving Repr, DecidableEq, BEq
+
 private def sameBondIdSet (left right : List BondId) : Bool :=
   allUnique left && allUnique right &&
     decide (left.length = right.length) &&
@@ -143,6 +164,15 @@ def atomPortMateIsSatisfied
     candidate.bonds.all (bondIsSeparated candidate) &&
     nonBondedCollisionFree candidate
 
+def evaluateAtomPortMate
+    (identity : AtomPortMateEvaluationIdentity)
+    (reference candidate : MoleculeSnapshot)
+    (policy : AtomPortMatePolicy)
+    (mate : AtomPortMate) : AtomPortMateEvaluation := {
+  identity
+  passed := atomPortMateIsSatisfied reference candidate policy mate
+}
+
 /-- Exact finite semantics of the checker, not a proof of chemical completeness. -/
 def AtomPortMateSemantics
     (reference candidate : MoleculeSnapshot)
@@ -175,5 +205,17 @@ theorem atomPortMateIsSatisfied_sound
     directedSegmentAlignmentIsSatisfied_sound _ _ _ hDirection,
     hBonds,
     hCollision⟩
+
+theorem evaluateAtomPortMate_pass_bound_to_identity
+    (identity : AtomPortMateEvaluationIdentity)
+    (reference candidate : MoleculeSnapshot)
+    (policy : AtomPortMatePolicy)
+    (mate : AtomPortMate)
+    (h : (evaluateAtomPortMate identity reference candidate policy mate).passed = true) :
+    (evaluateAtomPortMate identity reference candidate policy mate).identity = identity ∧
+      AtomPortMateSemantics reference candidate policy mate := by
+  constructor
+  · rfl
+  · exact atomPortMateIsSatisfied_sound reference candidate policy mate h
 
 end RetainMol.Geometry

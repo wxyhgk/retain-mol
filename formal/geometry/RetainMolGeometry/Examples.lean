@@ -863,6 +863,18 @@ example :
     ]).status = .indeterminate := by
   decide
 
+/-- The formal core fails closed even if an outer projector forgets the guard. -/
+example :
+    evaluateSpatialRelations jointReference jointQuarterTurn [] = {
+      status := .reject
+      issues := [{
+        relationIndex := none
+        issueClass := .contradiction
+        code := .noRelationsProvided
+      }]
+    } := by
+  decide
+
 private def truncatedFrameCandidate : MoleculeSnapshot := {
   atoms := jointReference.atoms.take 3
   bonds := []

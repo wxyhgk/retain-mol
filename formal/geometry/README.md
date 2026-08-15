@@ -148,13 +148,16 @@ gate。当前只注册 c-sp3 客体连接碳与 C 宿主替换 H 的单键场景
 
 内部 TypeScript 编译器、Lean 关系求值器和生成文档均执行三态规则。Lean 对完整图或关系
 契约的明确矛盾返回 `reject`，参考几何低于系统数值裕量时返回 `indeterminate`。该桥仍是
-实验性证明切片：精确角度集合仍是有限的，更细的 pass/possible 双层数值带尚未实现。
+实验性证明切片：空关系列表在 Lean 核心内直接 `reject`，聚合 `pass` 已证明关系非空且每条
+关系语义成立；精确角度集合仍是有限的，更细的 pass/possible 双层数值带尚未实现。
 
 `AtomPortMatePolicy` 由仓库内固定注册表按 `policyId` 解析。外部请求只允许提交 schema/
 projection/scale、`policyId`、`evidenceId` 和对应 SHA-256，不能提交 policy body、reference、
 candidate、rewrite 或任何阈值。投影器同时校验请求摘要、代码固定摘要与 registry 文件实际
 摘要；任一不一致都在生成 Lean 前拒绝。固定 evidence registry 只用于这条可回放切片，未来
-动态生产证据必须进入同等可信、不可由请求内联覆盖的内容寻址存储。
+动态生产证据必须进入同等可信、不可由请求内联覆盖的内容寻址存储。AtomPortMate 的 Lean
+evaluation value 和输出 envelope 会保留命令 ID、投影版本及上述 registry 身份与摘要，避免
+匿名 PASS 跨证据串线；这还不等于运行时 `preDigest/postDigest` 已接入正式发布 gate。
 
 ## 运行
 
@@ -173,7 +176,8 @@ npm run verify:formal-geometry
 3. 对重复字段、未知字段、非法 scale 和数值边界运行 fail-closed 测试；
 4. 把 `examples/anchored-core.json` 安全转换成 Lean 数据；
 5. 从固定 registry 投影 c-sp3/C 单键 AtomPortMate，并由 Lean 内核检查正确候选以及“距离正确、
-   客体刚性正确、但连接方向横置”的 reject 候选。
+   客体刚性正确、但连接方向横置”的 reject 候选；结果同时回传经过 Lean value 绑定的 registry
+   身份与摘要。
 
 JSON 转换器不接收任何原始 Lean 源码，只序列化 before、identified commands、expected、
 系统拥有的原子组和 candidate。
@@ -222,7 +226,8 @@ formal/geometry/
 
 ## 后续扩展顺序
 
-1. 证明 runtime receipt projection 与 Lean 基础命令轨迹逐字段等价；
+1. 把现有 runtime receipt 的 `preDigest/postDigest` 接到逐命令关系证书，并证明其投影与 Lean
+   基础命令轨迹逐字段等价；
 2. 为刚性和角度证据增加系统控制的 pass/possible 双层数值带；
 3. 为 `fragment.attach` 补齐端口径向参考和显式扭转角，再把动态生产证据接入不可内联覆盖的
    内容寻址 registry，扩展当前固定 c-sp3/C 单键 `GraphRewrite + AtomPortMate` gate；

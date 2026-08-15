@@ -20,6 +20,7 @@ inductive RelationIssueCode where
   | relationDefinitionInvalid
   | referenceEvidenceInsufficient
   | relationNotSatisfied
+  | noRelationsProvided
 deriving Repr, DecidableEq, BEq
 
 structure RelationIssue where
@@ -147,22 +148,81 @@ theorem evaluateSpatialRelation_pass_sound
   split at h <;> simp_all
   exact spatialRelationIsSatisfied_sound reference candidate relation (by assumption)
 
+private def mergeRelationEvaluationStatus :
+    RelationEvaluationStatus → RelationEvaluationStatus → RelationEvaluationStatus
+  | .reject, _ | _, .reject => .reject
+  | .indeterminate, _ | _, .indeterminate => .indeterminate
+  | .pass, .pass => .pass
+
 def RelationEvaluation.merge
-    (left right : RelationEvaluation) : RelationEvaluation :=
-  let status :=
-    if left.status == .reject || right.status == .reject then .reject
-    else if left.status == .indeterminate || right.status == .indeterminate then
-      .indeterminate
-    else .pass
-  { status, issues := left.issues ++ right.issues }
+    (left right : RelationEvaluation) : RelationEvaluation := {
+  status := mergeRelationEvaluationStatus left.status right.status
+  issues := left.issues ++ right.issues
+}
+
+theorem RelationEvaluation.merge_pass_iff
+    (left right : RelationEvaluation) :
+    (left.merge right).status = .pass ↔
+      left.status = .pass ∧ right.status = .pass := by
+  cases hLeft : left.status <;> cases hRight : right.status <;>
+    simp [RelationEvaluation.merge, mergeRelationEvaluationStatus, hLeft, hRight]
+
+private def evaluateSpatialRelationsFrom
+    (reference candidate : MoleculeSnapshot) :
+    Nat → List SpatialRelation → RelationEvaluation
+  | _, [] => { status := .pass }
+  | relationIndex, relation :: rest =>
+      (evaluateSpatialRelation reference candidate relationIndex relation).merge
+        (evaluateSpatialRelationsFrom reference candidate (relationIndex + 1) rest)
+
+def SpatialRelationsSemantics
+    (reference candidate : MoleculeSnapshot)
+    (relations : List SpatialRelation) : Prop :=
+  relations ≠ [] ∧
+    ∀ relation, relation ∈ relations →
+      SpatialRelationSemantics reference candidate relation
+
+private theorem evaluateSpatialRelationsFrom_pass_sound
+    (reference candidate : MoleculeSnapshot)
+    (relationIndex : Nat)
+    (relations : List SpatialRelation)
+    (h : (evaluateSpatialRelationsFrom reference candidate relationIndex relations).status =
+      .pass) :
+    ∀ relation, relation ∈ relations →
+      SpatialRelationSemantics reference candidate relation := by
+  induction relations generalizing relationIndex with
+  | nil => simp
+  | cons head tail inductionHypothesis =>
+      simp only [evaluateSpatialRelationsFrom] at h
+      have both := (RelationEvaluation.merge_pass_iff _ _).mp h
+      intro relation member
+      simp only [List.mem_cons] at member
+      cases member with
+      | inl isHead =>
+          subst relation
+          exact evaluateSpatialRelation_pass_sound reference candidate relationIndex head both.1
+      | inr inTail =>
+          exact inductionHypothesis (relationIndex + 1) both.2 relation inTail
 
 def evaluateSpatialRelations
     (reference candidate : MoleculeSnapshot)
     (relations : List SpatialRelation) : RelationEvaluation :=
-  relations.zipIdx.foldl
-    (fun evaluation indexed =>
-      evaluation.merge
-        (evaluateSpatialRelation reference candidate indexed.2 indexed.1))
-    { status := .pass }
+  if relations.isEmpty then
+    rejectIssue none .noRelationsProvided
+  else
+    evaluateSpatialRelationsFrom reference candidate 0 relations
+
+theorem evaluateSpatialRelations_pass_sound
+    (reference candidate : MoleculeSnapshot)
+    (relations : List SpatialRelation)
+    (h : (evaluateSpatialRelations reference candidate relations).status = .pass) :
+    SpatialRelationsSemantics reference candidate relations := by
+  unfold evaluateSpatialRelations at h
+  cases relations with
+  | nil => simp [rejectIssue] at h
+  | cons head tail =>
+      refine ⟨by simp, ?_⟩
+      exact evaluateSpatialRelationsFrom_pass_sound reference candidate 0
+        (head :: tail) h
 
 end RetainMol.Geometry

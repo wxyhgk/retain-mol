@@ -169,6 +169,7 @@ def render_evaluation() -> str:
         '  | .numericMargin => "numeric-margin"',
         "",
         "private def issueCode : RelationIssueCode → String",
+        '  | .noRelationsProvided => "no-relations-provided"',
         '  | .referenceTopologyInvalid => "reference-topology-invalid"',
         '  | .candidateTopologyInvalid => "candidate-topology-invalid"',
         '  | .molecularGraphChanged => "molecular-graph-changed"',
