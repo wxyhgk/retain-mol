@@ -135,9 +135,10 @@ Lean 内核 ---- 有限图、刚体、方向和角度区间判定
 两个轴端点、全部移动侧原子对距离、同一有符号角度和完整非坐标字段都必须保持相应关系。
 这套验证器目前没有接入 `ExpectedEffect V1` 或执行器，因此不会改变现有用户交互。
 
-模板连接的第一版内部编译器和 `AtomPortMate` 证明切片正在接入，但尚未成为发布 gate。边并环
-仍未激活，因为它需要显式端点映射、原子合并和允许的键级改写，不能复用保持完整图不变的
-旋转关系，也不能直接信任 AI 给出的世界坐标。三类结果的含义固定为：
+模板连接已有一条固定 registry 驱动的 `AtomPortMate` JSON -> Lean 投影切片，但尚未成为发布
+gate。当前只注册 c-sp3 客体连接碳与 C 宿主替换 H 的单键场景。边并环仍未激活，因为它需要
+显式端点映射、原子合并和允许的键级改写，不能复用保持完整图不变的旋转关系，也不能直接
+信任 AI 给出的世界坐标。三类结果的含义固定为：
 
 - `pass`：当前证据在该版本策略内充分；
 - `reject`：已发现明确的拓扑或几何违反；
@@ -147,16 +148,19 @@ Lean 内核 ---- 有限图、刚体、方向和角度区间判定
 契约的明确矛盾返回 `reject`，参考几何低于系统数值裕量时返回 `indeterminate`。该桥仍是
 实验性证明切片：精确角度集合仍是有限的，更细的 pass/possible 双层数值带尚未实现。
 
-`AtomPortMatePolicy` 必须由可信模板注册表按 `policyId` 解析，外部请求只能提交 policy ID，
-不能提交 policy body。否则调用方可以把可信客体参考与候选一起镜像后重新自证；类型分层只
-划清了信任边界，真正的严格注册表/JSON 投影仍是接入发布 gate 前的必做项。
+`AtomPortMatePolicy` 由仓库内固定注册表按 `policyId` 解析。外部请求只允许提交 schema/
+projection/scale、`policyId`、`evidenceId` 和对应 SHA-256，不能提交 policy body、reference、
+candidate、rewrite 或任何阈值。投影器同时校验请求摘要、代码固定摘要与 registry 文件实际
+摘要；任一不一致都在生成 Lean 前拒绝。固定 evidence registry 只用于这条可回放切片，未来
+动态生产证据必须进入同等可信、不可由请求内联覆盖的内容寻址存储。
 
 ## 运行
 
-先按 Lean 官方方式安装 `elan`。项目通过 `lean-toolchain` 固定 Lean 版本。
+先按 Lean 官方方式安装 `elan`。项目通过 `lean-toolchain` 固定 Lean 版本。`verify.sh` 会在
+非交互 shell 找不到 `lake` 时自动加载 `~/.elan/env`，不会依赖当前终端是否已经执行过
+`source`。
 
 ```bash
-source "$HOME/.elan/env"
 npm run verify:formal-geometry
 ```
 
@@ -166,13 +170,17 @@ npm run verify:formal-geometry
 2. 检查内置的通过与拒绝示例；
 3. 对重复字段、未知字段、非法 scale 和数值边界运行 fail-closed 测试；
 4. 把 `examples/anchored-core.json` 安全转换成 Lean 数据；
-5. 由 Lean 内核检查生成的候选策略。
+5. 从固定 registry 投影 c-sp3/C 单键 AtomPortMate，并由 Lean 内核检查 pass/reject 候选。
 
 JSON 转换器不接收任何原始 Lean 源码，只序列化 before、identified commands、expected、
 系统拥有的原子组和 candidate。
 它拒绝重复键、未知字段、缺失字段和超限数据，避免拼错字段后静默少做检查。当前全原子对
 碰撞枚举把单次请求限制为 316 个原子，使无序原子对保持在 50,000 的证明预算内；更大分子
 必须先采用可证明完备的空间分桶，而不是静默跳过原子对。
+
+AtomPortMate 请求是更窄的 capability schema，不接受上述分子正文。内置示例只引用固定
+policy/evidence registry 条目及摘要；registry 自身同样使用重复键检测、精确字段白名单、固定
+版本和整数 `positionUnits`。错误版本、未知字段、非整数坐标或摘要不匹配均 fail closed。
 
 ## 目录
 
@@ -195,12 +203,17 @@ formal/geometry/
 │   ├── anchored-core.json # B/N 固定母核示例
 │   ├── primitive-command-trace.json # 基础命令回执示例
 │   ├── primitive-intent.json # 严格意图桥示例
-│   └── quarter-turn-relation.json # 90 度关节关系示例
+│   ├── quarter-turn-relation.json # 90 度关节关系示例
+│   └── atom-port-mate-request.json # 仅含 registry ID 与摘要的连接请求
+├── registry/atom-port-mate-v1/
+│   ├── policies/          # 固定可信 AtomPortMatePolicy
+│   └── evidence/          # 固定 reference/candidate/mate 回放证据
 ├── tools/
 │   ├── json_to_lean.py    # 最终几何策略桥接器
 │   ├── command_trace_to_lean.py # 命令回执桥接器
 │   ├── intent_json_to_lean.py # 生产 GeometryIntent 严格桥
-│   └── relation_json_to_lean.py # SpatialRelation V1 严格桥
+│   ├── relation_json_to_lean.py # SpatialRelation V1 严格桥
+│   └── atom_port_mate_json_to_lean.py # 固定 registry AtomPortMate 投影器
 └── verify.sh
 ```
 
@@ -208,8 +221,8 @@ formal/geometry/
 
 1. 证明 runtime receipt projection 与 Lean 基础命令轨迹逐字段等价；
 2. 为刚性和角度证据增加系统控制的 pass/possible 双层数值带；
-3. 为 `fragment.attach` 补齐端口径向参考和显式扭转角，再把内部 TypeScript 证书投影到
-   `GraphRewrite + AtomPortMate` 的严格 JSON/Lean gate；
+3. 为 `fragment.attach` 补齐端口径向参考和显式扭转角，再把动态生产证据接入不可内联覆盖的
+   内容寻址 registry，扩展当前固定 c-sp3/C 单键 `GraphRewrite + AtomPortMate` gate；
 4. 为 exact edge fuse 单独定义“恰好合并两个端点”的改写关系；一般原子合并和芳香/Kekule
    改写继续保持独立证书，不能藏在距离阈值中；
 5. 补充配位、同位素和完整立体语义的 canonical projection；

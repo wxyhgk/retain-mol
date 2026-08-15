@@ -1,0 +1,41 @@
+{
+  "registryVersion": 1,
+  "policyId": "c-sp3-c-single-v1",
+  "expectedCommandId": "attach-c-sp3-1",
+  "expectedLeavingHydrogenAtomId": "host:H:leave",
+  "expectedLeavingBondId": "host:C-H:leave",
+  "guestReference": {
+    "atoms": [
+      {"atomId": "guest:C:attach", "symbol": "C", "positionUnits": [1500, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "guest:C:axis", "symbol": "C", "positionUnits": [2500, 0, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "guest:C:radial", "symbol": "C", "positionUnits": [1500, 1000, 0], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false},
+      {"atomId": "guest:H:handed", "symbol": "H", "positionUnits": [1500, 0, 1000], "formalCharge": 0, "radicalElectrons": 0, "aromatic": false}
+    ],
+    "bonds": [
+      {"bondId": "guest:C-C:axis", "atomId1": "guest:C:attach", "atomId2": "guest:C:axis", "order": "single"},
+      {"bondId": "guest:C-C:radial", "atomId1": "guest:C:attach", "atomId2": "guest:C:radial", "order": "single"},
+      {"bondId": "guest:C-H:handed", "atomId1": "guest:C:attach", "atomId2": "guest:H:handed", "order": "single"}
+    ]
+  },
+  "guestAttachAtomId": "guest:C:attach",
+  "linkBondOrder": "single",
+  "linkDistance": {
+    "atomId1": "host:C",
+    "atomId2": "guest:C:attach",
+    "minSquared": 2200000,
+    "maxSquared": 2300000
+  },
+  "guestRegion": {
+    "atomIds": ["guest:C:attach", "guest:C:axis", "guest:C:radial", "guest:H:handed"],
+    "frame": {
+      "originAtomId": "guest:C:attach",
+      "axisAtomId": "guest:C:axis",
+      "radialAtomId": "guest:C:radial",
+      "minAxisSquared": 1000000,
+      "minAreaSquared": 1000000000000
+    },
+    "handednessAtomId": "guest:H:handed",
+    "maxSquaredDistanceDelta": 0,
+    "minAbsVolume6": 1000000000
+  }
+}
