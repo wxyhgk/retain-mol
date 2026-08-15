@@ -11,6 +11,7 @@ from .job_creation import JobCreationManager
 from .job_operations import JobOperationsManager
 from .job_queries import JobQueryManager
 from .job_runtime import JobRuntimeManager
+from .job_submission import JobSubmissionManager
 from .job_workspace import JobWorkspace
 from .legacy_inputs import LegacyJobInputManager
 from .models import (
@@ -32,6 +33,7 @@ class JobServiceApi:
     job_creation: JobCreationManager
     job_operations: JobOperationsManager
     job_runtime: JobRuntimeManager
+    job_submission: JobSubmissionManager
     legacy_inputs: LegacyJobInputManager
     artifact_manager: ArtifactManager
     workspace: JobWorkspace
@@ -84,7 +86,7 @@ class JobServiceApi:
         workflow_id: str | None = None,
         require_active_workflow: bool = False,
     ) -> Job:
-        return self.job_creation.queue_calculation_job(
+        return self.job_submission.queue_calculation_job(
             job_id,
             inputs,
             workflow_id=workflow_id,

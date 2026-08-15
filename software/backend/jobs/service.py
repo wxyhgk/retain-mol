@@ -15,6 +15,7 @@ from .job_creation import JobCreationManager
 from .job_operations import JobOperationsManager
 from .job_queries import JobQueryManager
 from .job_runtime import JobRuntimeManager
+from .job_submission import JobSubmissionManager
 from .job_workspace import JobWorkspace
 from .legacy_inputs import LegacyJobInputManager
 from .molecule_assets import MoleculeAssetManager
@@ -57,6 +58,12 @@ class JobService(MoleculeServiceApi, JobServiceApi, WorkflowServiceApi):
             self.workspace,
             self.job_queries.get,
         )
+        self.job_submission = JobSubmissionManager(
+            self.repository,
+            self.input_resolver,
+            self.workspace,
+            self.job_queries.get,
+        )
         self.lifecycle = JobLifecycle(self.repository)
         self.job_operations = JobOperationsManager(
             self.repository,
@@ -91,6 +98,6 @@ class JobService(MoleculeServiceApi, JobServiceApi, WorkflowServiceApi):
         self.workflow_runtime = WorkflowRuntimeCoordinator(
             self.repository,
             self.job_queries.get,
-            self.job_creation.queue_calculation_job,
+            self.job_submission.queue_calculation_job,
             self.job_operations.cancel,
         )
