@@ -107,7 +107,17 @@ class RelationTraceProjectorTests(unittest.TestCase):
             timeout=30,
         )
         self.assertEqual(completed.returncode, 4, completed.stderr)
-        self.assertFalse(paths["output"].exists())
+        for artifact in (
+            "output",
+            "metadata",
+            "snapshot",
+            "identity-map",
+            "coordinate-transport-receipt",
+            "expected-effect",
+            "enforced-plan",
+            "receipt",
+        ):
+            self.assertTrue(paths[artifact].is_file(), artifact)
         return paths
 
     def project(self, paths: dict[str, Path], output: Path) -> subprocess.CompletedProcess[str]:

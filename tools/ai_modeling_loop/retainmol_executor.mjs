@@ -276,43 +276,6 @@ async function main() {
   await writeFile(args['expected-effect'], expectedEffectText)
   await writeFile(args['enforced-plan'], enforcedPlanText)
 
-  if (expectedEffect.status === 'indeterminate') {
-    const indeterminateReceipt = {
-      ...receipt,
-      status: 'indeterminate',
-      expectedEffectStatus: expectedEffect.status,
-      expectedEffectSha256: sha256(expectedEffectText),
-      actualEffectReceipt,
-      effectComparison: {
-        verdict: 'indeterminate',
-        reason: expectedEffect.reason,
-        message: expectedEffect.message,
-        mismatches: [],
-      },
-    }
-    await writeFile(args.receipt, `${JSON.stringify(indeterminateReceipt, null, 2)}\n`)
-    process.stderr.write(`${JSON.stringify(indeterminateReceipt, null, 2)}\n`)
-    process.exitCode = 4
-    return
-  }
-
-  const effectComparison = compareExpectedEffect(expectedEffect, actualEffectReceipt)
-
-  if (effectComparison.verdict !== 'pass') {
-    const failedReceipt = {
-      ...receipt,
-      status: effectComparison.verdict === 'reject' ? 'rejected' : 'indeterminate',
-      expectedEffectStatus: expectedEffect.status,
-      expectedEffectSha256: sha256(expectedEffectText),
-      actualEffectReceipt,
-      effectComparison,
-    }
-    await writeFile(args.receipt, `${JSON.stringify(failedReceipt, null, 2)}\n`)
-    process.stderr.write(`${JSON.stringify(failedReceipt, null, 2)}\n`)
-    process.exitCode = effectComparison.verdict === 'reject' ? 3 : 4
-    return
-  }
-
   const sdf = exportSdf(result.molecule)
   const builderSnapshot = createBuilderSnapshot(result.molecule)
   const builderSnapshotText = `${JSON.stringify(builderSnapshot, null, 2)}\n`
@@ -347,15 +310,7 @@ async function main() {
     coordinateTransportReceipt: path.basename(args['coordinate-transport-receipt']),
     coordinateTransportReceiptSha256: sha256(coordinateTransportReceiptText),
   }
-
-  await mkdir(path.dirname(args.output), { recursive: true })
-  await writeFile(args.output, sdf)
-  await writeFile(args.snapshot, builderSnapshotText)
-  await writeFile(args['identity-map'], identityMapText)
-  await writeFile(args['coordinate-transport-receipt'], coordinateTransportReceiptText)
-  await writeFile(args.metadata, `${JSON.stringify(metadata, null, 2)}\n`)
-  await writeFile(args.receipt, `${JSON.stringify({
-    ...receipt,
+  const artifactReceipt = {
     outputSha256: sha256(sdf),
     builderSnapshotSha256: sha256(builderSnapshotText),
     identityMapSha256: sha256(identityMapText),
@@ -363,9 +318,56 @@ async function main() {
     expectedEffectStatus: expectedEffect.status,
     expectedEffectSha256: sha256(expectedEffectText),
     actualEffectReceipt,
-    effectComparison,
     atomCount: result.molecule.atoms.length,
     bondCount: result.molecule.bonds.length,
+  }
+
+  await mkdir(path.dirname(args.output), { recursive: true })
+  await writeFile(args.output, sdf)
+  await writeFile(args.snapshot, builderSnapshotText)
+  await writeFile(args['identity-map'], identityMapText)
+  await writeFile(args['coordinate-transport-receipt'], coordinateTransportReceiptText)
+  await writeFile(args.metadata, `${JSON.stringify(metadata, null, 2)}\n`)
+
+  if (expectedEffect.status === 'indeterminate') {
+    const indeterminateReceipt = {
+      ...receipt,
+      ...artifactReceipt,
+      status: 'indeterminate',
+      effectComparison: {
+        verdict: 'indeterminate',
+        reason: expectedEffect.reason,
+        message: expectedEffect.message,
+        mismatches: [],
+      },
+    }
+    await writeFile(args.receipt, `${JSON.stringify(indeterminateReceipt, null, 2)}\n`)
+    process.stderr.write(`${JSON.stringify(indeterminateReceipt, null, 2)}\n`)
+    process.exitCode = 4
+    return
+  }
+
+  const effectComparison = compareExpectedEffect(expectedEffect, actualEffectReceipt)
+
+  if (effectComparison.verdict !== 'pass') {
+    const failedReceipt = {
+      ...receipt,
+      status: effectComparison.verdict === 'reject' ? 'rejected' : 'indeterminate',
+      expectedEffectStatus: expectedEffect.status,
+      expectedEffectSha256: sha256(expectedEffectText),
+      actualEffectReceipt,
+      effectComparison,
+    }
+    await writeFile(args.receipt, `${JSON.stringify(failedReceipt, null, 2)}\n`)
+    process.stderr.write(`${JSON.stringify(failedReceipt, null, 2)}\n`)
+    process.exitCode = effectComparison.verdict === 'reject' ? 3 : 4
+    return
+  }
+
+  await writeFile(args.receipt, `${JSON.stringify({
+    ...receipt,
+    ...artifactReceipt,
+    effectComparison,
   }, null, 2)}\n`)
 }
 

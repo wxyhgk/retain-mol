@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -120,7 +121,7 @@ class RetainMolExecutorIntegrationTests(unittest.TestCase):
                 execution["outputSha256"],
             )
 
-    def test_executor_does_not_publish_when_effect_is_indeterminate(self) -> None:
+    def test_executor_archives_candidate_but_remains_indeterminate(self) -> None:
         if not MODELING_DIST.is_file():
             self.skipTest("build @retainmol/mol-viewer before running executor integration")
 
@@ -210,11 +211,18 @@ class RetainMolExecutorIntegrationTests(unittest.TestCase):
                 execution["actualEffectReceipt"]["finalDigest"],
                 execution["actualEffectReceipt"]["baseDigest"],
             )
-            self.assertFalse(paths["output"].exists())
-            self.assertFalse(paths["metadata"].exists())
-            self.assertFalse(paths["snapshot"].exists())
-            self.assertFalse(paths["identity-map"].exists())
-            self.assertFalse(paths["coordinate-transport-receipt"].exists())
+            for artifact in (
+                "output",
+                "metadata",
+                "snapshot",
+                "identity-map",
+                "coordinate-transport-receipt",
+            ):
+                self.assertTrue(paths[artifact].is_file(), artifact)
+            self.assertEqual(
+                execution["outputSha256"],
+                hashlib.sha256(paths["output"].read_bytes()).hexdigest(),
+            )
 
 
 if __name__ == "__main__":
