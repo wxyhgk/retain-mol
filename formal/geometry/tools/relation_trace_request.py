@@ -8,7 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from json_to_lean import checked_int, checked_list, checked_string, strict_object
-from relation_trace_contract import MAX_STEPS, PROJECTION_VERSION, receipt
+from relation_trace_contract import (
+    MAX_STEPS,
+    PROJECTION_VERSION,
+    command_kind_for_witness,
+    primitive_command,
+    receipt,
+)
 from relation_trace_io import parse_strict_json_bytes, read_bounded_regular_file
 
 
@@ -51,6 +57,27 @@ def _sha256(value: Any, field: str) -> str:
     return digest
 
 
+def relation_policy(value: Any, field: str) -> dict[str, Any]:
+    discriminator = strict_object(value, field, {"kind"}, {"command"})
+    kind = checked_string(discriminator["kind"], f"{field}.kind")
+    if kind == "rotateGroup":
+        strict_object(value, field, {"kind"})
+        return {"kind": "rotateGroup"}
+    if kind == "primitive":
+        policy = strict_object(value, field, {"kind", "command"})
+        return {
+            "kind": "primitive",
+            "command": primitive_command(policy["command"], f"{field}.command"),
+        }
+    raise ValueError(f"{field}.kind is not supported: {kind!r}")
+
+
+def command_kind_for_policy(item: dict[str, Any]) -> str:
+    if item["kind"] == "primitive":
+        return item["command"]["kind"]
+    return "geometry.rotateGroup"
+
+
 def validate_request(
     value: Any,
     *,
@@ -59,7 +86,7 @@ def validate_request(
 ) -> dict[str, Any]:
     request = strict_object(value, "certificateRequest", {
         "schemaVersion", "requestId", "relationTraceSha256",
-        "expectedIdentity", "expectedReceipts",
+        "expectedIdentity", "expectedReceipts", "expectedPolicies",
     })
     if checked_int(request["schemaVersion"], "certificateRequest.schemaVersion") != REQUEST_SCHEMA_VERSION:
         raise ValueError(
@@ -114,6 +141,32 @@ def validate_request(
     ]
     if not expected_receipts:
         raise ValueError("certificateRequest.expectedReceipts must be nonempty")
+    expected_policies = [
+        relation_policy(item, f"certificateRequest.expectedPolicies[{index}]")
+        for index, item in enumerate(checked_list(
+            request["expectedPolicies"],
+            "certificateRequest.expectedPolicies",
+            maximum=MAX_STEPS,
+        ))
+    ]
+    if len(expected_policies) != len(expected_receipts):
+        raise ValueError(
+            "certificateRequest.expectedPolicies and expectedReceipts must have equal length"
+        )
+    for index, (policy, expected_receipt, step) in enumerate(zip(
+        expected_policies, expected_receipts, document["steps"], strict=True,
+    )):
+        policy_kind = command_kind_for_policy(policy)
+        if policy_kind != expected_receipt["commandKind"]:
+            raise ValueError(
+                f"certificateRequest.expectedPolicies[{index}] kind does not match "
+                "expectedReceipts commandKind"
+            )
+        if policy_kind != command_kind_for_witness(step["witness"]):
+            raise ValueError(
+                f"certificateRequest.expectedPolicies[{index}] kind does not match "
+                "the trace witness kind"
+            )
     if expected_identity != document["identity"]:
         raise ValueError("certificateRequest.expectedIdentity does not match the trace identity")
     if expected_receipts != document["expectedReceipts"]:
@@ -123,4 +176,5 @@ def validate_request(
         "relationTraceSha256": expected_trace_sha,
         "expectedIdentity": expected_identity,
         "expectedReceipts": expected_receipts,
+        "expectedPolicies": expected_policies,
     }

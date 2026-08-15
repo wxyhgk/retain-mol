@@ -23,10 +23,19 @@ import {
   writeBoundedAtomic,
 } from './relation_trace_projector_io.mjs'
 
-export const RELATION_TRACE_PROJECTION_VERSION = 'runtime-rotate-relation-trace-v1'
+export const RELATION_TRACE_PROJECTION_VERSION = 'runtime-mixed-relation-trace-v2'
 export const RELATION_TRACE_COORDINATE_SCALE = 1000
 
-const SUPPORTED_KIND = 'geometry.rotateGroup'
+const ROTATE_KIND = 'geometry.rotateGroup'
+const PRIMITIVE_KINDS = new Set([
+  'atom.add',
+  'atom.replace',
+  'atom.remove',
+  'atom.move',
+  'bond.add',
+  'bond.remove',
+  'bond.setOrder',
+])
 const MAX_RELATION_ATOMS = 316
 const MAX_RELATION_BONDS = 1000
 const MAX_TRACE_STEPS = 512
@@ -135,8 +144,58 @@ function classifyPlanCommandSet(rawPlan) {
     }
     return command.kind
   })
-  if (commandKinds.length === 0 || commandKinds.some(kind => kind !== SUPPORTED_KIND)) {
-    indeterminate('unsupported-command-set', 'relation trace v1 只接受非空且全部为 geometry.rotateGroup 的计划')
+  if (commandKinds.length === 0 || !commandKinds.includes(ROTATE_KIND)) {
+    indeterminate('unsupported-command-set', 'relation trace v2 要求至少一个 geometry.rotateGroup 命令')
+  }
+  if (commandKinds.some(kind => kind !== ROTATE_KIND && !PRIMITIVE_KINDS.has(kind))) {
+    indeterminate(
+      'unsupported-command-set',
+      'relation trace v2 只接受七种 primitive 命令与 geometry.rotateGroup 的混合计划',
+    )
+  }
+}
+
+function primitiveCommandPayload(command) {
+  switch (command.kind) {
+    case 'atom.add':
+      return {
+        kind: command.kind,
+        atom: {
+          atomId: command.atomId,
+          symbol: command.symbol,
+          position: [command.position.x, command.position.y, command.position.z],
+        },
+      }
+    case 'atom.replace':
+      return { kind: command.kind, atomId: command.atomId, symbol: command.symbol }
+    case 'atom.remove':
+      return { kind: command.kind, atomId: command.atomId }
+    case 'atom.move':
+      return {
+        kind: command.kind,
+        atomId: command.atomId,
+        position: [command.position.x, command.position.y, command.position.z],
+      }
+    case 'bond.add':
+      return {
+        kind: command.kind,
+        bond: {
+          bondId: command.bondId,
+          atomId1: command.atomId1,
+          atomId2: command.atomId2,
+          order: ({ 1: 'single', 2: 'double', 3: 'triple' })[command.order],
+        },
+      }
+    case 'bond.remove':
+      return { kind: command.kind, bondId: command.bondId }
+    case 'bond.setOrder':
+      return {
+        kind: command.kind,
+        bondId: command.bondId,
+        order: ({ 1: 'single', 2: 'double', 3: 'triple' })[command.order],
+      }
+    default:
+      reject('unsupported-primitive-command', `不支持的 primitive 命令：${command.kind}`)
   }
 }
 
@@ -538,24 +597,47 @@ export async function projectRelationTrace({ initialPath, enforcedPlanPath, exec
 
   const steps = replay.steps.map((step, index) => {
     const command = plan.commands[index]
-    if (command.kind !== SUPPORTED_KIND || step.commandId !== command.commandId || step.commandKind !== command.kind) {
+    if (step.commandId !== command.commandId || step.commandKind !== command.kind) {
       reject('trace-command-mismatch', `第 ${index + 1} 个执行步骤与计划命令不一致`)
-    }
-    const verification = verifyRotateGroupRelation(step.before, step.after, command)
-    if (verification.verdict !== 'pass') {
-      const message = `${verification.diagnostic.code}: ${verification.diagnostic.message}`
-      if (verification.verdict === 'reject') reject('runtime-relation-rejected', message)
-      indeterminate('runtime-relation-indeterminate', message)
-    }
-    if (verification.relation.movingAtomIds.length + 1 > MAX_RELATION_ATOMS) {
-      indeterminate('relation-too-large', '单步关系最多包含 ' + MAX_RELATION_ATOMS + ' 个原子')
     }
     const beforeRuntime = createCanonicalMoleculeSnapshot(step.before)
     const afterRuntime = createCanonicalMoleculeSnapshot(step.after)
     const before = projectCanonicalSnapshot(beforeRuntime)
     const after = projectCanonicalSnapshot(afterRuntime)
-    const { beforePoints, afterPoints, region } = deriveRigidRegion(before, after, verification.relation)
     const receipt = expectedReceipt.commands[index]
+    let witness
+    if (command.kind === ROTATE_KIND) {
+      const verification = verifyRotateGroupRelation(step.before, step.after, command)
+      if (verification.verdict !== 'pass') {
+        const message = `${verification.diagnostic.code}: ${verification.diagnostic.message}`
+        if (verification.verdict === 'reject') reject('runtime-relation-rejected', message)
+        indeterminate('runtime-relation-indeterminate', message)
+      }
+      if (verification.relation.movingAtomIds.length + 1 > MAX_RELATION_ATOMS) {
+        indeterminate('relation-too-large', '单步关系最多包含 ' + MAX_RELATION_ATOMS + ' 个原子')
+      }
+      const { beforePoints, afterPoints, region } = deriveRigidRegion(
+        before,
+        after,
+        verification.relation,
+      )
+      witness = {
+        kind: 'rotateGroup',
+        commandId: command.commandId,
+        axisBondId: findAxisBond(beforeRuntime, verification.relation),
+        fixedAxisAtomId: verification.relation.fixedAxisAtomId,
+        movingAxisAtomId: verification.relation.movingAxisAtomId,
+        movingAtomIds: [...verification.relation.movingAtomIds].sort(byteCompare),
+        region,
+        turn: createTurnBand(beforePoints, afterPoints, verification.relation, command),
+      }
+    } else {
+      witness = {
+        kind: 'primitive',
+        commandId: command.commandId,
+        command: primitiveCommandPayload(command),
+      }
+    }
     return {
       receipt: {
         commandId: receipt.commandId,
@@ -567,16 +649,7 @@ export async function projectRelationTrace({ initialPath, enforcedPlanPath, exec
       runtimeAfter: afterRuntime,
       before,
       after,
-      witness: {
-        kind: 'rotateGroup',
-        commandId: command.commandId,
-        axisBondId: findAxisBond(beforeRuntime, verification.relation),
-        fixedAxisAtomId: verification.relation.fixedAxisAtomId,
-        movingAxisAtomId: verification.relation.movingAxisAtomId,
-        movingAtomIds: [...verification.relation.movingAtomIds].sort(byteCompare),
-        region,
-        turn: createTurnBand(beforePoints, afterPoints, verification.relation, command),
-      },
+      witness,
     }
   })
 

@@ -509,7 +509,7 @@ class LoopContractsTest(unittest.TestCase):
                 "schemaVersion": 1,
                 "status": "pass",
                 "code": "lean-relation-satisfied",
-                "projectionVersion": "runtime-rotate-relation-trace-v1",
+                "projectionVersion": "runtime-mixed-relation-trace-v2",
                 "manifestSha256": "a" * 64,
                 "evidence": {},
             }
@@ -586,7 +586,7 @@ class LoopContractsTest(unittest.TestCase):
                 "schemaVersion": 1,
                 "status": "pass",
                 "code": "lean-relation-satisfied",
-                "projectionVersion": "runtime-rotate-relation-trace-v1",
+                "projectionVersion": "runtime-mixed-relation-trace-v2",
                 "manifestSha256": "a" * 64,
                 "evidence": {},
             }

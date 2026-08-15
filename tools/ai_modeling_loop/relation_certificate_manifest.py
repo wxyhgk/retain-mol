@@ -34,6 +34,15 @@ RELATION_NOT_APPLICABLE_KINDS = frozenset({
     "bond.remove",
     "bond.setOrder",
 })
+FORMAL_PRIMITIVE_KINDS = frozenset({
+    "atom.add",
+    "atom.replace",
+    "atom.remove",
+    "atom.move",
+    "bond.add",
+    "bond.remove",
+    "bond.setOrder",
+})
 RELATION_CERTIFICATE_FIELDS = frozenset({
     "schemaVersion",
     "relationMode",
@@ -135,7 +144,11 @@ def classify_relation_capability(plan: Mapping[str, Any]) -> str:
     if mode == "not-applicable":
         return mode
     commands = plan["commands"]
-    if all(command["kind"] == "geometry.rotateGroup" for command in commands):
+    if all(
+        command["kind"] == "geometry.rotateGroup"
+        or command["kind"] in FORMAL_PRIMITIVE_KINDS
+        for command in commands
+    ):
         return "supported"
     return "unsupported"
 

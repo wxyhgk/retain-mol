@@ -64,6 +64,28 @@ def rotate_plan() -> dict:
     }
 
 
+def mixed_plan() -> dict:
+    plan = rotate_plan()
+    rotate = plan["commands"][0]
+    plan["planId"] = "mixed-plan"
+    plan["commands"] = [
+        {
+            "commandId": "replace-before",
+            "kind": "atom.replace",
+            "atomId": "H",
+            "symbol": "N",
+        },
+        rotate,
+        {
+            "commandId": "replace-after",
+            "kind": "atom.replace",
+            "atomId": "H",
+            "symbol": "C",
+        },
+    ]
+    return plan
+
+
 class RelationCertificateCheckerTests(unittest.TestCase):
     def create_plan_only_run(self, root: Path, commands: list[dict]) -> Path:
         run_dir = root / "run"
@@ -74,7 +96,7 @@ class RelationCertificateCheckerTests(unittest.TestCase):
         })
         return run_dir
 
-    def create_executed_rotate_run(self, root: Path) -> Path:
+    def create_executed_run(self, root: Path, *, plan: dict | None = None) -> Path:
         run_dir = root / "run"
         paths = {
             "initial": run_dir / "inputs" / "initial-molecule.json",
@@ -94,7 +116,7 @@ class RelationCertificateCheckerTests(unittest.TestCase):
             "fixedAtomIds": ["F"],
             "molecule": rotate_molecule(),
         })
-        write_json(paths["plan"], rotate_plan())
+        write_json(paths["plan"], plan or rotate_plan())
         write_json(run_dir / "run-manifest.json", {"schemaVersion": 2, "runId": "run"})
         arguments = ["node", str(EXECUTOR)]
         for name, path in paths.items():
@@ -108,6 +130,9 @@ class RelationCertificateCheckerTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 4, completed.stderr)
         return run_dir
+
+    def create_executed_rotate_run(self, root: Path) -> Path:
+        return self.create_executed_run(root)
 
     def trusted_runtime(self) -> dict[str, str] | None:
         return relation_checker_runtime_evidence(30)
@@ -136,6 +161,22 @@ class RelationCertificateCheckerTests(unittest.TestCase):
             self.assertEqual(result.status, "indeterminate")
             self.assertEqual(result.code, "relation-command-set-unsupported")
             self.assertFalse(stale.exists())
+
+    def test_mixed_plan_with_unsupported_primitive_is_indeterminate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = self.create_plan_only_run(Path(directory), [
+                {
+                    "commandId": "charge-1",
+                    "kind": "atom.setCharge",
+                },
+                {
+                    "commandId": "rotate-1",
+                    "kind": "geometry.rotateGroup",
+                },
+            ])
+            result = run_relation_certificate_check(run_dir)
+            self.assertEqual(result.status, "indeterminate")
+            self.assertEqual(result.code, "relation-command-set-unsupported")
 
     def test_rotate_execution_is_reprojected_and_proved_by_lean(self) -> None:
         if not MODELING_DIST.is_file():
@@ -168,6 +209,47 @@ class RelationCertificateCheckerTests(unittest.TestCase):
                 final_sdf_path=run_dir / "candidate.sdf",
             )
             self.assertEqual(terminal.status, VerificationStatus.PASS, terminal)
+
+    def test_mixed_execution_is_reprojected_and_proved_by_lean(self) -> None:
+        if not MODELING_DIST.is_file():
+            self.skipTest("build @retainmol/mol-viewer before relation checker integration")
+        trusted = self.trusted_runtime()
+        if trusted is None:
+            self.skipTest("Lean toolchain is unavailable")
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = self.create_executed_run(Path(directory), plan=mixed_plan())
+            result = run_relation_certificate_check(
+                run_dir,
+                trusted_checker_closure_sha256=trusted["checkerClosureSha256"],
+            )
+            self.assertEqual(result.status, "pass", result)
+            request = json.loads(
+                (run_dir / "relation" / "relation-trace-request.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                request["expectedPolicies"],
+                [
+                    {
+                        "kind": "primitive",
+                        "command": {
+                            "kind": "atom.replace",
+                            "atomId": "H",
+                            "symbol": "N",
+                        },
+                    },
+                    {"kind": "rotateGroup"},
+                    {
+                        "kind": "primitive",
+                        "command": {
+                            "kind": "atom.replace",
+                            "atomId": "H",
+                            "symbol": "C",
+                        },
+                    },
+                ],
+            )
 
     def test_failed_recheck_removes_stale_pass_verdict(self) -> None:
         if not MODELING_DIST.is_file():

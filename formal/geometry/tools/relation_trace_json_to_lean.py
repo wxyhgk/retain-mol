@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from intent_json_to_lean import render_intent_molecule
+from command_trace_to_lean import render_command as render_primitive_command
 from json_to_lean import (
     lean_inline_list,
     lean_string,
@@ -50,6 +51,12 @@ def render_ratio(value: tuple[int, int, int, int]) -> str:
 
 
 def render_witness(item: dict[str, Any], field: str) -> str:
+    if item["kind"] == "primitive":
+        return (
+            ".primitive "
+            f"{lean_string(item['commandId'], f'{field}.commandId')} "
+            f"({render_primitive_command(item['command'], f'{field}.command')})"
+        )
     region = item["region"]
     frame = region["frame"]
     turn = item["turn"]
@@ -79,6 +86,15 @@ def render_witness(item: dict[str, Any], field: str) -> str:
         f"cosineSquared := {render_ratio(turn['cosineSquared'])}, "
         f"sineSquared := {render_ratio(turn['sineSquared'])} }} }}"
     )
+
+
+def render_policy(item: dict[str, Any], field: str) -> str:
+    if item["kind"] == "primitive":
+        return (
+            ".primitive "
+            f"({render_primitive_command(item['command'], f'{field}.command')})"
+        )
+    return ".rotateGroup"
 
 
 def render_document(
@@ -141,7 +157,10 @@ def render_document(
         + lean_inline_list(receipt_names),
         "",
         "private def expectedPolicies : List RelationPolicy := "
-        + lean_inline_list([".rotateGroup" for _ in request["expectedReceipts"]]),
+        + lean_inline_list([
+            render_policy(item, f"certificateRequest.expectedPolicies[{index}]")
+            for index, item in enumerate(request["expectedPolicies"])
+        ]),
         "",
         render_intent_molecule("base", document["base"]),
         render_intent_molecule("final", document["final"]),

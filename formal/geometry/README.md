@@ -174,16 +174,22 @@ candidate、rewrite 或任何阈值。投影器同时校验请求摘要、代码
 动态生产证据必须进入同等可信、不可由请求内联覆盖的内容寻址存储。AtomPortMate 的 Lean
 evaluation value 和输出 envelope 会保留命令 ID、投影版本及上述 registry 身份与摘要，避免
 匿名 PASS 跨证据串线。实验性的 `RelationTrace` 已给出正式 gate 所需的封闭 witness、精确
-receipt 顺序和完整快照链语义。当前已有一条只接受非空、纯 `geometry.rotateGroup` 计划的
-运行时 projector：它从冻结的 initial、enforced plan 和 execution receipt 独立重放，不接受
-调用方内联 witness，并把每一步完整 canonical before/after、重新计算的摘要和固定 V1 几何
-策略投影给严格 JSON -> Lean 转换器。转换器再次核对运行时快照摘要、整数坐标投影、回执
-顺序、完整快照链及固定阈值，生成 `RelationTraceSemantics` 证明。转换器不再从待证明 trace
-自身生成 `expectedIdentity` 和 `expectedReceipts`；调用它的受信任编排层必须另外提供 certificate
-request，预先固定 trace 原始字节 SHA-256、运行身份与逐命令回执。只篡改 trace、或重算 trace
-内部全部摘要，都会在生成 Lean 前被 request binding 拒绝。request 本身的 SHA-256 仍必须由
-最终 publication gate 或同等受信任的运行清单固定；转换器不把“调用方提供了 request”等同于
-request 已经可信。
+receipt 顺序和完整快照链语义。当前 `runtime-mixed-relation-trace-v2` projector 接受至少包含一条
+`geometry.rotateGroup`，且其余步骤只属于七类确定性 primitive 的非空计划：`atom.add`、
+`atom.replace`、`atom.remove`、`atom.move`、`bond.add`、`bond.remove` 与 `bond.setOrder`。
+projector 从冻结的 initial、enforced plan 和 execution receipt 独立重放全部步骤，不过滤无空间
+关系的中间命令，也不接受调用方内联 witness。每一步都包含完整 canonical before/after、重算
+摘要以及 primitive command 或固定旋转几何 witness，再交给严格 JSON -> Lean 转换器。
+转换器核对运行时快照摘要、整数坐标投影、回执顺序、完整快照链及固定阈值，并生成
+`RelationTraceSemantics` 证明。对于 primitive，Lean 还会执行冻结命令并要求其结果恰好等于
+after 快照。
+
+转换器不再从待证明 trace 自身生成 `expectedIdentity`、`expectedReceipts` 或
+`expectedPolicies`；受信任编排层必须从冻结 enforced plan 独立派生逐步骤策略，并通过
+certificate request 固定 trace 原始字节 SHA-256、运行身份、回执和命令策略。只篡改 trace、
+重算 trace 内部摘要，或令 primitive witness 与冻结策略不一致，都会被 request binding 或 Lean
+语义检查拒绝。request 本身的 SHA-256 仍必须由最终 publication gate 或同等受信任的运行清单
+固定；转换器不把“调用方提供了 request”等同于 request 已经可信。
 
 生成的 Lean 文件使用 `RelationTraceCertificate`，把 request ID、request 原始字节 SHA-256、
 trace 原始字节 SHA-256、外部期望身份、期望回执和完整 trace 放入同一个检查命题。
@@ -202,8 +208,10 @@ UTF-8、无 BOM 的字节协议。Node projector 与 Python converter 均在 JSO
 `relation_trace_request.py` 负责外部期望身份和 trace 字节绑定，
 `relation_trace_json_to_lean.py` 只负责编排验证并生成 Lean 文本。
 
-该切片仍未接入最终 publication gate，也不会把 executor 当前的 `indeterminate` 自动升级成
-生产 `pass`；`fragment.attach` 虽有 Lean 组合关系，但仍不在 runtime projector 能力内。其开放
+formal verdict 先作为暂存证据产生，最终 publication gate 会重新核对绑定后再决定是否发布；
+checker 不会把 executor 当前的 `indeterminate` 自动升级成生产 `pass`。`atom.setCharge`、
+`atom.setRadical`、`atom.addHydrogen` 和 `fragment.attach` 仍不在 runtime projector 能力内，
+混入任一命令都会得到 `indeterminate`。其中 `fragment.attach` 虽有 Lean 组合关系，但其开放
 前至少要固定宿主径向、模板客体径向、proper-rigid 手性见证、零角约定和 registry/profile 摘要，
 且这些身份必须由外部 certificate request 或不可变 run manifest 绑定。开发验证命令：
 
@@ -232,7 +240,7 @@ lake env lean GeneratedRelationTrace.lean
   "requestId": "run-id:relation-trace",
   "relationTraceSha256": "<trace 原始字节的 SHA-256>",
   "expectedIdentity": {
-    "projectionVersion": "runtime-rotate-relation-trace-v1",
+    "projectionVersion": "runtime-mixed-relation-trace-v2",
     "planId": "<冻结 plan id>",
     "enforcedPlanSha256": "<冻结 enforced plan 的 SHA-256>",
     "baseDigest": "canonical-v2:sha256:<...>",
@@ -244,6 +252,11 @@ lake env lean GeneratedRelationTrace.lean
       "commandKind": "geometry.rotateGroup",
       "preDigest": "canonical-v2:sha256:<...>",
       "postDigest": "canonical-v2:sha256:<...>"
+    }
+  ],
+  "expectedPolicies": [
+    {
+      "kind": "rotateGroup"
     }
   ]
 }

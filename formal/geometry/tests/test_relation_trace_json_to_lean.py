@@ -109,6 +109,9 @@ def create_certificate_request(trace_path: Path) -> Path:
         "relationTraceSha256": hashlib.sha256(trace_path.read_bytes()).hexdigest(),
         "expectedIdentity": payload["identity"],
         "expectedReceipts": payload["expectedReceipts"],
+        "expectedPolicies": [
+            {"kind": "rotateGroup"} for _ in payload["expectedReceipts"]
+        ],
     }
     output = trace_path.with_name("relation-trace-request.json")
     output.write_text(json.dumps(request, indent=2) + "\n", encoding="utf-8")
@@ -217,6 +220,126 @@ class RelationTraceJsonToLeanTests(unittest.TestCase):
         witness_blocks = rendered.split("  witness := ")[1:]
         self.assertTrue(witness_blocks)
         self.assertTrue(all("policy :=" not in block.split("\n}", 1)[0] for block in witness_blocks))
+
+    def test_all_primitive_witness_and_policy_variants_render(self) -> None:
+        commands = [
+            {"kind": "atom.add", "atom": {"atomId": "X", "symbol": "N", "position": [2, 0, 0]}},
+            {"kind": "atom.replace", "atomId": "R", "symbol": "N"},
+            {"kind": "atom.remove", "atomId": "R"},
+            {"kind": "atom.move", "atomId": "R", "position": [1, 2, 3]},
+            {"kind": "bond.add", "bond": {"bondId": "new", "atomId1": "F", "atomId2": "R", "order": "double"}},
+            {"kind": "bond.remove", "bondId": "MR"},
+            {"kind": "bond.setOrder", "bondId": "MR", "order": "triple"},
+        ]
+        constructors = [
+            ".atomAdd", ".atomReplace", ".atomRemove", ".atomMove",
+            ".bondAdd", ".bondRemove", ".bondSetOrder",
+        ]
+        for command, constructor in zip(commands, constructors, strict=True):
+            with self.subTest(kind=command["kind"]):
+                payload = self.valid_payload()
+                request = self.valid_request()
+                payload["steps"][0]["witness"] = {
+                    "kind": "primitive",
+                    "commandId": payload["steps"][0]["receipt"]["commandId"],
+                    "command": copy.deepcopy(command),
+                }
+                payload["steps"][0]["receipt"]["commandKind"] = command["kind"]
+                payload["expectedReceipts"][0]["commandKind"] = command["kind"]
+                request["expectedReceipts"][0]["commandKind"] = command["kind"]
+                request["expectedPolicies"][0] = {
+                    "kind": "primitive",
+                    "command": copy.deepcopy(command),
+                }
+                rendered = self.render(payload=payload, request=request)
+                self.assertIn(f".primitive ({constructor}", rendered)
+                self.assertIn(f".primitive \"rotate-1\" ({constructor}", rendered)
+
+    def test_primitive_policy_is_rendered_from_request_not_witness(self) -> None:
+        payload = self.valid_payload()
+        request = self.valid_request()
+        witness_command = {"kind": "atom.remove", "atomId": "R"}
+        policy_command = {"kind": "atom.remove", "atomId": "H"}
+        payload["steps"][0]["witness"] = {
+            "kind": "primitive",
+            "commandId": "rotate-1",
+            "command": witness_command,
+        }
+        payload["steps"][0]["receipt"]["commandKind"] = "atom.remove"
+        payload["expectedReceipts"][0]["commandKind"] = "atom.remove"
+        request["expectedReceipts"][0]["commandKind"] = "atom.remove"
+        request["expectedPolicies"][0] = {
+            "kind": "primitive",
+            "command": policy_command,
+        }
+        rendered = self.render(payload=payload, request=request)
+        self.assertIn('.primitive (.atomRemove "H")', rendered)
+        self.assertIn('.primitive "rotate-1" (.atomRemove "R")', rendered)
+
+    def test_lean_rejects_primitive_witness_that_differs_from_policy(self) -> None:
+        if shutil.which("lake") is None:
+            self.skipTest("lake is not installed")
+        payload = self.valid_payload()
+        request = self.valid_request()
+        payload["steps"][0]["witness"] = {
+            "kind": "primitive",
+            "commandId": "rotate-1",
+            "command": {"kind": "atom.remove", "atomId": "R"},
+        }
+        payload["steps"][0]["receipt"]["commandKind"] = "atom.remove"
+        payload["expectedReceipts"][0]["commandKind"] = "atom.remove"
+        request["expectedReceipts"][0]["commandKind"] = "atom.remove"
+        request["expectedPolicies"][0] = {
+            "kind": "primitive",
+            "command": {"kind": "atom.remove", "atomId": "H"},
+        }
+        output = Path(self._temporary.name) / "MismatchedPrimitivePolicy.lean"
+        output.write_text(
+            self.render(payload=payload, request=request),
+            encoding="utf-8",
+        )
+        completed = subprocess.run(
+            ["lake", "env", "lean", str(output)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+
+    def test_primitive_witness_cannot_self_declare_policy(self) -> None:
+        payload = self.valid_payload()
+        payload["steps"][0]["witness"] = {
+            "kind": "primitive",
+            "commandId": "rotate-1",
+            "command": {"kind": "atom.remove", "atomId": "R"},
+            "policy": {"kind": "atom.remove", "atomId": "R"},
+        }
+        with self.assertRaisesRegex(ValueError, "unknown fields"):
+            self.render(payload=payload)
+
+    def test_expected_policy_count_and_kind_must_align(self) -> None:
+        request = self.valid_request()
+        request["expectedPolicies"].pop()
+        with self.assertRaisesRegex(ValueError, "equal length"):
+            self.render(request=request)
+
+        request = self.valid_request()
+        request["expectedPolicies"][0] = {
+            "kind": "primitive",
+            "command": {"kind": "atom.remove", "atomId": "R"},
+        }
+        with self.assertRaisesRegex(ValueError, "kind does not match"):
+            self.render(request=request)
+
+    def test_unknown_primitive_command_field_is_rejected(self) -> None:
+        request = self.valid_request()
+        request["expectedPolicies"][0] = {
+            "kind": "primitive",
+            "command": {"kind": "atom.remove", "atomId": "R", "symbol": "N"},
+        }
+        with self.assertRaisesRegex(ValueError, "unknown fields"):
+            self.render(request=request)
 
     def test_generated_certificate_rejects_single_sided_digest_tampering(self) -> None:
         if shutil.which("lake") is None:

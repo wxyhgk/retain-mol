@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from command_trace_to_lean import render_command as render_primitive_command
 from json_to_lean import checked_int, checked_list, checked_string, strict_object
 from relation_trace_runtime import (
     CANONICAL_DIGEST_PREFIX,
@@ -17,7 +18,7 @@ from relation_trace_runtime import (
 
 
 SCHEMA_VERSION = 1
-PROJECTION_VERSION = "runtime-rotate-relation-trace-v1"
+PROJECTION_VERSION = "runtime-mixed-relation-trace-v2"
 MAX_STEPS = 512
 MIN_AXIS_SQUARED = "100000"
 MIN_AREA_SQUARED = "10000000000"
@@ -34,6 +35,16 @@ _EXACT_RATIO_PAIRS = {
     ((1, 4), (3, 4)),
     ((0, 1), (1, 1)),
 }
+PRIMITIVE_COMMAND_KINDS = {
+    "atom.add",
+    "atom.replace",
+    "atom.remove",
+    "atom.move",
+    "bond.add",
+    "bond.remove",
+    "bond.setOrder",
+}
+SUPPORTED_COMMAND_KINDS = PRIMITIVE_COMMAND_KINDS | {"geometry.rotateGroup"}
 
 
 def _utf8_key(value: str) -> bytes:
@@ -52,8 +63,8 @@ def _digest(value: Any, field: str) -> str:
 def receipt(value: Any, field: str) -> dict[str, str]:
     item = strict_object(value, field, {"commandId", "commandKind", "preDigest", "postDigest"})
     command_kind = checked_string(item["commandKind"], f"{field}.commandKind")
-    if command_kind != "geometry.rotateGroup":
-        raise ValueError(f"{field}.commandKind must be geometry.rotateGroup")
+    if command_kind not in SUPPORTED_COMMAND_KINDS:
+        raise ValueError(f"{field}.commandKind is not supported: {command_kind!r}")
     return {
         "commandId": checked_string(item["commandId"], f"{field}.commandId"),
         "commandKind": command_kind,
@@ -84,13 +95,38 @@ def _ratio(value: Any, field: str) -> tuple[int, int, int, int]:
     return result
 
 
+def primitive_command(value: Any, field: str) -> dict[str, Any]:
+    # The existing primitive trace renderer is also the canonical strict parser
+    # for all seven PrimitiveCommand JSON variants.
+    render_primitive_command(value, field)
+    return value
+
+
+def command_kind_for_witness(item: dict[str, Any]) -> str:
+    if item["kind"] == "primitive":
+        return item["command"]["kind"]
+    return "geometry.rotateGroup"
+
+
 def witness(value: Any, field: str) -> dict[str, Any]:
+    discriminator = strict_object(value, field, {"kind"}, {
+        "commandId", "command", "axisBondId", "fixedAxisAtomId", "movingAxisAtomId",
+        "movingAtomIds", "region", "turn",
+    })
+    kind = checked_string(discriminator["kind"], f"{field}.kind")
+    if kind == "primitive":
+        item = strict_object(value, field, {"kind", "commandId", "command"})
+        return {
+            "kind": "primitive",
+            "commandId": checked_string(item["commandId"], f"{field}.commandId"),
+            "command": primitive_command(item["command"], f"{field}.command"),
+        }
+    if kind != "rotateGroup":
+        raise ValueError(f"{field}.kind is not supported: {kind!r}")
     item = strict_object(value, field, {
         "kind", "commandId", "axisBondId", "fixedAxisAtomId", "movingAxisAtomId",
         "movingAtomIds", "region", "turn",
     })
-    if item["kind"] != "rotateGroup":
-        raise ValueError(f"{field}.kind must be rotateGroup")
     moving_ids = [
         checked_string(atom_id, f"{field}.movingAtomIds[{index}]")
         for index, atom_id in enumerate(checked_list(item["movingAtomIds"], f"{field}.movingAtomIds"))
@@ -252,6 +288,8 @@ def validate_document(value: Any) -> dict[str, Any]:
         step_witness = witness(item["witness"], f"{field}.witness")
         if step_witness["commandId"] != step_receipt["commandId"]:
             raise ValueError(f"{field}.witness.commandId does not match the receipt")
+        if command_kind_for_witness(step_witness) != step_receipt["commandKind"]:
+            raise ValueError(f"{field}.witness kind does not match the receipt commandKind")
         steps.append({
             "receipt": step_receipt,
             "runtimeBefore": runtime_before,

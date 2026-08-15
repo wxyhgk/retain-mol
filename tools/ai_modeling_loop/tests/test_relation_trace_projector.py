@@ -51,6 +51,28 @@ def rotate_plan(*, command_count: int = 1, reverse_axis: bool = False) -> dict:
     }
 
 
+def mixed_plan() -> dict:
+    plan = rotate_plan()
+    rotate = plan["commands"][0]
+    plan["planId"] = "mixed-plan"
+    plan["commands"] = [
+        {
+            "commandId": "replace-before",
+            "kind": "atom.replace",
+            "atomId": "H",
+            "symbol": "N",
+        },
+        rotate,
+        {
+            "commandId": "replace-after",
+            "kind": "atom.replace",
+            "atomId": "H",
+            "symbol": "C",
+        },
+    ]
+    return plan
+
+
 def reverse_object_fields(value):
     if isinstance(value, dict):
         return {
@@ -144,7 +166,7 @@ class RelationTraceProjectorTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
 
             projected = json.loads(output.read_text())
-            self.assertEqual(projected["projectionVersion"], "runtime-rotate-relation-trace-v1")
+            self.assertEqual(projected["projectionVersion"], "runtime-mixed-relation-trace-v2")
             self.assertEqual(projected["coordinateScale"], 1000)
             self.assertEqual(len(projected["steps"]), 2)
             self.assertEqual(
@@ -165,6 +187,37 @@ class RelationTraceProjectorTests(unittest.TestCase):
             self.assertEqual(
                 projected["steps"][0]["receipt"]["postDigest"],
                 projected["steps"][1]["receipt"]["preDigest"],
+            )
+            self.assertEqual(projected["steps"][-1]["after"], projected["final"])
+
+    def test_projects_complete_primitive_rotate_primitive_trace_in_plan_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = self.create_executor_artifacts(root, plan=mixed_plan())
+            output = root / "relation-trace.json"
+            completed = self.project(paths, output)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+            projected = json.loads(output.read_text())
+            self.assertEqual(
+                [step["receipt"]["commandId"] for step in projected["steps"]],
+                ["replace-before", "rotate-1", "replace-after"],
+            )
+            self.assertEqual(
+                [step["witness"]["kind"] for step in projected["steps"]],
+                ["primitive", "rotateGroup", "primitive"],
+            )
+            self.assertEqual(
+                projected["steps"][0]["witness"]["command"],
+                {"kind": "atom.replace", "atomId": "H", "symbol": "N"},
+            )
+            self.assertEqual(
+                projected["steps"][1]["receipt"]["preDigest"],
+                projected["steps"][0]["receipt"]["postDigest"],
+            )
+            self.assertEqual(
+                projected["steps"][2]["receipt"]["preDigest"],
+                projected["steps"][1]["receipt"]["postDigest"],
             )
             self.assertEqual(projected["steps"][-1]["after"], projected["final"])
 
@@ -318,6 +371,18 @@ class RelationTraceProjectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             paths = self.create_executor_artifacts(root)
+            receipt = json.loads(paths["receipt"].read_text())
+            receipt["actualEffectReceipt"]["commands"][0]["postDigest"] = "forged"
+            paths["receipt"].write_text(json.dumps(receipt))
+            output = root / "relation-trace.json"
+            completed = self.project(paths, output)
+            self.assertEqual(completed.returncode, 3, completed.stderr)
+            self.assertEqual(json.loads(output.read_text())["code"], "effect-receipt-mismatch")
+
+    def test_rejects_forged_primitive_receipt_in_mixed_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = self.create_executor_artifacts(root, plan=mixed_plan())
             receipt = json.loads(paths["receipt"].read_text())
             receipt["actualEffectReceipt"]["commands"][0]["postDigest"] = "forged"
             paths["receipt"].write_text(json.dumps(receipt))

@@ -198,7 +198,7 @@ class RelationFinalArtifactGateTests(unittest.TestCase):
         return RelationCertificateCheckResult(
             "pass",
             "lean-relation-satisfied",
-            projection_version="runtime-rotate-relation-trace-v1",
+            projection_version="runtime-mixed-relation-trace-v2",
             evidence={"checkerClosureSha256": "a" * 64},
         )
 

@@ -68,7 +68,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             "schemaVersion": 1,
             "status": "pass",
             "checker": "lean-relation-trace-v1",
-            "projectionVersion": "runtime-rotate-relation-trace-v1",
+            "projectionVersion": "runtime-mixed-relation-trace-v2",
             "relationTraceSha256": sha256_file(relation_dir / "relation-trace.json"),
             "certificateRequestSha256": sha256_file(
                 relation_dir / "relation-trace-request.json"
@@ -113,6 +113,15 @@ class RelationCertificateManifestTests(unittest.TestCase):
                     {"kind": "geometry.rotateGroup"},
                 ],
             }),
+            "supported",
+        )
+        self.assertEqual(
+            classify_relation_capability({
+                "commands": [
+                    {"kind": "atom.setCharge"},
+                    {"kind": "geometry.rotateGroup"},
+                ],
+            }),
             "unsupported",
         )
 
@@ -126,7 +135,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             self.create_relation_artifacts(run_dir)
             manifest = build_relation_certificate_manifest(
                 run_dir,
-                projection_version="runtime-rotate-relation-trace-v1",
+                projection_version="runtime-mixed-relation-trace-v2",
             )
             path = run_dir / "relation-certificate-manifest.json"
             write_json(path, manifest)
@@ -149,7 +158,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             self.create_relation_artifacts(run_dir)
             manifest = build_relation_certificate_manifest(
                 run_dir,
-                projection_version="runtime-rotate-relation-trace-v1",
+                projection_version="runtime-mixed-relation-trace-v2",
             )
             manifest["relationMode"] = "not-applicable"
             manifest["reason"] = "command-set-has-no-spatial-relation-v1"
@@ -172,7 +181,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             self.create_relation_artifacts(run_dir)
             manifest = build_relation_certificate_manifest(
                 run_dir,
-                projection_version="runtime-rotate-relation-trace-v1",
+                projection_version="runtime-mixed-relation-trace-v2",
             )
             path = run_dir / "relation-certificate-manifest.json"
             write_json(path, manifest)
@@ -189,7 +198,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             self.create_relation_artifacts(run_dir)
             manifest = build_relation_certificate_manifest(
                 run_dir,
-                projection_version="runtime-rotate-relation-trace-v1",
+                projection_version="runtime-mixed-relation-trace-v2",
             )
             path = run_dir / "relation-certificate-manifest.json"
             write_json(path, manifest)
@@ -211,7 +220,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(ArtifactContractError, "not bound"):
                 build_relation_certificate_manifest(
                     run_dir,
-                    projection_version="runtime-rotate-relation-trace-v1",
+                    projection_version="runtime-mixed-relation-trace-v2",
                 )
 
     def test_rejects_checker_evidence_rebound_to_other_initial_molecule(self) -> None:
@@ -225,7 +234,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(ArtifactContractError, "not bound"):
                 build_relation_certificate_manifest(
                     run_dir,
-                    projection_version="runtime-rotate-relation-trace-v1",
+                    projection_version="runtime-mixed-relation-trace-v2",
                 )
 
     def test_rejects_checker_evidence_with_forged_closure(self) -> None:
@@ -239,7 +248,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(ArtifactContractError, "closure hash"):
                 build_relation_certificate_manifest(
                     run_dir,
-                    projection_version="runtime-rotate-relation-trace-v1",
+                    projection_version="runtime-mixed-relation-trace-v2",
                 )
 
     def test_rejects_required_manifest_if_plan_becomes_unsupported(self) -> None:
@@ -248,7 +257,7 @@ class RelationCertificateManifestTests(unittest.TestCase):
             self.create_relation_artifacts(run_dir)
             manifest = build_relation_certificate_manifest(
                 run_dir,
-                projection_version="runtime-rotate-relation-trace-v1",
+                projection_version="runtime-mixed-relation-trace-v2",
             )
             write_json(run_dir / "enforced-plan.json", {
                 "schemaVersion": 1,

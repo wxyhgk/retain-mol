@@ -41,8 +41,19 @@ MODELING_NODE_DEPENDENCIES = (
     "zustand",
 )
 CONVERTER = GEOMETRY_ROOT / "tools" / "relation_trace_json_to_lean.py"
-PROJECTION_VERSION = "runtime-rotate-relation-trace-v1"
+PROJECTION_VERSION = "runtime-mixed-relation-trace-v2"
 CHECKER_SOURCE_ROOT = REPO_ROOT / "tools" / "ai_modeling_loop"
+
+_FORMAL_PRIMITIVE_FIELDS = {
+    "atom.add": frozenset({"commandId", "kind", "atomId", "symbol", "position"}),
+    "atom.replace": frozenset({"commandId", "kind", "atomId", "symbol"}),
+    "atom.remove": frozenset({"commandId", "kind", "atomId"}),
+    "atom.move": frozenset({"commandId", "kind", "atomId", "position"}),
+    "bond.add": frozenset({"commandId", "kind", "bondId", "atomId1", "atomId2", "order"}),
+    "bond.remove": frozenset({"commandId", "kind", "bondId"}),
+    "bond.setOrder": frozenset({"commandId", "kind", "bondId", "order"}),
+}
+_FORMAL_BOND_ORDERS = {1: "single", 2: "double", 3: "triple"}
 
 
 @dataclass(frozen=True)
@@ -152,6 +163,86 @@ def _require_mapping(value: Any, field: str) -> Mapping[str, Any]:
     return value
 
 
+def _require_exact_fields(value: Mapping[str, Any], field: str, expected: frozenset[str]) -> None:
+    actual = set(value)
+    if actual != expected:
+        raise ArtifactContractError(
+            f"{field} fields are invalid; "
+            f"missing={sorted(expected - actual)}, unknown={sorted(actual - expected)}"
+        )
+
+
+def _position_array(value: Any, field: str) -> list[int | float]:
+    position = _require_mapping(value, field)
+    _require_exact_fields(position, field, frozenset({"x", "y", "z"}))
+    result: list[int | float] = []
+    for axis in ("x", "y", "z"):
+        coordinate = position[axis]
+        if isinstance(coordinate, bool) or not isinstance(coordinate, (int, float)):
+            raise ArtifactContractError(f"{field}.{axis} must be a number")
+        result.append(coordinate)
+    return result
+
+
+def _expected_policy(raw: Any, index: int) -> dict[str, Any]:
+    field = f"enforced plan commands[{index}]"
+    command = _require_mapping(raw, field)
+    kind = command.get("kind")
+    if kind == "geometry.rotateGroup":
+        _require_exact_fields(
+            command,
+            field,
+            frozenset({
+                "commandId", "kind", "atomIds", "axisAtomId1", "axisAtomId2",
+                "angleDegrees",
+            }),
+        )
+        return {"kind": "rotateGroup"}
+    expected_fields = _FORMAL_PRIMITIVE_FIELDS.get(kind)
+    if expected_fields is None:
+        raise ArtifactContractError(f"unsupported formal relation command kind: {kind}")
+    _require_exact_fields(command, field, expected_fields)
+    if kind == "atom.add":
+        primitive = {
+            "kind": kind,
+            "atom": {
+                "atomId": command["atomId"],
+                "symbol": command["symbol"],
+                "position": _position_array(command["position"], f"{field}.position"),
+            },
+        }
+    elif kind == "atom.move":
+        primitive = {
+            "kind": kind,
+            "atomId": command["atomId"],
+            "position": _position_array(command["position"], f"{field}.position"),
+        }
+    elif kind == "bond.add":
+        order = _FORMAL_BOND_ORDERS.get(command["order"])
+        if order is None:
+            raise ArtifactContractError(f"{field}.order must be 1, 2 or 3")
+        primitive = {
+            "kind": kind,
+            "bond": {
+                "bondId": command["bondId"],
+                "atomId1": command["atomId1"],
+                "atomId2": command["atomId2"],
+                "order": order,
+            },
+        }
+    elif kind == "bond.setOrder":
+        order = _FORMAL_BOND_ORDERS.get(command["order"])
+        if order is None:
+            raise ArtifactContractError(f"{field}.order must be 1, 2 or 3")
+        primitive = {"kind": kind, "bondId": command["bondId"], "order": order}
+    else:
+        primitive = {
+            key: value for key, value in command.items()
+            if key not in {"commandId"}
+        }
+    return {"kind": "primitive", "command": primitive}
+
+
 def _build_request(plan_path: Path, receipt_path: Path, trace_path: Path, request_id: str) -> dict[str, Any]:
     plan = _require_mapping(load_strict_json(plan_path), "enforced plan")
     receipt = _require_mapping(load_strict_json(receipt_path), "execution receipt")
@@ -159,15 +250,30 @@ def _build_request(plan_path: Path, receipt_path: Path, trace_path: Path, reques
     commands = actual.get("commands")
     if not isinstance(commands, list) or not commands:
         raise ArtifactContractError("actual effect receipt commands must be a non-empty array")
+    plan_commands = plan.get("commands")
+    if not isinstance(plan_commands, list) or len(plan_commands) != len(commands):
+        raise ArtifactContractError(
+            "enforced plan and actual effect receipt must contain the same command count"
+        )
     expected_receipts = []
-    for index, raw in enumerate(commands):
+    expected_policies = []
+    for index, (raw, raw_plan_command) in enumerate(zip(commands, plan_commands, strict=True)):
         command = _require_mapping(raw, f"actual effect receipt commands[{index}]")
+        plan_command = _require_mapping(raw_plan_command, f"enforced plan commands[{index}]")
+        if (
+            command.get("commandId") != plan_command.get("commandId")
+            or command.get("kind") != plan_command.get("kind")
+        ):
+            raise ArtifactContractError(
+                f"actual effect receipt commands[{index}] does not match enforced plan order"
+            )
         expected_receipts.append({
             "commandId": command.get("commandId"),
             "commandKind": command.get("kind"),
             "preDigest": command.get("preDigest"),
             "postDigest": command.get("postDigest"),
         })
+        expected_policies.append(_expected_policy(plan_command, index))
     return {
         "schemaVersion": 1,
         "requestId": request_id,
@@ -180,6 +286,7 @@ def _build_request(plan_path: Path, receipt_path: Path, trace_path: Path, reques
             "finalDigest": actual.get("finalDigest"),
         },
         "expectedReceipts": expected_receipts,
+        "expectedPolicies": expected_policies,
     }
 
 

@@ -1,29 +1,46 @@
+import RetainMolGeometry.Command
 import RetainMolGeometry.FragmentAttach
 
 namespace RetainMol.Geometry
 
-/-- The two high-level geometry witnesses currently admitted by the formal gate. -/
+/-- Evidence for one primitive or high-level geometry command in an ordered trace. -/
 inductive RelationWitness where
+  | primitive (commandId : String) (command : PrimitiveCommand)
   | rotateGroup (joint : RotatableJoint)
   | fragmentAttach (witness : FragmentAttachWitness)
 deriving Repr, DecidableEq, BEq
 
 /-- Trusted policy travels beside evidence and can never be supplied by it. -/
 inductive RelationPolicy where
+  | primitive (command : PrimitiveCommand)
   | rotateGroup
   | fragmentAttach (policy : FragmentAttachPolicy)
 deriving Repr, DecidableEq, BEq
 
+def PrimitiveCommand.commandKind : PrimitiveCommand → String
+  | .atomAdd _ => "atom.add"
+  | .atomReplace _ _ => "atom.replace"
+  | .atomRemove _ => "atom.remove"
+  | .atomMove _ _ => "atom.move"
+  | .bondAdd _ => "bond.add"
+  | .bondRemove _ => "bond.remove"
+  | .bondSetOrder _ _ => "bond.setOrder"
+
 def RelationWitness.commandId : RelationWitness → String
+  | .primitive commandId _ => commandId
   | .rotateGroup joint => joint.commandId
   | .fragmentAttach witness => witness.mate.commandId
 
 def RelationWitness.commandKind : RelationWitness → String
+  | .primitive _ command => command.commandKind
   | .rotateGroup _ => "geometry.rotateGroup"
   | .fragmentAttach _ => "fragment.attach"
 
 def relationWitnessIsSatisfied
     (before after : MoleculeSnapshot) : RelationPolicy → RelationWitness → Bool
+  | .primitive policyCommand, .primitive _ witnessCommand =>
+      decide (policyCommand = witnessCommand) &&
+        decide (applyPrimitiveCommand before witnessCommand = some after)
   | .rotateGroup, .rotateGroup joint => rotatableJointIsSatisfied before after joint
   | .fragmentAttach policy, .fragmentAttach witness =>
       fragmentAttachWitnessIsSatisfied before after policy witness
@@ -31,6 +48,9 @@ def relationWitnessIsSatisfied
 
 def RelationWitnessSemantics
     (before after : MoleculeSnapshot) : RelationPolicy → RelationWitness → Prop
+  | .primitive policyCommand, .primitive _ witnessCommand =>
+      policyCommand = witnessCommand ∧
+        applyPrimitiveCommand before witnessCommand = some after
   | .rotateGroup, .rotateGroup joint => RotatableJointSemantics before after joint
   | .fragmentAttach policy, .fragmentAttach witness =>
       FragmentAttachWitnessSemantics before after policy witness
@@ -43,12 +63,21 @@ theorem relationWitnessIsSatisfied_sound
     (h : relationWitnessIsSatisfied before after policy witness = true) :
     RelationWitnessSemantics before after policy witness := by
   cases policy with
+  | primitive policyCommand =>
+      cases witness with
+      | primitive commandId witnessCommand =>
+          simp only [relationWitnessIsSatisfied, Bool.and_eq_true] at h
+          exact ⟨of_decide_eq_true h.1, of_decide_eq_true h.2⟩
+      | rotateGroup _ => simp [relationWitnessIsSatisfied] at h
+      | fragmentAttach _ => simp [relationWitnessIsSatisfied] at h
   | rotateGroup =>
       cases witness with
+      | primitive _ _ => simp [relationWitnessIsSatisfied] at h
       | rotateGroup joint => exact rotatableJointIsSatisfied_sound before after joint h
       | fragmentAttach _ => simp [relationWitnessIsSatisfied] at h
   | fragmentAttach attachPolicy =>
       cases witness with
+      | primitive _ _ => simp [relationWitnessIsSatisfied] at h
       | rotateGroup _ => simp [relationWitnessIsSatisfied] at h
       | fragmentAttach attachWitness =>
           exact fragmentAttachWitnessIsSatisfied_sound before after
