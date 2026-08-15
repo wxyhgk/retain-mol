@@ -94,7 +94,11 @@ class RelationJsonToLeanTests(unittest.TestCase):
         self.assertEqual(self.evaluate_payload(payload), {
             "status": "reject",
             "scope": "spatial-relation-v1",
-            "issues": ["rotatable-joint"],
+            "issues": [{
+                "relationIndex": 0,
+                "class": "contradiction",
+                "code": "relation-definition-invalid",
+            }],
         })
 
     def test_truncated_candidate_is_rejected(self):
@@ -116,17 +120,25 @@ class RelationJsonToLeanTests(unittest.TestCase):
         self.assertEqual(self.evaluate_payload(payload), {
             "status": "reject",
             "scope": "spatial-relation-v1",
-            "issues": ["port-frame"],
+            "issues": [{
+                "relationIndex": None,
+                "class": "contradiction",
+                "code": "molecular-graph-changed",
+            }],
         })
 
-    def test_axis_margin_gray_zone_is_rejected_until_tristate_exists(self):
+    def test_axis_margin_gray_zone_is_indeterminate(self):
         payload = self.valid_payload()
         self.set_quarter_turn_axis_length(payload, 316)
 
         self.assertEqual(self.evaluate_payload(payload), {
-            "status": "reject",
+            "status": "indeterminate",
             "scope": "spatial-relation-v1",
-            "issues": ["rotatable-joint"],
+            "issues": [{
+                "relationIndex": 0,
+                "class": "numeric-margin",
+                "code": "reference-evidence-insufficient",
+            }],
         })
 
     def test_axis_just_above_system_margin_passes(self):

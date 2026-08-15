@@ -1,3 +1,6 @@
+export * from './attachCompiler'
+export * from './attachContracts'
+export * from './attachVerifier'
 export * from './compiler'
 export * from './contracts'
 export * from './verifier'

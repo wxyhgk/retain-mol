@@ -341,6 +341,229 @@ example : geometryIntentIsWellFormed validGeometryIntent = true := by
 example : (compileGeometryPolicy validGeometryIntent).isSome = true := by
   decide
 
+/-! ## Explicit graph rewrite and atom-port attachment -/
+
+private def attachHost : MoleculeSnapshot := {
+  atoms := [
+    { atomId := "host:C", symbol := "C", position := { x := 0, y := 0, z := 0 } },
+    { atomId := "host:H:leave", symbol := "H", position := { x := 1000, y := 0, z := 0 } },
+    { atomId := "host:H:stay", symbol := "H", position := { x := -1000, y := 0, z := 0 } }
+  ]
+  bonds := [
+    { bondId := "host:C-H:leave", atomId1 := "host:C", atomId2 := "host:H:leave",
+      order := .single },
+    { bondId := "host:C-H:stay", atomId1 := "host:C", atomId2 := "host:H:stay",
+      order := .single }
+  ]
+}
+
+private def attachGuest : MoleculeSnapshot := {
+  atoms := [
+    { atomId := "cmd:atom:1", symbol := "C", position := { x := 1500, y := 0, z := 0 } },
+    { atomId := "cmd:atom:2", symbol := "C", position := { x := 2500, y := 0, z := 0 } },
+    { atomId := "cmd:atom:3", symbol := "C", position := { x := 1500, y := 1000, z := 0 } },
+    { atomId := "cmd:atom:4", symbol := "H", position := { x := 1500, y := 0, z := 1000 } }
+  ]
+  bonds := [
+    { bondId := "cmd:bond:1", atomId1 := "cmd:atom:1", atomId2 := "cmd:atom:2",
+      order := .single },
+    { bondId := "cmd:bond:2", atomId1 := "cmd:atom:1", atomId2 := "cmd:atom:3",
+      order := .single },
+    { bondId := "cmd:bond:3", atomId1 := "cmd:atom:1", atomId2 := "cmd:atom:4",
+      order := .single }
+  ]
+}
+
+private def attachRewrite : GraphRewrite := {
+  removedAtomIds := ["host:H:leave"]
+  removedBondIds := ["host:C-H:leave"]
+  addedAtoms := attachGuest.atoms
+  addedBonds := attachGuest.bonds ++ [
+    { bondId := "cmd:bond:link", atomId1 := "host:C", atomId2 := "cmd:atom:1",
+      order := .single }
+  ]
+}
+
+private def attachCandidate : MoleculeSnapshot :=
+  applyGraphRewrite attachHost attachRewrite
+
+private def attachPolicy : AtomPortMatePolicy := {
+  policyId := "registered-guest-v1"
+  expectedCommandId := "attach-fragment-1"
+  expectedLeavingHydrogenAtomId := "host:H:leave"
+  expectedLeavingBondId := "host:C-H:leave"
+  guestReference := attachGuest
+  guestAttachAtomId := "cmd:atom:1"
+  linkDistance := {
+    atomId1 := "host:C"
+    atomId2 := "cmd:atom:1"
+    minSquared := 2200000
+    maxSquared := 2300000
+  }
+  guestRegion := {
+    atomIds := attachGuest.atoms.map (·.atomId)
+    frame := {
+      originAtomId := "cmd:atom:1"
+      axisAtomId := "cmd:atom:2"
+      radialAtomId := "cmd:atom:3"
+      minAxisSquared := 1000000
+      minAreaSquared := 1000000000000
+    }
+    handednessAtomId := "cmd:atom:4"
+    maxSquaredDistanceDelta := 0
+    minAbsVolume6 := 1000000000
+  }
+}
+
+private def attachMate : AtomPortMate := {
+  commandId := "attach-fragment-1"
+  rewrite := attachRewrite
+  hostAtomId := "host:C"
+  leavingHydrogenAtomId := "host:H:leave"
+  leavingBondId := "host:C-H:leave"
+  linkBondId := "cmd:bond:link"
+}
+
+example : graphRewriteIsWellFormed attachHost attachRewrite = true := by decide
+example : graphRewriteIsSatisfied attachHost attachCandidate attachRewrite = true := by decide
+example : atomPortMateIsSatisfied attachHost attachCandidate attachPolicy attachMate = true := by decide
+
+private def attachMissingAtom : MoleculeSnapshot := {
+  attachCandidate with
+  atoms := attachCandidate.atoms.filter (fun atom => atom.atomId != "cmd:atom:4")
+  bonds := attachCandidate.bonds.filter (fun bond => bond.bondId != "cmd:bond:3")
+}
+
+example : graphRewriteIsSatisfied attachHost attachMissingAtom attachRewrite = false := by decide
+
+private def attachExtraAtom : MoleculeSnapshot := {
+  attachCandidate with
+  atoms := attachCandidate.atoms ++ [
+    { atomId := "forged", symbol := "H", position := { x := 5000, y := 0, z := 0 } }
+  ]
+}
+
+example : graphRewriteIsSatisfied attachHost attachExtraAtom attachRewrite = false := by decide
+
+private def attachWrongLinkOrder : MoleculeSnapshot := {
+  attachCandidate with
+  bonds := attachCandidate.bonds.map fun bond =>
+    if bond.bondId == "cmd:bond:link" then { bond with order := .double } else bond
+}
+
+example : atomPortMateIsSatisfied attachHost attachWrongLinkOrder attachPolicy attachMate = false := by decide
+
+private def attachMovedHost : MoleculeSnapshot := {
+  attachCandidate with
+  atoms := attachCandidate.atoms.map fun atom =>
+    if atom.atomId == "host:C" then
+      { atom with position := { x := 1, y := 0, z := 0 } }
+    else atom
+}
+
+example : atomPortMateIsSatisfied attachHost attachMovedHost attachPolicy attachMate = false := by decide
+
+private def attachDistortedGuest : MoleculeSnapshot := {
+  attachCandidate with
+  atoms := attachCandidate.atoms.map fun atom =>
+    if atom.atomId == "cmd:atom:4" then
+      { atom with position := { x := 1500, y := 0, z := 1200 } }
+    else atom
+}
+
+example : atomPortMateIsSatisfied attachHost attachDistortedGuest attachPolicy attachMate = false := by decide
+
+private def attachMirroredGuest : MoleculeSnapshot := {
+  attachCandidate with
+  atoms := attachCandidate.atoms.map fun atom =>
+    if atom.atomId == "cmd:atom:4" then
+      { atom with position := { x := 1500, y := 0, z := -1000 } }
+    else atom
+}
+
+example : atomPortMateIsSatisfied attachHost attachMirroredGuest attachPolicy attachMate = false := by decide
+
+private def undeclaredLeavingBondRewrite : GraphRewrite := {
+  attachRewrite with removedBondIds := []
+}
+
+example : graphRewriteIsWellFormed attachHost undeclaredLeavingBondRewrite = false := by decide
+
+private def collidingAddedIdRewrite : GraphRewrite := {
+  attachRewrite with
+  addedAtoms := attachRewrite.addedAtoms ++ [
+    { atomId := "host:C", symbol := "C", position := { x := 0, y := 0, z := 0 } }
+  ]
+}
+
+example : graphRewriteIsWellFormed attachHost collidingAddedIdRewrite = false := by decide
+
+private def noLeavingRewrite : GraphRewrite := {
+  attachRewrite with
+  removedAtomIds := []
+  removedBondIds := []
+}
+
+private def noLeavingMate : AtomPortMate := {
+  attachMate with rewrite := noLeavingRewrite
+}
+
+example : atomPortMateIsWellFormed attachHost attachPolicy noLeavingMate = false := by decide
+
+private def zeroLengthLinkPolicy : AtomPortMatePolicy := {
+  attachPolicy with
+  linkDistance := {
+    atomId1 := "host:C"
+    atomId2 := "cmd:atom:1"
+    minSquared := 0
+    maxSquared := 0
+  }
+}
+
+example : atomPortMatePolicyIsWellFormed zeroLengthLinkPolicy = false := by decide
+
+private def doubleLinkPolicy : AtomPortMatePolicy := {
+  attachPolicy with linkBondOrder := .double
+}
+
+example : atomPortMatePolicyIsWellFormed doubleLinkPolicy = false := by decide
+
+private def wrongCommandMate : AtomPortMate := {
+  attachMate with commandId := "forged-command"
+}
+
+example : atomPortMateIsWellFormed attachHost attachPolicy wrongCommandMate = false := by decide
+
+private def siblingHost : MoleculeSnapshot := attachHost
+
+private def wrongSiblingRewrite : GraphRewrite := {
+  attachRewrite with
+  removedAtomIds := ["host:H:stay"]
+  removedBondIds := ["host:C-H:stay"]
+}
+
+private def wrongSiblingMate : AtomPortMate := {
+  attachMate with
+  rewrite := wrongSiblingRewrite
+  leavingHydrogenAtomId := "host:H:stay"
+  leavingBondId := "host:C-H:stay"
+}
+
+example : atomPortMateIsWellFormed siblingHost attachPolicy wrongSiblingMate = false := by decide
+
+private def hydrogenGuestAttachPolicy : AtomPortMatePolicy := {
+  attachPolicy with
+  guestAttachAtomId := "cmd:atom:4"
+  linkDistance := {
+    atomId1 := "host:C"
+    atomId2 := "cmd:atom:4"
+    minSquared := 2200000
+    maxSquared := 2300000
+  }
+}
+
+example : atomPortMatePolicyIsWellFormed hydrogenGuestAttachPolicy = false := by decide
+
 private def forgedGeometryIntent : GeometryIntent := {
   validGeometryIntent with
   expected := { commandBonded with bonds := [] }
@@ -460,6 +683,11 @@ example : RotatableJointSemantics jointReference jointQuarterTurn quarterTurnJoi
   apply rotatableJointIsSatisfied_sound
   decide
 
+example :
+    (evaluateSpatialRelation jointReference jointQuarterTurn 0
+      (.rotatableJoint quarterTurnJoint)).status = .pass := by
+  decide
+
 private def mirroredQuarterTurn : MoleculeSnapshot := {
   jointQuarterTurn with
   atoms := jointQuarterTurn.atoms.map fun atom =>
@@ -481,6 +709,11 @@ example :
 
 example :
     rotatableJointIsSatisfied jointReference mirroredQuarterTurn quarterTurnJoint = false := by
+  decide
+
+example :
+    (evaluateSpatialRelation jointReference mirroredQuarterTurn 0
+      (.rotatableJoint quarterTurnJoint)).status = .reject := by
   decide
 
 /-- A rigid no-op cannot satisfy a requested positive quarter-turn. -/
@@ -531,6 +764,44 @@ private def detachedAngleFrameJoint : RotatableJoint := {
 
 /-- The turn frame must be the ordered axis bond, not another valid local frame. -/
 example : jointTopologyIsWellFormed jointReference detachedAngleFrameJoint = false := by
+  decide
+
+example :
+    (evaluateSpatialRelation jointReference jointQuarterTurn 0
+      (.rotatableJoint detachedAngleFrameJoint)).status = .reject := by
+  decide
+
+private def lowMarginJoint : RotatableJoint := {
+  quarterTurnJoint with
+  region := {
+    quarterTurnJoint.region with
+    frame := {
+      quarterTurnJoint.region.frame with
+      minAxisSquared := 2000000
+    }
+  }
+}
+
+/-- A valid contract with weak reference evidence abstains instead of rejecting. -/
+example :
+    (evaluateSpatialRelation jointReference jointQuarterTurn 0
+      (.rotatableJoint lowMarginJoint)).status = .indeterminate := by
+  decide
+
+/-- A contradiction dominates an independent numeric uncertainty. -/
+example :
+    (evaluateSpatialRelations jointReference jointQuarterTurn [
+      .rotatableJoint lowMarginJoint,
+      .rotatableJoint detachedAngleFrameJoint,
+    ]).status = .reject := by
+  decide
+
+/-- Without a contradiction, one uncertain relation makes the document uncertain. -/
+example :
+    (evaluateSpatialRelations jointReference jointQuarterTurn [
+      .rotatableJoint quarterTurnJoint,
+      .rotatableJoint lowMarginJoint,
+    ]).status = .indeterminate := by
   decide
 
 private def truncatedFrameCandidate : MoleculeSnapshot := {

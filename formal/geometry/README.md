@@ -76,6 +76,12 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
   转换为整数多项式不等式，不依赖 Lean 内的浮点三角函数。
 - `SpatialRelation V1` 的严格 JSON 桥固定坐标尺度与所有裕量，当前只接受系统生成的离散角集合
   `0/30/45/60/90/120/135/150/180` 度及其符号；调用方不能注入阈值。
+- `GraphRewrite` 显式声明删除和增加的原子/键，要求离去原子的全部关联键都被声明删除，并禁止
+  新 ID 与参考图中的任何 ID 冲突；候选图必须与改写后的完整预期图逐字段一致。
+- 第一版 `AtomPortMate` 在 `GraphRewrite` 之上验证一个原子位点连接：宿主保留原子完全不动，
+  客体内部图与稳定 ID 映射精确一致，客体保持 proper rigid（包括拒绝镜像），连接键端点、键级
+  和距离满足系统证书，并重新检查完整候选的成键硬下限与非键碰撞。可信 policy 还绑定具体
+  command ID、被替换的终端 H/键和重原子连接端点，防止同一宿主上的目标混淆。
 
 未形式化的内容：
 
@@ -87,6 +93,8 @@ GeometryIntent；任一摘要或重建结果不一致都不能发布。这是一
 - 量子化学能量、力和收敛性；
 - 同位素、完整立体标记和金属配位位点语义；
 - 通用键角、任意十进制二面角、平面性和已接入生产命令的 attachment local frame；
+- atom-port 的完整扭转角/端口径向对齐；当前第一版只证明客体 proper rigid、宿主固定及连接距离，
+  不能声称已证明用户期望的唯一绕键构象；
 - 元素相关的范德华半径和周期边界条件。
 
 因此当前结论只能表述为“最终候选满足该版本化 GeometryPolicy”，不能表述为“Lean 已证明
@@ -127,17 +135,21 @@ Lean 内核 ---- 有限图、刚体、方向和角度区间判定
 两个轴端点、全部移动侧原子对距离、同一有符号角度和完整非坐标字段都必须保持相应关系。
 这套验证器目前没有接入 `ExpectedEffect V1` 或执行器，因此不会改变现有用户交互。
 
-模板连接、边并环和高阶刚性片段放置目前仍未激活：它们必须先编译为同一类关系证书，不能
-直接信任 AI 给出的世界坐标。三类结果的含义固定为：
+模板连接的第一版内部编译器和 `AtomPortMate` 证明切片正在接入，但尚未成为发布 gate。边并环
+仍未激活，因为它需要显式端点映射、原子合并和允许的键级改写，不能复用保持完整图不变的
+旋转关系，也不能直接信任 AI 给出的世界坐标。三类结果的含义固定为：
 
 - `pass`：当前证据在该版本策略内充分；
 - `reject`：已发现明确的拓扑或几何违反；
 - `indeterminate`：证据、数值稳定性或当前关系语言能力不足，必须重规划或升级证书。
 
-内部 TypeScript 编译器和验证器已经执行三态规则，并对超出可靠浮点包络的坐标主动返回
-`indeterminate`。当前生成的 Lean 关系文档仍只输出 `pass/reject`：低于系统几何裕量的证据会
-保守地落入 `reject`。因此该桥仍是实验性证明切片，尚不能直接作为生产三态门禁；下一版必须
-在 Lean 内区分“结构反例”和“数值证据不足”。
+内部 TypeScript 编译器、Lean 关系求值器和生成文档均执行三态规则。Lean 对完整图或关系
+契约的明确矛盾返回 `reject`，参考几何低于系统数值裕量时返回 `indeterminate`。该桥仍是
+实验性证明切片：精确角度集合仍是有限的，更细的 pass/possible 双层数值带尚未实现。
+
+`AtomPortMatePolicy` 必须由可信模板注册表按 `policyId` 解析，外部请求只能提交 policy ID，
+不能提交 policy body。否则调用方可以把可信客体参考与候选一起镜像后重新自证；类型分层只
+划清了信任边界，真正的严格注册表/JSON 投影仍是接入发布 gate 前的必做项。
 
 ## 运行
 
@@ -175,6 +187,9 @@ formal/geometry/
 │   ├── Certificate.lean   # policy、结构化问题与几何判定
 │   ├── Intent.lean        # GeometryIntent V1 policy 编译器与 soundness
 │   ├── SpatialRelation.lean # 端口、proper rigid region 与可旋转关节
+│   ├── GraphRewrite.lean  # 显式原子/键增删及完整预期图
+│   ├── AtomPortMate.lean  # 图改写后的原子端口连接关系
+│   ├── RelationEvaluation.lean # pass/reject/indeterminate 关系求值
 │   └── Examples.lean      # 正例与反例
 ├── examples/
 │   ├── anchored-core.json # B/N 固定母核示例
@@ -192,11 +207,12 @@ formal/geometry/
 ## 后续扩展顺序
 
 1. 证明 runtime receipt projection 与 Lean 基础命令轨迹逐字段等价；
-2. 将 Lean 关系结果升级为 `pass/reject/indeterminate`，再把内部 `rotateGroup` 验证器接到
-   严格证书桥；
-3. 建立 `mate` 关系，并从模板连接、并环和刚性片段旋转命令生成关系意图，不展开成 AI
-   世界坐标；
-4. 补充配位、同位素和完整立体语义的 canonical projection；
-5. 用点积和有符号三重积增加键角、二面角 postcondition；
-6. 为大于 316 原子的结构实现可证明完备的空间分桶碰撞枚举；
-7. 把结构化失败映射为局部重规划提示。
+2. 为刚性和角度证据增加系统控制的 pass/possible 双层数值带；
+3. 为 `fragment.attach` 补齐端口径向参考和显式扭转角，再把内部 TypeScript 证书投影到
+   `GraphRewrite + AtomPortMate` 的严格 JSON/Lean gate；
+4. 为 exact edge fuse 单独定义“恰好合并两个端点”的改写关系；一般原子合并和芳香/Kekule
+   改写继续保持独立证书，不能藏在距离阈值中；
+5. 补充配位、同位素和完整立体语义的 canonical projection；
+6. 用点积和有符号三重积增加键角、二面角 postcondition；
+7. 为大于 316 原子的结构实现可证明完备的空间分桶碰撞枚举；
+8. 把结构化失败映射为局部重规划提示。

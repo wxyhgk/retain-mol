@@ -4,3 +4,6 @@ import RetainMolGeometry.Command
 import RetainMolGeometry.Certificate
 import RetainMolGeometry.Intent
 import RetainMolGeometry.SpatialRelation
+import RetainMolGeometry.GraphRewrite
+import RetainMolGeometry.AtomPortMate
+import RetainMolGeometry.RelationEvaluation
