@@ -8,6 +8,7 @@ from pathlib import Path
 from tools.ai_modeling_loop.artifact_contracts import ArtifactContractError, sha256_file
 from tools.ai_modeling_loop.relation_certificate_manifest import (
     build_relation_certificate_manifest,
+    classify_relation_capability,
     classify_relation_mode,
     load_relation_certificate_manifest,
 )
@@ -40,16 +41,54 @@ class RelationCertificateManifestTests(unittest.TestCase):
             "schemaVersion": 1,
             "status": "pass",
             "checker": "lean-relation-trace-v1",
+            "projectionVersion": "runtime-rotate-relation-trace-v1",
             "relationTraceSha256": sha256_file(relation_dir / "relation-trace.json"),
             "certificateRequestSha256": sha256_file(
                 relation_dir / "relation-trace-request.json"
             ),
             "generatedLeanSha256": sha256_file(lean_path),
+            "checkerEvidence": {
+                "requestSha256": sha256_file(
+                    relation_dir / "relation-trace-request.json"
+                ),
+                "nodeExecutable": "/usr/bin/node",
+                "nodeExecutableSha256": "1" * 64,
+                "projectorSha256": "2" * 64,
+                "projectorIoSha256": "3" * 64,
+                "strictJsonSha256": "4" * 64,
+                "modelingRuntimeSha256": "5" * 64,
+                "leanLauncher": "/usr/bin/lake",
+                "leanLauncherSha256": "6" * 64,
+                "leanExecutable": "/usr/bin/lean",
+                "leanExecutableSha256": "7" * 64,
+                "generatorSha256": "8" * 64,
+                "formalSourceTreeSha256": "9" * 64,
+                "generatedLeanSha256": sha256_file(lean_path),
+            },
         })
 
     def test_classifies_spatial_commands_as_required(self) -> None:
         self.assertEqual(classify_relation_mode({"commands": [{"kind": "fragment.attach"}]}), "required")
         self.assertEqual(classify_relation_mode({"commands": [{"kind": "geometry.rotateGroup"}]}), "required")
+        self.assertEqual(
+            classify_relation_capability({"commands": [{"kind": "geometry.rotateGroup"}]}),
+            "supported",
+        )
+
+    def test_classifies_unimplemented_relations_as_unsupported(self) -> None:
+        self.assertEqual(
+            classify_relation_capability({"commands": [{"kind": "fragment.attach"}]}),
+            "unsupported",
+        )
+        self.assertEqual(
+            classify_relation_capability({
+                "commands": [
+                    {"kind": "atom.add"},
+                    {"kind": "geometry.rotateGroup"},
+                ],
+            }),
+            "unsupported",
+        )
 
     def test_classifies_primitive_commands_as_not_applicable(self) -> None:
         self.assertEqual(classify_relation_mode({"commands": [{"kind": "atom.replace"}]}), "not-applicable")
@@ -148,6 +187,24 @@ class RelationCertificateManifestTests(unittest.TestCase):
                     run_dir,
                     projection_version="runtime-rotate-relation-trace-v1",
                 )
+
+    def test_rejects_required_manifest_if_plan_becomes_unsupported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = self.create_run(Path(directory), "geometry.rotateGroup")
+            self.create_relation_artifacts(run_dir)
+            manifest = build_relation_certificate_manifest(
+                run_dir,
+                projection_version="runtime-rotate-relation-trace-v1",
+            )
+            write_json(run_dir / "enforced-plan.json", {
+                "schemaVersion": 1,
+                "commands": [{"commandId": "command-1", "kind": "fragment.attach"}],
+            })
+            manifest["enforcedPlanSha256"] = sha256_file(run_dir / "enforced-plan.json")
+            path = run_dir / "relation-certificate-manifest.json"
+            write_json(path, manifest)
+            with self.assertRaisesRegex(ArtifactContractError, "unsupported command set"):
+                load_relation_certificate_manifest(path)
 
 
 if __name__ == "__main__":

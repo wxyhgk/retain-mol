@@ -48,6 +48,22 @@ RELATION_ARTIFACTS = {
     "generatedLeanSha256": Path("relation") / "GeneratedRelationTrace.lean",
     "formalVerdictSha256": Path("relation") / "formal-verdict.json",
 }
+CHECKER_EVIDENCE_FIELDS = frozenset({
+    "requestSha256",
+    "nodeExecutable",
+    "nodeExecutableSha256",
+    "projectorSha256",
+    "projectorIoSha256",
+    "strictJsonSha256",
+    "modelingRuntimeSha256",
+    "leanLauncher",
+    "leanLauncherSha256",
+    "leanExecutable",
+    "leanExecutableSha256",
+    "generatorSha256",
+    "formalSourceTreeSha256",
+    "generatedLeanSha256",
+})
 BOUND_RUN_ARTIFACTS = {
     "runManifestSha256": Path("run-manifest.json"),
     "initialMoleculeSha256": Path("inputs") / "initial-molecule.json",
@@ -97,6 +113,16 @@ def classify_relation_mode(plan: Mapping[str, Any]) -> str:
     return "required" if any(kind in RELATION_REQUIRED_KINDS for kind in kinds) else "not-applicable"
 
 
+def classify_relation_capability(plan: Mapping[str, Any]) -> str:
+    mode = classify_relation_mode(plan)
+    if mode == "not-applicable":
+        return mode
+    commands = plan["commands"]
+    if all(command["kind"] == "geometry.rotateGroup" for command in commands):
+        return "supported"
+    return "unsupported"
+
+
 def build_relation_certificate_manifest(
     run_dir: Path,
     *,
@@ -106,6 +132,7 @@ def build_relation_certificate_manifest(
     if not isinstance(plan, Mapping):
         raise ArtifactContractError("enforced plan must be an object")
     relation_mode = classify_relation_mode(plan)
+    capability = classify_relation_capability(plan)
     payload: dict[str, Any] = {
         "schemaVersion": RELATION_CERTIFICATE_SCHEMA_VERSION,
         "relationMode": relation_mode,
@@ -120,6 +147,8 @@ def build_relation_certificate_manifest(
     if relation_mode == "not-applicable":
         payload["reason"] = "command-set-has-no-spatial-relation-v1"
         return payload
+    if capability != "supported":
+        raise ArtifactContractError("enforced plan requires an unsupported relation certificate")
     if not isinstance(projection_version, str) or not projection_version:
         raise ArtifactContractError("required relation certificate needs a projection version")
     payload["projectionVersion"] = projection_version
@@ -140,15 +169,24 @@ def _validate_formal_verdict(run_dir: Path, manifest: Mapping[str, Any]) -> None
             "schemaVersion",
             "status",
             "checker",
+            "projectionVersion",
             "relationTraceSha256",
             "certificateRequestSha256",
             "generatedLeanSha256",
+            "checkerEvidence",
         }),
     )
     if verdict["schemaVersion"] != 1:
         raise ArtifactContractError("unsupported relation formal verdict schema")
     if verdict["status"] != "pass" or verdict["checker"] != "lean-relation-trace-v1":
         raise ArtifactContractError("relation formal verdict must be a Lean pass")
+    if verdict["projectionVersion"] != manifest["projectionVersion"]:
+        raise ArtifactContractError("relation formal verdict projectionVersion mismatch")
+    evidence = _strict_object(
+        verdict["checkerEvidence"],
+        "relation formal verdict checkerEvidence",
+        CHECKER_EVIDENCE_FIELDS,
+    )
     for field in (
         "relationTraceSha256",
         "certificateRequestSha256",
@@ -156,6 +194,25 @@ def _validate_formal_verdict(run_dir: Path, manifest: Mapping[str, Any]) -> None
     ):
         if _sha256(verdict[field], f"relation formal verdict {field}") != manifest[field]:
             raise ArtifactContractError(f"relation formal verdict {field} is not bound to manifest")
+    if _sha256(evidence["requestSha256"], "checker evidence requestSha256") != verdict["certificateRequestSha256"]:
+        raise ArtifactContractError("checker evidence requestSha256 is not bound to verdict")
+    if _sha256(evidence["generatedLeanSha256"], "checker evidence generatedLeanSha256") != verdict["generatedLeanSha256"]:
+        raise ArtifactContractError("checker evidence generatedLeanSha256 is not bound to verdict")
+    for field in (
+        "nodeExecutableSha256",
+        "projectorSha256",
+        "projectorIoSha256",
+        "strictJsonSha256",
+        "modelingRuntimeSha256",
+        "leanLauncherSha256",
+        "leanExecutableSha256",
+        "generatorSha256",
+        "formalSourceTreeSha256",
+    ):
+        _sha256(evidence[field], f"checker evidence {field}")
+    for field in ("nodeExecutable", "leanLauncher", "leanExecutable"):
+        if not isinstance(evidence[field], str) or not evidence[field]:
+            raise ArtifactContractError(f"checker evidence {field} must be a non-empty string")
 
 
 def load_relation_certificate_manifest(path: Path) -> Mapping[str, Any]:
@@ -177,6 +234,9 @@ def load_relation_certificate_manifest(path: Path) -> Mapping[str, Any]:
     expected_mode = classify_relation_mode(plan)
     if mode != expected_mode:
         raise ArtifactContractError("relationMode does not match the enforced plan")
+    capability = classify_relation_capability(plan)
+    if mode == "required" and capability != "supported":
+        raise ArtifactContractError("required relation certificate uses an unsupported command set")
 
     for field, relative_path in BOUND_RUN_ARTIFACTS.items():
         expected = _sha256(manifest[field], f"relation certificate manifest {field}")
