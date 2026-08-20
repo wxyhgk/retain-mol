@@ -1,20 +1,20 @@
 import * as THREE from 'three'
-import { BOND_PAIR_GIZMO } from '../../config/bondPairGizmo.config'
-import { RENDER_ORDER } from '../../config/render.config'
+import { BOND_PAIR_GIZMO } from '../../../config/bondPairGizmo.config'
+import { RENDER_ORDER } from '../../../config/render.config'
 import type {
   BondPairGizmoError,
   BondPairGizmoGeometry,
   BondPairGizmoInspection,
   BondPairGizmoMode,
   BondPairGizmoValue,
-} from '../bondPairGizmo'
-import type { RotateGizmoRendererPort } from './rendererPorts'
+} from '../../../lib/bondPairGizmo'
+import type { RotateGizmoRendererPort } from '../../../lib/molRenderer/rendererPorts'
 import {
   applyBondPairGizmoDelta,
   applyGizmoAngleModifiers,
   normalizeDegrees,
   unwrapAngleDegrees,
-} from './bondPairGizmoMath'
+} from '../../../lib/molRenderer/bondPairGizmoMath'
 import type { GizmoScheduler } from './RotateGizmoController'
 
 export interface BondPairAlignmentGizmoCallbacks {

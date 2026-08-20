@@ -5,17 +5,17 @@ import { useBondLengthGizmoController } from './useBondLengthGizmoController'
 
 interface Props {
   renderer: ThreeRendererPort | null
-  visible: boolean
-  readOnly?: boolean
+  enabled: boolean
+  readOnly: boolean
 }
 
-export default function BondLengthGizmo({ renderer, visible, readOnly = false }: Props) {
+export default function BondLengthGizmo({ renderer, enabled, readOnly }: Props) {
   const { moleculeStore } = useViewerRuntimeServices()
   const selectedAtomIds = moleculeStore(state => state.selectedAtomIds)
   const atomIds = selectedAtomIds.size === 2
     ? [...selectedAtomIds] as [string, string]
     : null
-  const controller = useBondLengthGizmoController({ renderer, visible, readOnly, atomIds })
+  const controller = useBondLengthGizmoController({ renderer, enabled, readOnly, atomIds })
 
   if (!controller.active) return null
   return (

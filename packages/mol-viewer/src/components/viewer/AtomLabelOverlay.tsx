@@ -8,6 +8,7 @@ import { ATOM_LABEL as L } from '../../config/overlay.config'
 import { CAMERA } from '../../config/camera.config'
 import { resolveRenderProfile } from '../../styles'
 import { buildNumberedAtomLabels } from './atomLabels'
+import { prepareOverlayCanvas } from '../../viewer/overlay/useOverlayCanvas'
 
 interface Props {
   renderer: ThreeRendererPort | null
@@ -52,23 +53,6 @@ function iboviewDrawRadius(symbol: string): number {
   return radii[symbol] ?? radii.C ?? 1.43
 }
 
-function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-  const w = canvas.offsetWidth
-  const h = canvas.offsetHeight
-  const dpr = window.devicePixelRatio || 1
-  const bw = Math.max(1, Math.round(w * dpr))
-  const bh = Math.max(1, Math.round(h * dpr))
-  if (canvas.width !== bw || canvas.height !== bh) {
-    canvas.width = bw
-    canvas.height = bh
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  ctx.clearRect(0, 0, w, h)
-  return { ctx, w, h }
-}
-
 export default function AtomLabelOverlay({ renderer }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { moleculeStore, editorStore, ticker } = useViewerRuntimeServices()
@@ -85,7 +69,7 @@ export default function AtomLabelOverlay({ renderer }: Props) {
       const { showAtomLabels } = editorStore.getState()
       const molecule = selectActiveMoleculeOrEmpty(moleculeStore.getState())
 
-      const prepared = prepareCanvas(canvas)
+      const prepared = prepareOverlayCanvas(canvas)
       if (!prepared) return
       const { ctx, w, h } = prepared
       if (molecule.atoms.length === 0) return

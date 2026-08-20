@@ -5,7 +5,7 @@
  */
 
 import * as THREE from 'three'
-import type { Molecule } from '../molecule'
+import type { Molecule } from '../../../lib/molecule'
 
 /** store 操作由外部（RotateGizmo.tsx）通过 callbacks 注入，保持 lib 层无 store 依赖 */
 export interface GizmoCallbacks {
@@ -14,11 +14,11 @@ export interface GizmoCallbacks {
   startEditSession: () => void
   endEditSession: () => void
 }
-import type { RotateGizmoRendererPort } from './rendererPorts'
-import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../config/rotateGizmo.config'
-import { RENDER_ORDER } from '../../config/render.config'
-import { computeRingRadius, collectBondSideAtoms } from './gizmoMath'
-import { ticker as defaultTicker } from '../animation'
+import type { RotateGizmoRendererPort } from '../../../lib/molRenderer/rendererPorts'
+import { GIZMO_RING, GIZMO_LINE, GIZMO_PICKER, GIZMO_ARROW, GIZMO_COLOR } from '../../../config/rotateGizmo.config'
+import { RENDER_ORDER } from '../../../config/render.config'
+import { computeRingRadius, collectBondSideAtoms } from '../../../lib/molRenderer/gizmoMath'
+import { ticker as defaultTicker } from '../../../lib/animation'
 
 export interface GizmoScheduler {
   invalidate(): void

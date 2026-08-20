@@ -1,12 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Axis3d, Focus, Grid3x3, Maximize2, MousePointer2, Pencil, RotateCcw } from 'lucide-react'
 import {
   fitViewport,
   focusViewportSelection,
   resetViewport,
-  setViewportAxesVisible,
-  setViewportGridVisible,
 } from '@/domain/viewer/viewport'
+import { useViewportStore } from '@retainmol/mol-viewer/state'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import {
   deriveWorkspaceTool,
@@ -27,19 +26,19 @@ export function ViewportToolbar() {
   const hasSelection = useMoleculeStore(
     state => state.selectedAtomIds.size > 0 || state.selectedBondIds.size > 0,
   )
-  const [axesVisible, setAxesVisible] = useState(false)
-  const [gridVisible, setGridVisible] = useState(false)
+  const axesVisible = useViewportStore(state => state.axesVisible)
+  const gridVisible = useViewportStore(state => state.gridVisible)
+  const setAxesVisible = useViewportStore(state => state.setAxesVisible)
+  const setGridVisible = useViewportStore(state => state.setGridVisible)
   const panel = useWorkspaceToolStore(selectWorkspacePanel)
   const editorTool = useEditorStore(state => state.activeTool)
   const workspaceTool = deriveWorkspaceTool(panel, editorTool)
   const toggleAxes = () => {
-    const next = !axesVisible
-    if (setViewportAxesVisible(next)) setAxesVisible(next)
+    setAxesVisible(!axesVisible)
   }
 
   const toggleGrid = () => {
-    const next = !gridVisible
-    if (setViewportGridVisible(next)) setGridVisible(next)
+    setGridVisible(!gridVisible)
   }
 
   return (

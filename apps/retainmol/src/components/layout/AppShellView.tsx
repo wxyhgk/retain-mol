@@ -18,6 +18,7 @@ import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import type { JobArtifact, JobDetail } from '@retainmol/jobs'
 import { useMoleculeDocumentStore } from '@/features/molecule-assets'
 import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
+import { useViewportStore } from '@retainmol/mol-viewer/state'
 
 const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
 const WorkflowEditor = lazy(() => import('@/features/workflows').then(module => ({ default: module.WorkflowEditor })))
@@ -84,6 +85,7 @@ export function AppShellView({
     }
     useEditorStore.getState().flashHint(result.restoredSnapshot ? '已载入任务分子与 xTB 优化坐标' : '已载入 xTB 优化坐标')
   }
+  const gridVisible = useViewportStore(state => state.gridVisible)
   const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
   const leftDefaultSize = workspaceMode === 'simulate' ? 38 : workspaceMode === 'analyze' ? 32 : 28
   return (
@@ -148,7 +150,7 @@ export function AppShellView({
                 onPointerCancelCapture={canvasFocus.finish}
                 onWheelCapture={event => canvasFocus.pulse(event.target)}
               >
-                <div className="absolute inset-0"><MolViewer appearance={uiTheme} gridVisible={false} /></div>
+                <div className="absolute inset-0"><MolViewer appearance={uiTheme} gridVisible={gridVisible} /></div>
                 <SelectionHud />
                 <BusyOverlay />
                 <ViewportToolbar />

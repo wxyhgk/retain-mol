@@ -1,6 +1,6 @@
 import type { MoleculeState } from '../../store/slices/types'
 import type { Molecule } from '../../lib/molecule'
-import type { GizmoCallbacks } from '../../lib/molRenderer/RotateGizmoController'
+import type { GizmoCallbacks } from '../../viewer/gizmo/controllers/RotateGizmoController'
 
 export interface RotateGizmoEditSession {
   readonly start: () => void
