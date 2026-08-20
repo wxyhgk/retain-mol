@@ -19,4 +19,21 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/features/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['@/components/ui', '@/components/ui/*'],
+            message: 'Use @retainmol/ui-kit instead of @/components/ui. The app stub is deprecated.',
+          },
+          {
+            group: ['@/components/data', '@/components/data/*'],
+            message: 'Use @retainmol/ui-kit instead of @/components/data. The app stub is deprecated.',
+          },
+        ],
+      }],
+    },
+  },
 ])

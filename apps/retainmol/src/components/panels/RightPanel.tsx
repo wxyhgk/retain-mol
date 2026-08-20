@@ -1,4 +1,4 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@retainmol/ui-kit'
 import { SelectionInspector } from '@/features/selection-inspector'
 import { MeasurePanel } from '@/features/measure'
 import { useEditorStore } from '@/domain/viewer/editorState'

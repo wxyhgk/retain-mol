@@ -82,6 +82,8 @@ export { DataTable } from './data/DataTable'
 export type { DataTableColumn, DataTableProps } from './data/DataTable'
 export { VirtualList } from './data/VirtualList'
 export type { VirtualListProps } from './data/VirtualList'
+export { FileDropzone } from './data/FileDropzone'
+export type { FileDropzoneProps, FileDropzoneRenderState } from './data/FileDropzone'
 export { sortAriaValue } from './data/dataTableAccessibility'
 export type { TableSortDirection } from './data/dataTableAccessibility'
 

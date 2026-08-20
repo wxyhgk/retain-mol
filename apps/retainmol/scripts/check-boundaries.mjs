@@ -345,6 +345,15 @@ for (const file of walk(join(SRC_DIR, 'features/geometry-optimization/infrastruc
   }
 }
 
+for (const file of walk(join(SRC_DIR, 'features'))) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  if (!rel.includes('/infrastructure/')) continue
+  const source = readFileSync(file, 'utf8')
+  if (/\bimport\.meta\.env(?:\.|\[)/.test(source) && source.includes('VITE_RETAINMOL_BACKEND_URL')) {
+    violations.push(`${rel}: infrastructure must use injected backend URL from @/infrastructure/backendUrl instead of import.meta.env.VITE_RETAINMOL_BACKEND_URL`)
+  }
+}
+
 if (existsSync(join(SRC_DIR, 'domain/viewerAdapter.ts'))) {
   violations.push('domain/viewerAdapter.ts: use focused domain/viewer capability adapters')
 }
