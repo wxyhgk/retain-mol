@@ -7,6 +7,7 @@ import {
   type Molecule,
 } from '@retainmol/mol-viewer/core'
 import { calcAngle, calcDihedral, calcDistance } from '@/domain/viewer/geometry'
+import { splitConnectedComponents } from '@retainmol/mol-viewer/graph'
 
 export interface IndexedAtom {
   atom: Atom
@@ -20,13 +21,15 @@ export interface NeighborBond {
   length: number
 }
 
-export type EditableGeometry =
+export type EditableLiveGeometry =
   | {
       kind: 'distance'
       atomIds: readonly [string, string]
       atoms: readonly [IndexedAtom, IndexedAtom]
       value: number
       unit: 'Å'
+      label: string
+      editHint: string
     }
   | {
       kind: 'angle'
@@ -34,6 +37,8 @@ export type EditableGeometry =
       atoms: readonly [IndexedAtom, IndexedAtom, IndexedAtom]
       value: number
       unit: '°'
+      label: string
+      editHint: string
     }
   | {
       kind: 'dihedral'
@@ -41,9 +46,14 @@ export type EditableGeometry =
       atoms: readonly [IndexedAtom, IndexedAtom, IndexedAtom, IndexedAtom]
       value: number
       unit: '°'
+      label: string
+      editHint: string
     }
 
-export type SelectionInspectorModel =
+// Backward compat alias for consumers still importing EditableGeometry
+export type EditableGeometry = EditableLiveGeometry
+
+export type InspectorModel =
   | {
       mode: 'molecule'
       formula: string
@@ -74,14 +84,17 @@ export type SelectionInspectorModel =
       selectedBondCount: number
       atoms: readonly IndexedAtom[]
       bonds: readonly Bond[]
-      geometry: EditableGeometry | null
+      geometry: EditableLiveGeometry | null
     }
 
-export function buildSelectionInspectorModel(
+// Keep SelectionInspectorModel alias for migration
+export type SelectionInspectorModel = InspectorModel
+
+export function buildInspectorModel(
   molecule: Molecule,
   selectedAtomIds: Iterable<string>,
   selectedBondIds: Iterable<string>,
-): SelectionInspectorModel {
+): InspectorModel {
   const atomById = new Map(molecule.atoms.map((atom, index) => [
     atom.id,
     { atom, number: index + 1 } satisfies IndexedAtom,
@@ -152,9 +165,12 @@ export function buildSelectionInspectorModel(
     selectedBondCount: bonds.length,
     atoms,
     bonds,
-    geometry: buildEditableGeometry(atoms),
+    geometry: buildEditableLiveGeometry(atoms),
   }
 }
+
+// Alias for existing call sites
+export const buildSelectionInspectorModel = buildInspectorModel
 
 function orderedExisting<T>(ids: Iterable<string>, byId: ReadonlyMap<string, T>): T[] {
   const result: T[] = []
@@ -165,7 +181,8 @@ function orderedExisting<T>(ids: Iterable<string>, byId: ReadonlyMap<string, T>)
   return result
 }
 
-function buildEditableGeometry(atoms: readonly IndexedAtom[]): EditableGeometry | null {
+function buildEditableLiveGeometry(atoms: readonly IndexedAtom[]): EditableLiveGeometry | null {
+  const label = atoms.map(({ atom }) => atom.symbol).join('—')
   if (atoms.length === 2) {
     const pair = atoms as [IndexedAtom, IndexedAtom]
     return {
@@ -174,6 +191,8 @@ function buildEditableGeometry(atoms: readonly IndexedAtom[]): EditableGeometry 
       atoms: pair,
       value: calcDistance(pair[0].atom, pair[1].atom),
       unit: 'Å',
+      label,
+      editHint: '修改距离将平移后选原子一侧',
     }
   }
   if (atoms.length === 3) {
@@ -184,6 +203,8 @@ function buildEditableGeometry(atoms: readonly IndexedAtom[]): EditableGeometry 
       atoms: triple,
       value: calcAngle(triple[0].atom, triple[1].atom, triple[2].atom),
       unit: '°',
+      label,
+      editHint: '键角顶点 = 第 2 个选中原子 · 转动末端一侧',
     }
   }
   if (atoms.length === 4) {
@@ -194,7 +215,78 @@ function buildEditableGeometry(atoms: readonly IndexedAtom[]): EditableGeometry 
       atoms: quartet,
       value: calcDihedral(quartet[0].atom, quartet[1].atom, quartet[2].atom, quartet[3].atom),
       unit: '°',
+      label,
+      editHint: '二面角绕 2–3 号原子轴转动末端一侧',
     }
   }
   return null
+}
+
+// ── Scene panel rows (moved from domain/moleculePanelSelectors for inspector family) ──
+export type ScenePanelRow = {
+  readonly id: string
+  readonly name: string
+  readonly visible: boolean
+  readonly locked: boolean
+  readonly componentCount: number
+  readonly topologyKey: string
+}
+
+type SceneObjectLike = {
+  readonly id: string
+  readonly name: string
+  readonly visible: boolean
+  readonly locked: boolean
+  readonly molecule: Molecule
+}
+
+type ScenePanelState = {
+  readonly objectsById: Readonly<Record<string, SceneObjectLike>>
+  readonly objectOrder: readonly string[]
+  readonly activeObjectId: string | null
+}
+
+let previousSceneRows: readonly ScenePanelRow[] = []
+
+function moleculeTopologyKey(molecule: Molecule): string {
+  return `${molecule.atoms.map(atom => atom.id).join(',')}|${molecule.bonds
+    .map(bond => `${bond.id}:${bond.atomId1}:${bond.atomId2}:${bond.order}`)
+    .join(',')}`
+}
+
+export function selectScenePanelRows(state: ScenePanelState): readonly ScenePanelRow[] {
+  const previousById = new Map(previousSceneRows.map(row => [row.id, row]))
+  const next = state.objectOrder.flatMap(id => {
+    const object = state.objectsById[id]
+    if (!object) return []
+    const topologyKey = moleculeTopologyKey(object.molecule)
+    const previous = previousById.get(id)
+    if (
+      previous
+      && previous.name === object.name
+      && previous.visible === object.visible
+      && previous.locked === object.locked
+      && previous.topologyKey === topologyKey
+    ) return [previous]
+    return [{
+      id,
+      name: object.name,
+      visible: object.visible,
+      locked: object.locked,
+      topologyKey,
+      componentCount: splitConnectedComponents(object.molecule).length,
+    }]
+  })
+  if (
+    next.length === previousSceneRows.length
+    && next.every((row, index) => row === previousSceneRows[index])
+  ) return previousSceneRows
+  previousSceneRows = next
+  return next
+}
+
+export function selectActiveMoleculeName(state: ScenePanelState): string {
+  const id = state.activeObjectId
+  if (!id) return 'New Molecule'
+  return state.objectsById[id]?.molecule.name || 'New Molecule'
 }
