@@ -39,3 +39,5 @@ export {
   setViewportAxesVisible,
   setViewportGridVisible,
 } from '../viewport'
+export { useViewportStore } from '../store/viewportStore'
+export type { ViewportUiState } from '../store/viewportStore'

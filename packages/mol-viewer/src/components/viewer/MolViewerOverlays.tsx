@@ -53,18 +53,20 @@ export function MolViewerOverlays({
       <AtomLabelOverlay renderer={renderer} />
       <RotateGizmo
         renderer={renderer}
-        readOnly={!editingEnabled || Boolean(bondPairGizmo?.enabled)}
+        enabled={editingEnabled && toolCan(activeTool, 'canEdit') && !bondPairGizmo?.enabled}
+        readOnly={!editingEnabled}
       />
       <BondPairAlignmentGizmo
         renderer={renderer}
         config={bondPairGizmo}
-        disabled={interactionMode === 'read-only'}
+        enabled={Boolean(bondPairGizmo?.enabled)}
+        readOnly={interactionMode === 'read-only'}
         onChange={onBondPairGizmoChange}
         onError={onBondPairGizmoError}
       />
       <BondLengthGizmo
         renderer={renderer}
-        visible={toolCan(activeTool, 'canEdit') && brushArmed}
+        enabled={toolCan(activeTool, 'canEdit') && brushArmed}
         readOnly={!editingEnabled}
       />
       <BoxSelectOverlay rect={editingEnabled ? boxRect : null} />

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
-import type { MolRenderer } from './MolRenderer'
+import type { MolRenderer } from '../../../lib/molRenderer/MolRenderer'
 import { RotateGizmoController } from './RotateGizmoController'
-import { ticker } from '../animation'
+import { ticker } from '../../../lib/animation'
 
 class FakeCanvas extends EventTarget {
   readonly style = { cursor: '' }

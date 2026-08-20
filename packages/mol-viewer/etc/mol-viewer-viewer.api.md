@@ -6,6 +6,8 @@
 
 import { JSX } from 'react';
 import { PropsWithChildren } from 'react';
+import { StoreApi } from 'zustand';
+import { UseBoundStore } from 'zustand';
 
 // @public (undocumented)
 export interface Atom {
@@ -254,6 +256,9 @@ export function setViewportGridVisible(visible: boolean): boolean;
 export function useViewerRuntime(): ViewerRuntime;
 
 // @public (undocumented)
+export const useViewportStore: UseBoundStore<StoreApi<ViewportUiState>>;
+
+// @public (undocumented)
 export interface ViewerRuntime {
     dispose(): void;
 }
@@ -262,6 +267,18 @@ export interface ViewerRuntime {
 export function ViewerRuntimeProvider(input: PropsWithChildren<{
     runtime: ViewerRuntime;
 }>): JSX.Element;
+
+// @public (undocumented)
+export interface ViewportUiState {
+    // (undocumented)
+    axesVisible: boolean;
+    // (undocumented)
+    gridVisible: boolean;
+    // (undocumented)
+    setAxesVisible: (visible: boolean) => void;
+    // (undocumented)
+    setGridVisible: (visible: boolean) => void;
+}
 
 // (No @packageDocumentation comment for this package)
 

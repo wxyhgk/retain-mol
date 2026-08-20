@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
-import type { MolRenderer } from './MolRenderer'
+import type { MolRenderer } from '../../../lib/molRenderer/MolRenderer'
 import { BondPairAlignmentGizmoController } from './BondPairAlignmentGizmoController'
-import type { BondPairGizmoGeometry } from '../bondPairGizmo'
+import type { BondPairGizmoGeometry } from '../../../lib/bondPairGizmo'
 
 class FakeCanvas extends EventTarget {
   readonly style = { cursor: '' }

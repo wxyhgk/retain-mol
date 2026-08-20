@@ -1,5 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
-import { Phase } from '../../lib/animation'
+import { useCallback, useRef } from 'react'
 import type {
   BondPairGizmoConfig,
   BondPairGizmoError,
@@ -8,14 +7,16 @@ import type {
 } from '../../lib/bondPairGizmo'
 import { inspectBondPairGeometry } from '../../lib/builder/geometry/bondPairAlignment'
 import type { ThreeRendererPort } from '../../lib/molRenderer'
-import { BondPairAlignmentGizmoController } from '../../lib/molRenderer/BondPairAlignmentGizmoController'
+import { BondPairAlignmentGizmoController } from '../../viewer/gizmo/controllers/BondPairAlignmentGizmoController'
 import { createBondPairAlignmentEditSession } from '../../hooks/editSessionFactory'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
+import { useGizmoRegistry, type GizmoScheduler } from '../../viewer/gizmo/useGizmoRegistry'
 
 interface Props {
   readonly renderer: ThreeRendererPort | null
   readonly config: BondPairGizmoConfig | undefined
-  readonly disabled: boolean
+  readonly enabled: boolean
+  readonly readOnly: boolean
   readonly onChange: ((value: BondPairGizmoValue, phase: BondPairGizmoPhase) => void) | undefined
   readonly onError: ((error: BondPairGizmoError) => void) | undefined
 }
@@ -23,19 +24,21 @@ interface Props {
 export default function BondPairAlignmentGizmo({
   renderer,
   config,
-  disabled,
+  enabled,
+  readOnly,
   onChange,
   onError,
 }: Props) {
-  const { moleculeStore, ticker } = useViewerRuntimeServices()
-  const subscriptionId = useId()
+  const { moleculeStore } = useViewerRuntimeServices()
   const onChangeRef = useRef(onChange)
   const onErrorRef = useRef(onError)
   onChangeRef.current = onChange
   onErrorRef.current = onError
 
-  useEffect(() => {
-    if (!renderer || !config?.enabled || disabled) return
+  const isEnabled = enabled && !readOnly && Boolean(config?.enabled)
+
+  const create = useCallback((scheduler: GizmoScheduler) => {
+    if (!renderer || !config?.enabled) return null
     const session = createBondPairAlignmentEditSession(moleculeStore)
     let sessionStartAzimuth = 0
     let latestValue: BondPairGizmoValue | null = null
@@ -93,39 +96,22 @@ export default function BondPairAlignmentGizmo({
         },
         error: error => onErrorRef.current?.(error),
       },
-      {
-        invalidate: () => ticker.invalidate(),
-        startContinuous: reason => ticker.startContinuous(reason),
-        stopContinuous: reason => ticker.stopContinuous(reason),
-      },
+      scheduler,
     )
-    if (!controller.isValid) return
-
-    const tickerKey = `bond-pair-gizmo:${subscriptionId}`
-    const unsubscribe = ticker.subscribe(tickerKey, Phase.Gizmo, () => controller.update())
-    ticker.invalidate()
-    return () => {
-      unsubscribe()
-      controller.dispose()
+    if (!controller.isValid) return controller
+    // Wrap dispose to also cancel session if still active
+    const originalDispose = controller.dispose.bind(controller)
+    controller.dispose = () => {
+      originalDispose()
       if (session.isActive) {
         session.cancel()
         if (latestValue) onChangeRef.current?.(latestValue, 'cancel')
       }
     }
-  }, [
-    renderer,
-    disabled,
-    config?.enabled,
-    config?.referenceBondId,
-    config?.movingBondId,
-    config?.referenceAnchorAtomId,
-    config?.movingAnchorAtomId,
-    config?.mode,
-    config?.showCoplanarHandles,
-    moleculeStore,
-    ticker,
-    subscriptionId,
-  ])
+    return controller
+  }, [renderer, config, moleculeStore])
+
+  useGizmoRegistry(renderer, isEnabled, create as (s: GizmoScheduler)=> {isValid:boolean; update():void; dispose():void}, 'bond-pair-gizmo')
 
   return null
 }

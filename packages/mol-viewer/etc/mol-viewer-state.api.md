@@ -623,6 +623,21 @@ export const useMoleculeStore: MoleculeStoreApi;
 // @public (undocumented)
 export const useMoleculeTemporal: UseBoundStore<StoreApi<TemporalState<MoleculeState>>>;
 
+// @public (undocumented)
+export const useViewportStore: UseBoundStore<StoreApi<ViewportUiState>>;
+
+// @public (undocumented)
+export interface ViewportUiState {
+    // (undocumented)
+    axesVisible: boolean;
+    // (undocumented)
+    gridVisible: boolean;
+    // (undocumented)
+    setAxesVisible: (visible: boolean) => void;
+    // (undocumented)
+    setGridVisible: (visible: boolean) => void;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```
