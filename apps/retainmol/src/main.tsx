@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { registerForceFieldFromUrl } from '@retainmol/mol-viewer/io'
 import { configureJobsApiBase } from '@retainmol/jobs'
 import { configureMoleculeAssetsApiBase } from '@retainmol/molecule-assets'
+import { configureBackendUrl } from '@/infrastructure/backendUrl'
 import './index.css'
 import App from './App.tsx'
 import ApiTestPage from './dev/ApiTestPage.tsx'
@@ -10,6 +11,7 @@ import { AppProviders } from './app/AppProviders.tsx'
 
 // 包内不读 import.meta.env,由 app 在启动时统一注入后端地址
 const backendUrl = import.meta.env.VITE_RETAINMOL_BACKEND_URL
+configureBackendUrl(backendUrl)
 configureJobsApiBase(backendUrl)
 configureMoleculeAssetsApiBase(backendUrl)
 

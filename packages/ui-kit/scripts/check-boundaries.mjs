@@ -12,6 +12,7 @@ const ALLOWED_SIBLING_PACKAGES = new Set()
 const THIRD_PARTY_ADAPTERS = new Map([
   ['@tanstack/react-table', 'data/DataTable.tsx'],
   ['react-virtuoso', 'data/VirtualList.tsx'],
+  ['react-dropzone', 'data/FileDropzone.tsx'],
 ])
 
 const SRC_DIR = new URL('../src', import.meta.url).pathname

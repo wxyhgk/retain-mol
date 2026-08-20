@@ -1,5 +1,6 @@
 import type { CreateTsPreparationWorkflowRequest, WorkflowsApi, WorkflowSaveRequest } from '../domain/workflowTypes'
 import { projectTsPreparationWorkflowWire, projectWorkflowListWire, projectWorkflowWire } from './workflowWireProjector'
+import { resolveBackendUrl } from '@/infrastructure/backendUrl'
 
 interface BrowserLocation {
   protocol: string
@@ -7,13 +8,10 @@ interface BrowserLocation {
 }
 
 export function resolveWorkflowsApiBase(
-  configuredUrl: string | undefined = import.meta.env.VITE_RETAINMOL_BACKEND_URL,
+  configuredUrl: string | undefined = undefined,
   browserLocation: BrowserLocation | undefined = typeof window === 'undefined' ? undefined : window.location,
 ): string {
-  const configured = configuredUrl?.trim()
-  if (configured) return configured.replace(/\/$/, '')
-  if (browserLocation?.hostname) return `${browserLocation.protocol}//${browserLocation.hostname}:8000`
-  return 'http://127.0.0.1:8000'
+  return resolveBackendUrl(configuredUrl, browserLocation)
 }
 
 async function readJson<T>(response: Response): Promise<T> {
