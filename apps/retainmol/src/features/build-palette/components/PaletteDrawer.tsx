@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import type { WorkspacePanel } from '@/domain/workspaceToolStore'
 import type { BuildPaletteController } from '../model/useBuildPaletteController'
-import { DrawWorkspacePanel } from './workspace/DrawWorkspacePanel'
+import { DrawPanel } from './workspace/DrawPanel'
 import { TemplateWorkspacePanel } from './workspace/TemplateWorkspacePanel'
 
 const PANEL_META: Record<WorkspacePanel, { title: string; subtitle: string }> = {
@@ -37,25 +37,7 @@ export function PaletteDrawer({ controller }: { controller: BuildPaletteControll
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden p-3">
-        {panel === 'draw' && (
-          <DrawWorkspacePanel
-            activeElement={controller.activeElement}
-            atomClickMode={controller.atomClickMode}
-            inspectedElement={controller.paletteElement}
-            activeFragmentId={controller.activeFragmentId}
-            onInspectElement={controller.inspectElement}
-            onPickAtom={controller.pickAtom}
-            onPickHydrogenGrow={controller.pickHydrogenGrow}
-            onPickFragment={controller.pickDrawFragment}
-            onBeginAttachmentSitePick={controller.beginAttachmentSitePick}
-            onPickAttachmentSite={controller.pickAttachmentSite}
-            selectedAtomCount={controller.selectedAtomCount}
-            selectedBond={controller.selectedBond}
-            onConnectSelectedAtoms={controller.connectSelectedAtoms}
-            onSetBondOrder={controller.setSelectedBondOrder}
-            onDeleteSelectedBond={controller.deleteSelectedBond}
-          />
-        )}
+        {panel === 'draw' && <DrawPanel controller={controller} />}
         {panel === 'template' && (
           <div className="h-full overflow-y-auto [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
             <TemplateWorkspacePanel

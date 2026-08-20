@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, ChevronRight, Hexagon, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { listSavedTemplateDrafts } from '@/features/template-library'
 import type { RuntimeTemplateSite } from '../../application/runtimeTemplateBrush'
 import { listCanvasTemplates, RING_FRAGMENTS, type CanvasTemplateSummary } from '../../domain/buildCatalog'
 import { WorkspaceSection } from './WorkspacePanelUi'
@@ -12,7 +13,7 @@ export function TemplateWorkspacePanel({ activeFragmentId, onPickTemplate, onPic
   onPickFragment: (id: string) => void
   onPickRuntimeSite: (template: CanvasTemplateSummary, site: RuntimeTemplateSite, flipped: boolean) => boolean
 }) {
-  const templates = useMemo(() => listCanvasTemplates(), [])
+  const templates = useMemo(() => listCanvasTemplates(listSavedTemplateDrafts()), [])
   const workspaceTemplates = templates.filter(template => template.source === 'workspace')
   const builtinTemplates = templates.filter(template => template.source === 'builtin')
   const [previewId, setPreviewId] = useState<string | null>(null)

@@ -2,7 +2,7 @@ import {
   bondDepthStyle,
   projectCoordinationDirections,
   type ProjectedCoordinationSite,
-} from './coordinationGeometryProjection'
+} from './projection'
 
 const WIDTH = 52
 const HEIGHT = 36

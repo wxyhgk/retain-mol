@@ -4,6 +4,7 @@ import {
   registerFragment,
 } from '@retainmol/mol-viewer/fragments'
 import type { WorkspaceToolEffects } from '@/domain/workspaceToolStore'
+import { listSavedTemplateDrafts } from '@/features/template-library'
 import { placeMoleculeInViewer } from '@/features/molecule-placement'
 import {
   selectFragmentBuildMode,
@@ -45,7 +46,7 @@ export function createBuildPaletteFragmentActions({ effects, flashHint }: Option
   }
 
   const pickTemplate = (id: string) => {
-    const molecule = createCanvasMoleculeFromTemplate(id)
+    const molecule = createCanvasMoleculeFromTemplate(id, listSavedTemplateDrafts())
     if (molecule) void placeMoleculeInViewer(molecule, { mode: 'replace' })
   }
 

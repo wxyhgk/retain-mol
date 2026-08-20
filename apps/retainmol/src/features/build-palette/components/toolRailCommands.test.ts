@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activateToolRailItem, type ToolRailCommandDependencies } from './toolRailCommands'
+import { activateToolRailItem, type ToolRailCommandDependencies } from './ToolRail'
 
 function createDependencies(overrides: Partial<ToolRailCommandDependencies> = {}): ToolRailCommandDependencies {
   return {

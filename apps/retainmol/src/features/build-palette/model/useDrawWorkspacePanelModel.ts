@@ -8,7 +8,7 @@ import { getBuildFragmentsForElement } from '../domain/buildCatalog'
 import {
   groupEquivalentAttachmentSites,
   type AttachmentSitePickerModel,
-} from '../domain/attachmentSiteOptions'
+} from '../domain/fragmentGeometry'
 
 interface Options {
   readonly inspectedElement: string

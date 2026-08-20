@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import type { FragmentAttachmentSite } from '@retainmol/mol-viewer/fragments'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { AttachmentSitePickerModel } from '../../domain/attachmentSiteOptions'
+import type { AttachmentSitePickerModel } from '../../../domain/fragmentGeometry'
 
 interface CoordinationSitePickerProps {
   model: AttachmentSitePickerModel
