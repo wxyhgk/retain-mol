@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Atom, RotateCcw, Download, Upload, Search, LibraryBig, PanelRight } from 'lucide-react'
+import { Atom, RotateCcw, Download, Upload, Search, LibraryBig, PanelRight, Palette } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -10,6 +10,7 @@ import type { ToolbarModel } from './useToolbarModel'
 import type { WorkspaceMode } from '@/App'
 import { MoleculeDocumentControls } from '@/features/molecule-assets'
 import { editorHostPort } from '@/domain/viewer/editorHostPort'
+import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 
 export interface ToolbarProps {
   showInspector: boolean
@@ -39,14 +40,11 @@ export function ToolbarView({
   const [importError, setImportError] = useState<string | null>(null)
   return (
     <TooltipProvider delayDuration={300}>
-      <header className="relative z-50 flex h-14 shrink-0 select-none items-center gap-2 border-b border-border bg-card px-3 text-card-foreground shadow-sm">
-
-        <WorkspaceModeSwitch value={workspaceMode} onChange={onWorkspaceModeChange} />
-
+      <header className="relative z-50 flex h-14 shrink-0 select-none items-center gap-1 border-b border-border bg-card px-2 text-card-foreground shadow-sm sm:gap-2 sm:px-3">
         {/* 品牌 */}
-        <span className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"><span className="flex h-7 w-7 items-center justify-center rounded-md border border-primary bg-primary text-primary-foreground"><Atom size={16} /></span><span className="hidden sm:inline">RetainMol</span></span>
+        <span className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight text-foreground"><span className="flex h-7 w-7 items-center justify-center rounded-md border border-primary bg-primary text-primary-foreground"><Atom size={16} /></span><span className="hidden sm:inline">RetainMol</span></span>
 
-        <div className="mx-1 h-5 w-px bg-border" />
+        <div className="mx-1 hidden h-5 w-px bg-border sm:block" />
 
         <div className="hidden min-w-0 items-center gap-2 md:flex">
           <span className="max-w-40 truncate text-xs font-semibold text-foreground" title={moleculeName}>
@@ -123,6 +121,14 @@ export function ToolbarView({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* 居中工作模式：桌面端 flex 居中，移动端下拉 */}
+        <div className="hidden flex-1 justify-center md:flex">
+          <WorkspaceModeSwitch value={workspaceMode} onChange={onWorkspaceModeChange} />
+        </div>
+        <div className="flex shrink-0 md:hidden">
+          <WorkspaceModeDropdown value={workspaceMode} onChange={onWorkspaceModeChange} />
+        </div>
+
         {/* 搜索 */}
         <Tip label="从 PubChem 搜索分子 (Ctrl+K)" side="bottom">
           <button
@@ -135,8 +141,9 @@ export function ToolbarView({
           </button>
         </Tip>
 
-        {/* 右侧：检查器切换 */}
+        {/* 右侧：检查器切换 + 主题 */}
         <div className="ml-auto flex items-center gap-1">
+          <PaletteSwitcher />
           <Tip label="打开模板工作台" side="bottom">
             <Button
               variant="ghost"
@@ -167,6 +174,12 @@ export function ToolbarView({
   )
 }
 
+const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; title?: string }> = [
+  { id: 'build', label: 'Build' },
+  { id: 'analyze', label: 'Analyze', title: 'Analyze 工作区即将接入分析结果与可视化' },
+  { id: 'simulate', label: 'Simulate', title: '打开计算任务工作区' },
+]
+
 function WorkspaceModeSwitch({
   value,
   onChange,
@@ -174,17 +187,12 @@ function WorkspaceModeSwitch({
   value: WorkspaceMode
   onChange: (mode: WorkspaceMode) => void
 }) {
-  const modes: Array<{ id: WorkspaceMode; label: string; title?: string }> = [
-    { id: 'build', label: 'Build' },
-    { id: 'analyze', label: 'Analyze', title: 'Analyze 工作区即将接入分析结果与可视化' },
-    { id: 'simulate', label: 'Simulate', title: '打开计算任务工作区' },
-  ]
   return (
     <nav
       aria-label="工作模式"
-      className="absolute left-1/2 top-1/2 hidden h-9 w-[300px] -translate-x-1/2 -translate-y-1/2 items-center rounded-full border border-border bg-muted p-1 shadow-inner min-[1100px]:flex min-[1400px]:w-[330px]"
+      className="flex h-9 w-[300px] items-center rounded-full border border-border bg-muted p-1 shadow-inner xl:w-[330px]"
     >
-      {modes.map(mode => (
+      {WORKSPACE_MODES.map(mode => (
         <button
           key={mode.id}
           type="button"
@@ -202,6 +210,75 @@ function WorkspaceModeSwitch({
         </button>
       ))}
     </nav>
+  )
+}
+
+function WorkspaceModeDropdown({
+  value,
+  onChange,
+}: {
+  value: WorkspaceMode
+  onChange: (mode: WorkspaceMode) => void
+}) {
+  const current = WORKSPACE_MODES.find(m => m.id === value) ?? WORKSPACE_MODES[0]
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium">
+          {current.label}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-32">
+        {WORKSPACE_MODES.map(mode => (
+          <DropdownMenuItem
+            key={mode.id}
+            onClick={() => onChange(mode.id)}
+            className={cn('text-xs', value === mode.id && 'bg-accent font-semibold')}
+          >
+            {mode.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function PaletteSwitcher() {
+  const palette = useUiPaletteStore(state => state.palette)
+  const setPalette = useUiPaletteStore(state => state.setPalette)
+  return (
+    <DropdownMenu>
+      <Tip label={palette === 'heritage' ? '古建筑主题' : '默认主题'} side="bottom">
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'h-8 w-8 rounded-md',
+              palette === 'heritage'
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            )}
+          >
+            <Palette size={14} />
+          </Button>
+        </DropdownMenuTrigger>
+      </Tip>
+      <DropdownMenuContent side="bottom" align="end" className="w-40">
+        <DropdownMenuItem
+          onClick={() => setPalette('default')}
+          className={cn('text-xs', palette === 'default' && 'bg-accent font-semibold')}
+        >
+          默认（slate）
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => setPalette('heritage')}
+          className={cn('text-xs', palette === 'heritage' && 'bg-accent font-semibold')}
+        >
+          古建筑（黄棕白）
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

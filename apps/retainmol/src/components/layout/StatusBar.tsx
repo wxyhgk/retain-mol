@@ -27,7 +27,7 @@ export function StatusBar() {
   }
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-6 flex items-center px-3 text-[11px] text-gray-400 select-none pointer-events-none">
+    <div className="absolute bottom-0 left-0 right-0 flex h-6 items-center border-t border-border/50 bg-card/80 px-3 text-[11px] text-muted-foreground backdrop-blur-sm select-none pointer-events-none">
       {toolLabel[workspaceTool]}
     </div>
   )

@@ -6,6 +6,7 @@ import {
   TemplateStudioPage,
 } from '@/features/template-studio'
 import { useUiThemeStore } from '@/domain/uiThemeStore'
+import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 import {
   jobPath,
   resolveAppRoute,
@@ -28,6 +29,7 @@ export type WorkspaceMode = 'build' | 'analyze' | 'simulate'
 
 export default function App() {
   const uiTheme = useUiThemeStore(state => state.theme)
+  const palette = useUiPaletteStore(state => state.palette)
   const [showInspector, setShowInspector] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('build')
@@ -56,6 +58,10 @@ export default function App() {
     document.documentElement.classList.toggle('dark', uiTheme === 'night')
     document.documentElement.style.colorScheme = uiTheme === 'night' ? 'dark' : 'light'
   }, [uiTheme])
+
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle('heritage', palette === 'heritage')
+  }, [palette])
 
   useAppClipboardShortcuts()
   useAppKeyboardShortcuts(openSearch)
