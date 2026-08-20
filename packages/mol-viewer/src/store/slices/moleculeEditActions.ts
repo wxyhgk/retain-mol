@@ -23,12 +23,12 @@ import { editWithSelectionSets } from '../../lib/builder/commands/shared'
 import { editChanged, editUnchanged, type EditCommandResult } from '../../lib/builder/commands/shared'
 import type { Bond } from '../../lib/molecule'
 
-/** 键的拓扑指纹：端点对（无序）+ 键级 + 芳香标记，忽略键 ID。 */
+/** 键的规范拓扑键：端点对（无序）+ 键级 + 芳香标记，忽略键 ID。 */
 function bondTopologyKey(bond: Bond): string {
   const [a, b] = bond.atomId1 < bond.atomId2
     ? [bond.atomId1, bond.atomId2]
     : [bond.atomId2, bond.atomId1]
-  return `${a}|${b}|${bond.order}|${bond.aromatic ? 1 : 0}`
+  return JSON.stringify([a, b, bond.order, bond.aromatic === true])
 }
 
 /** 两组键在拓扑上等价（多重集比较，忽略 ID 与顺序）。 */

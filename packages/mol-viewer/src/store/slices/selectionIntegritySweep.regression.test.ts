@@ -58,6 +58,21 @@ const carbonPair = (order: 1 | 2 | 3): Molecule => ({
   bonds: [{ id: 'cc', atomId1: 'c1', atomId2: 'c2', order }],
 })
 
+/**
+ * 旧键 a--b|c 与推断键 a|b--c 在分隔符拼接下都曾编码为
+ * a|b|c|1|0；四个原子的位置确保 inferBonds 只保留后一条键。
+ */
+const separatorCollisionMolecule = (): Molecule => ({
+  name: 'separator-collision',
+  atoms: [
+    { id: 'a', symbol: 'C', x: 100, y: 0, z: 0 },
+    { id: 'b|c', symbol: 'C', x: 200, y: 0, z: 0 },
+    { id: 'a|b', symbol: 'C', x: 0, y: 0, z: 0 },
+    { id: 'c', symbol: 'C', x: 1.5, y: 0, z: 0 },
+  ],
+  bonds: [{ id: 'colliding-old', atomId1: 'a', atomId2: 'b|c', order: 1 }],
+})
+
 function setup(mol: Molecule) {
   const store = createMoleculeStore()
   store.getState().setMolecule(mol)
@@ -158,5 +173,19 @@ describe('引用完整性清扫（隐式删原子/重建键 ID 的 action 出口
     // 再来一次也一样（审查里的复现是连续两次调用）
     store.getState().autoInferBonds()
     expect(store.temporal.getState().pastStates.length).toBe(pastBefore)
+  })
+
+  it('autoInferBonds 不把含分隔符原子 ID 的不同拓扑误判为相同', () => {
+    const store = setup(separatorCollisionMolecule())
+    const pastBefore = store.temporal.getState().pastStates.length
+
+    store.getState().autoInferBonds()
+
+    const mol = activeMol(store)
+    expect(mol.bonds).toHaveLength(1)
+    expect(new Set([mol.bonds[0]!.atomId1, mol.bonds[0]!.atomId2])).toEqual(
+      new Set(['a|b', 'c']),
+    )
+    expect(store.temporal.getState().pastStates.length).toBe(pastBefore + 1)
   })
 })
