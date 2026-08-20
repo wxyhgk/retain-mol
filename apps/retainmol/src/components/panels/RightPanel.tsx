@@ -1,16 +1,22 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { SelectionInspector } from '@/features/selection-inspector'
-import { MeasurePanel } from '@/features/measure'
+import { MeasureSection, SelectionInspector } from '@/features/inspector'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { WorkspaceDisplayPanel, WorkspaceScenePanel } from '@/features/workspace-panels'
+import type { WorkspaceMode } from '@/App'
+import { cn } from '@/lib/utils'
 
-export default function RightPanel() {
+export interface RightPanelProps {
+  workspaceMode?: WorkspaceMode
+}
+
+export default function RightPanel({ workspaceMode }: RightPanelProps) {
+  const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
   return (
     <Tabs defaultValue="inspector" className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
       <div className="shrink-0 border-b border-border px-2">
-        <TabsList className="grid h-10 w-full grid-cols-3 rounded-none bg-transparent p-0">
+        <TabsList className={cn('grid h-10 w-full rounded-none bg-transparent p-0', hasLeftWorkspace ? 'grid-cols-2' : 'grid-cols-3')}>
           <PanelTab value="inspector" label="Inspector" />
-          <PanelTab value="scene" label="Scene" />
+          {!hasLeftWorkspace && <PanelTab value="scene" label="Scene" />}
           <PanelTab value="display" label="Display" />
         </TabsList>
       </div>
@@ -19,9 +25,11 @@ export default function RightPanel() {
         <TabsContent value="inspector" className="mt-0 min-w-0">
           <InspectorContent />
         </TabsContent>
-        <TabsContent value="scene" className="mt-0 min-w-0">
-          <WorkspaceScenePanel />
-        </TabsContent>
+        {!hasLeftWorkspace && (
+          <TabsContent value="scene" className="mt-0 min-w-0">
+            <WorkspaceScenePanel />
+          </TabsContent>
+        )}
         <TabsContent value="display" className="mt-0 min-w-0">
           <WorkspaceDisplayPanel />
         </TabsContent>
@@ -32,7 +40,13 @@ export default function RightPanel() {
 
 function InspectorContent() {
   const activeTool = useEditorStore(state => state.activeTool)
-  return activeTool === 'measure' ? <MeasurePanel /> : <SelectionInspector />
+  const isMeasureActive = activeTool === 'measure'
+  return (
+    <div className="min-w-0">
+      {isMeasureActive && <MeasureSection />}
+      <SelectionInspector />
+    </div>
+  )
 }
 
 function PanelTab({ value, label }: { value: string; label: string }) {

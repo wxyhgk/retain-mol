@@ -10,6 +10,7 @@ import type { DisplayMode } from '@retainmol/mol-viewer/core'
 import { Atom, Box, CircleDot, Hash, Minus, StretchHorizontal, Torus } from 'lucide-react'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { cn } from '@/lib/utils'
+import { InspectorLayout, InspectorSection } from '@/features/inspector'
 
 type Icon = ComponentType<{ size?: number; strokeWidth?: number }>
 const DISPLAY_MODES: { id: DisplayMode; label: string; icon: Icon }[] = [
@@ -37,8 +38,8 @@ export function WorkspaceDisplayPanel() {
   const themes = listThemes()
 
   return (
-    <div className="space-y-5 p-3 text-foreground">
-      <WorkspaceSection title="软件风格">
+    <InspectorLayout>
+      <InspectorSection title="软件风格">
         <div className="grid grid-cols-2 gap-2">
           {presets.map(preset => (
             <OptionButton key={preset.id} active={stylePresetId === preset.id} title={preset.description} onClick={() => setStylePreset(preset.id)}>
@@ -47,9 +48,9 @@ export function WorkspaceDisplayPanel() {
             </OptionButton>
           ))}
         </div>
-      </WorkspaceSection>
+      </InspectorSection>
 
-      <WorkspaceSection title="显示模式">
+      <InspectorSection title="显示模式">
         <div className="grid grid-cols-3 gap-2">
           {DISPLAY_MODES.map(mode => {
             const ModeIcon = mode.icon
@@ -61,9 +62,9 @@ export function WorkspaceDisplayPanel() {
             )
           })}
         </div>
-      </WorkspaceSection>
+      </InspectorSection>
 
-      <WorkspaceSection title="渲染器">
+      <InspectorSection title="渲染器">
         <div className="grid grid-cols-3 gap-2">
           {profiles.map(profile => (
             <OptionButton key={profile.id} active={renderStyle === profile.id} title={profile.description} onClick={() => setRenderStyle(profile.id as RenderStyle)} className="h-9 px-2 text-center text-[10px] font-semibold">
@@ -71,9 +72,9 @@ export function WorkspaceDisplayPanel() {
             </OptionButton>
           ))}
         </div>
-      </WorkspaceSection>
+      </InspectorSection>
 
-      <WorkspaceSection title="配色">
+      <InspectorSection title="配色">
         <div className="grid grid-cols-6 gap-2">
           {themes.map(theme => (
             <button
@@ -92,20 +93,16 @@ export function WorkspaceDisplayPanel() {
             </button>
           ))}
         </div>
-      </WorkspaceSection>
+      </InspectorSection>
 
-      <WorkspaceSection title="标注">
+      <InspectorSection title="标注">
         <OptionButton active={showAtomLabels} onClick={toggleAtomLabels} className="flex h-10 w-full items-center gap-2 px-3">
           <Hash size={14} /><span className="text-[11px] font-medium">显示原子编号</span>
           <span className="ml-auto text-[9px]">{showAtomLabels ? '开' : '关'}</span>
         </OptionButton>
-      </WorkspaceSection>
-    </div>
+      </InspectorSection>
+    </InspectorLayout>
   )
-}
-
-function WorkspaceSection({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="space-y-2"><h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h3>{children}</section>
 }
 
 function OptionButton({ active, title, className, onClick, children }: { active: boolean; title?: string; className?: string; onClick: () => void; children: ReactNode }) {

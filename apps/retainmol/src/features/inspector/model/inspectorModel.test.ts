@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Molecule } from '@retainmol/mol-viewer/core'
-import { buildSelectionInspectorModel } from './selectionInspectorModel'
+import { buildInspectorModel } from './inspectorModel'
 
 const molecule: Molecule = {
   name: 'formaldehyde fragment',
@@ -16,9 +16,9 @@ const molecule: Molecule = {
   ],
 }
 
-describe('buildSelectionInspectorModel', () => {
+describe('buildInspectorModel', () => {
   it('builds a molecule summary when selection is empty', () => {
-    const model = buildSelectionInspectorModel(molecule, [], [])
+    const model = buildInspectorModel(molecule, [], [])
 
     expect(model).toMatchObject({
       mode: 'molecule',
@@ -30,7 +30,7 @@ describe('buildSelectionInspectorModel', () => {
   })
 
   it('describes one atom with its number, inferred hybridization and neighbors', () => {
-    const model = buildSelectionInspectorModel(molecule, ['c'], [])
+    const model = buildInspectorModel(molecule, ['c'], [])
 
     expect(model).toMatchObject({
       mode: 'atom',
@@ -44,7 +44,7 @@ describe('buildSelectionInspectorModel', () => {
   })
 
   it('describes one bond and both indexed endpoints', () => {
-    const model = buildSelectionInspectorModel(molecule, [], ['co'])
+    const model = buildInspectorModel(molecule, [], ['co'])
 
     expect(model).toMatchObject({
       mode: 'bond',
@@ -55,8 +55,8 @@ describe('buildSelectionInspectorModel', () => {
     })
   })
 
-  it('preserves selection order when calculating multi-atom geometry', () => {
-    const model = buildSelectionInspectorModel(molecule, ['h1', 'c', 'o'], ['ch'])
+  it('preserves selection order when calculating multi-atom geometry with label and hint', () => {
+    const model = buildInspectorModel(molecule, ['h1', 'c', 'o'], ['ch'])
 
     expect(model).toMatchObject({
       mode: 'multi',
@@ -71,12 +71,34 @@ describe('buildSelectionInspectorModel', () => {
         kind: 'angle',
         atomIds: ['h1', 'c', 'o'],
         value: 90,
+        label: 'H—C—O',
+        editHint: '键角顶点 = 第 2 个选中原子 · 转动末端一侧',
       },
     })
   })
 
+  it('builds distance geometry with label and hint', () => {
+    const model = buildInspectorModel(molecule, ['c', 'o'], [])
+    expect(model.mode === 'multi' ? model.geometry : null).toMatchObject({
+      kind: 'distance',
+      label: 'C—O',
+      unit: 'Å',
+      editHint: '修改距离将平移后选原子一侧',
+    })
+  })
+
+  it('builds dihedral geometry with label and hint', () => {
+    const model = buildInspectorModel(molecule, ['c', 'o', 'h1', 'h2'], [])
+    const geometry = model.mode === 'multi' ? model.geometry : null
+    expect(geometry?.kind).toBe('dihedral')
+    expect(geometry).toMatchObject({
+      label: 'C—O—H—H',
+      editHint: '二面角绕 2–3 号原子轴转动末端一侧',
+    })
+  })
+
   it('ignores stale ids instead of exposing missing entities', () => {
-    const model = buildSelectionInspectorModel(molecule, ['missing'], ['missing'])
+    const model = buildInspectorModel(molecule, ['missing'], ['missing'])
 
     expect(model.mode).toBe('molecule')
   })

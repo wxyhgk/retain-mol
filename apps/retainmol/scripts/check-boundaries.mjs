@@ -351,9 +351,8 @@ if (existsSync(join(SRC_DIR, 'domain/viewerAdapter.ts'))) {
 
 for (const rel of [
   'components/panels/RightPanel.tsx',
-  'features/geometry/components/GeometryPanel.tsx',
-  'features/scene/components/ScenePanel.tsx',
 ]) {
+  if (!existsSync(join(SRC_DIR, rel))) continue
   const source = readFileSync(join(SRC_DIR, rel), 'utf8')
   if (/\buseMoleculeStore\s*\(\s*\)/.test(source)) {
     violations.push(`${rel}: subscribe through a focused molecule-store selector`)

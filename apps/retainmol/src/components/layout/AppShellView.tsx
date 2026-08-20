@@ -165,7 +165,7 @@ export function AppShellView({
                   maxSize={38}
                   className="min-h-0 min-w-0 overflow-hidden border-l border-border bg-card"
                 >
-                  <RightPanel />
+                  <RightPanel workspaceMode={workspaceMode} />
                 </Panel>
               </>
             )}
