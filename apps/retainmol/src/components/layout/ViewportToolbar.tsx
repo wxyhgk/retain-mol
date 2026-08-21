@@ -123,7 +123,7 @@ function ViewportButton({ label, children, disabled, pressed, onClick }: Viewpor
           <span className="text-[9px] font-medium leading-none">{shortLabel(label)}</span>
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" className="border-primary bg-primary text-xs text-primary-foreground shadow-lg">
+      <TooltipContent side="top" className="border bg-popover text-xs text-popover-foreground shadow-md">
         {label}
       </TooltipContent>
     </Tooltip>

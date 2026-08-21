@@ -305,7 +305,7 @@ function Tip({ label, children, side = 'right' }: { label: string; children: Rea
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side={side} className="border-primary bg-primary text-xs text-primary-foreground">{label}</TooltipContent>
+      <TooltipContent side={side} className="border bg-popover text-xs text-popover-foreground shadow-md">{label}</TooltipContent>
     </Tooltip>
   )
 }
