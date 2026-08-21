@@ -109,7 +109,7 @@ export function AppShellView({
       {searchOpen && <PubChemSearch onClose={onCloseSearch} />}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="relative z-20 h-full w-[72px] shrink-0 border-r border-border bg-white">
+        <div className="relative z-20 h-full w-[72px] shrink-0 border-r border-border bg-card">
           <ToolStrip onToggleInspector={onToggleInspector} />
         </div>
 
