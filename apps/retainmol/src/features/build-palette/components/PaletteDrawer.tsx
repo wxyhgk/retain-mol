@@ -1,17 +1,14 @@
 import { X } from 'lucide-react'
-import type { WorkspacePanel } from '@/domain/workspaceToolStore'
 import type { BuildPaletteController } from '../model/useBuildPaletteController'
-import { DrawPanel } from './workspace/DrawPanel'
 import { TemplateWorkspacePanel } from './workspace/TemplateWorkspacePanel'
 
-const PANEL_META: Record<WorkspacePanel, { title: string; subtitle: string }> = {
-  draw: { title: '绘制', subtitle: '元素、杂化构建与键编辑' },
+const PANEL_META = {
   template: { title: '模板', subtitle: '环系、连接模板与起始结构' },
-}
+} as const
 
 export function PaletteDrawer({ controller }: { controller: BuildPaletteController }) {
   const panel = controller.panel
-  if (!panel) return null
+  if (panel !== 'template') return null
   const meta = PANEL_META[panel]
 
   return (
@@ -37,17 +34,14 @@ export function PaletteDrawer({ controller }: { controller: BuildPaletteControll
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden p-3">
-        {panel === 'draw' && <DrawPanel controller={controller} />}
-        {panel === 'template' && (
-          <div className="h-full overflow-y-auto [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
-            <TemplateWorkspacePanel
-              activeFragmentId={controller.activeFragmentId}
-              onPickTemplate={controller.pickTemplate}
-              onPickFragment={controller.pickTemplateFragment}
-              onPickRuntimeSite={controller.pickRuntimeTemplateSite}
-            />
-          </div>
-        )}
+        <div className="h-full overflow-y-auto [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
+          <TemplateWorkspacePanel
+            activeFragmentId={controller.activeFragmentId}
+            onPickTemplate={controller.pickTemplate}
+            onPickFragment={controller.pickTemplateFragment}
+            onPickRuntimeSite={controller.pickRuntimeTemplateSite}
+          />
+        </div>
       </div>
     </aside>
   )
