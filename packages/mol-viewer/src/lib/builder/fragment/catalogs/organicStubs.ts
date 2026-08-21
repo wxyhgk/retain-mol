@@ -4,13 +4,16 @@ import { AS_FRAGMENTS } from './hybrids/as'
 import { B_FRAGMENTS } from './hybrids/b'
 import { BE_FRAGMENTS } from './hybrids/be'
 import { C_FRAGMENTS } from './hybrids/c'
+import { GA_FRAGMENTS } from './hybrids/ga'
 import { GE_FRAGMENTS } from './hybrids/ge'
+import { IN_FRAGMENTS } from './hybrids/in'
 import { N_FRAGMENTS } from './hybrids/n'
 import { O_FRAGMENTS } from './hybrids/o'
 import { P_FRAGMENTS } from './hybrids/p'
 import { SE_FRAGMENTS } from './hybrids/se'
 import { SI_FRAGMENTS } from './hybrids/si'
 import { S_FRAGMENTS } from './hybrids/s'
+import { TL_FRAGMENTS } from './hybrids/tl'
 
 export const ORGANIC_STUB_FRAGMENTS: readonly FragmentDef[] = [
   ...C_FRAGMENTS,
@@ -25,6 +28,9 @@ export const ORGANIC_STUB_FRAGMENTS: readonly FragmentDef[] = [
   ...BE_FRAGMENTS,
   ...AS_FRAGMENTS,
   ...SE_FRAGMENTS,
+  ...GA_FRAGMENTS,
+  ...IN_FRAGMENTS,
+  ...TL_FRAGMENTS,
 ]
 
 // 兼容旧聚合逻辑：如需新增元素，只需在 hybrids/ 下新建 <symbol>.ts 并在此聚合
