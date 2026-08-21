@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Atom, Command, PanelRight, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -200,11 +200,11 @@ function EditorCommandPalette({
   const palette = useUiPaletteStore(state => state.palette)
   const setPalette = useUiPaletteStore(state => state.setPalette)
 
-  const run = (fn: () => void) => {
+  const run = useCallback((fn: () => void) => {
     onOpenChange(false)
     setQuery('')
     fn()
-  }
+  }, [onOpenChange])
 
   type CommandItem = { label: string; hint?: string; disabled?: boolean; onRun: () => void }
   const groups = useMemo<Array<{ title: string; items: CommandItem[] }>>(() => {
@@ -245,7 +245,7 @@ function EditorCommandPalette({
         ].filter(item => filter(item.label)),
       },
     ].filter(group => group.items.length > 0)
-  }, [query, history, fileIO, onOpenTemplateStudio, onSearchOpen, palette, setPalette])
+  }, [query, history, fileIO, onOpenTemplateStudio, onSearchOpen, palette, setPalette, run])
 
   return (
     <Dialog open={open} onOpenChange={value => { onOpenChange(value); if (!value) setQuery('') }}>

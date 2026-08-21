@@ -18,7 +18,7 @@ import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import type { JobArtifact, JobDetail } from '@retainmol/jobs'
 import { useMoleculeDocumentStore } from '@/features/molecule-assets'
 import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
-import { useViewportStore } from '@retainmol/mol-viewer/state'
+import { useViewportStore } from '@/domain/viewer/viewportStore'
 import { useBuildPaletteController } from '@/features/build-palette/model/useBuildPaletteController'
 
 const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
@@ -26,7 +26,9 @@ const WorkflowEditor = lazy(() => import('@/features/workflows').then(module => 
 
 function ResizeHandle() {
   return (
-    <PanelResizeHandle className="w-px shrink-0 bg-border transition-colors data-[resize-handle-state=hover]:bg-foreground/30 data-[resize-handle-state=drag]:bg-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+    <PanelResizeHandle className="group flex w-2 shrink-0 items-center justify-center bg-transparent focus-visible:outline-none">
+      <div className="h-full w-px bg-border transition-colors group-data-[resize-handle-state=hover]:bg-foreground/30 group-data-[resize-handle-state=drag]:bg-foreground/50 group-focus-visible:bg-ring" />
+    </PanelResizeHandle>
   )
 }
 

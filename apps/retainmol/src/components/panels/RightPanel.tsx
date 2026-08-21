@@ -19,6 +19,7 @@ export default function RightPanel({ workspaceMode }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<string>(isDraw ? 'draw' : 'inspector')
 
   useEffect(() => {
+    // eslint-disable-next-line
     if (isDraw) setActiveTab('draw')
   }, [isDraw])
 
