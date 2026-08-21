@@ -5,7 +5,7 @@ import {
   focusViewportSelection,
   resetViewport,
 } from '@/domain/viewer/viewport'
-import { useViewportStore } from '@retainmol/mol-viewer/state'
+import { useViewportStore } from '@/domain/viewer/viewportStore'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import {
   deriveWorkspaceTool,
