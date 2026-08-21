@@ -12,6 +12,7 @@ interface CoordinationSitePickerProps {
   selectedSiteId: string | null
   onSelect: (siteId: string) => void
   onBack: () => void
+  hideInternalBackButton?: boolean
 }
 
 const BOND_LENGTH = 2.15
@@ -24,6 +25,7 @@ export function CoordinationSitePicker({
   selectedSiteId,
   onSelect,
   onBack,
+  hideInternalBackButton = false,
 }: CoordinationSitePickerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const onSelectRef = useRef(onSelect)
@@ -207,10 +209,12 @@ export function CoordinationSitePicker({
   return (
     <div data-coordination-site-picker className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
       <div className="flex shrink-0 items-center gap-2 border-b border-border pb-3">
-        <Button type="button" variant="ghost" size="icon" onClick={onBack} className="h-8 w-8" title="返回">
-          <ArrowLeft />
-          <span className="sr-only">返回</span>
-        </Button>
+        {!hideInternalBackButton && (
+          <Button type="button" variant="ghost" size="icon" onClick={onBack} className="h-8 w-8" title="返回">
+            <ArrowLeft />
+            <span className="sr-only">返回</span>
+          </Button>
+        )}
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-foreground">{model.name}</h3>
           <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">

@@ -1,7 +1,3 @@
-export const QUICK_ELEMENTS = ['C', 'H', 'O', 'N', 'B', 'F', 'Cl', 'Br', 'I', 'S'] as const
-
-export type QuickElement = (typeof QUICK_ELEMENTS)[number]
-
 export const FULL_PERIODIC_TABLE_LAYOUT = [
   ['H', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'He'],
   ['Li', 'Be', '', '', '', '', '', '', '', '', '', '', 'B', 'C', 'N', 'O', 'F', 'Ne'],
@@ -13,3 +9,7 @@ export const FULL_PERIODIC_TABLE_LAYOUT = [
   ['', '', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu', ''],
   ['', '', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', ''],
 ] as const
+
+export type PeriodicTableSymbol = (typeof FULL_PERIODIC_TABLE_LAYOUT)[number][number]
+
+export const QUICK_ELEMENTS = ['C', 'H', 'O', 'N', 'B', 'F', 'Cl', 'Br', 'I', 'S'] as const
