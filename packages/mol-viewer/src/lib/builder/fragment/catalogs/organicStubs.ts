@@ -26,6 +26,7 @@ import { K_FRAGMENTS } from './hybrids/k'
 import { RB_FRAGMENTS } from './hybrids/rb'
 import { TE_FRAGMENTS } from './hybrids/te'
 import { TL_FRAGMENTS } from './hybrids/tl'
+import { PB_FRAGMENTS } from './hybrids/pb'
 
 export const ORGANIC_STUB_FRAGMENTS: readonly FragmentDef[] = [
   ...C_FRAGMENTS,
@@ -46,6 +47,7 @@ export const ORGANIC_STUB_FRAGMENTS: readonly FragmentDef[] = [
   ...TE_FRAGMENTS,
   ...SB_FRAGMENTS,
   ...SN_FRAGMENTS,
+  ...PB_FRAGMENTS,
   ...LI_FRAGMENTS,
   ...NA_FRAGMENTS,
   ...K_FRAGMENTS,
