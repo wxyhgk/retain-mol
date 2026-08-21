@@ -19,6 +19,8 @@ import { SE_FRAGMENTS } from './hybrids/se'
 import { SI_FRAGMENTS } from './hybrids/si'
 import { SN_FRAGMENTS } from './hybrids/sn'
 import { S_FRAGMENTS } from './hybrids/s'
+import { K_FRAGMENTS } from './hybrids/k'
+import { RB_FRAGMENTS } from './hybrids/rb'
 import { TE_FRAGMENTS } from './hybrids/te'
 import { TL_FRAGMENTS } from './hybrids/tl'
 
@@ -43,6 +45,8 @@ export const ORGANIC_STUB_FRAGMENTS: readonly FragmentDef[] = [
   ...SN_FRAGMENTS,
   ...LI_FRAGMENTS,
   ...NA_FRAGMENTS,
+  ...K_FRAGMENTS,
+  ...RB_FRAGMENTS,
   ...MG_FRAGMENTS,
   ...CA_FRAGMENTS,
 ]
