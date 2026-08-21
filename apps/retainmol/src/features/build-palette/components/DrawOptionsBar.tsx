@@ -21,32 +21,62 @@ import { HYBRID_GROUP_LABEL } from '../domain/buildCatalog'
 import { QUICK_ELEMENTS } from '../domain/periodicTableLayout'
 import { PeriodicTable } from './PeriodicTable'
 import { projectCoordinationDirections, type ProjectedCoordinationSite } from '../domain/fragmentGeometry'
+import { CoordinationSitePicker } from './workspace/CoordinationSitePicker'
 
 // ---------------------------------------------------------------------------
 // DrawOptionsBar – top bar for Draw workspace: quick elements + geometry scroll
 // ---------------------------------------------------------------------------
 
+import { useDrawWorkspacePanelModel } from '../model/useDrawWorkspacePanelModel'
+import type { BuildPaletteController } from '../model/useBuildPaletteController'
+
 interface DrawOptionsBarProps {
-  readonly paletteElement: string
-  readonly activeElement: string
-  readonly activeFragmentId: string | null
-  readonly fragments: readonly PublicFragmentDef[]
-  readonly atomClickMode?: 'grow' | 'replace'
-  readonly onInspectElement: (symbol: string) => void
-  readonly onPickAtom?: (symbol: string) => void
-  readonly onPickFragment: (fragmentId: string) => void
+  readonly controller: BuildPaletteController
 }
 
-export function DrawOptionsBar({
-  paletteElement,
-  activeElement,
-  activeFragmentId,
-  fragments,
-  atomClickMode = 'replace',
-  onInspectElement,
-  onPickAtom,
-  onPickFragment,
-}: DrawOptionsBarProps) {
+export function DrawOptionsBar({ controller }: DrawOptionsBarProps) {
+  const model = useDrawWorkspacePanelModel({
+    inspectedElement: controller.paletteElement,
+    onBeginAttachmentSitePick: controller.beginAttachmentSitePick,
+    onPickAttachmentSite: controller.pickAttachmentSite,
+    onPickFragment: controller.pickDrawFragment,
+  })
+  const paletteElement = controller.paletteElement
+  const activeElement = controller.activeElement
+  const activeFragmentId = controller.activeFragmentId
+  const fragments = model.fragments
+  const atomClickMode = controller.atomClickMode
+  const onInspectElement = controller.inspectElement
+  const onPickAtom = controller.pickAtom
+  const onPickFragment = model.chooseFragment
+
+  if (model.attachment) {
+    return (
+      <div className="flex flex-col border-b border-border bg-card text-card-foreground">
+        <div className="flex h-11 shrink-0 items-center gap-2 px-3">
+          <button
+            type="button"
+            onClick={model.closeAttachmentPicker}
+            className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            ← 返回绘制
+          </button>
+          <span className="text-xs text-muted-foreground">
+            选择 {model.attachment.model.name} 的连接位点（{model.attachment.siteOptions.length} 个）
+          </span>
+        </div>
+        <div className="h-[360px] border-t border-border">
+          <CoordinationSitePicker
+            model={model.attachment.model}
+            siteOptions={model.attachment.siteOptions}
+            selectedSiteId={model.selectedAttachmentSiteId}
+            onSelect={model.chooseAttachmentSite}
+            onBack={model.closeAttachmentPicker}
+          />
+        </div>
+      </div>
+    )
+  }
   return (
     <div
       className="flex min-h-11 flex-wrap items-center gap-2 border-b border-border bg-card px-2 py-1 sm:py-0"
