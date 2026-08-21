@@ -149,7 +149,7 @@ export function AppShellView({
 
             <Panel minSize={30} className="relative min-h-0 min-w-0 overflow-hidden bg-muted">
               <div
-                className="relative h-full w-full overflow-hidden"
+                className="relative h-full w-full overflow-hidden pb-6"
                 onPointerDownCapture={event => canvasFocus.begin(event.target)}
                 onPointerUpCapture={canvasFocus.finish}
                 onPointerCancelCapture={canvasFocus.finish}

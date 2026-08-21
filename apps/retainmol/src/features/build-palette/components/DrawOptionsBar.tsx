@@ -53,7 +53,7 @@ export function DrawOptionsBar({ controller }: DrawOptionsBarProps) {
   if (model.attachment) {
     return (
       <div className="flex flex-col border-b border-border bg-card text-card-foreground">
-        <div className="flex h-11 shrink-0 items-center gap-2 px-3">
+        <div className="flex h-11 shrink-0 items-center gap-2 px-4">
           <button
             type="button"
             onClick={model.closeAttachmentPicker}
@@ -79,7 +79,7 @@ export function DrawOptionsBar({ controller }: DrawOptionsBarProps) {
   }
   return (
     <div
-      className="flex min-h-11 flex-wrap items-center gap-2 border-b border-border bg-card px-2 py-1 sm:py-0"
+      className="flex min-h-11 flex-wrap items-center gap-2 border-b border-border bg-card px-4 py-2"
       aria-label="绘制选项"
     >
       {/* Quick element triggers – touch target 44px via h-8 sm:h-9 + padding */}
@@ -161,17 +161,17 @@ function PeriodicTableSheet({
           title="完整周期表"
           className="flex h-8 sm:h-9 size-8 sm:size-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:border-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <Ellipsis size={15} />
+          <Ellipsis size={14} />
         </button>
       </SheetTrigger>
       <SheetContent
         side="bottom"
         overlayClassName="bg-black/15 backdrop-blur-[1px] dark:bg-white/10"
-        className="inset-x-auto bottom-5 left-1/2 w-[min(920px,calc(100vw-32px))] -translate-x-1/2 gap-0 overflow-hidden rounded-lg border border-border bg-card p-0 text-card-foreground shadow-[0_18px_50px_rgba(0,0,0,0.22)]"
+        className="inset-x-auto bottom-5 left-1/2 w-[min(920px,calc(100vw-32px))] -translate-x-1/2 gap-0 overflow-hidden rounded-lg border border-border bg-card p-0 text-card-foreground shadow-xl"
       >
         <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle className="text-sm">元素库 · 周期表</SheetTitle>
-          <SheetDescription className="text-[10px]">选择元素后返回绘制面板，再选择原子替换或可用构型。</SheetDescription>
+          <SheetDescription className="text-xs">选择元素后返回绘制面板，再选择原子替换或可用构型。</SheetDescription>
         </SheetHeader>
         <PeriodicTable activeElement={paletteElement} onSelect={handleSelect} />
       </SheetContent>
@@ -278,14 +278,13 @@ function GeometryScrollArea({
           onClick={() => scrollBy(-120)}
           disabled={!canLeft}
           className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            !canLeft && 'opacity-40 cursor-not-allowed',
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
             canLeft && 'hover:border-foreground hover:text-foreground',
           )}
         >
           <ChevronLeft size={14} />
         </button>
-        <div className="mx-2 flex flex-1 items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+        <div className="mx-2 flex flex-1 items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
           暂无可用构型 · 选取元素后可替换原子或添加构型
         </div>
         <button
@@ -294,8 +293,7 @@ function GeometryScrollArea({
           onClick={() => scrollBy(120)}
           disabled={!canRight}
           className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            !canRight && 'opacity-40 cursor-not-allowed',
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
             canRight && 'hover:border-foreground hover:text-foreground',
           )}
         >
@@ -306,7 +304,7 @@ function GeometryScrollArea({
   }
 
   return (
-    <div className="relative flex flex-1 items-center gap-1 overflow-hidden">
+    <div className="relative flex flex-1 items-center gap-2 overflow-hidden">
       {/* scroll left button – always rendered, disabled opacity when cannot scroll */}
       <button
         type="button"
@@ -314,8 +312,7 @@ function GeometryScrollArea({
         onClick={() => scrollBy(-120)}
         disabled={!canLeft}
         className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          !canLeft && 'opacity-40 cursor-not-allowed',
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
           canLeft && 'hover:border-foreground hover:text-foreground',
         )}
       >
@@ -381,8 +378,8 @@ function GeometryScrollArea({
                   tabIndex={focusedIndex === visibleFragments.length + 1 ? 0 : -1}
                   className="flex h-[52px] min-w-[56px] flex-col items-center justify-center rounded-md border border-border bg-card px-2 text-muted-foreground transition-colors hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <MoreHorizontal size={14} />
-                  <span className="mt-0.5 text-[9px] font-medium">+{overflowFragments.length}</span>
+                  <MoreHorizontal size={16} />
+                  <span className="mt-0.5 text-[10px] font-medium">+{overflowFragments.length}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[160px]">
@@ -392,7 +389,7 @@ function GeometryScrollArea({
                     onClick={() => onChooseFragment(fragment.id)}
                     className="gap-2"
                   >
-                    <span className="flex size-6 items-center justify-center rounded-sm border border-border bg-muted text-[9px] font-bold">
+                    <span className="flex size-6 items-center justify-center rounded-sm border border-border bg-muted text-[10px] font-bold">
                       {paletteElement}
                     </span>
                     <span className="flex-1 truncate text-xs">{getFragmentLabel(fragment)} · {fragment.name}</span>
@@ -411,8 +408,7 @@ function GeometryScrollArea({
         onClick={() => scrollBy(120)}
         disabled={!canRight}
         className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          !canRight && 'opacity-40 cursor-not-allowed',
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
           canRight && 'hover:border-foreground hover:text-foreground',
         )}
       >
@@ -484,7 +480,7 @@ function GeometryMiniButton({
       )}
     >
       <MiniGeometryGlyph symbol={symbol} kind={kind} directions={directions} geometryId={geometryId} />
-      <span className="mt-1 text-[9px] font-semibold leading-none">{label}</span>
+      <span className="mt-1 text-[10px] font-semibold leading-none">{label}</span>
     </button>
   )
 }
@@ -502,7 +498,7 @@ function MiniGeometryGlyph({
   geometryId?: string
 }) {
   if (kind === 'atom') {
-    return <span className="flex h-4 items-center justify-center text-[11px] font-bold leading-none">{symbol}</span>
+    return <span className="flex h-4 items-center justify-center text-xs font-bold leading-none">{symbol}</span>
   }
   if (kind === 'coordination') {
     // 24x16 mini glyph, scale 0.55, depth threshold 0.11 (vs default 0.18)
@@ -530,7 +526,7 @@ function MiniGeometryGlyph({
           }}
         />
       ))}
-      <span className="absolute left-1/2 top-1/2 z-10 flex size-3 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-current bg-card text-[6px] font-bold text-card-foreground shadow-sm">
+      <span className="absolute left-1/2 top-1/2 z-10 flex size-3 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-current bg-card text-[8px] font-bold text-card-foreground shadow-sm">
         {symbol}
       </span>
     </span>
@@ -589,7 +585,7 @@ function MiniCoordinationGlyph({
           )
         })}
         <circle cx={CENTER_X} cy={CENTER_Y} r="3.8" className="fill-card stroke-current" strokeWidth="0.9" />
-        <text x={CENTER_X} y={CENTER_Y + 0.3} className="fill-card-foreground text-[5px] font-bold" dominantBaseline="middle" textAnchor="middle">
+        <text x={CENTER_X} y={CENTER_Y + 0.3} className="fill-card-foreground text-[8px] font-bold" dominantBaseline="middle" textAnchor="middle">
           {symbol}
         </text>
       </g>

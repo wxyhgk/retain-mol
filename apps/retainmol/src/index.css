@@ -28,6 +28,7 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+    --viewport-surface: 0 0% 100%;
   }
   .dark {
     --background: 222.2 84% 4.9%;
@@ -49,6 +50,7 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+    --viewport-surface: 222.2 84% 4.9%;
   }
 }
 
@@ -122,6 +124,7 @@
   --border: 40 20% 82%;
   --input: 40 20% 82%;
   --ring: 196 33% 35%;
+  --viewport-surface: 45 40% 98%;
   --gilt: 37 45% 45%;
   --sidebar: hsl(45 40% 98%);
   --sidebar-foreground: hsl(160 4% 15%);
@@ -152,6 +155,7 @@
   --border: 198 8% 26%;
   --input: 198 8% 26%;
   --ring: 196 35% 65%;
+  --viewport-surface: 202 9% 18%;
   --gilt: 37 42% 55%;
   --sidebar: hsl(202 9% 14%);
   --sidebar-foreground: hsl(36 24% 87%);
@@ -168,6 +172,7 @@
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
+  --color-viewport-surface: hsl(var(--viewport-surface));
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
   --color-primary: hsl(var(--primary));

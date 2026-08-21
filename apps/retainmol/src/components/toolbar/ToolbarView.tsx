@@ -11,6 +11,8 @@ import { Separator } from '@/components/ui/separator'
 import type { ToolbarModel } from './useToolbarModel'
 import type { WorkspaceMode } from '@/App'
 import { useUiPaletteStore } from '@/domain/uiPaletteStore'
+import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { selectAppBusyMessage, useAppTaskStore } from '@/store/appTaskStore'
 
 export interface ToolbarProps {
   showInspector: boolean
@@ -49,7 +51,7 @@ export function ToolbarView({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <header className="relative z-50 flex h-14 shrink-0 select-none items-center gap-2 border-b border-border bg-card px-3 text-card-foreground shadow-sm">
+      <header className="relative z-50 flex h-14 shrink-0 select-none items-center gap-2 border-b border-border bg-card px-4 text-card-foreground shadow-sm">
         {/* 品牌：仅保留 Logo，分子信息移至画布/状态栏 */}
         <span className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
           <span className="flex h-7 w-7 items-center justify-center rounded-md border border-primary bg-primary text-primary-foreground">
@@ -75,9 +77,9 @@ export function ToolbarView({
               className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground"
               onClick={() => setPaletteOpen(true)}
             >
-              <Search size={13} />
+              <Search size={14} />
               <span className="hidden sm:inline">搜索</span>
-              <kbd className="ml-1 hidden rounded bg-muted px-1 py-0.5 font-sans text-[10px] text-muted-foreground md:inline">⌘K</kbd>
+              <kbd className="ml-1 hidden rounded bg-muted px-1 py-0.5 font-sans text-xs text-muted-foreground md:inline">⌘K</kbd>
             </Button>
           </Tip>
           <Tip label={showInspector ? '收起检查器' : '展开检查器'} side="bottom">
@@ -93,7 +95,7 @@ export function ToolbarView({
               aria-expanded={showInspector}
               onClick={onToggleInspector}
             >
-              <PanelRight size={13} />
+              <PanelRight size={14} />
               <span className="hidden sm:inline">检查器</span>
             </Button>
           </Tip>
@@ -199,6 +201,10 @@ function EditorCommandPalette({
   const [query, setQuery] = useState('')
   const palette = useUiPaletteStore(state => state.palette)
   const setPalette = useUiPaletteStore(state => state.setPalette)
+  const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
+  const isEmpty = molecule.atoms.length === 0
+  const busyMessage = useAppTaskStore(selectAppBusyMessage)
+  const isBusy = Boolean(busyMessage)
 
   const run = useCallback((fn: () => void) => {
     onOpenChange(false)
@@ -223,11 +229,11 @@ function EditorCommandPalette({
         items: [
           { label: '导入分子（替换当前）', onRun: () => void fileIO.importXYZ() },
           { label: '导入分子（添加到场景）', onRun: () => void fileIO.importXYZToScene() },
-          { label: '导出 XYZ', onRun: () => fileIO.exportCurrentXYZ() },
-          { label: '导出 MOL', onRun: () => fileIO.exportCurrentMol() },
-          { label: '导出 SDF', onRun: () => fileIO.exportCurrentSdf() },
-          { label: '导出 GJF', onRun: () => fileIO.exportCurrentGJF() },
-          { label: '导出 PNG 截图', onRun: () => fileIO.exportPNG() },
+          { label: '导出 XYZ', disabled: isEmpty, onRun: () => fileIO.exportCurrentXYZ() },
+          { label: '导出 MOL', disabled: isEmpty, onRun: () => fileIO.exportCurrentMol() },
+          { label: '导出 SDF', disabled: isEmpty, onRun: () => fileIO.exportCurrentSdf() },
+          { label: '导出 GJF', disabled: isEmpty, onRun: () => fileIO.exportCurrentGJF() },
+          { label: '导出 PNG 截图', disabled: isEmpty, onRun: () => fileIO.exportPNG() },
         ].filter(item => filter(item.label)),
       },
       {
@@ -245,11 +251,11 @@ function EditorCommandPalette({
         ].filter(item => filter(item.label)),
       },
     ].filter(group => group.items.length > 0)
-  }, [query, history, fileIO, onOpenTemplateStudio, onSearchOpen, palette, setPalette, run])
+  }, [query, history, fileIO, onOpenTemplateStudio, onSearchOpen, palette, setPalette, run, isEmpty])
 
   return (
     <Dialog open={open} onOpenChange={value => { onOpenChange(value); if (!value) setQuery('') }}>
-      <DialogContent className="max-w-lg gap-0 overflow-hidden p-0">
+      <DialogContent aria-busy={isBusy || undefined} className="max-w-lg gap-0 overflow-hidden p-0">
         <DialogHeader className="sr-only">
           <DialogTitle>命令面板</DialogTitle>
           <DialogDescription>搜索并执行编辑器命令</DialogDescription>
@@ -271,18 +277,20 @@ function EditorCommandPalette({
             ) : (
               groups.map(group => (
                 <div key={group.title} className="mb-3 last:mb-0">
-                  <div className="px-2 py-1 text-[10px] font-semibold tracking-widest text-muted-foreground">{group.title}</div>
+                  <div className="px-2 py-1 text-xs font-semibold tracking-widest text-muted-foreground">{group.title}</div>
                   <div className="space-y-0.5">
                     {group.items.map(item => (
                       <button
                         key={item.label}
                         type="button"
                         disabled={item.disabled}
+                        aria-disabled={item.disabled || undefined}
+                        aria-busy={isBusy || undefined}
                         onClick={() => run(item.onRun)}
-                        className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-40"
+                        className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <span>{item.label}</span>
-                        {item.hint && <span className="ml-2 shrink-0 font-mono text-[10px] text-muted-foreground">{item.hint}</span>}
+                        {item.hint && <span className="ml-2 shrink-0 font-mono text-xs text-muted-foreground">{item.hint}</span>}
                       </button>
                     ))}
                   </div>
@@ -292,7 +300,7 @@ function EditorCommandPalette({
             )}
           </div>
         </ScrollArea>
-        <div className="flex items-center justify-between border-t border-border bg-muted/50 px-3 py-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-border bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
           <span>↑↓ 选择 · 回车 执行 · Esc 关闭</span>
           <span>⌘K 快速打开</span>
         </div>

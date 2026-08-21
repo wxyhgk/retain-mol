@@ -46,7 +46,7 @@ export function ViewportToolbar() {
       <nav
         aria-label="视图控制"
         data-workspace-control="true"
-        className="absolute bottom-8 left-1/2 z-20 flex h-14 -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border bg-card/90 p-1 text-card-foreground opacity-90 shadow-[0_12px_28px_rgba(0,0,0,0.14)] backdrop-blur-md transition-opacity hover:opacity-100 focus-within:opacity-100"
+        className="absolute bottom-8 left-1/2 z-20 flex h-14 -translate-x-1/2 items-center gap-1 rounded-lg border border-border bg-[hsl(var(--card)/0.9)] p-1 text-card-foreground opacity-90 shadow-lg backdrop-blur-md transition-opacity hover:opacity-100 focus-within:opacity-100"
       >
         <ViewportButton
           label="选择"
@@ -115,12 +115,12 @@ function ViewportButton({ label, children, disabled, pressed, onClick }: Viewpor
           disabled={disabled}
           onClick={onClick}
           className={cn(
-            'flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-30',
+            'flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
             pressed && 'bg-primary text-primary-foreground ring-1 ring-inset ring-primary',
           )}
         >
           {children}
-          <span className="text-[9px] font-medium leading-none">{shortLabel(label)}</span>
+          <span className="text-[10px] font-medium leading-none">{shortLabel(label)}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" className="border bg-popover text-xs text-popover-foreground shadow-md">
