@@ -26,6 +26,7 @@ import { K_FRAGMENTS } from './hybrids/k'
 import { RB_FRAGMENTS } from './hybrids/rb'
 import { TE_FRAGMENTS } from './hybrids/te'
 import { TL_FRAGMENTS } from './hybrids/tl'
+import { BI_FRAGMENTS } from './hybrids/bi'
 
 export const ORGANIC_STUB_FRAGMENTS: readonly FragmentDef[] = [
   ...C_FRAGMENTS,
@@ -55,6 +56,7 @@ export const ORGANIC_STUB_FRAGMENTS: readonly FragmentDef[] = [
   ...CS_FRAGMENTS,
   ...SR_FRAGMENTS,
   ...BA_FRAGMENTS,
+  ...BI_FRAGMENTS,
 ]
 
 // 兼容旧聚合逻辑：如需新增元素，只需在 hybrids/ 下新建 <symbol>.ts 并在此聚合
