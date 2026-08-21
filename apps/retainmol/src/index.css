@@ -27,7 +27,7 @@
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
-    --radius: 0.625rem;
+    --radius: 0.625rem; /* card radius: 10px, keep 0.625rem for shadcn consistency */
   }
   .dark {
     --background: 222.2 84% 4.9%;
@@ -55,6 +55,10 @@
 @layer base {
   * {
     border-color: hsl(var(--border));
+  }
+  *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
   body {
     -webkit-font-smoothing: antialiased;
@@ -135,8 +139,8 @@
   --card-foreground: 36 24% 87%;
   --popover: 202 9% 18%;
   --popover-foreground: 36 24% 87%;
-  --primary: 164 19% 45%;
-  --primary-foreground: 200 10% 8%;
+  --primary: 164 22% 52%;
+  --primary-foreground: 43 26% 96%;
   --secondary: 205 9% 15%;
   --secondary-foreground: 36 24% 87%;
   --muted: 205 9% 16%;
@@ -147,16 +151,16 @@
   --destructive-foreground: 200 10% 8%;
   --border: 198 8% 26%;
   --input: 198 8% 26%;
-  --ring: 196 35% 55%;
+  --ring: 196 35% 65%;
   --gilt: 37 42% 55%;
   --sidebar: hsl(202 9% 14%);
   --sidebar-foreground: hsl(36 24% 87%);
-  --sidebar-primary: hsl(164 19% 45%);
-  --sidebar-primary-foreground: hsl(200 10% 8%);
+  --sidebar-primary: hsl(164 22% 52%);
+  --sidebar-primary-foreground: hsl(43 26% 96%);
   --sidebar-accent: hsl(165 14% 24%);
   --sidebar-accent-foreground: hsl(36 24% 87%);
   --sidebar-border: hsl(198 8% 26%);
-  --sidebar-ring: hsl(196 35% 55%);
+  --sidebar-ring: hsl(196 35% 65%);
 }
 
 @theme inline {
