@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@retainmol/ui-kit'
 import { MeasureSection, SelectionInspector } from '@/features/inspector'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { WorkspaceDisplayPanel, WorkspaceScenePanel } from '@/features/workspace-panels'
+import { DrawPanel } from '@/features/build-palette/components/workspace/DrawPanel'
+import { useBuildPaletteController } from '@/features/build-palette/model/useBuildPaletteController'
 import type { WorkspaceMode } from '@/App'
 import { cn } from '@/lib/utils'
 
@@ -11,10 +14,21 @@ export interface RightPanelProps {
 
 export default function RightPanel({ workspaceMode }: RightPanelProps) {
   const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
+  const buildController = useBuildPaletteController()
+  const isDraw = buildController.workspaceTool === 'draw'
+  const [activeTab, setActiveTab] = useState<string>(isDraw ? 'draw' : 'inspector')
+
+  useEffect(() => {
+    if (isDraw) setActiveTab('draw')
+  }, [isDraw])
+
+  const cols = hasLeftWorkspace ? (isDraw ? 'grid-cols-3' : 'grid-cols-2') : isDraw ? 'grid-cols-4' : 'grid-cols-3'
+
   return (
-    <Tabs defaultValue="inspector" className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
       <div className="shrink-0 border-b border-border px-2">
-        <TabsList className={cn('grid h-10 w-full rounded-none bg-transparent p-0', hasLeftWorkspace ? 'grid-cols-2' : 'grid-cols-3')}>
+        <TabsList className={cn('grid h-10 w-full rounded-none bg-transparent p-0', cols)}>
+          <PanelTab value="draw" label="Draw" />
           <PanelTab value="inspector" label="Inspector" />
           {!hasLeftWorkspace && <PanelTab value="scene" label="Scene" />}
           <PanelTab value="display" label="Display" />
@@ -22,6 +36,9 @@ export default function RightPanel({ workspaceMode }: RightPanelProps) {
       </div>
 
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
+        <TabsContent value="draw" className="mt-0 min-w-0 p-3">
+          <DrawPanel controller={buildController} />
+        </TabsContent>
         <TabsContent value="inspector" className="mt-0 min-w-0">
           <InspectorContent />
         </TabsContent>

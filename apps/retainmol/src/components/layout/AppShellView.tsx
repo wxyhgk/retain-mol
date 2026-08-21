@@ -20,7 +20,6 @@ import { useMoleculeDocumentStore } from '@/features/molecule-assets'
 import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
 import { useViewportStore } from '@retainmol/mol-viewer/state'
 import { useBuildPaletteController } from '@/features/build-palette/model/useBuildPaletteController'
-import { DrawOptionsBar } from '@/features/build-palette/components/DrawOptionsBar'
 
 const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
 const WorkflowEditor = lazy(() => import('@/features/workflows').then(module => ({ default: module.WorkflowEditor })))
@@ -91,7 +90,7 @@ export function AppShellView({
   const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
   const leftDefaultSize = workspaceMode === 'simulate' ? 38 : workspaceMode === 'analyze' ? 32 : 28
   const buildController = useBuildPaletteController()
-  const showDrawOptionsBar = buildController.workspaceTool === 'draw' && workspaceMode === 'build' && !hasLeftWorkspace
+  const showRightPanel = showInspector || buildController.workspaceTool === 'draw'
   return (
     <div
       className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground"
@@ -105,7 +104,6 @@ export function AppShellView({
         onOpenTemplateStudio={onOpenTemplateStudio}
         onSearchOpen={onOpenSearch}
       />
-      {showDrawOptionsBar && <DrawOptionsBar controller={buildController} />}
       {searchOpen && <PubChemSearch onClose={onCloseSearch} />}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -163,7 +161,7 @@ export function AppShellView({
               </div>
             </Panel>
 
-            {showInspector && (
+            {showRightPanel && (
               <>
                 <ResizeHandle />
                 <Panel
