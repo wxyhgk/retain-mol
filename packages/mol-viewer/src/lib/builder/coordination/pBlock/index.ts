@@ -1,0 +1,17 @@
+import { AS_COORDINATION_SET } from './as'
+import { SB_COORDINATION_SET } from './sb'
+import { SE_COORDINATION_SET } from './se'
+import { TE_COORDINATION_SET } from './te'
+import { SN_COORDINATION_SET } from './sn'
+import { PB_COORDINATION_SET } from './pb'
+import { BI_COORDINATION_SET } from './bi'
+
+export const P_BLOCK_COORDINATION_SETS = [
+  AS_COORDINATION_SET,
+  SB_COORDINATION_SET,
+  SE_COORDINATION_SET,
+  TE_COORDINATION_SET,
+  SN_COORDINATION_SET,
+  PB_COORDINATION_SET,
+  BI_COORDINATION_SET,
+] as const
