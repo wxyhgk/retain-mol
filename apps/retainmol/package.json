@@ -1,7 +1,7 @@
 {
   "name": "retainmol",
   "private": true,
-  "version": "0.0.40",
+  "version": "0.0.41",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-ocl-resources.mjs && node scripts/copy-ketcher-resources.mjs && npm run build --workspace @retainmol/ui-kit && npm run build --workspace @retainmol/mol-viewer && npm run build --workspace @retainmol/molecule-assets && npm run build --workspace @retainmol/jobs",

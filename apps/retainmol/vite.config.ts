@@ -9,15 +9,21 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@', replacement: path.resolve(__dirname, './src') },
-      { find: 'ketcher-macromolecules', replacement: path.resolve(__dirname, '../../../ketcher-retainmol/packages/ketcher-macromolecules/src') },
+      { find: 'ketcher-macromolecules', replacement: path.resolve(__dirname, './src/empty.ts') },
     ],
-    // app 与 mol-viewer 各带一份 three（peerDep + external），不去重会产生双实例、跨边界 instanceof 失效
-    dedupe: ['three'],
+    // app 与 mol-viewer 各带一份 three/react，多实例会导致 hooks/ instanceof 失效（ketcher 独立 react 导致 useRef 读空）
+    dedupe: ['three', 'react', 'react-dom', 'react/jsx-runtime'],
   },
   assetsInclude: ['**/*.ket'],
+  define: {
+    global: 'globalThis',
+  },
   server: {
     fs: {
       allow: [path.resolve(__dirname, './'), path.resolve(__dirname, '../../'), path.resolve(__dirname, '../../../ketcher-retainmol')],
+    },
+    watch: {
+      ignored: ['**/public/ketcher-dist/**', '**/node_modules/**'],
     },
   },
   optimizeDeps: {

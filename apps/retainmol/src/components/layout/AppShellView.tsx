@@ -3,7 +3,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import type { AppShellProps } from './AppShell'
 import type { AppShellModel } from './useAppShellModel'
 import Toolbar from '@/components/toolbar/Toolbar'
-import { RightPanel } from '@/components/panels'
+import { FloatingInspector } from '@/components/panels/FloatingInspector'
 import PubChemSearch from '@/components/search/PubChemSearch'
 import { MolViewer } from '@/domain/viewer/viewport'
 import { BusyOverlay } from './BusyOverlay'
@@ -92,7 +92,13 @@ export function AppShellView({
   const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
   const leftDefaultSize = workspaceMode === 'simulate' ? 38 : workspaceMode === 'analyze' ? 32 : 28
   const buildController = useBuildPaletteController()
-  const showRightPanel = showInspector || buildController.workspaceTool === 'draw'
+  // 悬浮窗承载全部 RightPanel 职责：Draw / Inspector / Scene / Display
+  // 展开条件：检查器按钮 或 Draw 工具激活时（与旧版 showRightPanel 逻辑一致）
+  const showFloating = showInspector || buildController.workspaceTool === 'draw'
+  const handleFloatingClose = () => {
+    if (showInspector) onToggleInspector()
+    if (buildController.workspaceTool === 'draw') buildController.closePanel()
+  }
   return (
     <div
       className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground"
@@ -166,21 +172,9 @@ export function AppShellView({
                 <StatusBar />
               </div>
             </Panel>
-
-            {showRightPanel && (
-              <>
-                <ResizeHandle />
-                <Panel
-                  defaultSize={22}
-                  minSize={18}
-                  maxSize={38}
-                  className="min-h-0 min-w-0 overflow-hidden border-l border-border bg-card"
-                >
-                  <RightPanel workspaceMode={workspaceMode} />
-                </Panel>
-              </>
-            )}
           </PanelGroup>
+          {/* 顶层悬浮：承载全部 RightPanel（Draw / Inspector / Scene / Display），不参与 PanelGroup 布局，z-[80] 压盖画布 */}
+          <FloatingInspector open={showFloating} onClose={handleFloatingClose} workspaceMode={workspaceMode} />
 
           {workflowEditSession && (
             <div className="absolute inset-0 z-30 bg-background">
