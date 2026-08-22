@@ -3,7 +3,6 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import type { AppShellProps } from './AppShell'
 import type { AppShellModel } from './useAppShellModel'
 import Toolbar from '@/components/toolbar/Toolbar'
-import { ToolStrip } from '@/features/build-palette'
 import { RightPanel } from '@/components/panels'
 import PubChemSearch from '@/components/search/PubChemSearch'
 import { MolViewer } from '@/domain/viewer/viewport'
@@ -23,6 +22,7 @@ import { useBuildPaletteController } from '@/features/build-palette/model/useBui
 
 const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
 const WorkflowEditor = lazy(() => import('@/features/workflows').then(module => ({ default: module.WorkflowEditor })))
+const KetcherPanel = lazy(() => import('@/features/ketcher').then(m => ({ default: m.KetcherPanel })))
 
 function ResizeHandle() {
   return (
@@ -108,44 +108,48 @@ export function AppShellView({
       />
       {searchOpen && <PubChemSearch onClose={onCloseSearch} />}
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="relative z-20 h-full w-[72px] shrink-0 border-r border-border bg-card">
-          <ToolStrip onToggleInspector={onToggleInspector} />
-        </div>
-
-        <div className="relative flex min-h-0 flex-1 overflow-hidden bg-muted">
-          <PanelGroup
-            direction="horizontal"
-            autoSaveId="retainmol-editor"
-            className="flex min-h-0 flex-1"
-          >
-            {hasLeftWorkspace && (
-              <>
-                <Panel
-                  defaultSize={leftDefaultSize}
-                  minSize={22}
-                  maxSize={50}
-                  className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-card"
-                >
-                  {workspaceMode === 'simulate' ? (
-                    <SimulationWorkspace
-                      structure={jobStructure}
-                      molecule={activeMolecule}
-                      objectId={activeObjectId}
-                      documentBinding={documentBinding ?? null}
-                      revisionMetadata={pendingRevisionMetadata}
-                      onLoadOptimizedStructure={loadOptimizedStructure}
-                      workflowEditor={WorkflowEditor}
-                    />
-                  ) : (
-                    <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载分析模块</div>}>
-                      <AnalysisWorkspace />
-                    </Suspense>
-                  )}
-                </Panel>
-                <ResizeHandle />
-              </>
-            )}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-muted">
+        <PanelGroup
+          direction="horizontal"
+          autoSaveId="retainmol-chem3d"
+          className="flex min-h-0 flex-1"
+        >
+          {hasLeftWorkspace ? (
+            <>
+              <Panel
+                defaultSize={leftDefaultSize}
+                minSize={22}
+                maxSize={50}
+                className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-card"
+              >
+                {workspaceMode === 'simulate' ? (
+                  <SimulationWorkspace
+                    structure={jobStructure}
+                    molecule={activeMolecule}
+                    objectId={activeObjectId}
+                    documentBinding={documentBinding ?? null}
+                    revisionMetadata={pendingRevisionMetadata}
+                    onLoadOptimizedStructure={loadOptimizedStructure}
+                    workflowEditor={WorkflowEditor}
+                  />
+                ) : (
+                  <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载分析模块</div>}>
+                    <AnalysisWorkspace />
+                  </Suspense>
+                )}
+              </Panel>
+              <ResizeHandle />
+            </>
+          ) : (
+            <>
+              <Panel defaultSize={48} minSize={25} className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-white">
+                <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载 2D 编辑器…</div>}>
+                  <KetcherPanel />
+                </Suspense>
+              </Panel>
+              <ResizeHandle />
+            </>
+          )}
 
             <Panel minSize={30} className="relative min-h-0 min-w-0 overflow-hidden bg-muted">
               <div
@@ -201,7 +205,6 @@ export function AppShellView({
             </div>
           )}
         </div>
-      </div>
     </div>
   )
 }

@@ -13,6 +13,9 @@ export default defineConfig({
     // app 与 mol-viewer 各带一份 three（peerDep + external），不去重会产生双实例、跨边界 instanceof 失效
     dedupe: ['three'],
   },
+  optimizeDeps: {
+    exclude: ['ketcher-react', 'ketcher-core', 'ketcher-standalone', 'ketcher-macromolecules'],
+  },
   test: {
     globals: true,
     environment: 'node',
