@@ -12,7 +12,7 @@ import {
   type ModelingCommandEffectReceipt,
 } from './contracts'
 import {
-  applyExpectedEffectCommand,
+  applyExpectedEffectTransactionCommand,
   isExpectedEffectCommandSupported,
 } from './semantics'
 
@@ -66,7 +66,7 @@ export function compileExpectedEffect(
       }
     }
     const before = createCanonicalMoleculeSnapshot(current)
-    const result = applyExpectedEffectCommand(current, command)
+    const result = applyExpectedEffectTransactionCommand(current, command)
     if (result.ok === false) {
       return {
         status: 'indeterminate',

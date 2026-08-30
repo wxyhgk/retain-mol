@@ -15,6 +15,47 @@ function isFiniteCoord(value: number): boolean {
   return Number.isFinite(value)
 }
 
+interface TemplateBondCapacity {
+  readonly count: number
+  readonly order: number
+}
+
+const HYBRID_SLOT_CAPACITY = {
+  sp: 2,
+  sp2: 3,
+  sp3: 4,
+} as const
+
+function templateBondCapacity(
+  fragment: FragmentDef,
+  atomIndex: number,
+): TemplateBondCapacity {
+  const atom = fragment.atoms[atomIndex]
+  const elementCapacity = getElementConfig(atom?.symbol ?? '').maxBonds
+  if (atomIndex !== fragment.attachIndex) {
+    return { count: elementCapacity, order: elementCapacity }
+  }
+
+  if (fragment.coordination) {
+    return {
+      count: fragment.coordination.coordinationNumber,
+      order: fragment.coordination.sites.reduce((sum, site) => sum + site.bondOrder, 0),
+    }
+  }
+
+  const hybridCapacity = fragment.group === 'sp'
+    || fragment.group === 'sp2'
+    || fragment.group === 'sp3'
+    ? HYBRID_SLOT_CAPACITY[fragment.group]
+    : undefined
+  if (hybridCapacity !== undefined && atom?.symbol !== 'H' && elementCapacity > 0) {
+    const capacity = Math.max(elementCapacity, hybridCapacity)
+    return { count: capacity, order: capacity }
+  }
+
+  return { count: elementCapacity, order: elementCapacity }
+}
+
 export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIssue[] {
   const issues: FragmentValidationIssue[] = []
   const atomCount = fragment.atoms.length
@@ -58,8 +99,8 @@ export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIs
   })
 
   fragment.atoms.forEach((atom, index) => {
-    const maxBonds = getElementConfig(atom.symbol).maxBonds
-    if ((bondCounts[index] ?? 0) > maxBonds || (bondOrders[index] ?? 0) > maxBonds) {
+    const capacity = templateBondCapacity(fragment, index)
+    if ((bondCounts[index] ?? 0) > capacity.count || (bondOrders[index] ?? 0) > capacity.order) {
       issues.push(issue(
         fragment,
         'atom.valence.exceeded',
@@ -157,7 +198,7 @@ export function validateFragmentDef(fragment: FragmentDef): FragmentValidationIs
         leaving.z - center.z,
       ])
     })
-    if (center && finalCenterValence > getElementConfig(center.symbol).maxBonds) {
+    if (center && finalCenterValence > templateBondCapacity(fragment, centerIndex).order) {
       issues.push(issue(fragment, 'bridge.center.valence.exceeded', 'bridgeAttachment 应用后中心价态超过上限'))
     }
     if (directions.length === 2) {

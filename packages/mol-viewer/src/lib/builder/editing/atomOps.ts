@@ -9,6 +9,7 @@ import { getElementConfig } from '../../../config/elements.config'
 import { degree, hParentOf, hNeighborsOf } from '../graph'
 import { calcAddAtomOnExisting, calcBondLength } from '../geometry/vsepr'
 import { maxValence, targetValence, valenceUsed } from '../valence'
+import { getHydrogenAdditionAvailability } from '../../chemistry/policies/atomPolicy'
 
 /** 原子的有效成键数（读取自身电荷/自由基） */
 function atomMaxBonds(a: Atom): number {
@@ -112,10 +113,9 @@ export function substituteAtomElement(
  * 返回新分子；若已满或找不到原子则原样返回。
  */
 export function addOneHydrogen(mol: Molecule, atomId: string): Molecule {
+  if (getHydrogenAdditionAvailability(mol, atomId).ok === false) return mol
   const atom = mol.atoms.find(a => a.id === atomId)
   if (!atom) return mol
-  if (atomMaxBonds(atom) === 0) return mol
-  if (valenceUsed(mol, atomId) >= atomMaxBonds(atom)) return mol
   const result = calcAddAtomOnExisting(atom, mol.bonds, mol.atoms, 'H')
   const h = newAtom('H', ...result.position)
   return {
@@ -150,27 +150,6 @@ export function resaturateAtom(mol: Molecule, atomId: string): Molecule {
 }
 
 /**
- * 只删除超出当前目标价态的 H，不补缺失 H；用于显式提高键级后的拓扑清理。
- * 保守取整（与 autoAddHydrogens 的 floor 对称）：aromatic 键计 1.5 价，局部化键
- * 与 aromatic 键混排会产生 <1 的簿记残差（如苯环单键升双键后另一条环键仍为
- * aromatic，excess = 0.5），这种残差不代表真的多出一个 H，不删。
- */
-export function removeExcessHydrogens(mol: Molecule, atomId: string): Molecule {
-  const atom = mol.atoms.find(a => a.id === atomId)
-  if (!atom) return mol
-  const excess = valenceUsed(mol, atomId) - targetValence(atom)
-  if (excess <= 0) return mol
-  const hs = hNeighborsOf(mol, atomId).slice(0, Math.floor(excess + 1e-6))
-  if (hs.length === 0) return mol
-  const remove = new Set(hs.map(h => h.id))
-  return {
-    ...mol,
-    atoms: mol.atoms.filter(a => !remove.has(a.id)),
-    bonds: mol.bonds.filter(b => !remove.has(b.atomId1) && !remove.has(b.atomId2)),
-  }
-}
-
-/**
  * 给分子中所有（或指定）原子补满氢原子。
  * 同样以连接数判断，不依赖键级。
  * @param atomId 可选，只对指定原子补氢；省略时对所有原子补氢
@@ -183,6 +162,7 @@ export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
   let current = mol
 
   for (const target of targets) {
+    if (getHydrogenAdditionAvailability(current, target.id).ok === false) continue
     const targetMax = targetValence(target)
     if (targetMax === 0) continue
 

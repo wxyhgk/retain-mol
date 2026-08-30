@@ -55,6 +55,34 @@ describe('FragmentValidator', () => {
     expect(validateFragmentDef(invalid).map(issue => issue.code)).toContain('atom.valence.exceeded')
   })
 
+  it('bounds hybrid placeholders by geometry slots rather than elemental covalent valence', () => {
+    const lithium = getFragment('li-sp')!
+    const extraHydrogenIndex = lithium.atoms.length
+    const invalid: FragmentDef = {
+      ...lithium,
+      id: 'li-sp-too-many-slots',
+      atoms: [...lithium.atoms, { symbol: 'H', x: 0, y: 1, z: 0 }],
+      bonds: [...lithium.bonds, { a: 0, b: extraHydrogenIndex, order: 1 }],
+    }
+
+    expect(validateFragmentDef(lithium)).toEqual([])
+    expect(validateFragmentDef(invalid).map(issue => issue.code)).toContain('atom.valence.exceeded')
+  })
+
+  it('bounds coordination placeholders by the declared coordination capacity', () => {
+    const arsenic = getFragment('as-coord-trigonal-bipyramidal')!
+    const extraHydrogenIndex = arsenic.atoms.length
+    const invalid: FragmentDef = {
+      ...arsenic,
+      id: 'as-coordination-too-many-slots',
+      atoms: [...arsenic.atoms, { symbol: 'H', x: 0, y: 0, z: 2 }],
+      bonds: [...arsenic.bonds, { a: 0, b: extraHydrogenIndex, order: 1 }],
+    }
+
+    expect(validateFragmentDef(arsenic)).toEqual([])
+    expect(validateFragmentDef(invalid).map(issue => issue.code)).toContain('atom.valence.exceeded')
+  })
+
   it('rejects ambiguous bridge metadata instead of inferring a second site', () => {
     const fluorene = getFragment('fluorene-9h-site-a')!
     const invalid: FragmentDef = {

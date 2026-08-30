@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { newAtom, newBond } from '../molecule'
 import type { Atom } from '../molecule'
 import { effectiveMaxBonds } from '../../config/elements.config'
-import { autoAddHydrogens, resaturateAtom } from './editing/atomOps'
-import { canBond } from './editing/bondOps'
+import { autoAddHydrogens, resaturateAtom } from '../builder/editing/atomOps'
+import { canBond } from '../builder/editing/bondOps'
 
 describe('电荷/自由基对有效价态与补氢的影响', () => {
   it('effectiveMaxBonds 中性时严格等于 maxBonds', () => {

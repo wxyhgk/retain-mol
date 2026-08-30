@@ -5,10 +5,13 @@
 import { lookupBondLengthByOrder } from '../../../config/geometry.config'
 import type { Atom, Bond, Molecule } from '../../molecule'
 import { newBond } from '../../molecule'
-import { removeExcessHydrogens } from './atomOps'
 import { bondsOf, findBond, otherEnd } from '../graph'
 import { availableMaxValenceByBonds } from '../valence'
-import { GraphIndex, ValencePolicy } from '../kernel'
+import {
+  planBondOrderChange,
+  supportedBondOrders,
+  validateBondAddition,
+} from '../../chemistry/policies/bondPolicy'
 
 /** 判断两个原子之间是否允许成键 */
 export function canBond(
@@ -16,18 +19,15 @@ export function canBond(
   atom2: Atom,
   bonds: readonly Bond[],
 ): { ok: boolean; reason?: string } {
-  const graph = new GraphIndex({ atoms: [atom1, atom2], bonds })
-  return new ValencePolicy(graph).canAddBond(atom1, atom2)
+  return validateBondAddition(
+    { atoms: [atom1, atom2], bonds },
+    { atomId1: atom1.id, atomId2: atom2.id },
+  )
 }
 
 export type BondEditResult =
   | { ok: true; molecule: Molecule }
   | { ok: false; reason: string }
-
-function withBondOrder(bond: Bond, order: Bond['order']): Bond {
-  const { aromatic: _aromatic, ...plainBond } = bond
-  return { ...plainBond, order }
-}
 
 /**
  * H 槽位成键（价态完整模型下 H 就是可用的成键槽位）：
@@ -141,9 +141,7 @@ export function cycleBondLength(mol: Molecule, bondId: string): CycleBondLengthR
   if (!a1 || !a2) return { ok: false, reason: '原子不存在' }
 
   // 该元素对可用的键级档位（单键永远可用）
-  const orders = ([1, 2, 3] as const).filter(
-    o => lookupBondLengthByOrder(a1.symbol, a2.symbol, o) !== null,
-  )
+  const orders = supportedBondOrders(a1, a2)
   if (orders.length < 2) {
     return { ok: false, reason: `${a1.symbol}–${a2.symbol} 只有单键` }
   }
@@ -151,17 +149,16 @@ export function cycleBondLength(mol: Molecule, bondId: string): CycleBondLengthR
   if (next === undefined) return { ok: false, reason: '没有可用的下一键级' }
 
   // 用户显式调整键级 = 覆盖导入的 aromatic 标记
-  const withOrder: Molecule = {
-    ...mol,
-    bonds: mol.bonds.map(b =>
-      b.id === bondId ? withBondOrder(b, next) : b),
+  const orderChange = planBondOrderChange(mol, bondId, next)
+  if (orderChange.ok === false || !orderChange.changed) {
+    return { ok: false, reason: orderChange.ok === false ? orderChange.reason : '键级未变化' }
   }
+  const withOrder = orderChange.molecule
 
   // 环判定：去掉这条键后 a2 仍能到达 a1 → 环内，只改键级
   const side2 = reachableWithout(mol.bonds, bondId, a2.id)
   if (side2.has(a1.id)) {
-    const trimmed = removeExcessHydrogens(removeExcessHydrogens(withOrder, a1.id), a2.id)
-    return { ok: true, molecule: trimmed, order: next, moved: false }
+    return { ok: true, molecule: withOrder, order: next, moved: false }
   }
 
   const target = lookupBondLengthByOrder(a1.symbol, a2.symbol, next)!
@@ -185,6 +182,6 @@ export function cycleBondLength(mol: Molecule, bondId: string): CycleBondLengthR
     ok: true,
     order: next,
     moved: true,
-    molecule: removeExcessHydrogens(removeExcessHydrogens(movedMol, a1.id), a2.id),
+    molecule: movedMol,
   }
 }

@@ -77,7 +77,8 @@ export type GeomCommandResult =
   | { ok: false; reason: string }
 
 export type AddAtomCommandResult =
-  Extract<EditCommandResultWithMeta<{ atomId: string }>, { ok: true; changed: true }>
+  | Extract<EditCommandResultWithMeta<{ atomId: string }>, { ok: true; changed: true }>
+  | { ok: false; reason: string }
 
 export type CleanupGeometryCommandResult =
   | { ok: true; changed: true; molecule: Molecule }

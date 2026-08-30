@@ -51,6 +51,7 @@ function runGrowToEmptyCommand(
     input.position.y,
     input.position.z,
   )
+  if (addAtomResult.ok === false) return editFailed(addAtomResult.reason)
   const addBondResult = runAddBondCommand(addAtomResult.molecule, {
     atomId1: input.sourceId,
     atomId2: addAtomResult.atomId,

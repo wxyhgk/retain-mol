@@ -135,6 +135,9 @@ export interface CanonicalMoleculeSnapshot {
 // @public
 export function commitEditPlan(input: EditPlan | unknown, runtime?: ViewerRuntime): ModelingCommitResult;
 
+// @public (undocumented)
+export function commitSelectedBondFragmentFusion(input: SelectedBondFragmentFusionCommitInput, runtime?: ViewerRuntime): SelectedBondFragmentFusionCommitResult;
+
 // @public
 export function compareExpectedEffect(expected: ExpectedEffectCompileResult, actual: ModelingEffectReceipt): ExpectedEffectComparison;
 
@@ -919,8 +922,110 @@ export interface Molecule {
 // @public (undocumented)
 export function parseEditPlan(input: unknown): EditPlanParseResult;
 
+// @public (undocumented)
+export function previewSelectedBondFragmentFusion(input: SelectedBondFragmentFusionPreviewInput, runtime?: ViewerRuntime): SelectedBondFragmentFusionPreviewResult;
+
 // @public
 export function replayEditPlan(molecule: Molecule, input: EditPlan | unknown, options?: HeadlessModelingOptions): ModelingDryRunResult;
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionCandidate {
+    // (undocumented)
+    readonly coordinatesStale: true;
+    // (undocumented)
+    readonly flippedAnchors: readonly boolean[];
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly molecule: Molecule;
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionCommitInput extends SelectedBondFragmentFusionPreviewInput {
+    // (undocumented)
+    readonly candidateKey: string;
+    // (undocumented)
+    readonly selectionVersion: number;
+    // (undocumented)
+    readonly targetObjectId: string;
+}
+
+// @public (undocumented)
+export type SelectedBondFragmentFusionCommitResult = SelectedBondFragmentFusionCommitSuccess | SelectedBondFragmentFusionFailure;
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionCommitSuccess {
+    // (undocumented)
+    readonly coordinatesStale: true;
+    // (undocumented)
+    readonly effect: SelectedBondFragmentFusionEffect;
+    // (undocumented)
+    readonly molecule: Molecule;
+    // (undocumented)
+    readonly ok: true;
+    // (undocumented)
+    readonly selectedTopologyKey: string;
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionDiagnostic {
+    // (undocumented)
+    readonly code: string;
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionEffect {
+    // (undocumented)
+    readonly addedAtomIds: readonly string[];
+    // (undocumented)
+    readonly addedBondIds: readonly string[];
+    // (undocumented)
+    readonly removedAtomIds: readonly string[];
+    // (undocumented)
+    readonly removedBondIds: readonly string[];
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionFailure {
+    // (undocumented)
+    readonly code: SelectedBondFragmentFusionFailureCode;
+    // (undocumented)
+    readonly ok: false;
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public (undocumented)
+export type SelectedBondFragmentFusionFailureCode = 'no-editable-active-molecule' | 'requires-two-selected-bonds' | 'selection-changed' | 'target-object-changed' | 'candidate-not-found' | 'stale-host' | 'candidate-no-longer-valid' | 'concurrent-store-change';
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionPreview {
+    // (undocumented)
+    readonly candidates: readonly SelectedBondFragmentFusionCandidate[];
+    // (undocumented)
+    readonly ok: true;
+    // (undocumented)
+    readonly rejected: readonly SelectedBondFragmentFusionDiagnostic[];
+    // (undocumented)
+    readonly selectionVersion: number;
+    // (undocumented)
+    readonly targetObjectId: string;
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionPreviewInput {
+    // (undocumented)
+    readonly fragment: Molecule;
+    // (undocumented)
+    readonly fragmentBondIds: readonly [string, string];
+    // (undocumented)
+    readonly reconcileHydrogens?: boolean;
+}
+
+// @public (undocumented)
+export type SelectedBondFragmentFusionPreviewResult = SelectedBondFragmentFusionPreview | SelectedBondFragmentFusionFailure;
 
 // @public
 export function validateModelingCommandConstraints(command: ModelingCommand, constraints: ModelingConstraints | undefined): ModelingIssue | null;
