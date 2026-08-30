@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { newAtom, newBond, type Molecule, type Bond } from '../../molecule'
-import { removeExcessHydrogens } from './atomOps'
+import { removeExcessHydrogens } from '../../chemistry/policies/explicitHydrogenPolicy'
 import { cycleBondLength } from './bondOps'
 
 /** 构造 SDF 导入形态的苯：6C 六元环，环键 order 1 + aromatic:true，每 C 一个 H */

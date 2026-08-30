@@ -6,3 +6,5 @@ export * from './headless'
 export * from './planSchema'
 export * from './revision'
 export * from './planExecutor'
+
+export * from './fragmentFusionStoreAdapter'

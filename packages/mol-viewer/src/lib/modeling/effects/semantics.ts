@@ -1,5 +1,11 @@
-import type { Atom, Bond, Molecule } from '../../molecule'
-import { lookupBondLengthByOrder } from '../../../config/geometry.config'
+import type { Atom, Molecule } from '../../molecule'
+import { validateAtomCreationInput, validateElementSymbol } from '../../chemistry/policies/atomPolicy'
+import {
+  planBondOrderChange,
+  planBondTopologyOrderChange,
+  validateBondAddition,
+  validateBondTopologyAddition,
+} from '../../chemistry/policies/bondPolicy'
 import {
   MODELING_COMMAND_KINDS,
   type ModelingCommandKind,
@@ -53,24 +59,47 @@ function replaceAtom(atom: Atom, symbol: string): Atom {
   return { ...plainAtom, symbol }
 }
 
-function setBondOrder(bond: Bond, order: Bond['order']): Bond {
-  const { aromatic: _aromatic, ...plainBond } = bond
-  return { ...plainBond, order }
+function bondRuleFailure(
+  result: { readonly category: 'invalid-input' | 'unsupported-order'; readonly reason: string },
+): ApplyExpectedEffectCommandResult {
+  return result.category === 'unsupported-order'
+    ? unsupportedSemantics(result.reason)
+    : invalidInput(result.reason)
 }
 
-function isBondOrderSupported(atom1: Atom, atom2: Atom, order: Bond['order']): boolean {
-  return lookupBondLengthByOrder(atom1.symbol, atom2.symbol, order) !== null
+type ExpectedEffectBondPolicy = {
+  readonly validateAddition: typeof validateBondAddition
+  readonly planOrderChange: typeof planBondOrderChange
 }
 
-/** Pure V1 command semantics; this module has no dependency on the production builder. */
-export function applyExpectedEffectCommand(
+const strictBondPolicy: ExpectedEffectBondPolicy = {
+  validateAddition: validateBondAddition,
+  planOrderChange: planBondOrderChange,
+}
+
+const transactionBondPolicy: ExpectedEffectBondPolicy = {
+  validateAddition: validateBondTopologyAddition,
+  planOrderChange: planBondTopologyOrderChange,
+}
+
+function applyCommandWithBondPolicy(
   molecule: Molecule,
   command: ExpectedEffectSupportedCommand,
+  bondPolicy: ExpectedEffectBondPolicy,
 ): ApplyExpectedEffectCommandResult {
   switch (command.kind) {
     case 'atom.add':
       if (molecule.atoms.some(atom => atom.id === command.atomId)) {
         return invalidInput(`Atom id already exists: ${command.atomId}`)
+      }
+      {
+        const validation = validateAtomCreationInput(
+          command.symbol,
+          command.position.x,
+          command.position.y,
+          command.position.z,
+        )
+        if (validation.ok === false) return invalidInput(validation.reason)
       }
       return {
         ok: true,
@@ -89,6 +118,10 @@ export function applyExpectedEffectCommand(
     case 'atom.replace':
       if (!molecule.atoms.some(atom => atom.id === command.atomId)) {
         return invalidInput(`Atom does not exist: ${command.atomId}`)
+      }
+      {
+        const validation = validateElementSymbol(command.symbol)
+        if (validation.ok === false) return invalidInput(validation.reason)
       }
       return {
         ok: true,
@@ -135,19 +168,8 @@ export function applyExpectedEffectCommand(
       if (molecule.bonds.some(bond => bond.id === command.bondId)) {
         return invalidInput(`Bond id already exists: ${command.bondId}`)
       }
-      const atom1 = molecule.atoms.find(atom => atom.id === command.atomId1)
-      if (!atom1) {
-        return invalidInput(`Atom does not exist: ${command.atomId1}`)
-      }
-      const atom2 = molecule.atoms.find(atom => atom.id === command.atomId2)
-      if (!atom2) {
-        return invalidInput(`Atom does not exist: ${command.atomId2}`)
-      }
-      if (!isBondOrderSupported(atom1, atom2, command.order)) {
-        return unsupportedSemantics(
-          `ExpectedEffect cannot compile unsupported ${atom1.symbol}-${atom2.symbol} bond order ${command.order}`,
-        )
-      }
+      const validation = bondPolicy.validateAddition(molecule, command)
+      if (validation.ok === false) return bondRuleFailure(validation)
       return {
         ok: true,
         molecule: {
@@ -175,30 +197,28 @@ export function applyExpectedEffectCommand(
       }
 
     case 'bond.setOrder': {
-      const bond = molecule.bonds.find(candidate => candidate.id === command.bondId)
-      if (!bond) {
-        return invalidInput(`Bond does not exist: ${command.bondId}`)
-      }
-      const atom1 = molecule.atoms.find(atom => atom.id === bond.atomId1)
-      const atom2 = molecule.atoms.find(atom => atom.id === bond.atomId2)
-      if (!atom1 || !atom2) {
-        return invalidInput(`Bond endpoint does not exist: ${command.bondId}`)
-      }
-      if (!isBondOrderSupported(atom1, atom2, command.order)) {
-        return unsupportedSemantics(
-          `ExpectedEffect cannot compile unsupported ${atom1.symbol}-${atom2.symbol} bond order ${command.order}`,
-        )
-      }
+      const result = bondPolicy.planOrderChange(molecule, command.bondId, command.order)
+      if (result.ok === false) return bondRuleFailure(result)
       return {
         ok: true,
-        molecule: {
-          ...molecule,
-          bonds: molecule.bonds.map(bond =>
-            bond.id === command.bondId && (bond.order !== command.order || bond.aromatic === true)
-              ? setBondOrder(bond, command.order)
-              : bond),
-        },
+        molecule: result.changed ? result.molecule : molecule,
       }
     }
   }
+}
+
+/** Pure single-command semantics aligned with production chemistry checks. */
+export function applyExpectedEffectCommand(
+  molecule: Molecule,
+  command: ExpectedEffectSupportedCommand,
+): ApplyExpectedEffectCommandResult {
+  return applyCommandWithBondPolicy(molecule, command, strictBondPolicy)
+}
+
+/** Plan-internal semantics that permit temporary valence excess within one transaction. */
+export function applyExpectedEffectTransactionCommand(
+  molecule: Molecule,
+  command: ExpectedEffectSupportedCommand,
+): ApplyExpectedEffectCommandResult {
+  return applyCommandWithBondPolicy(molecule, command, transactionBondPolicy)
 }

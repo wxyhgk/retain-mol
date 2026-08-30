@@ -176,3 +176,21 @@ export function commitEditPlan(
     transactionId: parsed.plan.planId,
   }
 }
+
+export {
+  commitSelectedBondFragmentFusion,
+  previewSelectedBondFragmentFusion,
+} from '../runtime/selectedBondFragmentFusionRuntime'
+export type {
+  SelectedBondFragmentFusionCandidate,
+  SelectedBondFragmentFusionCommitInput,
+  SelectedBondFragmentFusionCommitResult,
+  SelectedBondFragmentFusionCommitSuccess,
+  SelectedBondFragmentFusionDiagnostic,
+  SelectedBondFragmentFusionEffect,
+  SelectedBondFragmentFusionFailure,
+  SelectedBondFragmentFusionFailureCode,
+  SelectedBondFragmentFusionPreview,
+  SelectedBondFragmentFusionPreviewInput,
+  SelectedBondFragmentFusionPreviewResult,
+} from '../runtime/selectedBondFragmentFusionRuntime'

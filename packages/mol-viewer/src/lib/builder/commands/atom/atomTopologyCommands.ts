@@ -1,7 +1,10 @@
 import type { Molecule } from '../../../molecule'
 import { autoAddHydrogens, addOneHydrogen, growByReplacingH, substituteAtomElement } from '../../editing/atomOps'
-import { maxValence, valenceUsed } from '../../valence'
-import { editChanged, editUnchanged, type EditCommandResult } from '../shared'
+import {
+  getHydrogenAdditionAvailability,
+  validateElementSymbol,
+} from '../../../chemistry/policies/atomPolicy'
+import { editChanged, editFailed, editUnchanged, type EditCommandResult } from '../shared'
 
 export function runAddHydrogensCommand(
   molecule: Molecule,
@@ -17,6 +20,8 @@ export function runAddOneHydrogenCommand(
   molecule: Molecule,
   atomId: string,
 ): EditCommandResult {
+  const availability = getHydrogenAdditionAvailability(molecule, atomId)
+  if (availability.ok === false) return editFailed(availability.reason)
   const next = addOneHydrogen(molecule, atomId)
   return next === molecule
     ? editUnchanged()
@@ -38,13 +43,7 @@ export function getAddOneHydrogenAvailabilityCommand(
   molecule: Molecule,
   atomId: string,
 ): AddOneHydrogenAvailability {
-  const atom = molecule.atoms.find(candidate => candidate.id === atomId)
-  if (!atom) return { ok: false, reason: '原子不存在' }
-  if (atom.symbol === 'H') return { ok: false, reason: 'H 不能继续加 H' }
-  const max = maxValence(atom)
-  if (max <= 0) return { ok: false, reason: '该元素不能成键' }
-  if (valenceUsed(molecule, atomId) >= max) return { ok: false, reason: '已满键，无法加 H' }
-  return { ok: true }
+  return getHydrogenAdditionAvailability(molecule, atomId)
 }
 
 export function getAddOneHydrogensAvailabilityCommand(
@@ -72,6 +71,7 @@ export function runAddOneHydrogensCommand(
 ): EditCommandResult {
   let next = molecule
   for (const atomId of atomIds) {
+    if (getHydrogenAdditionAvailability(next, atomId).ok === false) continue
     next = addOneHydrogen(next, atomId)
   }
   return next === molecule
@@ -84,6 +84,8 @@ export function runReplaceAtomCommand(
   atomId: string,
   symbol: string,
 ): EditCommandResult {
+  const validation = validateElementSymbol(symbol)
+  if (validation.ok === false) return editFailed(validation.reason)
   const next = substituteAtomElement(molecule, atomId, symbol)
   return next === molecule
     ? editUnchanged()
@@ -95,6 +97,8 @@ export function runReplaceAtomsCommand(
   atomIds: readonly string[],
   symbol: string,
 ): EditCommandResult {
+  const validation = validateElementSymbol(symbol)
+  if (validation.ok === false) return editFailed(validation.reason)
   let next = molecule
   for (const atomId of atomIds) {
     next = substituteAtomElement(next, atomId, symbol)
@@ -109,6 +113,8 @@ export function runGrowFromHydrogenCommand(
   atomId: string,
   symbol: string,
 ): EditCommandResult {
+  const validation = validateElementSymbol(symbol)
+  if (validation.ok === false) return editFailed(validation.reason)
   const next = growByReplacingH(molecule, atomId, symbol)
   return next === molecule
     ? editUnchanged()
