@@ -22,12 +22,12 @@
 当前仍有明确缺口：
 
 - 迁移器没有 schema 签名校验、SQLite backup、磁盘空间预检或迁移审计表；
-- `JobInputBinding` 已落表，新 xTB 提交只写冻结 Binding；`job_inputs` 仅保留 legacy 读取兼容；
+- `JobInputSnapshot` 已落表，新 xTB 提交只写冻结 Snapshot；`job_inputs` 仅保留 legacy 读取兼容；
 - schema 2 只把 `artifacts.path` 复制到 `storage_key`，没有读取文件并回填 `sha256`/`byte_size`；
 - 新 Artifact 已通过 `JobService` 发布到 `ArtifactStorage`，但旧 Artifact 尚未批量搬迁和校验；
 - schema 5 已完成 Molecule Asset/Revision 的 head/version、双摘要、不可变触发器、service/API 和 `molecule_revision` xTB 主路径；schema 6 增加 Revision provenance metadata。编辑器保存、xTB 提交冻结和优化结果来源回写已接线，更完善的旧数据迁移审计仍待完成。
 
-**schema 4** 引入 `job_input_bindings` 与 create → bind → queue；**schema 5** 完成 Revision 不可变与 xTB Revision 输入所需存储约束；**schema 6** 增加不可变来源 metadata。详细契约见 [JobInputBinding 设计](./bindings.md)。
+**schema 4** 引入 `job_input_bindings` 与 create → freeze → queue；**schema 5** 完成 Revision 不可变与 xTB Revision 输入所需存储约束；**schema 6** 增加不可变来源 metadata。详细契约见 [JobInputSnapshot 设计](./input-snapshots.md)。
 
 因此当前工作区以 schema 6 作为 repository 启动目标。旧 Artifact 离线回填和迁移审计/备份尚未完成，仍不能据此宣称产品数据模型 v1 正式发布。
 
@@ -78,7 +78,7 @@ flowchart TD
 | `jobs.status = completed` | 映射为 `succeeded` |
 | 迁移时的 `jobs.status = running` | 映射为终态 `interrupted`，因为进程连续性无法证明 |
 | 其他未知 Job 状态 | 停止自动迁移并要求显式映射，不能默认当作失败 |
-| `job_inputs` | 转成 `sourceKind = literal` 的 JobInputBinding；不从任意 JSON 猜测 Revision/Artifact |
+| `job_inputs` | 转成 `sourceKind = literal` 的 JobInputSnapshot；不从任意 JSON 猜测 Revision/Artifact |
 | `artifacts.path` | 在 `<data_root>/tasks/<jobId>/<path>` 内安全解析，读取字节并发布到 ArtifactStorage，回填 `sha256`、`byte_size` 和规范 `storage_key` |
 | 缺失 Artifact 文件 | 保留记录和 legacy path，标为 `missing`；不得伪造摘要，依赖它的新 Job 不能排队 |
 | `workflows` / `workflow_jobs` | 原样保留 ID、时间、成员和 position；Workflow `version` 初始化为 1 |
@@ -133,7 +133,7 @@ sequenceDiagram
 - API 继续接受当前 camelCase 请求，并投影现有 `taskType`、`inputs`、`error` 等旧字段。
 - legacy `job.json` 可读取；新快照带独立 `schemaVersion`，SQLite 始终是真源。
 - 旧 Artifact path 仅作读取回退和审计；新 Artifact 只写内容寻址存储，不双写旧布局。
-- legacy `job_inputs` 通过适配器表现为 Binding；新代码不得继续写 legacy 表。
+- legacy `job_inputs` 通过适配器表现为 Snapshot；新代码不得继续写 legacy 表。
 - 前端 wire projector 同时接受当前 snake_case/camelCase 和规范化状态，Zustand 不承担 DTO 兼容。
 
 ### 不保证的兼容性

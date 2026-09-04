@@ -106,6 +106,11 @@ export class InteractionHandler {
   // 任意左键按下的位置：浏览器在拖拽（如转相机）松手后仍会派发 click，
   // 用按下→抬起的位移判断"这不是一次点击"，避免旋转视角误触发点击语义
   private _downClient = new THREE.Vector2()
+  // _downClient 的记录点：必须挂在 document capture（canvas 的上游）。上游路由层
+  // （useCanvasPointerRouter）会对 move-object/框选的 pointerdown 调 stopImmediatePropagation，
+  // canvas 上的监听器收不到，但 click 仍会派发——若只在 canvas 记录，movedSinceDown
+  // 会拿陈旧坐标比较，把正常点击（如 move-object 模式点空白清选择）误判为拖拽吞掉
+  private readonly _downEventTarget: EventTarget
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -125,6 +130,12 @@ export class InteractionHandler {
     canvas.addEventListener('pointermove', this.handlePointerMove)
     canvas.addEventListener('pointerup', this.handlePointerUp)
     canvas.addEventListener('pointercancel', this.handlePointerCancel)
+    this._downEventTarget = canvas.ownerDocument ?? canvas
+    this._downEventTarget.addEventListener(
+      'pointerdown',
+      this.trackDownClient as EventListener,
+      { capture: true },
+    )
   }
 
   get idleCursor(): string { return this._idleCursor }
@@ -253,9 +264,27 @@ export class InteractionHandler {
     return new THREE.Plane().setFromNormalAndCoplanarPoint(normalW, pointW)
   }
 
-  private handlePointerDown = (e: PointerEvent) => {
+  /** 只记录主键按下坐标供 movedSinceDown 使用；不做任何手势处理 */
+  private trackDownClient = (e: PointerEvent) => {
     if (e.button !== 0) return
     this._downClient.set(e.clientX, e.clientY)
+  }
+
+  /**
+   * 手势进行中只响应开启该手势的 pointer（对照 MolControls 的 activePointerId 过滤）。
+   * 合成事件（测试直接调私有处理器）可能没有 pointerId，视为同一指针。
+   */
+  private isGesturePointer(e: PointerEvent): boolean {
+    if (this._activePointerId === null) return true
+    return typeof e.pointerId !== 'number' || e.pointerId === this._activePointerId
+  }
+
+  private handlePointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return
+    // 手势进行中（触摸第二根手指、笔+触摸等）：忽略新的按下。
+    // 否则 _gesture 被无声覆盖——进行中的 atom-drag 事务既不 end 也不 cancel，
+    // 永久悬挂并连累后续所有编辑事务
+    if (this._gesture.kind !== 'idle' || this._activePointerId !== null) return
     const hit = this._picker.atomHitAt(e.clientX, e.clientY)
     if (!hit) return
     const atomId = hit.object.userData.id as string
@@ -303,6 +332,7 @@ export class InteractionHandler {
   }
 
   private handlePointerMove = (e: PointerEvent) => {
+    if (!this.isGesturePointer(e)) return
     const rect = this.canvas.getBoundingClientRect()
     const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1
     const my = -((e.clientY - rect.top) / rect.height) * 2 + 1
@@ -425,6 +455,8 @@ export class InteractionHandler {
 
   private handlePointerUp = (e: PointerEvent) => {
     if (e.button !== 0) return
+    // 其他 pointer 的抬起不得结束进行中的手势（否则第二根手指轻点会强制提交拖拽）
+    if (!this.isGesturePointer(e)) return
     const gesture = this._gesture
 
     if (isFragmentGesture(gesture)) {
@@ -439,8 +471,10 @@ export class InteractionHandler {
     // ── Bond-drag 结束 ──────────────────────────────────────────────────────
     if (isBondGesture(gesture)) {
       if (gesture.kind === 'bond-drag') {
-        const targetId = this.pickAtomIdAt(e.clientX, e.clientY)
-        const validTarget = targetId !== null && targetId !== gesture.sourceId
+        // 手势内跟踪的 targetId/dropPosition 是预览的真相（用户看到的吸附/幽灵原子）；
+        // 按 up 坐标重新拾取只做两者皆空时的兜底——move 合并/触摸抬指抖动会让
+        // pointerup 坐标偏离最后一次 move，重拾取会与预览不符（显示成键却 noop）
+        let targetId = gesture.targetId
         const dropPosition = gesture.dropPosition
           ? new THREE.Vector3(
               gesture.dropPosition.x,
@@ -448,10 +482,14 @@ export class InteractionHandler {
               gesture.dropPosition.z,
             )
           : null
+        if (targetId === null && dropPosition === null) {
+          const repicked = this.pickAtomIdAt(e.clientX, e.clientY)
+          if (repicked !== null && repicked !== gesture.sourceId) targetId = repicked
+        }
         this.onBondDragEnd?.(
           gesture.sourceId,
-          validTarget ? targetId : null,
-          validTarget ? null : dropPosition,
+          targetId,
+          targetId !== null ? null : dropPosition,
         )
         this._suppressNextClick = true
       }
@@ -470,7 +508,10 @@ export class InteractionHandler {
     }
   }
 
-  private handlePointerCancel = () => {
+  private handlePointerCancel = (e: PointerEvent) => {
+    // 其他 pointer 被 cancel（如第二根手指触发系统手势）不影响进行中的手势；
+    // 活动 pointer 被 cancel 走与 pointerup 相同的收尾（回滚事务、清 preview、复位相机）
+    if (!this.isGesturePointer(e)) return
     this.cancelActiveGesture()
   }
 
@@ -544,6 +585,11 @@ export class InteractionHandler {
     this.canvas.removeEventListener('pointermove', this.handlePointerMove)
     this.canvas.removeEventListener('pointerup', this.handlePointerUp)
     this.canvas.removeEventListener('pointercancel', this.handlePointerCancel)
+    this._downEventTarget.removeEventListener(
+      'pointerdown',
+      this.trackDownClient as EventListener,
+      { capture: true } as AddEventListenerOptions,
+    )
     this._ghost.dispose()
     this.canvas.style.cursor = ''
   }

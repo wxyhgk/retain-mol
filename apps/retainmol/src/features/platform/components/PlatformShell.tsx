@@ -1,9 +1,11 @@
 import type { MouseEvent, ReactNode } from 'react'
-import { Atom, Blocks, FlaskConical, GitBranch, LayoutDashboard, Moon, Sun } from 'lucide-react'
+import { Atom, Blocks, FlaskConical, GitBranch, LayoutDashboard, Moon, Palette, Sun } from 'lucide-react'
 import type { AppRoute } from '@/app/appRoute'
 import { Button } from '@/components/ui/button'
 import { useUiThemeStore } from '@/domain/uiThemeStore'
+import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 import { cn } from '@/lib/utils'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 type PlatformRoute = Extract<AppRoute, 'dashboard' | 'jobs' | 'workflows'>
 
@@ -22,6 +24,8 @@ const navigation: Array<{ route: PlatformRoute; label: string; path: string; ico
 export function PlatformShell({ route, onNavigate, children }: PlatformShellProps) {
   const theme = useUiThemeStore(state => state.theme)
   const toggleTheme = useUiThemeStore(state => state.toggleTheme)
+  const palette = useUiPaletteStore(state => state.palette)
+  const setPalette = useUiPaletteStore(state => state.setPalette)
 
   function followLink(event: MouseEvent<HTMLAnchorElement>, path: string) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -60,6 +64,26 @@ export function PlatformShell({ route, onNavigate, children }: PlatformShellProp
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn('size-9', palette === 'heritage' && 'bg-primary text-primary-foreground hover:bg-primary/90')}
+                title={palette === 'heritage' ? '古建筑主题' : '默认主题'}
+              >
+                <Palette className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => setPalette('default')} className={cn('text-xs', palette === 'default' && 'bg-accent font-semibold')}>
+                默认（slate）
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPalette('heritage')} className={cn('text-xs', palette === 'heritage' && 'bg-accent font-semibold')}>
+                古建筑（黄棕白）
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="ghost" size="icon" className="size-9" onClick={toggleTheme} title={theme === 'day' ? '切换到夜间主题' : '切换到白天主题'}>
             {theme === 'day' ? <Moon /> : <Sun />}
           </Button>

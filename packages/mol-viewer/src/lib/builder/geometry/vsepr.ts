@@ -6,7 +6,7 @@
 import { BONDING } from '../../../config/bonding.config'
 import { getElementConfig } from '../../../config/elements.config'
 import { inferGeometry, GEOMETRY_RULES, STANDARD_BOND_LENGTHS } from '../../../config/geometry.config'
-import type { AtomHybridization } from '../../../config/geometry.config'
+import type { AtomHybridization, GeometryRule } from '../../../config/geometry.config'
 import { inferHybridization } from '../analysis/hybridization'
 import { bondsOf, otherEnd } from '../graph'
 import type { Atom, Bond } from '../../molecule'
@@ -14,6 +14,17 @@ import { add, sub, scale, dot, cross, length, normalize } from '../math/vec3'
 import type { Vec3 } from '../math/vec3'
 import type { SketchPlane } from './plane'
 import { isBetterClashScore, scoreClashes } from './clash'
+
+/**
+ * 'free' 几何的 bondAngle=360 是「无角约束」哨兵，不是真实键角。
+ * 终端元素（H/卤素）被迫在已有键旁再放一个键时（如 Cl 设 +1 电荷后价态补 H），
+ * 直接用 cos360°=1 会让新键与已有键完全同向、新原子嵌进邻居内部——
+ * 此时退回四面体角（终端元素带孤对，~109.5° 是合理的弯曲几何）。
+ */
+function effectiveBondAngleRad(rule: GeometryRule): number {
+  const deg = rule.name === 'free' ? GEOMETRY_RULES['tetrahedral'].bondAngle : rule.bondAngle
+  return deg * (Math.PI / 180)
+}
 
 function directionAt(directions: readonly Vec3[], index: number): Vec3 {
   const direction = directions[index]
@@ -97,7 +108,7 @@ export function findNextBondDir(
   const n = neighborDirs.length
   const geometry = inferGeometry(centerSymbol, n, hybridization)
   const rule = GEOMETRY_RULES[geometry] ?? GEOMETRY_RULES['tetrahedral']
-  const θrad = rule.bondAngle * (Math.PI / 180)
+  const θrad = effectiveBondAngleRad(rule)
   const cosθ = Math.cos(θrad)
   const sinθ = Math.sin(θrad)
 
@@ -161,7 +172,7 @@ export function findSnapBondDir(
   const n = neighborDirs.length
   const geometry = inferGeometry(centerSymbol, n, hybridization)
   const rule = GEOMETRY_RULES[geometry] ?? GEOMETRY_RULES['tetrahedral']
-  const θrad = rule.bondAngle * (Math.PI / 180)
+  const θrad = effectiveBondAngleRad(rule)
   const cosθ = Math.cos(θrad)
   const sinθ = Math.sin(θrad)
 
@@ -244,7 +255,7 @@ function candidateDirsForGrow(
   const n = neighborDirs.length
   const geometry = inferGeometry(centerSymbol, n, hybridization)
   const rule = GEOMETRY_RULES[geometry] ?? GEOMETRY_RULES['tetrahedral']
-  const theta = rule.bondAngle * (Math.PI / 180)
+  const theta = effectiveBondAngleRad(rule)
 
   if (n === 0) {
     const axes: Vec3[] = [
@@ -437,7 +448,7 @@ export function getGrowGuide(
   const hybridization = inferHybridization(bonds, centerAtom.id)
   const geometry = inferGeometry(centerAtom.symbol, n, hybridization)
   const rule = GEOMETRY_RULES[geometry] ?? GEOMETRY_RULES['tetrahedral']
-  const θrad = rule.bondAngle * (Math.PI / 180)
+  const θrad = effectiveBondAngleRad(rule)
   const bLen = calcBondLength(centerAtom.symbol, newSymbol)
   const c: Vec3 = [centerAtom.x, centerAtom.y, centerAtom.z]
   const at = (dir: Vec3): [number, number, number] =>

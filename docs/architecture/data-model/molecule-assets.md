@@ -1,6 +1,6 @@
 # MoleculeAsset / MoleculeRevision 契约
 
-本文定义分子资产的 service/API 契约，以及它与 `JobInputBinding(sourceKind = molecule_revision)` 的边界。这里记录 schema 6 的当前实现与编辑器接入规则。
+本文定义分子资产的 service/API 契约，以及它与 `JobInputSnapshot(sourceKind = molecule_revision)` 的边界。这里记录 schema 6 的当前实现与编辑器接入规则。
 
 ## 实施状态
 
@@ -12,7 +12,7 @@
 | 前端领域层 | DTO、规范哈希、API port/client、Query/mutation、编辑对象绑定、保存与冲突恢复 UI | 自动保存策略和显式分支/合并 |
 | 后端 repository | create/list/get Asset、create/get/list Revision 和 expected head/version CAS | 后续分支/合并命令单独设计 |
 | 后端 service/API | 服务端规范化、双摘要复算、错误映射和 HTTP 路由已测试 | 权限、分页和审计能力 |
-| Job Binding | xTB 接受 `molecule_revision`，排队冻结摘要，runner 执行前复验 | 其他计算引擎逐个注册端口契约 |
+| Job Snapshot | xTB 接受 `molecule_revision`，排队冻结摘要，runner 执行前复验 | 其他计算引擎逐个注册端口契约 |
 
 编辑器现已把当前场景对象作为本地工作副本：首次保存创建 Asset 和首个 Revision，后续保存携带 head/version CAS。版本库可以载入 head，或把历史 Revision 恢复到工作副本后另存为新 head。发生并发冲突时，本地结构保持不变，用户只能选择载入服务器 head 或另存为独立 Asset，不提供静默强制覆盖。
 
@@ -204,9 +204,9 @@ COMMIT
 1. 按 ID 读取 Revision，不再解析 Asset 的当前 head。
 2. 要求 Revision 有服务端生成的 `contentHash`，并复算或按完整性策略验证 `structure_json` 与摘要一致。
 3. 校验目标端口接受 `molecule_revision` 和 RetainMol 规范结构格式。
-4. 写入 `JobInputBinding` 的 `moleculeRevisionId` 与 `contentSha256`，再将 Job 转为 `queued`。
+4. 写入 `JobInputSnapshot` 的 `moleculeRevisionId` 与 `contentSha256`，再将 Job 转为 `queued`。
 
-Job 进入 `queued` 后，Asset 改名、head 前进、工作副本继续编辑或 Workflow 改线，都不能改变该 Job 的输入。runner 只按 Binding 的 Revision ID 读取快照，并在执行前比对摘要；不得回退解析 Asset head，也不得把 Revision 原地转换成另一个 Revision。
+Job 进入 `queued` 后，Asset 改名、head 前进、工作副本继续编辑或 Workflow 改线，都不能改变该 Job 的输入。runner 只按 Snapshot 的 Revision ID 读取快照，并在执行前比对摘要；不得回退解析 Asset head，也不得把 Revision 原地转换成另一个 Revision。
 
 当前 xTB 端口契约已接受 literal/Revision/Artifact；Revision 路径会在排队时冻结摘要，并由 runner 在执行前重新校验结构内容。
 
@@ -218,12 +218,12 @@ Job 进入 `queued` 后，Asset 改名、head 前进、工作副本继续编辑�
 | --- | --- |
 | schema 2 Asset/Revision 行 | schema 5 保留 ID 和原始 JSON并物化 head；schema 6 为 Revision metadata 补 `{}`；旧结构按迁移规则回填摘要 |
 | `metadata.request.molecule` | 仅供历史 Job 重放/查看；不自动合并为 Asset，不反向覆盖 Revision |
-| literal molecule Binding | 兼容既有 Job；新 UI 从已保存分子提交时优先使用 `molecule_revision` |
+| literal molecule Snapshot | 兼容既有 Job；新 UI 从已保存分子提交时优先使用 `molecule_revision` |
 | Artifact 结构 | 仍可作为计算输入或导入来源；导入为可编辑分子时显式创建新 Asset/Revision，并记录来源 Artifact ID |
 | API DTO | 接受既定 camelCase；SQLite 列名和本机路径不暴露给客户端 |
 | 摘要算法 | 算法或规范化规则变化必须提升内容 schema 版本；不能用新算法重写旧 Revision 的摘要 |
 
-legacy literal/metadata 回退仍存在，但读取优先级必须是“已冻结 Binding 优先，legacy 仅在 Binding 缺失时使用”。移除回退需要独立发布说明、历史数据测试和使用量证据。
+legacy literal/metadata 回退仍存在，但读取优先级必须是“已冻结 Snapshot 优先，legacy 仅在 Snapshot 缺失时使用”。移除回退需要独立发布说明、历史数据测试和使用量证据。
 
 ## 本阶段验收
 
@@ -231,5 +231,5 @@ legacy literal/metadata 回退仍存在，但读取优先级必须是“已冻�
 - 服务端与前端对同一规范化测试向量计算出相同 `contentHash` 和 `topologyFingerprint`。
 - 保存成功时 Revision 插入与 head CAS 同时提交；冲突时两者都不提交。
 - 已保存 Revision 的结构、摘要、父版本和归属不能通过公开 repository/service/API 修改。
-- `molecule_revision` Binding 在 Job 排队前冻结 ID 和摘要，排队后切换 Asset head 不改变 runner 输入。
+- `molecule_revision` Snapshot 在 Job 排队前冻结 ID 和摘要，排队后切换 Asset head 不改变 runner 输入。
 - schema 2 来源数据、历史 metadata Job 和 Artifact 输入仍可按兼容规则读取；迁移只追加 schema 5/6 字段和保护约束，不重写既有迁移脚本。

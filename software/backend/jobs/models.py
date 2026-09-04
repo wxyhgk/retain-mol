@@ -18,6 +18,14 @@ JobStatus = Literal[
     "interrupted",
 ]
 
+JobRunStatus = Literal[
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "interrupted",
+]
+
 DispatchStatus = Literal["pending", "leased", "finished"]
 WorkflowExecutionStatus = Literal["active", "succeeded", "blocked", "cancelled"]
 WorkflowNodeState = Literal[
@@ -155,12 +163,12 @@ class JobInput(BaseModel):
     created_at: datetime = Field(alias="createdAt")
 
 
-class JobInputBinding(BaseModel):
-    """A resolved, immutable input source used by one concrete job run."""
+class JobInputSnapshot(BaseModel):
+    """The resolved, immutable input actually consumed by one job run."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    binding_id: str = Field(alias="bindingId")
+    snapshot_id: str = Field(alias="bindingId")
     job_id: str = Field(alias="jobId")
     input_name: str = Field(alias="inputName", min_length=1)
     source_kind: Literal["literal", "molecule_revision", "artifact"] = Field(
@@ -172,26 +180,61 @@ class JobInputBinding(BaseModel):
     )
     artifact_id: str | None = Field(default=None, alias="artifactId")
     content_sha256: str | None = Field(default=None, alias="contentSha256")
-    resolved_from_reference_id: str | None = Field(
+    resolved_from_link_id: str | None = Field(
         default=None, alias="resolvedFromReferenceId"
     )
     created_at: datetime = Field(alias="createdAt")
 
     @model_validator(mode="after")
-    def validate_source_payload(self) -> "JobInputBinding":
+    def validate_source_payload(self) -> "JobInputSnapshot":
         if self.source_kind == "literal":
             if self.molecule_revision_id is not None or self.artifact_id is not None:
-                raise ValueError("literal bindings cannot reference a revision or artifact")
+                raise ValueError("literal snapshots cannot reference a revision or artifact")
         elif self.source_kind == "molecule_revision":
             if self.molecule_revision_id is None or self.artifact_id is not None:
-                raise ValueError("molecule_revision bindings require only a revision")
+                raise ValueError("molecule_revision snapshots require only a revision")
             if self.literal_value is not None:
-                raise ValueError("molecule_revision bindings cannot contain a literal")
+                raise ValueError("molecule_revision snapshots cannot contain a literal")
         elif self.artifact_id is None or self.molecule_revision_id is not None:
-            raise ValueError("artifact bindings require only an artifact")
+            raise ValueError("artifact snapshots require only an artifact")
         elif self.literal_value is not None:
-            raise ValueError("artifact bindings cannot contain a literal")
+            raise ValueError("artifact snapshots cannot contain a literal")
         return self
+
+
+class JobTypeData(BaseModel):
+    """Opaque, versioned request data interpreted by one JobType handler."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    job_id: str = Field(alias="jobId")
+    job_type: str = Field(alias="jobType")
+    job_type_version: int = Field(default=1, alias="jobTypeVersion", ge=1)
+    schema_version: int = Field(default=1, alias="schemaVersion", ge=1)
+    data: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class JobRun(BaseModel):
+    """One concrete execution attempt of a durable Job."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    run_id: str = Field(alias="runId")
+    job_id: str = Field(alias="jobId")
+    run_number: int = Field(alias="runNumber", ge=1)
+    engine: str
+    status: JobRunStatus
+    collector_id: str | None = Field(default=None, alias="collectorId")
+    collector_version: int | None = Field(
+        default=None, alias="collectorVersion", ge=1
+    )
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    started_at: datetime = Field(alias="startedAt")
+    finished_at: datetime | None = Field(default=None, alias="finishedAt")
 
 
 class Artifact(BaseModel):
@@ -201,6 +244,7 @@ class Artifact(BaseModel):
 
     artifact_id: str = Field(alias="artifactId")
     job_id: str = Field(alias="jobId")
+    run_id: str | None = Field(default=None, alias="runId")
     name: str
     path: str
     storage_key: str | None = Field(default=None, alias="storageKey")
@@ -214,12 +258,12 @@ class Artifact(BaseModel):
     created_at: datetime = Field(alias="createdAt")
 
 
-class JobInputReference(BaseModel):
-    """Connect one named input of a job to a named value from another job."""
+class WorkflowInputLink(BaseModel):
+    """A design-time data link from one workflow job to another."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    reference_id: str = Field(alias="referenceId")
+    link_id: str = Field(alias="referenceId")
     workflow_id: str = Field(alias="workflowId")
     target_job_id: str = Field(alias="targetJobId")
     target_input_name: str = Field(alias="targetInputName")
@@ -231,7 +275,7 @@ class JobInputReference(BaseModel):
 
 
 class Workflow(BaseModel):
-    """A persisted DAG of jobs and the input references between them."""
+    """A persisted DAG of jobs and the input links between them."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -240,7 +284,10 @@ class Workflow(BaseModel):
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     job_ids: list[str] = Field(default_factory=list, alias="jobIds")
-    references: list[JobInputReference] = Field(default_factory=list)
+    input_links: list[WorkflowInputLink] = Field(
+        default_factory=list,
+        alias="references",
+    )
 
 
 class Job(BaseModel):
@@ -265,7 +312,10 @@ class Job(BaseModel):
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     inputs: list[JobInput] = Field(default_factory=list)
-    bindings: list[JobInputBinding] = Field(default_factory=list)
+    input_snapshots: list[JobInputSnapshot] = Field(
+        default_factory=list,
+        alias="bindings",
+    )
     artifacts: list[Artifact] = Field(default_factory=list)
 
 

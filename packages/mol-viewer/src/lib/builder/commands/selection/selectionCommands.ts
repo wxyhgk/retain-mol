@@ -69,6 +69,20 @@ export function runSelectBondCommand(
   return selectionResult(selectedAtomIds, selectedBondIds, new Set(), new Set([bondId]))
 }
 
+export function runSetSelectionCommand(
+  selectedAtomIds: ReadonlySet<string>,
+  selectedBondIds: ReadonlySet<string>,
+  nextAtomIds: Iterable<string>,
+  nextBondIds: Iterable<string>,
+): SelectionCommandResult {
+  return selectionResult(
+    selectedAtomIds,
+    selectedBondIds,
+    new Set(nextAtomIds),
+    new Set(nextBondIds),
+  )
+}
+
 export function runClearSelectionCommand(
   selectedAtomIds: ReadonlySet<string>,
   selectedBondIds: ReadonlySet<string>,

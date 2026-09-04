@@ -50,6 +50,13 @@ export interface EditorState {
 
   // ── 测量 ──────────────────────────────────────────────────────────────────
   measurements:   Measurement[]
+  /**
+   * 引用失效被停放的测量（由 integrity 管理，不直接渲染）：
+   * 引用的原子被删时测量移到这里，原子恢复（undo）后原样复活回 measurements。
+   * measurements 不进 undo 历史，没有这层停放的话「删原子 → Ctrl+Z」会让
+   * 测量永久蒸发。
+   */
+  orphanedMeasurements: Measurement[]
   measureType:    MeasureType
   pendingAtomIds: string[]
   measureStyle:   MeasureStyle
@@ -116,6 +123,7 @@ export function createEditorStore(moleculeStore: MoleculeStoreApi): EditorStoreA
   clipboard: null,
 
   measurements:   [],
+  orphanedMeasurements: [],
   measureType:    'auto',
   pendingAtomIds: [],
   measureStyle:   DEFAULT_MEASURE_STYLE,
@@ -209,7 +217,8 @@ export function createEditorStore(moleculeStore: MoleculeStoreApi): EditorStoreA
 
   cancelPendingMeasure: () => set({ pendingAtomIds: [] }),
   removeMeasurement:    (id) => set(s => ({ measurements: s.measurements.filter(m => m.id !== id) })),
-  clearMeasurements:    () => set({ measurements: [], pendingAtomIds: [] }),
+  // 清空必须连停放区一起清：用户"清除所有测量"后，undo 恢复原子不该复活旧测量
+  clearMeasurements:    () => set({ measurements: [], orphanedMeasurements: [], pendingAtomIds: [] }),
   setMeasureType:       (t) => set({ measureType: t, pendingAtomIds: [] }),
   setMeasureStyle:      (patch) => set(s => ({ measureStyle: { ...s.measureStyle, ...patch } })),
 

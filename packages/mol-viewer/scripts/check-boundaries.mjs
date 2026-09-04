@@ -45,6 +45,10 @@ for (const file of walk(srcDir)) {
   const source = readFileSync(file, 'utf8')
   const imports = moduleSpecifiers(source)
 
+  if (/\bimport\.meta\.env(?:\.|\[)/.test(source)) {
+    violations.push(`${fileRel}: mol-viewer must receive runtime configuration from its host`)
+  }
+
   if (fileRel.startsWith('lib/builder/')) {
     for (const specifier of imports) {
       if (specifier === 'three' || specifier.startsWith('three/')) {

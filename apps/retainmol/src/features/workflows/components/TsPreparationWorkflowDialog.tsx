@@ -13,7 +13,7 @@ import {
 import { useCreateTsPreparationWorkflowMutation } from '../application/workflowQueries'
 import type { TsPreparationSourceJob, WorkflowDefinition } from '../domain/workflowTypes'
 
-const selectClass = 'h-9 w-full border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none focus:border-black'
+const selectClass = 'h-9 w-full border border-border bg-card px-2 text-sm text-foreground outline-none focus:border-black'
 
 export function TsPreparationWorkflowDialog({
   sources,
@@ -111,12 +111,12 @@ export function TsPreparationWorkflowDialog({
             onArtifactChange={setProductArtifactId}
           />
           {sources.length < 2 && (
-            <p className="border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <p className="border border-foreground/30 bg-muted px-3 py-2 text-xs text-foreground">
               至少需要两个已成功且具有 XYZ、SDF、MOL 或 RetainMol JSON 输出的任务。
             </p>
           )}
           {mutation.error && (
-            <p className="border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            <p className="border border-foreground/30 bg-muted px-3 py-2 text-xs text-foreground">
               {mutation.error.message}
             </p>
           )}
@@ -154,9 +154,9 @@ function EndpointFields({
   onArtifactChange: (value: string) => void
 }) {
   return (
-    <fieldset className="grid gap-2 border border-slate-200 p-3">
+    <fieldset className="grid gap-2 border border-border p-3">
       <legend className="px-1 text-sm font-semibold">{label}</legend>
-      <label className="grid gap-1 text-xs font-medium text-slate-600">
+      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
         优化任务
         <select value={jobId} onChange={event => onJobChange(event.target.value)} className={selectClass}>
           <option value="">选择任务</option>
@@ -165,7 +165,7 @@ function EndpointFields({
           ))}
         </select>
       </label>
-      <label className="grid gap-1 text-xs font-medium text-slate-600">
+      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
         结构产物
         <select
           value={artifactId}

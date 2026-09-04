@@ -39,26 +39,33 @@ export interface BoxRect { x: number; y: number; w: number; h: number }
 
 // ── 对象变换状态 ──────────────────────────────────────────────────────────────
 
-interface TransformState {
+export interface TransformState {
   dragging: boolean
+  /** 开启本次拖拽的 pointer；move/up/cancel 只响应它（触摸第二指不得干扰）。仅在 dragging 时有意义 */
+  pointerId: number | null
   lastX: number
   lastY: number
   fragmentIds: Set<string> | null
   targetObjectId: string | null
 }
 
-function makeTransformState(): TransformState {
-  return { dragging: false, lastX: 0, lastY: 0, fragmentIds: null, targetObjectId: null }
+export function makeTransformState(): TransformState {
+  return { dragging: false, pointerId: null, lastX: 0, lastY: 0, fragmentIds: null, targetObjectId: null }
 }
 
-function handleTransformDown(
+export function handleTransformDown(
   e: PointerEvent,
-  canvas: HTMLCanvasElement,
-  renderer: ThreeRendererPort,
+  canvas: Pick<HTMLCanvasElement, 'setPointerCapture'>,
+  renderer: Pick<ThreeRendererPort, 'pickAtomIdAt'>,
   state: TransformState,
-  session: ReturnType<typeof createObjectTransformEditSession>,
+  session: Pick<ReturnType<typeof createObjectTransformEditSession>, 'start'>,
   moleculeStore: MoleculeStoreApi,
 ) {
+  // 已在拖拽（触摸第二根手指等）：不得重置变换目标——置空 fragmentIds 会冻结拖拽，
+  // 命中另一分子会切换目标并以两指坐标差瞬移它
+  if (state.dragging) return
+  // 仅主键（左键/触摸主触点）开启变换拖拽
+  if (e.button !== 0) return
   state.fragmentIds = null
   state.targetObjectId = null
 
@@ -76,25 +83,29 @@ function handleTransformDown(
   state.targetObjectId = target.targetObjectId
 
   state.dragging = true
+  state.pointerId = e.pointerId
   state.lastX = e.clientX
   state.lastY = e.clientY
   canvas.setPointerCapture(e.pointerId)
   session.start()
 }
 
-function handleTransformMove(
+export function handleTransformMove(
   e: PointerEvent,
-  renderer: ThreeRendererPort,
+  renderer: Pick<ThreeRendererPort, 'screenDeltaToModelLocal' | 'modelGroup'>,
   state: TransformState,
   moleculeStore: MoleculeStoreApi,
 ) {
   if (!state.dragging || !state.fragmentIds || !state.targetObjectId) return
+  if (e.pointerId !== state.pointerId) return
 
   const dx = e.clientX - state.lastX
   const dy = e.clientY - state.lastY
+  // 亚阈值位移必须可累积：先判阈值再推进基准点。若先推进 lastX/lastY，
+  // 高回报率/hi-DPI 的连续小数位移每步都被丢弃，慢速精调时对象不跟手
+  if (Math.abs(dx) < INTERACTION.transformMinDisplacement && Math.abs(dy) < INTERACTION.transformMinDisplacement) return
   state.lastX = e.clientX
   state.lastY = e.clientY
-  if (Math.abs(dx) < INTERACTION.transformMinDisplacement && Math.abs(dy) < INTERACTION.transformMinDisplacement) return
 
   const { objectsById, setObjectAtomPositions } = moleculeStore.getState()
   const mol = objectsById[state.targetObjectId]?.molecule
@@ -277,9 +288,10 @@ export function useCanvasPointerRouter(
       const renderer = getRenderer()
       const canvas   = getCanvas()
 
-      // 对象变换结束
+      // 对象变换结束（只响应开启拖拽的 pointer：第二根手指抬起不得提前提交）
       const ts = transformRef.current
       if (ts.dragging) {
+        if (e.pointerId !== ts.pointerId) return
         finishObjectTransform(ts, transformSession)
         return
       }
@@ -295,9 +307,12 @@ export function useCanvasPointerRouter(
 
     // ── pointercancel（触屏手势抢占等）────────────────────────────────────────
     // 拖拽中被 cancel 时若不清理，beginTransaction 会悬挂（zundo 永久 paused）
-    const onCancel = () => {
+    const onCancel = (e: PointerEvent) => {
       const ts = transformRef.current
-      cancelObjectTransform(ts, transformSession)
+      // 变换拖拽只被开启它的 pointer 的 cancel 中止；其他 pointer 的 cancel 不影响
+      if (!ts.dragging || e.pointerId === ts.pointerId) {
+        cancelObjectTransform(ts, transformSession)
+      }
       const bs = boxRef.current
       if (bs.active) {
         bs.active = false

@@ -3,26 +3,10 @@ import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { MEASURE_LABEL as L } from '../../config/overlay.config'
+import { prepareOverlayCanvas } from '../../viewer/overlay/useOverlayCanvas'
 
 interface Props {
   renderer: ThreeRendererPort | null
-}
-
-function prepareCanvas(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-  const w = canvas.offsetWidth
-  const h = canvas.offsetHeight
-  const dpr = window.devicePixelRatio || 1
-  const bw = Math.max(1, Math.round(w * dpr))
-  const bh = Math.max(1, Math.round(h * dpr))
-  if (canvas.width !== bw || canvas.height !== bh) {
-    canvas.width = bw
-    canvas.height = bh
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  ctx.clearRect(0, 0, w, h)
-  return { ctx, w, h }
 }
 
 export default function MeasureOverlay({ renderer }: Props) {
@@ -36,7 +20,7 @@ export default function MeasureOverlay({ renderer }: Props) {
 
     // 同 AtomLabelOverlay：去掉 dirty flag，每帧直接读 store 当前状态
     const draw = () => {
-      const prepared = prepareCanvas(canvas)
+      const prepared = prepareOverlayCanvas(canvas)
       if (!prepared) return
       const { ctx, w, h } = prepared
 

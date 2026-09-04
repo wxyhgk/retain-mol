@@ -4,7 +4,11 @@
     {
       "name": "retainmol",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace=apps/retainmol"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace=apps/retainmol"
+      ],
       "port": 5173
     }
   ]

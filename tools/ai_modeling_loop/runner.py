@@ -1,26 +1,44 @@
 from __future__ import annotations
 
-import json
 import hashlib
-import shutil
+import json
+import os
 import subprocess
-from dataclasses import replace
-from datetime import UTC, datetime
 from pathlib import Path
 
-from .chemistry import (
-    embed_candidate_distance_geometry,
-    load_sdf,
-    optimize_with_xtb,
-    with_explicit_hydrogens,
-    write_sdf,
+from .artifact_contracts import (
+    CoordinateTransportAtomRow,
+    coordinate_transport_atom_row_mapping_sha256,
+    coordinate_transport_atom_rows_json,
+    load_identity_map,
+    sha256_file,
 )
-from .contracts import BenchmarkCase, DEFAULT_HISTORY_DIR, DEFAULT_WORK_DIR
-from .evaluator import EvaluationResult, candidate_anchor_indices, evaluate_candidate
+from .chemistry import embed_candidate_distance_geometry, load_sdf, optimize_with_xtb
+from .contracts import BenchmarkCase, DEFAULT_WORK_DIR
+from .evaluator import EvaluationResult
+from .final_artifact_gate import verify_final_artifact
+from .history_index import (
+    _is_archivable_attempt,
+    _rebuild_history_index,
+    _rebuild_verified_index,
+    archive_existing_runs,
+    archive_run,
+)
+from .refinement_stage import (
+    refine_candidate,
+    refine_conformer_ensemble,
+    refine_with_xtb_fallback,
+)
+from .run_preparation import prepare_run
+from .run_recording import write_run_record
+from .target_evaluation import evaluate_archived_target
+from .verification_stage import verify_completed_run
 from .workspace import prepare_task_bundle
 
 
 RETAINMOL_EXECUTOR = Path(__file__).with_name("retainmol_executor.mjs")
+XTB_ROW_ORDER_CONTRACT = "xtb-preserves-input-row-order-v1"
+XTB_POST_PROCESSING = "fixed-anchor-frame-projection-v1"
 
 
 def _git_commit() -> str | None:
@@ -37,66 +55,77 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _rebuild_history_index(history_dir: Path) -> None:
-    rows = []
-    for path in sorted(history_dir.glob("*/*/run.json")):
-        value = json.loads(path.read_text())
-        evaluation = value["evaluation"]
-        rows.append({
-            "runId": value["runId"],
-            "caseId": evaluation["case_id"],
-            "createdAt": value["createdAt"],
-            "score": evaluation["score"],
-            "passed": evaluation["passed"],
-            "failures": evaluation["failures"],
-            "path": str(path.parent.relative_to(history_dir)),
-        })
-    history_dir.mkdir(parents=True, exist_ok=True)
-    (history_dir / "index.json").write_text(
-        json.dumps({"schemaVersion": 1, "runs": rows}, ensure_ascii=False, indent=2) + "\n"
-    )
+def _write_json_atomic(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+    os.replace(temporary, path)
 
 
-def archive_run(run_dir: Path, history_dir: Path = DEFAULT_HISTORY_DIR) -> Path:
-    record_path = run_dir / "run.json"
-    record = json.loads(record_path.read_text())
-    case_id = record["evaluation"]["case_id"]
-    target = history_dir / case_id / run_dir.name
-    record["archiveRelativePath"] = str(target.relative_to(history_dir))
-    record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-    if target.exists():
-        shutil.rmtree(target)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(run_dir, target)
-    _rebuild_history_index(history_dir)
-    return target
-
-
-def _is_archivable_attempt(run_dir: Path) -> bool:
-    if (run_dir / "edit-plan.json").exists():
-        return True
-    metadata = run_dir / "candidate.json"
-    if not metadata.exists():
-        return False
-    try:
-        builder = str(json.loads(metadata.read_text()).get("builder", ""))
-    except (json.JSONDecodeError, OSError):
-        return False
-    return bool(builder) and builder != "reference-self-check"
-
-
-def archive_existing_runs(
-    work_dir: Path = DEFAULT_WORK_DIR,
-    history_dir: Path = DEFAULT_HISTORY_DIR,
-) -> list[Path]:
-    archived = []
-    for run_dir in sorted((work_dir / "runs").iterdir() if (work_dir / "runs").exists() else ()):
-        if not (run_dir / "run.json").exists():
-            continue
-        if not _is_archivable_attempt(run_dir):
-            continue
-        archived.append(archive_run(run_dir, history_dir))
-    return archived
+def _write_coordinate_transport_receipt(
+    *,
+    path: Path,
+    builder_snapshot_path: Path,
+    identity_map_path: Path,
+    final_sdf_path: Path,
+    source_sdf_path: Path | None = None,
+    input_xyz_path: Path | None = None,
+    output_xyz_path: Path | None = None,
+    executable_sha256: str | None = None,
+    fixed_atom_rows: tuple[int, ...] = (),
+) -> str:
+    """Bind final serialized coordinates to stable builder atom rows."""
+    identity = load_identity_map(identity_map_path)
+    molecule = load_sdf(final_sdf_path)
+    if molecule.GetNumAtoms() != len(identity.atom_rows):
+        raise ValueError("coordinate transport changed atom count; stable atom IDs cannot be proven")
+    conformer = molecule.GetConformer()
+    rows: list[CoordinateTransportAtomRow] = []
+    for index, identity_row in enumerate(identity.atom_rows):
+        atom = molecule.GetAtomWithIdx(index)
+        if atom.GetSymbol() != identity_row.symbol:
+            raise ValueError(
+                f"coordinate transport changed atom row {index + 1}: "
+                f"{atom.GetSymbol()} != {identity_row.symbol}"
+            )
+        position = conformer.GetAtomPosition(index)
+        rows.append(CoordinateTransportAtomRow(
+            row_index=identity_row.row_index,
+            atom_id=identity_row.atom_id,
+            symbol=identity_row.symbol,
+            position=(float(position.x), float(position.y), float(position.z)),
+        ))
+    payload = {
+        "schemaVersion": 1,
+        "kind": "stable-atom-coordinate-transport",
+        "builderSnapshotSha256": sha256_file(builder_snapshot_path),
+        "identityMapSha256": sha256_file(identity_map_path),
+        "finalSdfSha256": sha256_file(final_sdf_path),
+        "atomRowMappingSha256": coordinate_transport_atom_row_mapping_sha256(rows),
+        "atomRows": coordinate_transport_atom_rows_json(rows),
+    }
+    provenance_values = (source_sdf_path, input_xyz_path, output_xyz_path, executable_sha256)
+    if any(value is not None for value in provenance_values):
+        if not all(value is not None for value in provenance_values):
+            raise ValueError("xTB coordinate provenance must be complete")
+        assert source_sdf_path is not None
+        assert input_xyz_path is not None
+        assert output_xyz_path is not None
+        assert executable_sha256 is not None
+        if not source_sdf_path.is_file() or not input_xyz_path.is_file() or not output_xyz_path.is_file():
+            raise ValueError("xTB coordinate provenance files are missing")
+        payload["transportProvenance"] = {
+            "kind": "xtb-coordinate-transport",
+            "sourceSdfSha256": sha256_file(source_sdf_path),
+            "inputXyzSha256": sha256_file(input_xyz_path),
+            "outputXyzSha256": sha256_file(output_xyz_path),
+            "executableSha256": executable_sha256,
+            "rowOrderContract": XTB_ROW_ORDER_CONTRACT,
+            "postProcessing": XTB_POST_PROCESSING,
+            "fixedAtomRows": list(fixed_atom_rows),
+        }
+    _write_json_atomic(path, payload)
+    return sha256_file(path)
 
 
 def _invalid_result(case: BenchmarkCase, error: Exception) -> EvaluationResult:
@@ -120,28 +149,19 @@ def _evaluate_or_invalid(
     case: BenchmarkCase,
     candidate: Path,
     metadata: Path | None,
-    work_dir: Path,
+    archived_reference: Path,
+    archived_evaluator: Path,
 ) -> EvaluationResult:
     try:
-        return evaluate_candidate(
+        return evaluate_archived_target(
             case,
             candidate,
             candidate_metadata=metadata,
-            work_dir=work_dir,
+            archived_reference=archived_reference,
+            archived_evaluator=archived_evaluator,
         )
     except Exception as error:
         return _invalid_result(case, error)
-
-
-def _xtb_stage(result, method: str, status: str = "completed") -> dict:
-    return {
-        "method": method,
-        "status": status if result.converged else "not-converged",
-        "energyEh": result.energy,
-        "returnCode": result.return_code,
-        "anchorRmsdBeforeProjection": result.anchor_rmsd_before_projection,
-        "logTail": result.log_tail,
-    }
 
 
 def _refine_with_xtb_fallback(
@@ -151,46 +171,13 @@ def _refine_with_xtb_fallback(
     fixed_atom_indices: tuple[int, ...],
     xtb: str | None,
 ):
-    stages = []
-    try:
-        result = optimize_with_xtb(
-            molecule,
-            charge=case.charge,
-            multiplicity=case.multiplicity,
-            fixed_atom_indices=fixed_atom_indices,
-            xtb=xtb,
-            method="gfn2",
-        )
-        stages.append(_xtb_stage(result, "GFN2-xTB"))
-        return result, stages
-    except Exception as direct_error:
-        stages.append({
-            "method": "GFN2-xTB",
-            "status": "failed",
-            "error": f"{type(direct_error).__name__}: {direct_error}",
-        })
-
-    pre_relaxed = optimize_with_xtb(
+    return refine_with_xtb_fallback(
         molecule,
-        charge=case.charge,
-        multiplicity=case.multiplicity,
+        case=case,
         fixed_atom_indices=fixed_atom_indices,
         xtb=xtb,
-        method="gfnff",
-        max_steps=300,
+        optimize=optimize_with_xtb,
     )
-    stages.append(_xtb_stage(pre_relaxed, "GFN-FF"))
-    result = optimize_with_xtb(
-        pre_relaxed.molecule,
-        charge=case.charge,
-        multiplicity=case.multiplicity,
-        fixed_atom_indices=fixed_atom_indices,
-        xtb=xtb,
-        method="gfn2",
-        electronic_temperature=1000,
-    )
-    stages.append(_xtb_stage(result, "GFN2-xTB(etemp=1000K)"))
-    return result, stages
 
 
 def _refine_conformer_ensemble(
@@ -201,80 +188,15 @@ def _refine_conformer_ensemble(
     seeds: tuple[int, ...],
     xtb: str | None,
 ):
-    stages = []
-    pre_relaxed = []
-    sources = [("input", None, molecule)]
-    for seed in seeds:
-        try:
-            embedded = embed_candidate_distance_geometry(
-                molecule,
-                fixed_atom_indices=fixed_atom_indices,
-                seed=seed,
-            )
-            sources.append((f"etkdg-{seed}", seed, embedded))
-        except Exception as error:
-            stages.append({
-                "method": "ETKDGv3",
-                "seed": seed,
-                "status": "failed",
-                "error": f"{type(error).__name__}: {error}",
-            })
-    for label, seed, source in sources:
-        try:
-            result = optimize_with_xtb(
-                source,
-                charge=case.charge,
-                multiplicity=case.multiplicity,
-                fixed_atom_indices=fixed_atom_indices,
-                xtb=xtb,
-                method="gfnff",
-                max_steps=300,
-            )
-            stage = _xtb_stage(result, "GFN-FF")
-            stage.update({"source": label, "seed": seed})
-            stages.append(stage)
-            pre_relaxed.append((result.energy, label, result))
-        except Exception as error:
-            stages.append({
-                "method": "GFN-FF",
-                "source": label,
-                "seed": seed,
-                "status": "failed",
-                "error": f"{type(error).__name__}: {error}",
-            })
-    if not pre_relaxed:
-        raise RuntimeError("all GFN-FF conformer pre-relaxations failed")
-    _, selected_source, selected = min(pre_relaxed, key=lambda item: item[0])
-    try:
-        result = optimize_with_xtb(
-            selected.molecule,
-            charge=case.charge,
-            multiplicity=case.multiplicity,
-            fixed_atom_indices=fixed_atom_indices,
-            xtb=xtb,
-            method="gfn2",
-        )
-        stage = _xtb_stage(result, "GFN2-xTB")
-    except Exception as error:
-        stages.append({
-            "method": "GFN2-xTB",
-            "source": selected_source,
-            "status": "failed",
-            "error": f"{type(error).__name__}: {error}",
-        })
-        result = optimize_with_xtb(
-            selected.molecule,
-            charge=case.charge,
-            multiplicity=case.multiplicity,
-            fixed_atom_indices=fixed_atom_indices,
-            xtb=xtb,
-            method="gfn2",
-            electronic_temperature=1000,
-        )
-        stage = _xtb_stage(result, "GFN2-xTB(etemp=1000K)")
-    stage.update({"source": selected_source})
-    stages.append(stage)
-    return result, stages, selected_source
+    return refine_conformer_ensemble(
+        molecule,
+        case=case,
+        fixed_atom_indices=fixed_atom_indices,
+        seeds=seeds,
+        xtb=xtb,
+        embed=embed_candidate_distance_geometry,
+        optimize=optimize_with_xtb,
+    )
 
 
 def _execute_edit_plan(
@@ -284,6 +206,11 @@ def _execute_edit_plan(
     candidate: Path,
     metadata: Path,
     receipt: Path,
+    snapshot: Path,
+    identity_map: Path,
+    coordinate_transport_receipt: Path,
+    expected_effect: Path,
+    enforced_plan: Path,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -293,6 +220,11 @@ def _execute_edit_plan(
             "--output", str(candidate),
             "--metadata", str(metadata),
             "--receipt", str(receipt),
+            "--snapshot", str(snapshot),
+            "--identity-map", str(identity_map),
+            "--coordinate-transport-receipt", str(coordinate_transport_receipt),
+            "--expected-effect", str(expected_effect),
+            "--enforced-plan", str(enforced_plan),
         ],
         capture_output=True,
         text=True,
@@ -309,135 +241,115 @@ def record_run(
     xtb: str | None = None,
     conformer_seeds: tuple[int, ...] = (),
 ) -> tuple[Path, EvaluationResult]:
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    run_dir = work_dir / "runs" / f"{stamp}-{case.case_id}"
-    suffix = 1
-    while run_dir.exists():
-        suffix += 1
-        run_dir = work_dir / "runs" / f"{stamp}-{case.case_id}-{suffix}"
-    run_dir.mkdir(parents=True)
-    copied_plan = run_dir / "edit-plan.json"
-    shutil.copy2(edit_plan, copied_plan)
-    if builder_notes and builder_notes.exists():
-        shutil.copy2(builder_notes, run_dir / "builder-notes.json")
-
-    task_dir = work_dir / "tasks" / case.case_id
-    initial = task_dir / "initial-molecule.json"
-    if not initial.exists():
-        prepare_task_bundle(case, work_dir)
-    copied_candidate = run_dir / ("candidate.raw.sdf" if refine else "candidate.sdf")
-    copied_metadata = run_dir / "candidate.json"
-    receipt = run_dir / "execution.json"
+    prepared = prepare_run(
+        case,
+        edit_plan,
+        work_dir=work_dir,
+        refine=refine,
+        builder_notes=builder_notes,
+        git_commit=_git_commit(),
+        git_dirty=_git_dirty(),
+        sha256=_sha256,
+        write_json_atomic=_write_json_atomic,
+        prepare_task=prepare_task_bundle,
+        xtb=xtb,
+        conformer_seeds=conformer_seeds,
+    )
+    paths = prepared.paths
     execution = _execute_edit_plan(
-        initial=initial,
-        edit_plan=copied_plan,
-        candidate=copied_candidate,
-        metadata=copied_metadata,
-        receipt=receipt,
+        initial=paths.initial,
+        edit_plan=paths.copied_plan,
+        candidate=paths.raw_candidate,
+        metadata=paths.metadata,
+        receipt=paths.execution_receipt,
+        snapshot=paths.builder_snapshot,
+        identity_map=paths.identity_map,
+        coordinate_transport_receipt=paths.coordinate_transport_receipt,
+        expected_effect=paths.expected_effect,
+        enforced_plan=paths.enforced_plan,
     )
     if execution.returncode == 0:
-        raw_result = _evaluate_or_invalid(case, copied_candidate, copied_metadata, work_dir)
+        if refine and paths.coordinate_transport_receipt.is_file():
+            paths.executor_coordinate_transport_receipt.write_bytes(
+                paths.coordinate_transport_receipt.read_bytes()
+            )
+        raw_result = _evaluate_or_invalid(
+            case,
+            paths.raw_candidate,
+            paths.metadata,
+            paths.archived_reference,
+            paths.archived_evaluator,
+        )
     else:
         error = RuntimeError(
             "RetainMol EditPlan 执行失败：" + (execution.stderr.strip() or execution.stdout.strip())
         )
         raw_result = _invalid_result(case, error)
+
     result = raw_result
-    evaluated_candidate = copied_candidate
+    evaluated_candidate = paths.raw_candidate
     refinement = None
+    transport_evidence = None
+    transport_source_sdf = None
+    transport_input_xyz = None
+    transport_output_xyz = None
     if refine and execution.returncode == 0 and "candidate-invalid" not in raw_result.failures:
-        try:
-            molecule = with_explicit_hydrogens(load_sdf(copied_candidate))
-            anchors = candidate_anchor_indices(case, molecule, copied_metadata)
-            fixed_indices = tuple(index + 1 for index in anchors.values())
-            selected_source = "input"
-            if conformer_seeds:
-                xtb_result, stages, selected_source = _refine_conformer_ensemble(
-                    molecule,
-                    case=case,
-                    fixed_atom_indices=fixed_indices,
-                    seeds=conformer_seeds,
-                    xtb=xtb,
-                )
-            else:
-                xtb_result, stages = _refine_with_xtb_fallback(
-                    molecule,
-                    case=case,
-                    fixed_atom_indices=fixed_indices,
-                    xtb=xtb,
-                )
-            evaluated_candidate = run_dir / "candidate.sdf"
-            write_sdf(xtb_result.molecule, evaluated_candidate)
-            result = _evaluate_or_invalid(case, evaluated_candidate, copied_metadata, work_dir)
-            refinement = {
-                "method": "GFN2-xTB",
-                "status": "completed" if xtb_result.converged else "not-converged",
-                "energyEh": xtb_result.energy,
-                "returnCode": xtb_result.return_code,
-                "anchorRmsdBeforeProjection": xtb_result.anchor_rmsd_before_projection,
-                "logTail": xtb_result.log_tail,
-                "stages": stages,
-                "strategy": "conformer-ensemble" if conformer_seeds else "direct-with-fallback",
-                "conformerSeeds": list(conformer_seeds),
-                "selectedSource": selected_source,
-            }
-            if not xtb_result.converged:
-                result = replace(
-                    result,
-                    passed=False,
-                    failures=(*result.failures, "xtb-not-converged"),
-                    diagnostics=(*result.diagnostics, "GFN2-xTB 返回结构，但优化未收敛。"),
-                )
-        except Exception as error:
-            refinement = {
-                "method": "GFN2-xTB",
-                "status": "failed",
-                "error": f"{type(error).__name__}: {error}",
-            }
-            result = replace(
-                raw_result,
-                passed=False,
-                failures=(*raw_result.failures, "xtb-failed"),
-                diagnostics=(*raw_result.diagnostics, f"GFN2-xTB 精修失败：{error}"),
-            )
-    record = {
-        "schemaVersion": 1,
-        "runId": run_dir.name,
-        "createdAt": datetime.now(UTC).isoformat(),
-        "gitCommit": _git_commit(),
-        "gitDirty": _git_dirty(),
-        "executor": "@retainmol/mol-viewer/modeling",
-        "executorReturnCode": execution.returncode,
-        "executorStderr": execution.stderr.strip() or None,
-        "editPlanSha256": _sha256(copied_plan),
-        "executionReceiptSha256": _sha256(receipt) if receipt.exists() else None,
-        "candidateSha256": _sha256(evaluated_candidate) if evaluated_candidate.exists() else None,
-        "rawCandidateSha256": _sha256(copied_candidate) if copied_candidate.exists() else None,
-        "referenceSdfSha256": _sha256(
-            work_dir / "references" / case.case_id / "reference.sdf"
-        ),
-        "rawEvaluation": raw_result.to_json(),
-        "refinement": refinement,
-        "evaluation": result.to_json(),
-    }
-    (run_dir / "run.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-    lines = [
-        f"# {run_dir.name}",
-        "",
-        f"- 评分：{result.score:.3f}",
-        f"- 通过：{'是' if result.passed else '否'}",
-        f"- 失败分类：{', '.join(result.failures) if result.failures else '无'}",
-        f"- 原始候选评分：{raw_result.score:.3f}",
-        f"- GFN2-xTB：{refinement['status'] if refinement else '未执行'}",
-        "",
-        "## 下一轮诊断",
-        "",
-        *[f"- {item}" for item in result.diagnostics],
-    ]
-    (run_dir / "report.md").write_text("\n".join(lines) + "\n")
-    if work_dir.resolve() == DEFAULT_WORK_DIR.resolve() and _is_archivable_attempt(run_dir):
-        archive_run(run_dir)
-    return run_dir, result
+        outcome = refine_candidate(
+            case=case,
+            paths=paths,
+            raw_result=raw_result,
+            conformer_seeds=conformer_seeds,
+            xtb=xtb,
+            refine_with_fallback=_refine_with_xtb_fallback,
+            refine_ensemble=_refine_conformer_ensemble,
+            write_coordinate_receipt=_write_coordinate_transport_receipt,
+            evaluate_candidate=lambda candidate: _evaluate_or_invalid(
+                case,
+                candidate,
+                paths.metadata,
+                paths.archived_reference,
+                paths.archived_evaluator,
+            ),
+            row_order_contract=XTB_ROW_ORDER_CONTRACT,
+            post_processing=XTB_POST_PROCESSING,
+            trusted_xtb_sha256=prepared.trusted_xtb_sha256,
+        )
+        result = outcome.result
+        evaluated_candidate = outcome.evaluated_candidate
+        refinement = outcome.refinement
+        transport_evidence = outcome.transport_evidence
+        transport_source_sdf = outcome.transport_source_sdf
+        transport_input_xyz = outcome.transport_input_xyz
+        transport_output_xyz = outcome.transport_output_xyz
+
+    verification = None
+    if execution.returncode == 0:
+        result, verification = verify_completed_run(
+            case_id=case.case_id,
+            prepared=prepared,
+            result=result,
+            evaluated_candidate=evaluated_candidate,
+            transport_evidence=transport_evidence,
+            transport_source_sdf=transport_source_sdf,
+            transport_input_xyz=transport_input_xyz,
+            transport_output_xyz=transport_output_xyz,
+            verify_final_artifact=verify_final_artifact,
+        )
+    write_run_record(
+        prepared=prepared,
+        executor_return_code=execution.returncode,
+        executor_stderr=execution.stderr.strip(),
+        raw_result=raw_result,
+        result=result,
+        evaluated_candidate=evaluated_candidate,
+        refinement=refinement,
+        verification=verification,
+        sha256=_sha256,
+        write_json_atomic=_write_json_atomic,
+    )
+    if work_dir.resolve() == DEFAULT_WORK_DIR.resolve() and _is_archivable_attempt(paths.run_dir):
+        archive_run(paths.run_dir)
+    return paths.run_dir, result
 
 
 def scoreboard(work_dir: Path = DEFAULT_WORK_DIR) -> list[dict]:

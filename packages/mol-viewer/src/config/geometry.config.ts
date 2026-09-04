@@ -117,8 +117,10 @@ export function inferGeometry(
 ): GeometryName {
   if (TERMINAL_ELEMENTS.has(symbol)) return 'free'
   if (OCTAHEDRAL_METALS.has(symbol)) return 'octahedral'
-  // 超价磷（5+ 键）
-  if (symbol === 'P' && connectionCount >= 4) return 'octahedral'
+  // 超价磷：仅当实际连接数 ≥5（PF₅/PCl₆⁻ 等）。
+  // connectionCount 是"当前已有连接数"——4 配位磷（磷酸根/磷酸酯/鏻盐）是普通四面体，
+  // 不能落进 octahedral（90° 角对 4 个方向在三维中不可满足，会把松弛器约束系统弄成自相矛盾）。
+  if (symbol === 'P' && connectionCount >= 5) return 'octahedral'
 
   return (ELEMENT_GEOMETRY_TABLE[symbol] ?? DEFAULT_GEOMETRY)[hybridization]
 }
@@ -127,7 +129,10 @@ export function inferGeometry(
 
 /**
  * 键长查找表 (Å)
- * key 格式："{A}{sep}{B}"，A/B 按字母序排列
+ * key 格式："{A}{sep}{B}"，A/B 按字符串字母序排列（与查表点的 [a,b].sort() 一致，
+ * 注意是整个符号的字典序：'Br' < 'C'、'H' < 'N'/'O'/'P'/'S'/'Si'）。
+ * 违反此约定的 key 永远查不中，会静默退化成共价半径估算——
+ * 由 geometry.config.regression.test.ts 全表断言把守。
  * sep: '-' 单键, '=' 双键, '#' 三键
  */
 export const STANDARD_BOND_LENGTHS: Record<string, number> = {
@@ -138,25 +143,25 @@ export const STANDARD_BOND_LENGTHS: Record<string, number> = {
   'C-O':  1.430, 'C=O': 1.210,
   'C-F':  1.350,
   'C-Cl': 1.770,
-  'C-Br': 1.940,
+  'Br-C': 1.940,
   'C-I':  2.140,
   'C-S':  1.820, 'C=S': 1.610,
   'C-P':  1.840, 'C=P': 1.665,
   'C-Si': 1.870,
   // N
-  'N-H':  1.010,
+  'H-N':  1.010,
   'N-N':  1.450, 'N=N': 1.250, 'N#N': 1.100,
   'N-O':  1.400, 'N=O': 1.210,
   // O
-  'O-H':  0.960,
+  'H-O':  0.960,
   'O-O':  1.480, 'O=O': 1.210,
   'O-S':  1.650, 'O=S': 1.480,
   'O-P':  1.610, 'O=P': 1.480,
   // misc
-  'S-H':  1.340,
+  'H-S':  1.340,
   'S-S':  2.050,
-  'P-H':  1.420,
-  'Si-H': 1.480,
+  'H-P':  1.420,
+  'H-Si': 1.480,
 }
 
 const ORDER_SEP = { 1: '-', 2: '=', 3: '#' } as const

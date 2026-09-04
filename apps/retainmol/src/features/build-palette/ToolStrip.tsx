@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { SidebarProvider } from '@/components/ui/sidebar'
+import { SidebarProvider } from '@retainmol/ui-kit'
 import { ToolRail } from './components/ToolRail'
 import { PaletteDrawer } from './components/PaletteDrawer'
 import { useBuildPaletteController } from './model/useBuildPaletteController'

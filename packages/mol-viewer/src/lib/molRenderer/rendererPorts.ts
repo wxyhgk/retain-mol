@@ -8,6 +8,7 @@ import type { RenderStyle } from '../../styles'
 import type { InteractionBindingsPort } from '../interaction/contracts'
 import type { MeasureLabel } from './MeasurementVisualBuilder'
 import type { SketchPlane } from './ViewportGuides'
+import type { ReactionHighlight } from '../reactionHighlights'
 
 export interface RendererLifecyclePort {
   resize(width: number, height: number): void
@@ -39,6 +40,14 @@ export interface RendererViewportPort {
   setAxesVisible(visible: boolean): void
   setGridVisible(visible: boolean): void
   getViewPlaneLocal(): { origin: [number, number, number]; normal: [number, number, number] }
+  /** Fit the viewport to the currently resolvable reaction-highlight endpoints. */
+  focusReactionHighlights(): boolean
+  /** Imperatively remove current reaction-highlight visuals and definitions. */
+  clearReactionHighlights(): void
+}
+
+export interface RendererReactionHighlightPort {
+  setReactionHighlights(highlights: readonly ReactionHighlight[]): void
 }
 
 export interface RendererMeasurementPort {
@@ -82,6 +91,7 @@ export interface ThreeRendererPort
   extends RendererPort,
     RendererLifecyclePort,
     RendererScenePort,
+    RendererReactionHighlightPort,
     RendererMeasurementPort,
     RendererInteractionPort,
     ThreeRendererOverlayPort {}

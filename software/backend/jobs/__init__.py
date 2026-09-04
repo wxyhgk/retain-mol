@@ -1,17 +1,31 @@
 """Persistent job records for RetainMol backend workers and routes."""
 
+from .contracts import (
+    CreateJobRequest,
+    JobDefinition,
+    JobExecutionRequest,
+    JobInputManifest,
+    JobProfile,
+    JobTaskContract,
+    list_task_contracts,
+    resolve_task_contract,
+)
+
 from .models import (
     Artifact,
     CalculationSpec,
     Job,
     JobDispatch,
     JobInput,
-    JobInputBinding,
-    JobInputReference,
+    JobInputSnapshot,
+    JobRun,
+    JobRunStatus,
     JobStatus,
+    JobTypeData,
     MoleculeAsset,
     MoleculeRevision,
     Workflow,
+    WorkflowInputLink,
     WorkflowExecution,
     WorkflowNodeRuntime,
     WorkflowSchedule,
@@ -24,28 +38,36 @@ from .executor import (
     execution_mode,
     get_job_executor,
 )
-from .service import (
+from .errors import (
     InvalidJobInputError,
     InvalidJobOperationError,
     InvalidJobTransitionError,
     JobInUseError,
     JobNotFoundError,
-    JobService,
     MoleculeAssetNotFoundError,
     MoleculeHeadConflictError,
     MoleculeRevisionNotFoundError,
     WorkflowNotFoundError,
 )
+from .service import JobService
 
 __all__ = [
     "Artifact",
     "CalculationSpec",
+    "CreateJobRequest",
     "Job",
     "JobDispatch",
+    "JobDefinition",
+    "JobExecutionRequest",
     "JobInput",
-    "JobInputBinding",
-    "JobInputReference",
+    "JobInputManifest",
+    "JobInputSnapshot",
+    "JobRun",
+    "JobRunStatus",
+    "JobProfile",
     "JobStatus",
+    "JobTypeData",
+    "JobTaskContract",
     "InvalidJobInputError",
     "InvalidJobOperationError",
     "InvalidJobTransitionError",
@@ -62,10 +84,13 @@ __all__ = [
     "MoleculeRevision",
     "MoleculeRevisionNotFoundError",
     "Workflow",
+    "WorkflowInputLink",
     "WorkflowExecution",
     "WorkflowNodeRuntime",
     "WorkflowNotFoundError",
     "WorkflowSchedule",
     "get_job_executor",
     "execution_mode",
+    "list_task_contracts",
+    "resolve_task_contract",
 ]

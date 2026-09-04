@@ -4,8 +4,10 @@
 
 ```ts
 
-import { JSX } from 'react/jsx-runtime';
+import { JSX } from 'react';
 import { PropsWithChildren } from 'react';
+import { StoreApi } from 'zustand';
+import { UseBoundStore } from 'zustand';
 
 // @public (undocumented)
 export interface Atom {
@@ -42,6 +44,51 @@ export interface Bond {
     readonly id: string;
     // (undocumented)
     readonly order: 1 | 2 | 3;
+}
+
+// @public (undocumented)
+export interface BondPairGizmoConfig {
+    // (undocumented)
+    readonly enabled: boolean;
+    // (undocumented)
+    readonly mode?: BondPairGizmoMode;
+    // (undocumented)
+    readonly movingAnchorAtomId: string;
+    // (undocumented)
+    readonly movingBondId: string;
+    // (undocumented)
+    readonly referenceAnchorAtomId: string;
+    // (undocumented)
+    readonly referenceBondId: string;
+    readonly showCoplanarHandles?: boolean;
+}
+
+// @public (undocumented)
+export interface BondPairGizmoError {
+    // (undocumented)
+    readonly code: BondPairGizmoErrorCode;
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public (undocumented)
+export type BondPairGizmoErrorCode = 'invalid-number' | 'invalid-angle' | 'invalid-distance' | 'unsupported-move-mode' | 'session-not-started' | 'reference-bond-not-found' | 'moving-bond-not-found' | 'same-bond' | 'reference-object-hidden' | 'moving-object-hidden' | 'moving-object-locked' | 'reference-anchor-not-on-bond' | 'moving-anchor-not-on-bond' | 'zero-length-reference-bond' | 'zero-length-moving-bond' | 'connected-bond-pair' | 'topology-changed';
+
+// @public (undocumented)
+export type BondPairGizmoMode = 'azimuth' | 'axis-angle' | 'both';
+
+// @public (undocumented)
+export type BondPairGizmoPhase = 'start' | 'preview' | 'commit' | 'cancel';
+
+// @public (undocumented)
+export interface BondPairGizmoValue {
+    // (undocumented)
+    readonly axisAngleDegrees: number;
+    readonly azimuthDegrees: number;
+    // (undocumented)
+    readonly coplanar: false | 0 | 180;
+    // (undocumented)
+    readonly distance: number;
 }
 
 // @public
@@ -106,6 +153,7 @@ export function MolViewer(props?: MolViewerProps): JSX.Element;
 // @public (undocumented)
 export interface MolViewerProps {
     appearance?: 'day' | 'night';
+    bondPairGizmo?: BondPairGizmoConfig;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -114,6 +162,8 @@ export interface MolViewerProps {
     interactionMode?: InteractionMode;
     // (undocumented)
     molecule?: Molecule;
+    onBondPairGizmoChange?: (value: BondPairGizmoValue, phase: BondPairGizmoPhase) => void;
+    onBondPairGizmoError?: (error: BondPairGizmoError) => void;
     // (undocumented)
     onMoleculeChange?: (mol: Molecule) => void;
     onRendererChange?: (renderer: RendererPort | null) => void;
@@ -121,11 +171,14 @@ export interface MolViewerProps {
     onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void;
     // (undocumented)
     overlays?: React.ReactNode;
+    reactionHighlights?: readonly ReactionHighlight[];
     // @deprecated (undocumented)
     readOnly?: boolean;
     runtime?: ViewerRuntime;
     // (undocumented)
     selectedAtomIds?: ReadonlySet<string>;
+    // (undocumented)
+    selectedBondIds?: ReadonlySet<string>;
     // (undocumented)
     showAtomLabels?: boolean;
     // (undocumented)
@@ -133,6 +186,31 @@ export interface MolViewerProps {
     // (undocumented)
     theme?: string;
 }
+
+// @public (undocumented)
+export interface ReactionHighlight {
+    // (undocumented)
+    readonly atomId1: string;
+    // (undocumented)
+    readonly atomId2: string;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly dashed?: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: ReactionHighlightKind;
+    // (undocumented)
+    readonly label?: string;
+    // (undocumented)
+    readonly opacity?: number;
+    // (undocumented)
+    readonly radius?: number;
+}
+
+// @public (undocumented)
+export type ReactionHighlightKind = 'breaking' | 'forming' | 'coordination';
 
 // @public (undocumented)
 export interface RendererCapturePort {
@@ -146,8 +224,10 @@ export interface RendererPort extends RendererCapturePort, RendererViewportPort 
 
 // @public (undocumented)
 export interface RendererViewportPort {
+    clearReactionHighlights(): void;
     // (undocumented)
     fitToMolecule(atoms: Atom[]): void;
+    focusReactionHighlights(): boolean;
     // (undocumented)
     getViewPlaneLocal(): {
         origin: [number, number, number];
@@ -176,6 +256,9 @@ export function setViewportGridVisible(visible: boolean): boolean;
 export function useViewerRuntime(): ViewerRuntime;
 
 // @public (undocumented)
+export const useViewportStore: UseBoundStore<StoreApi<ViewportUiState>>;
+
+// @public (undocumented)
 export interface ViewerRuntime {
     dispose(): void;
 }
@@ -184,6 +267,18 @@ export interface ViewerRuntime {
 export function ViewerRuntimeProvider(input: PropsWithChildren<{
     runtime: ViewerRuntime;
 }>): JSX.Element;
+
+// @public (undocumented)
+export interface ViewportUiState {
+    // (undocumented)
+    axesVisible: boolean;
+    // (undocumented)
+    gridVisible: boolean;
+    // (undocumented)
+    setAxesVisible: (visible: boolean) => void;
+    // (undocumented)
+    setGridVisible: (visible: boolean) => void;
+}
 
 // (No @packageDocumentation comment for this package)
 

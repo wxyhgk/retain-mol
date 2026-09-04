@@ -19,7 +19,10 @@ import type {
   SetMoleculeInSceneCommandResult,
   SplitSceneObjectCommandResult,
 } from '../../lib/builder/commands/scene'
-import type { SelectionCommandResult } from '../../lib/builder/commands/selection'
+import {
+  runPruneSelectionCommand,
+  type SelectionCommandResult,
+} from '../../lib/builder/commands/selection'
 import type { MoleculeState } from './types'
 
 function isSuccessfulCommandResult<TResult extends { readonly ok: boolean }>(
@@ -170,6 +173,45 @@ export function applySceneObjectUpdatedResult(
   }
 }
 
+/**
+ * 引用完整性清扫：分子编辑落盘的统一出口。
+ *
+ * 有些命令会隐式删原子或重建键 ID——resaturateAtom 删 H（setAtomCharge/
+ * setAtomRadical）、removeExcessHydrogens（cycleBondLength 升键级）、
+ * autoInferBonds 全量重建键等。这些路径不是显式的"删除"action，不走
+ * selection-aware command，会把 selectedAtomIds/selectedBondIds 留成悬空 id。
+ * 这里对照编辑后的分子统一剪枝（与 afterTimeTravel 的清理逻辑同源），
+ * 避免每个 action 各补一刀。
+ *
+ * editorStore 侧的 measurements/pendingAtomIds/bondingAtomId 由
+ * integrity.ts 订阅 objectsById 级联清理，不需要在这里处理。
+ */
+export function pruneSelectionAfterEdit(
+  s: MoleculeState,
+  newMol: Molecule,
+): Partial<MoleculeState> {
+  if (s.selectedAtomIds.size === 0 && s.selectedBondIds.size === 0) return {}
+  const validAtomIds = new Set<string>()
+  const validBondIds = new Set<string>()
+  for (const [objectId, obj] of Object.entries(s.objectsById)) {
+    const mol = objectId === s.activeObjectId ? newMol : obj.molecule
+    for (const atom of mol.atoms) validAtomIds.add(atom.id)
+    for (const bond of mol.bonds) validBondIds.add(bond.id)
+  }
+  const result = runPruneSelectionCommand(
+    s.selectedAtomIds,
+    s.selectedBondIds,
+    validAtomIds,
+    validBondIds,
+  )
+  if (!result.selectionChanged) return {}
+  return {
+    selectedAtomIds: result.selectedAtomIds,
+    selectedBondIds: result.selectedBondIds,
+    selectionVersion: s.selectionVersion + 1,
+  }
+}
+
 export interface ApplyActiveMoleculeEditOptions {
   readonly bumpAtomPositionVersion?: boolean
 }
@@ -185,6 +227,7 @@ export function applyActiveMoleculeEdit(
   if (!result.ok || !result.changed) return {}
   return {
     ...patchActiveMol(s, result.molecule),
+    ...pruneSelectionAfterEdit(s, result.molecule),
     ...(options.bumpAtomPositionVersion ? { atomPositionVersion: s.atomPositionVersion + 1 } : {}),
   }
 }
@@ -207,7 +250,10 @@ export function applyActiveMoleculeEditWithMeta<
   set((s) => {
     const m = getActiveMol(s)
     if (!m) return {}
-    return patchActiveMol(s, result.molecule)
+    return {
+      ...patchActiveMol(s, result.molecule),
+      ...pruneSelectionAfterEdit(s, result.molecule),
+    }
   })
   return { ok: true, ...meta }
 }
@@ -271,6 +317,7 @@ export function applyGeomEdit(
     if (!m) return {}
     return {
       ...patchActiveMol(s, result.molecule),
+      ...pruneSelectionAfterEdit(s, result.molecule),
       atomPositionVersion: s.atomPositionVersion + 1,
     }
   })
@@ -302,6 +349,7 @@ export function applyGeomEditWithMeta<
     if (!m) return {}
     return {
       ...patchActiveMol(s, result.molecule),
+      ...pruneSelectionAfterEdit(s, result.molecule),
       atomPositionVersion: s.atomPositionVersion + 1,
     }
   })

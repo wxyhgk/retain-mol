@@ -1,23 +1,36 @@
 import { lazy, Suspense } from 'react'
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import type { AppShellProps } from './AppShell'
 import type { AppShellModel } from './useAppShellModel'
 import Toolbar from '@/components/toolbar/Toolbar'
-import { ToolStrip } from '@/features/build-palette'
-import { RightPanel } from '@/components/panels'
+import { FloatingInspector } from '@/components/panels/FloatingInspector'
 import PubChemSearch from '@/components/search/PubChemSearch'
 import { MolViewer } from '@/domain/viewer/viewport'
 import { BusyOverlay } from './BusyOverlay'
 import { SelectionHud } from './SelectionHud'
 import { StatusBar } from './StatusBar'
 import { ViewportToolbar } from './ViewportToolbar'
-import { JobEditorLoadSession, SimulationWorkspace, resolveOptimizedJobStructure } from '@/features/jobs'
+import { JobEditorLoadSession, SimulationWorkspace, resolveOptimizedJobStructure } from '@retainmol/jobs'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { useEditorStore } from '@/domain/viewer/editorState'
-import type { JobArtifact, JobDetail } from '@/features/jobs'
+import { editorHostPort } from '@/domain/viewer/editorHostPort'
+import type { JobArtifact, JobDetail } from '@retainmol/jobs'
 import { useMoleculeDocumentStore } from '@/features/molecule-assets'
 import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
+import { useViewportStore } from '@/domain/viewer/viewportStore'
+import { useBuildPaletteController } from '@/features/build-palette/model/useBuildPaletteController'
 
 const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
+const WorkflowEditor = lazy(() => import('@/features/workflows').then(module => ({ default: module.WorkflowEditor })))
+const KetcherPanel = lazy(() => import('@/features/ketcher').then(m => ({ default: m.KetcherPanel })))
+
+function ResizeHandle() {
+  return (
+    <PanelResizeHandle className="group flex w-2 shrink-0 items-center justify-center bg-transparent focus-visible:outline-none">
+      <div className="h-full w-px bg-border transition-colors group-data-[resize-handle-state=hover]:bg-foreground/30 group-data-[resize-handle-state=drag]:bg-foreground/50 group-focus-visible:bg-ring" />
+    </PanelResizeHandle>
+  )
+}
 
 type AppShellViewProps = AppShellProps & AppShellModel
 
@@ -75,93 +88,117 @@ export function AppShellView({
     }
     useEditorStore.getState().flashHint(result.restoredSnapshot ? '已载入任务分子与 xTB 优化坐标' : '已载入 xTB 优化坐标')
   }
+  const gridVisible = useViewportStore(state => state.gridVisible)
+  const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
+  const leftDefaultSize = workspaceMode === 'simulate' ? 38 : workspaceMode === 'analyze' ? 32 : 28
+  const buildController = useBuildPaletteController()
+  // 悬浮窗承载全部 RightPanel 职责：Draw / Inspector / Scene / Display
+  // 展开条件：检查器按钮 或 Draw 工具激活时（与旧版 showRightPanel 逻辑一致）
+  const showFloating = showInspector || buildController.workspaceTool === 'draw'
+  const handleFloatingClose = () => {
+    if (showInspector) onToggleInspector()
+    if (buildController.workspaceTool === 'draw') buildController.closePanel()
+  }
   return (
     <div
       className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground"
       data-canvas-interacting={canvasFocus.interacting ? 'true' : 'false'}
     >
-        <Toolbar
-          showInspector={showInspector}
-          workspaceMode={workspaceMode}
-          onToggleInspector={onToggleInspector}
-          onWorkspaceModeChange={onWorkspaceModeChange}
+      <Toolbar
+        showInspector={showInspector}
+        workspaceMode={workspaceMode}
+        onToggleInspector={onToggleInspector}
+        onWorkspaceModeChange={onWorkspaceModeChange}
         onOpenTemplateStudio={onOpenTemplateStudio}
         onSearchOpen={onOpenSearch}
       />
       {searchOpen && <PubChemSearch onClose={onCloseSearch} />}
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <div className="relative z-30 h-full w-[72px] shrink-0">
-          <ToolStrip onToggleInspector={onToggleInspector} />
-        </div>
-        <main
-          className="relative h-full min-w-0 flex-1 overflow-hidden bg-muted"
-          onPointerDownCapture={event => canvasFocus.begin(event.target)}
-          onPointerUpCapture={canvasFocus.finish}
-          onPointerCancelCapture={canvasFocus.finish}
-          onWheelCapture={event => canvasFocus.pulse(event.target)}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-muted">
+        <PanelGroup
+          direction="horizontal"
+          autoSaveId="retainmol-chem3d"
+          className="flex min-h-0 flex-1"
         >
-          <div className="absolute inset-0"><MolViewer appearance={uiTheme} gridVisible={false} /></div>
-          <SelectionHud />
-          <BusyOverlay />
-          <ViewportToolbar />
-          <StatusBar />
+          {hasLeftWorkspace ? (
+            <>
+              <Panel
+                defaultSize={leftDefaultSize}
+                minSize={22}
+                maxSize={50}
+                className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-card"
+              >
+                {workspaceMode === 'simulate' ? (
+                  <SimulationWorkspace
+                    structure={jobStructure}
+                    molecule={activeMolecule}
+                    objectId={activeObjectId}
+                    documentBinding={documentBinding ?? null}
+                    revisionMetadata={pendingRevisionMetadata}
+                    onLoadOptimizedStructure={loadOptimizedStructure}
+                    workflowEditor={WorkflowEditor}
+                  />
+                ) : (
+                  <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载分析模块</div>}>
+                    <AnalysisWorkspace />
+                  </Suspense>
+                )}
+              </Panel>
+              <ResizeHandle />
+            </>
+          ) : (
+            <>
+              <Panel defaultSize={48} minSize={25} className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-white">
+                <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载 2D 编辑器…</div>}>
+                  <KetcherPanel />
+                </Suspense>
+              </Panel>
+              <ResizeHandle />
+            </>
+          )}
+
+            <Panel minSize={30} className="relative min-h-0 min-w-0 overflow-hidden bg-muted">
+              <div
+                className="relative h-full w-full overflow-hidden pb-6"
+                onPointerDownCapture={event => canvasFocus.begin(event.target)}
+                onPointerUpCapture={canvasFocus.finish}
+                onPointerCancelCapture={canvasFocus.finish}
+                onWheelCapture={event => canvasFocus.pulse(event.target)}
+              >
+                <div className="absolute inset-0"><MolViewer appearance={uiTheme} gridVisible={gridVisible} /></div>
+                <SelectionHud />
+                <BusyOverlay />
+                <ViewportToolbar />
+                <StatusBar />
+              </div>
+            </Panel>
+          </PanelGroup>
+          {/* 顶层悬浮：承载全部 RightPanel（Draw / Inspector / Scene / Display），不参与 PanelGroup 布局，z-[80] 压盖画布 */}
+          <FloatingInspector open={showFloating} onClose={handleFloatingClose} workspaceMode={workspaceMode} />
 
           {workflowEditSession && (
-            <WorkflowJobEditSession
-              key={`${workflowEditSession.workflowId}:${workflowEditSession.jobId}`}
-              workflowId={workflowEditSession.workflowId}
-              jobId={workflowEditSession.jobId}
-              onClose={onCloseWorkflowEdit}
-            />
+            <div className="absolute inset-0 z-30 bg-background">
+              <WorkflowJobEditSession
+                key={`${workflowEditSession.workflowId}:${workflowEditSession.jobId}`}
+                workflowId={workflowEditSession.workflowId}
+                jobId={workflowEditSession.jobId}
+                onClose={onCloseWorkflowEdit}
+              />
+            </div>
           )}
 
           {jobEditSession && !workflowEditSession && (
-            <JobEditorLoadSession
-              key={`${jobEditSession.jobId}:${jobEditSession.artifactId ?? 'input'}`}
-              jobId={jobEditSession.jobId}
-              artifactId={jobEditSession.artifactId}
-              onClose={onCloseJobEdit}
-            />
-          )}
-
-          {workspaceMode === 'simulate' && (
-            <aside
-              data-workspace-floating="true"
-              className="absolute bottom-3 left-3 top-3 z-30 w-[min(980px,calc(100%-24px))] min-w-0 overflow-hidden rounded-lg border border-border bg-card/95 text-card-foreground shadow-[0_14px_34px_rgba(0,0,0,0.14)] backdrop-blur-md"
-            >
-              <SimulationWorkspace
-                structure={jobStructure}
-                molecule={activeMolecule}
-                objectId={activeObjectId}
-                documentBinding={documentBinding ?? null}
-                revisionMetadata={pendingRevisionMetadata}
-                onLoadOptimizedStructure={loadOptimizedStructure}
+            <div className="absolute inset-0 z-30 bg-background">
+              <JobEditorLoadSession
+                key={`${jobEditSession.jobId}:${jobEditSession.artifactId ?? 'input'}`}
+                jobId={jobEditSession.jobId}
+                artifactId={jobEditSession.artifactId}
+                editorHost={editorHostPort}
+                onClose={onCloseJobEdit}
               />
-            </aside>
+            </div>
           )}
-
-          {workspaceMode === 'analyze' && (
-            <aside
-              data-workspace-floating="true"
-              className="absolute bottom-3 left-3 top-3 z-30 w-[min(760px,calc(100%-24px))] min-w-0 overflow-hidden rounded-lg border border-border bg-card/95 text-card-foreground shadow-[0_14px_34px_rgba(0,0,0,0.14)] backdrop-blur-md"
-            >
-              <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载分析模块</div>}>
-                <AnalysisWorkspace />
-              </Suspense>
-            </aside>
-          )}
-
-          {showInspector && (
-            <aside
-              data-workspace-floating="true"
-              className="absolute bottom-3 right-3 top-3 z-30 w-[min(340px,calc(100%-24px))] min-w-0 overflow-hidden rounded-lg border border-border bg-card/95 text-card-foreground shadow-[0_14px_34px_rgba(0,0,0,0.14)] backdrop-blur-md transition-opacity duration-75"
-            >
-              <RightPanel />
-            </aside>
-          )}
-        </main>
-      </div>
+        </div>
     </div>
   )
 }

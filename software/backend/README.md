@@ -98,7 +98,7 @@ POST /jobs/{jobId}/run
 
 三个创建接口都要求且仅允许一种结构来源：内联 `structure`、不可变的
 `moleculeRevisionId`，或成功上游任务的 `artifactId`。方法、基组、内存、线程和
-收敛参数进入不可变 `CalculationSpec`，结构进入带 SHA-256 的 `JobInputBinding`。
+收敛参数进入不可变 `CalculationSpec`，结构进入带 SHA-256 的 `JobInputSnapshot`。
 
 任务产物：
 

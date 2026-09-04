@@ -8,7 +8,7 @@ import { X } from 'lucide-react'
 function StyleRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-500 w-8 shrink-0">{label}</span>
+      <span className="text-xs text-muted-foreground w-8 shrink-0">{label}</span>
       {children}
     </div>
   )
@@ -18,13 +18,17 @@ function ColorRow({ label, value, onChange }: { label: string; value: string; on
   return (
     <label className="flex items-center gap-1.5 cursor-pointer">
       <input type="color" value={value} onChange={e => onChange(e.target.value)}
-        className="w-6 h-6 rounded border border-gray-200 cursor-pointer p-0.5 bg-white" />
-      <span className="text-[11px] text-gray-500">{label}</span>
+        className="w-6 h-6 rounded border border-border cursor-pointer p-0.5 bg-white" />
+      <span className="text-[11px] text-muted-foreground">{label}</span>
     </label>
   )
 }
 
-export default function MeasurePanel() {
+export interface MeasurePanelProps {
+  compact?: boolean
+}
+
+export default function MeasurePanel({ compact = false }: MeasurePanelProps) {
   const {
     measurements, measureType, pendingAtomIds, activeTool,
     removeMeasurement, clearMeasurements, setMeasureType,
@@ -45,20 +49,20 @@ export default function MeasurePanel() {
         : `已选 ${pendingAtoms.map(a => a.symbol).join('—')}，还需 ${needed - pendingAtoms.length} 个`)
 
   return (
-    <div className="p-3 space-y-4 text-sm text-gray-800">
+    <div className={compact ? 'space-y-3 text-sm text-foreground' : 'p-3 space-y-4 text-sm text-foreground'}>
       {/* 测量类型选择 */}
       <section className="space-y-2">
-        <div className="text-xs font-medium text-gray-700">测量类型</div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">测量类型</div>
         <div className="grid grid-cols-4 gap-1">
           {(['auto', 'distance', 'angle', 'dihedral'] as MeasureType[]).map(t => (
             <button key={t} onClick={() => setMeasureType(t)}
-              className={`py-1 rounded-[8px] text-[11px] font-medium border transition-colors ${measureType === t ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700'}`}>
+              className={`py-1 rounded-[8px] text-[11px] font-medium border transition-colors ${measureType === t ? 'bg-primary border-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-foreground hover:text-foreground'}`}>
               {t === 'auto' ? '自动' : t === 'distance' ? '键长' : t === 'angle' ? '键角' : '二面角'}
             </button>
           ))}
         </div>
         {activeTool === 'measure' && (
-          <div className="text-xs text-gray-400 bg-gray-50 rounded px-2 py-1.5 font-mono">
+          <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1.5 font-mono">
             {measureHint}
           </div>
         )}
@@ -66,10 +70,10 @@ export default function MeasurePanel() {
 
       {/* 已提交的测量记录 */}
       {measurements.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs font-medium text-gray-700">测量记录</div>
-            <Button variant="ghost" size="icon" className="w-5 h-5 text-gray-400 hover:text-gray-900"
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">测量记录 · {measurements.length}</span>
+            <Button variant="ghost" size="icon" className="w-5 h-5 text-muted-foreground hover:text-foreground"
               onClick={clearMeasurements} title="清除全部">
               <X size={11} />
             </Button>
@@ -103,10 +107,10 @@ export default function MeasurePanel() {
       )}
 
       {/* 标注样式 */}
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs font-medium text-gray-700">标注样式</div>
-          <button className="text-[10px] text-gray-400 hover:text-gray-900 transition-colors"
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">标注样式</div>
+          <button className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => setMeasureStyle(DEFAULT_MEASURE_STYLE)}>重置</button>
         </div>
         <div className="space-y-2">

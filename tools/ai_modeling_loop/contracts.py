@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .geometry_policy_spec import GeometryPolicySpec, parse_geometry_policy_spec
+
 
 SCHEMA_VERSION = 1
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -61,6 +63,7 @@ class BenchmarkCase:
     multiplicity: int
     anchors: tuple[Anchor, ...]
     description: str
+    geometry_policy_spec: GeometryPolicySpec
 
     @classmethod
     def from_json(cls, value: dict[str, Any], manifest_path: Path) -> "BenchmarkCase":
@@ -72,6 +75,19 @@ class BenchmarkCase:
         anchors = tuple(Anchor.from_json(item) for item in value["anchors"])
         if len({anchor.anchor_id for anchor in anchors}) != len(anchors):
             raise ValueError(f"Duplicate anchor id in {manifest_path}")
+        geometry_policy_value = value.get("geometryPolicy", {
+            "schemaVersion": 1,
+            "policyId": f"{value['caseId']}-anchored-geometry-v1",
+            "fixedAtomIds": [anchor.anchor_id for anchor in anchors],
+            "orientationChecks": [],
+            "rigidAtomGroups": [],
+        })
+        geometry_policy_spec = parse_geometry_policy_spec(geometry_policy_value)
+        anchor_ids = {anchor.anchor_id for anchor in anchors}
+        if set(geometry_policy_spec.fixed_atom_ids) != anchor_ids:
+            raise ValueError(
+                f"geometryPolicy.fixedAtomIds must exactly match anchors in {manifest_path}"
+            )
         return cls(
             case_id=str(value["caseId"]),
             image=image,
@@ -80,6 +96,7 @@ class BenchmarkCase:
             multiplicity=int(value.get("multiplicity", 1)),
             anchors=anchors,
             description=str(value.get("description", "")),
+            geometry_policy_spec=geometry_policy_spec,
         )
 
 

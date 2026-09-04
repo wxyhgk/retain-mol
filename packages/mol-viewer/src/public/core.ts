@@ -1,4 +1,5 @@
 export type { Molecule, Atom, Bond } from '../lib/molecule'
+export type { EditorHostPort, EditorHostSnapshot } from '../lib/editorHostPort'
 export {
   newAtom,
   newBond,

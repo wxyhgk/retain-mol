@@ -1,27 +1,53 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { SelectionInspector } from '@/features/selection-inspector'
-import { MeasurePanel } from '@/features/measure'
+import { useEffect, useState } from 'react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@retainmol/ui-kit'
+import { MeasureSection, SelectionInspector } from '@/features/inspector'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { WorkspaceDisplayPanel, WorkspaceScenePanel } from '@/features/workspace-panels'
+import { DrawPanel } from '@/features/build-palette/components/workspace/DrawPanel'
+import { useBuildPaletteController } from '@/features/build-palette/model/useBuildPaletteController'
+import type { WorkspaceMode } from '@/App'
+import { cn } from '@/lib/utils'
 
-export default function RightPanel() {
+export interface RightPanelProps {
+  workspaceMode?: WorkspaceMode
+}
+
+export default function RightPanel({ workspaceMode }: RightPanelProps) {
+  const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
+  const buildController = useBuildPaletteController()
+  const isDraw = buildController.workspaceTool === 'draw'
+  const [activeTab, setActiveTab] = useState<string>(isDraw ? 'draw' : 'inspector')
+
+  useEffect(() => {
+    // eslint-disable-next-line
+    if (isDraw) setActiveTab('draw')
+  }, [isDraw])
+
+  const cols = hasLeftWorkspace ? (isDraw ? 'grid-cols-3' : 'grid-cols-2') : isDraw ? 'grid-cols-4' : 'grid-cols-3'
+
   return (
-    <Tabs defaultValue="inspector" className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
       <div className="shrink-0 border-b border-border px-2">
-        <TabsList className="grid h-10 w-full grid-cols-3 rounded-none bg-transparent p-0">
+        <TabsList className={cn('grid h-10 w-full rounded-none bg-transparent p-0', cols)}>
+          <PanelTab value="draw" label="Draw" />
           <PanelTab value="inspector" label="Inspector" />
-          <PanelTab value="scene" label="Scene" />
+          {!hasLeftWorkspace && <PanelTab value="scene" label="Scene" />}
           <PanelTab value="display" label="Display" />
         </TabsList>
       </div>
 
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
+        <TabsContent value="draw" className="mt-0 min-w-0 p-3">
+          <DrawPanel controller={buildController} />
+        </TabsContent>
         <TabsContent value="inspector" className="mt-0 min-w-0">
           <InspectorContent />
         </TabsContent>
-        <TabsContent value="scene" className="mt-0 min-w-0">
-          <WorkspaceScenePanel />
-        </TabsContent>
+        {!hasLeftWorkspace && (
+          <TabsContent value="scene" className="mt-0 min-w-0">
+            <WorkspaceScenePanel />
+          </TabsContent>
+        )}
         <TabsContent value="display" className="mt-0 min-w-0">
           <WorkspaceDisplayPanel />
         </TabsContent>
@@ -32,7 +58,13 @@ export default function RightPanel() {
 
 function InspectorContent() {
   const activeTool = useEditorStore(state => state.activeTool)
-  return activeTool === 'measure' ? <MeasurePanel /> : <SelectionInspector />
+  const isMeasureActive = activeTool === 'measure'
+  return (
+    <div className="min-w-0">
+      {isMeasureActive && <MeasureSection />}
+      <SelectionInspector />
+    </div>
+  )
 }
 
 function PanelTab({ value, label }: { value: string; label: string }) {

@@ -17,6 +17,33 @@ export interface AmbientLightProfile {
 // @public (undocumented)
 export type AromaticBondStyle = 'dashed' | 'single' | 'kekule';
 
+// @public
+export class AromaticRingCache {
+    centroids(mol: Molecule): Map<string, THREE.Vector3>;
+}
+
+// @public (undocumented)
+export interface Atom {
+    readonly charge?: number;
+    readonly coordinationDirections?: readonly (readonly [number, number, number])[];
+    readonly coordinationGeometry?: string;
+    readonly coordinationNumber?: number;
+    readonly coordinationSites?: readonly CoordinationSite[];
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label?: string;
+    readonly radical?: number;
+    // (undocumented)
+    readonly symbol: string;
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+    // (undocumented)
+    readonly z: number;
+}
+
 // @public (undocumented)
 export type AtomLabelMode = 'none' | 'element-symbol';
 
@@ -50,10 +77,50 @@ export interface AtomLabelProfile {
 export type AtomRadiusMode = 'theme-covalent' | 'iboview-draw-radius';
 
 // @public (undocumented)
+export interface Bond {
+    // (undocumented)
+    readonly aromatic?: boolean;
+    // (undocumented)
+    readonly atomId1: string;
+    // (undocumented)
+    readonly atomId2: string;
+    readonly coordinationSites?: readonly CoordinationSiteAssignment[];
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly order: 1 | 2 | 3;
+}
+
+// @public (undocumented)
 export type BondColorPolicy = 'element' | 'brighten-neutral' | 'fixed';
 
 // @public (undocumented)
 export type BondGeometryStyle = 'cylinder' | 'capsule';
+
+// @public (undocumented)
+export type CoordinationBondOrder = 1 | 2 | 3;
+
+// @public (undocumented)
+export interface CoordinationSite {
+    // (undocumented)
+    readonly bondOrder: CoordinationBondOrder;
+    // (undocumented)
+    readonly direction: readonly [number, number, number];
+    // (undocumented)
+    readonly equivalenceGroup: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string;
+}
+
+// @public (undocumented)
+export interface CoordinationSiteAssignment {
+    // (undocumented)
+    readonly atomId: string;
+    // (undocumented)
+    readonly siteId: string;
+}
 
 // @public (undocumented)
 export type DepthCueMode = 'three-fog' | 'iboview-fragcoord' | 'none';
@@ -82,6 +149,12 @@ export interface DirectionalLightProfile {
 
 // @public (undocumented)
 export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe' | 'tube' | 'mtube';
+
+// @public (undocumented)
+export interface ElementStyle {
+    // (undocumented)
+    color: string;
+}
 
 // @public (undocumented)
 export interface IboViewShaderMaterialProfile {
@@ -134,6 +207,39 @@ export interface MaterialFactoryContext {
 
 // @public (undocumented)
 export type MaterialModel = 'phong' | 'publication-shader' | 'iboview-shader' | (string & {});
+
+// @public (undocumented)
+export interface Molecule {
+    // (undocumented)
+    readonly atoms: readonly Atom[];
+    // (undocumented)
+    readonly bonds: readonly Bond[];
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public
+export class MoleculeRenderer {
+    constructor(modelGroup: THREE.Group, getTheme: () => ResolvedTheme, invalidate?: () => void);
+    // (undocumented)
+    get atomMeshes(): Map<string, THREE.Mesh<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.Material<THREE.MaterialEventMap> | THREE.Material<THREE.MaterialEventMap>[], THREE.Object3DEventMap>>;
+    // (undocumented)
+    get bondMeshes(): Map<string, THREE.Group<THREE.Object3DEventMap>>;
+    // (undocumented)
+    clearDragHover(): void;
+    // (undocumented)
+    dispose(): void;
+    // (undocumented)
+    render(molecule: Molecule, displayMode: DisplayMode, selectedAtoms: Set<string>, selectedBonds: Set<string>, aromaticBonds?: Map<string, THREE.Vector3>, renderStyle?: RenderStyle, visualState?: ObjectVisualState): void;
+    // (undocumented)
+    setDragHover(atomId: string): void;
+}
+
+// @public (undocumented)
+export interface ObjectVisualState {
+    // (undocumented)
+    readonly opacity?: number;
+}
 
 // @public (undocumented)
 export function registerMaterialFactory(factory: MaterialFactory, options?: {
@@ -204,7 +310,73 @@ export interface ResolvedRenderProfile {
 }
 
 // @public (undocumented)
+export interface ResolvedTheme {
+    // (undocumented)
+    bonds: {
+        defaultColor: 'inherit-from-atoms' | string;
+    };
+    // (undocumented)
+    elements: Record<string, ElementStyle>;
+    fallbackColor: string;
+    // (undocumented)
+    metadata: Theme['metadata'];
+    // (undocumented)
+    render: {
+        ballScale: number;
+        bondRadiusStick: number;
+        bondGap: number;
+        spacefillScale: number;
+    };
+    // (undocumented)
+    scene: {
+        backgroundColor: string;
+        highlightColor: string;
+        highlightOpacity: number;
+    };
+}
+
+// @public (undocumented)
 export function resolveMaterialFactory(id: MaterialModel): MaterialFactory;
+
+// @public (undocumented)
+export interface Theme {
+    // (undocumented)
+    $schemaVersion: '1';
+    // (undocumented)
+    bonds?: {
+        defaultColor?: 'inherit-from-atoms' | string | undefined;
+    } | undefined;
+    // (undocumented)
+    elements: Record<string, ElementStyle>;
+    // (undocumented)
+    extends?: string | undefined;
+    // (undocumented)
+    fallbackColor?: string | undefined;
+    // (undocumented)
+    kind: 'theme';
+    // (undocumented)
+    metadata: {
+        id: string;
+        name: string;
+        description: string;
+        source?: string | undefined;
+        author?: string | undefined;
+        version: string;
+    };
+    // (undocumented)
+    render?: {
+        ballScale?: number | undefined;
+        bondRadiusStick?: number | undefined;
+        bondGap?: number | undefined;
+        spacefillScale?: number | undefined;
+    } | undefined;
+    // (undocumented)
+    scene?: {
+        backgroundColor?: string | undefined;
+        highlightColor?: string | undefined;
+        highlightOpacity?: number | undefined;
+    } | undefined;
+}
 
 // (No @packageDocumentation comment for this package)
 

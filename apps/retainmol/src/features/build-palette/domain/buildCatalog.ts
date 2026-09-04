@@ -11,10 +11,6 @@ import {
   listMoleculeTemplates,
 } from '@retainmol/mol-viewer/templates'
 import { cloneTemplateMolecule } from '@retainmol/mol-viewer/templates'
-import {
-  getSavedTemplateDraft,
-  listSavedTemplateDrafts,
-} from '@/features/template-library'
 
 export const COMMON_HYBRID_IDS = ['c-sp3', 'c-sp2', 'c-sp', 'n-sp3', 'n-sp2', 'n-sp', 'o-sp3', 'o-sp2', 's-sp3', 's-sp2']
 export const COMMON_ATOMS = ['C', 'H', 'N', 'O', 'S', 'P', 'F', 'Cl', 'Br', 'I']
@@ -36,6 +32,13 @@ export interface CanvasTemplateSummary {
   readonly description?: string
   readonly source: 'builtin' | 'workspace'
   readonly molecule?: Molecule
+}
+
+export interface WorkspaceTemplateDraft {
+  readonly id: string
+  readonly name: string
+  readonly description?: string
+  readonly molecule: Molecule
 }
 
 export function toElementHex(color: number) {
@@ -66,13 +69,13 @@ export function getBuildFragmentsForElement(symbol: string) {
     })
 }
 
-export function createCanvasMoleculeFromTemplate(id: string): Molecule | undefined {
+export function createCanvasMoleculeFromTemplate(id: string, drafts: readonly WorkspaceTemplateDraft[] = []): Molecule | undefined {
   if (!id.startsWith('workspace:')) return createCenteredMoleculeFromTemplate(id)
-  const draft = getSavedTemplateDraft(id.slice('workspace:'.length))
+  const draft = drafts.find(item => item.id === id.slice('workspace:'.length))
   return draft ? centerMolecule(cloneTemplateMolecule(draft.molecule)) : undefined
 }
 
-export function listCanvasTemplates(): readonly CanvasTemplateSummary[] {
+export function listCanvasTemplates(drafts: readonly WorkspaceTemplateDraft[] = []): readonly CanvasTemplateSummary[] {
   const builtin = listMoleculeTemplates().map(template => ({
     id: template.id,
     name: template.name,
@@ -81,7 +84,7 @@ export function listCanvasTemplates(): readonly CanvasTemplateSummary[] {
     source: 'builtin' as const,
     molecule: createCenteredMoleculeFromTemplate(template.id),
   }))
-  const workspace = listSavedTemplateDrafts().map(draft => ({
+  const workspace = drafts.map(draft => ({
     id: `workspace:${draft.id}`,
     name: draft.name,
     formula: getMolecularFormula(draft.molecule.atoms),

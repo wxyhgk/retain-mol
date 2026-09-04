@@ -8,6 +8,7 @@ import type { StateCreator } from 'zustand'
 import { createSceneObject } from '../../lib/sceneObject'
 import { genId } from '../../lib/utils'
 import type { MoleculeState, SceneSlice } from './types'
+import type { GetTemporal } from './transactionController'
 import {
   runAddSceneObjectCommand,
   runRemoveSceneObjectCommand,
@@ -29,7 +30,10 @@ import {
 /** 初始默认场景对象（空分子）。 */
 export const defaultSceneObject = createSceneObject({ atoms: [], bonds: [], name: 'New Molecule' })
 
-export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> = (set, get) => {
+export function createSceneSlice(
+  getTemporal: GetTemporal,
+): StateCreator<MoleculeState, [], [], SceneSlice> {
+  return (set, get) => {
   // Store factories must not share the default scene object or its nested molecule.
   const initialObject = createSceneObject({ atoms: [], bonds: [], name: 'New Molecule' })
   return {
@@ -49,10 +53,23 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
     return newId
   },
 
-  setActiveObject: (id) => set((s) => {
-    const result = runSetActiveSceneObjectCommand(s.objectsById, s.activeObjectId, id)
-    return applyActiveSceneObjectResult(s, result)
-  }),
+  setActiveObject: (id) => {
+    // 纯激活切换不入 undo 历史：activeObjectId 留在快照里是为了场景图操作
+    // （remove/split 等）undo 的一致性，但"点另一分子的原子仅为选中"这类
+    // 纯激活不该产生历史条目、也不该冲掉 redo 分支。已暂停（事务中）时
+    // 保持暂停不动，激活变更并入事务自身的快照处理。
+    const temporal = getTemporal().getState()
+    const wasTracking = temporal.isTracking
+    if (wasTracking) temporal.pause()
+    try {
+      set((s) => {
+        const result = runSetActiveSceneObjectCommand(s.objectsById, s.activeObjectId, id)
+        return applyActiveSceneObjectResult(s, result)
+      })
+    } finally {
+      if (wasTracking) temporal.resume()
+    }
+  },
 
   removeSceneObject: (id) => set((s) => {
     const result = runRemoveSceneObjectCommand(s.objectsById, s.objectOrder, s.activeObjectId, id)
@@ -88,5 +105,6 @@ export const createSceneSlice: StateCreator<MoleculeState, [], [], SceneSlice> =
 
   activateObjectContainingBond: (bondId) =>
     activateObjectWhere(get(), obj => obj.molecule.bonds.some(b => b.id === bondId)),
+  }
   }
 }

@@ -5,15 +5,18 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
-import software.backend.routers.optimize as optimize_router
-from software.backend.routers.optimize import (
-    Atom,
-    OptimizeRequest,
-    _build_xtb_command,
-    _prepare_output_atoms,
+from software.backend.engines.xtb import (
+    XtbAtom as Atom,
+    XtbOptimizationRequest as OptimizeRequest,
+    build_xtb_command as _build_xtb_command,
+    prepare_output_atoms as _prepare_output_atoms,
 )
+import software.backend.engines.xtb.execution as xtb_execution
+import software.backend.engines.xtb.process as xtb_process
+import software.backend.routers.optimize as optimize_router
 
 
 def _atoms() -> list[Atom]:
@@ -160,7 +163,7 @@ def test_sync_response_uses_aligned_and_restored_coordinates(monkeypatch: pytest
     output[0]["x"] += 0.45
     output[1]["y"] -= 0.88
 
-    def fake_run(command: list[str], *, cwd: str, **_: object) -> SimpleNamespace:
+    def fake_run(command: list[str], *, cwd: Path, **_: object) -> SimpleNamespace:
         assert "--input" in command
         _write_output_xyz(Path(cwd) / "xtbopt.xyz", output)
         return SimpleNamespace(
@@ -169,7 +172,7 @@ def test_sync_response_uses_aligned_and_restored_coordinates(monkeypatch: pytest
             returncode=0,
         )
 
-    monkeypatch.setattr(optimize_router.subprocess, "run", fake_run)
+    monkeypatch.setattr(xtb_process, "run_live_process", fake_run)
 
     response = asyncio.run(optimize_router.optimize(req))
 
@@ -181,6 +184,73 @@ def test_sync_response_uses_aligned_and_restored_coordinates(monkeypatch: pytest
         )
     assert response.energy == -10.5
     assert response.method == "gfn2"
+
+
+def test_shared_process_prepares_input_and_forwards_runtime_controls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = OptimizeRequest(atoms=_atoms(), method="gfn1")
+    cancelled = lambda: False
+    captured: dict[str, object] = {}
+
+    def fake_run(
+        command: list[str],
+        *,
+        cwd: Path,
+        log_path: Path,
+        timeout: float,
+        cancel_check: object,
+    ) -> SimpleNamespace:
+        captured.update(
+            command=command,
+            cwd=cwd,
+            log_path=log_path,
+            timeout=timeout,
+            cancel_check=cancel_check,
+        )
+        return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    monkeypatch.setattr(xtb_process, "run_live_process", fake_run)
+    log_path = tmp_path / "xtb.log"
+
+    result = xtb_process.run_xtb_process(
+        request,
+        work_directory=tmp_path,
+        log_path=log_path,
+        timeout=12.5,
+        cancel_check=cancelled,
+    )
+
+    assert result.returncode == 0
+    input_lines = (tmp_path / "input.xyz").read_text(encoding="utf-8").splitlines()
+    assert input_lines[:2] == ["3", ""]
+    assert [line.split() for line in input_lines[2:]] == [
+        ["O", "0.0000000000", "0.0000000000", "0.0000000000"],
+        ["H", "0.0000000000", "0.0000000000", "1.0000000000"],
+        ["H", "1.0000000000", "0.0000000000", "0.0000000000"],
+    ]
+    assert captured == {
+        "command": [
+            "xtb",
+            str(tmp_path / "input.xyz"),
+            "--opt",
+            "normal",
+            "--gfn1",
+            "--chrg",
+            "0",
+            "--uhf",
+            "0",
+            "--cycles",
+            "200",
+            "--parallel",
+            "1",
+        ],
+        "cwd": tmp_path,
+        "log_path": log_path,
+        "timeout": 12.5,
+        "cancel_check": cancelled,
+    }
 
 
 def test_sse_frame_and_done_use_aligned_and_restored_coordinates(
@@ -218,7 +288,11 @@ def test_sse_frame_and_done_use_aligned_and_restored_coordinates(
         _write_output_xyz(Path(cwd) / "xtbopt.xyz", output)
         return FakeProcess()
 
-    monkeypatch.setattr(optimize_router.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(
+        xtb_execution.asyncio,
+        "create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
 
     async def collect_events() -> list[dict]:
         chunks = [chunk async for chunk in optimize_router._stream_optimization(req)]
@@ -235,3 +309,54 @@ def test_sse_frame_and_done_use_aligned_and_restored_coordinates(
                 event["atoms"][index]["y"],
                 event["atoms"][index]["z"],
             ) == (atoms[index].x, atoms[index].y, atoms[index].z)
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code"),
+    [
+        (xtb_execution.XtbInvalidStructureError("invalid"), 400),
+        (xtb_execution.XtbExecutableNotFoundError("missing"), 503),
+        (xtb_execution.XtbExecutionTimeoutError("timeout"), 504),
+        (xtb_execution.XtbMissingOutputError("no output"), 500),
+    ],
+)
+def test_sync_route_maps_engine_errors_to_http_status(
+    error: Exception,
+    status_code: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = OptimizeRequest(atoms=_atoms())
+
+    def fail(_: OptimizeRequest) -> None:
+        raise error
+
+    monkeypatch.setattr(optimize_router, "run_xtb_optimization", fail)
+
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(optimize_router.optimize(request))
+
+    assert caught.value.status_code == status_code
+    assert caught.value.detail == str(error)
+
+
+def test_sse_route_encodes_engine_failure_as_error_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = OptimizeRequest(atoms=_atoms())
+
+    async def fail(_: OptimizeRequest):
+        if False:
+            yield {}
+        raise xtb_execution.XtbMissingOutputError("no optimized structure")
+
+    monkeypatch.setattr(optimize_router, "stream_xtb_optimization_events", fail)
+
+    async def collect_events() -> list[dict]:
+        chunks = [
+            chunk async for chunk in optimize_router._stream_optimization(request)
+        ]
+        return [json.loads(chunk.removeprefix("data: ")) for chunk in chunks]
+
+    assert asyncio.run(collect_events()) == [
+        {"type": "error", "message": "no optimized structure"}
+    ]

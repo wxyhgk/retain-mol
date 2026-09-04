@@ -1,4 +1,4 @@
-import type { JobsApi, JobDetail } from '@/features/jobs'
+import type { JobsApi, JobDetail } from '@retainmol/jobs'
 import type {
   WorkflowDefinition,
   WorkflowReferenceDraft,

@@ -154,9 +154,9 @@ export function WorkspaceTemplateSiteCanvas({
 
   return (
     <div className="space-y-2.5">
-      <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-        <div className="flex h-9 items-center justify-between border-b border-slate-200 px-2.5">
-          <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500">
+      <div className="overflow-hidden rounded-md border border-border bg-muted">
+        <div className="flex h-9 items-center justify-between border-b border-border px-2.5">
+          <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
             <MousePointer2 size={12} />
             <span className="truncate">点原子连接 · 点键并环</span>
           </div>
@@ -164,14 +164,14 @@ export function WorkspaceTemplateSiteCanvas({
             type="button"
             onClick={onFlip}
             aria-pressed={flipped}
-            className="flex h-7 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            className="flex h-7 items-center gap-1 rounded-md px-2 text-[10px] font-medium text-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <FlipHorizontal2 size={13} />{flipped ? '已翻转' : '翻转'}
           </button>
         </div>
         <div className="relative">
           <canvas ref={canvasRef} className="block h-[240px] w-full cursor-grab touch-none active:cursor-grabbing" />
-          <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded bg-white/90 px-1.5 py-1 text-[9px] text-slate-500">
+          <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded bg-white/90 px-1.5 py-1 text-[9px] text-muted-foreground">
             <Rotate3D size={11} />拖动旋转
           </div>
         </div>

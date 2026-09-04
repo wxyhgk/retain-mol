@@ -80,7 +80,11 @@ export function ringPlaneIntersection(
 
   const phi = Math.atan2(B, A)
   const dt = Math.acos(Math.max(-1, Math.min(1, ratio)))
-  const ts = dt < 1e-6 ? [phi] : [phi + dt, phi - dt]   // 相切时只有一个
+  // 相切时只有一个交点：ratio≈+1 侧 dt≈0（phi±dt 收敛到 phi）；
+  // ratio≈−1 侧 dt≈π（phi+dt 与 phi−dt 相差 2π，是同一个点），两侧都要去重
+  const ts = dt < 1e-6 ? [phi]
+    : Math.PI - dt < 1e-6 ? [phi + Math.PI]
+    : [phi + dt, phi - dt]
 
   return ts.map(tAng => add(
     center,

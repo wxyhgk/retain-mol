@@ -8,6 +8,7 @@ dist/
 packages/mol-viewer/node_modules
 packages/mol-viewer/temp/
 .retainmol-loop/
+**/.lake/
 
 # Local credentials and private keys
 .env
@@ -42,3 +43,4 @@ timer.dat
 
 # Persistent local job workspace (SQLite records and calculation artifacts)
 software/backend/data/
+packages/mol-viewer/node_modules

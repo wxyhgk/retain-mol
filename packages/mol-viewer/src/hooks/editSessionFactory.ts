@@ -7,6 +7,11 @@ import {
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '../store/moleculeStore'
 import type { BuilderMoleculeStoreApi } from './builderPointerTypes'
 import type { UndoTransactionHandle } from '../store/contracts/transaction'
+import type {
+  AlignBondPairDiagnostics,
+  AlignBondPairFailureCode,
+  AlignBondPairInput,
+} from '../lib/builder/geometry/bondPairAlignment'
 
 function finishEditTransaction(
   store: BuilderMoleculeStoreApi,
@@ -84,4 +89,70 @@ export function createObjectPositionWriteEditSession(
       store.getState().setObjectAtomPositions(targetObjectId, positions)
     },
   })
+}
+
+export type InternalAlignBondPairResult =
+  | { readonly ok: true; readonly diagnostics: AlignBondPairDiagnostics }
+  | { readonly ok: false; readonly code: AlignBondPairFailureCode; readonly reason: string }
+
+export function runBondPairAlignmentEdit(
+  input: AlignBondPairInput,
+  store: BuilderMoleculeStoreApi = useMoleculeStore,
+): InternalAlignBondPairResult {
+  return store.getState().alignBondPair(input)
+}
+
+export interface InternalBondPairAlignmentEditSession {
+  readonly isActive: boolean
+  start(): void
+  update(input: AlignBondPairInput): InternalAlignBondPairResult
+  end(): void
+  cancel(): void
+}
+
+export function createBondPairAlignmentEditSession(
+  store: BuilderMoleculeStoreApi = useMoleculeStore,
+): InternalBondPairAlignmentEditSession {
+  let transaction: UndoTransactionHandle | null = null
+  let active = false
+  let previousAzimuthDegrees = 0
+
+  return {
+    get isActive() {
+      return active && Boolean(transaction?.active)
+    },
+    start() {
+      if (active) return
+      transaction = store.getState().beginTransaction('bond-pair-alignment')
+      previousAzimuthDegrees = 0
+      active = true
+    },
+    update(input) {
+      if (!active) {
+        return {
+          ok: false,
+          code: 'session-not-started',
+          reason: '键对齐编辑会话尚未开始',
+        }
+      }
+      const result = store.getState().alignBondPair({
+        ...input,
+        azimuthDegrees: input.azimuthDegrees - previousAzimuthDegrees,
+      })
+      if (result.ok) previousAzimuthDegrees = input.azimuthDegrees
+      return result
+    },
+    end() {
+      if (!active) return
+      finishEditTransaction(store, transaction)
+      transaction = null
+      active = false
+    },
+    cancel() {
+      if (!active) return
+      cancelEditTransaction(store, transaction)
+      transaction = null
+      active = false
+    },
+  }
 }

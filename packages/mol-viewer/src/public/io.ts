@@ -22,3 +22,6 @@ export type { RelaxOptions } from '../lib/geometry/relax'
 
 export { parseClipboard, exportGJF } from '../lib/io'
 export type { GJFOptions, PasteFormat } from '../lib/io/pasteParser'
+
+export { depictMolecule2D } from '../lib/io/depict'
+export type { DepictMolecule2DOptions } from '../lib/io/depict'

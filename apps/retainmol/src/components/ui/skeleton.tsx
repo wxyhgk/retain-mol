@@ -1,15 +1,4 @@
-import { cn } from "@/lib/utils"
-
-function Skeleton({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn("animate-pulse rounded-md bg-muted", className)}
-      {...props}
-    />
-  )
-}
-
-export { Skeleton }
+/**
+ * @deprecated 直接从 '@retainmol/ui-kit' 导入；此重导出仅保留一个发版的兼容。
+ */
+export { Skeleton } from '@retainmol/ui-kit'

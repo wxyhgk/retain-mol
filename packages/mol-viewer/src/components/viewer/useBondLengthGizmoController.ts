@@ -14,7 +14,7 @@ import type { BondLengthGizmoViewHandle } from './BondLengthGizmoView'
 
 interface Options {
   readonly renderer: ThreeRendererPort | null
-  readonly visible: boolean
+  readonly enabled: boolean
   readonly readOnly: boolean
   readonly atomIds: readonly [string, string] | null
 }
@@ -31,13 +31,13 @@ interface DragSession {
 const MIN_LENGTH = 0.1
 const MAX_LENGTH = 10
 
-export function useBondLengthGizmoController({ renderer, visible, readOnly, atomIds }: Options) {
+export function useBondLengthGizmoController({ renderer, enabled, readOnly, atomIds }: Options) {
   const { moleculeStore, editorStore, ticker } = useViewerRuntimeServices()
   const viewRef = useRef<BondLengthGizmoViewHandle>(null)
   const dragRef = useRef<DragSession | null>(null)
   const atomId1 = atomIds?.[0] ?? null
   const atomId2 = atomIds?.[1] ?? null
-  const active = Boolean(renderer && visible && !readOnly && atomId1 && atomId2)
+  const active = Boolean(renderer && enabled && !readOnly && atomId1 && atomId2)
   const availability = useMemo(() => {
     if (!atomId1 || !atomId2) return null
     return createBondLengthEditPlan(selectActiveMoleculeOrEmpty(moleculeStore.getState()), atomId1, atomId2)

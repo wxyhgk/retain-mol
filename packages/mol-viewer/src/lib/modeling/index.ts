@@ -1,7 +1,10 @@
 export * from './contracts'
 export * from './constraints'
 export * from './context'
+export * from './effects'
 export * from './headless'
 export * from './planSchema'
 export * from './revision'
 export * from './planExecutor'
+
+export * from './fragmentFusionStoreAdapter'

@@ -1,0 +1,8 @@
+export { SelectionInspector } from './components/SelectionInspector'
+export { MeasureSection } from './components/MeasureSection'
+export { buildInspectorModel, buildSelectionInspectorModel } from './model/inspectorModel'
+export type { EditableLiveGeometry, EditableGeometry, InspectorModel, SelectionInspectorModel, IndexedAtom } from './model/inspectorModel'
+export { selectScenePanelRows, selectActiveMoleculeName } from './model/inspectorModel'
+export type { ScenePanelRow } from './model/inspectorModel'
+export * from './model/inspectorFormatters'
+export * from './components/primitives'

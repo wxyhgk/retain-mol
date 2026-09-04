@@ -26,6 +26,9 @@ function makeState(): MoleculeState {
     objectsById: { [object.id]: object },
     objectOrder: [object.id],
     atomPositionVersion: 0,
+    selectedAtomIds: new Set<string>(),
+    selectedBondIds: new Set<string>(),
+    selectionVersion: 0,
   } as MoleculeState
 }
 

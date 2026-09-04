@@ -3,7 +3,7 @@ import type { FragmentDef } from '../../fragmentLibrary'
 import type { AttachResult } from './types'
 import { planRingFusePlacement } from './ringFusePlacement'
 import { buildRingFuseFragmentFrame, buildRingFuseTargetFrame } from './ringFuseGeometry'
-import { buildRingFuseOrderOverride } from './ringFuseKekule'
+import { buildRingFuseOrderOverrideCandidates, ringFuseMinAddedOrders } from './ringFuseKekule'
 import { buildRingFuseSkipSet, resolveRingFuseTarget, validateRingFuseSharedValence } from './ringFuseRules'
 import { getFragmentAtom, resolveFragmentBondAttachment } from './fragmentGuards'
 
@@ -40,10 +40,28 @@ export function fuseFragmentOnBond(
   if (!fragmentFrame) return { ok: false, reason: '模板几何异常' }
   const targetFrame = buildRingFuseTargetFrame(mol, target.targetAtom1, target.targetAtom2)
 
-  const orderOverride = buildRingFuseOrderOverride(frag, f1i, f2i, target.bond.order, isH)
+  // 凯库勒交替给出两个相位候选（首选在前）：目标是凯库勒单键时首选相位
+  // 可能让共享原子超价，由 remapAndMergeBonds 的键级和校验拒绝、备选相位顶上。
+  const overridePhases = buildRingFuseOrderOverrideCandidates(frag, f1i, f2i, target.bond.order, isH)
+  const addedOrders = ringFuseMinAddedOrders(frag, f1i, f2i, overridePhases, isH)
 
-  // 方向自动探索：交换共享边端点并尝试两侧，共四种构型。优先零合并的
-  // 干净并环（外侧），其次才是合并式并环（凹区拼稠环，如菲 bay → 芘）。
+  // 端点交换会让共享原子映射到 f1 或 f2 —— 预检取两端新增键级的较小值，避免误拒
+  const minAddedOrder = Math.min(addedOrders.atF1, addedOrders.atF2)
+  const addedOrderByAtomId = new Map<string, number>([
+    [target.targetAtom1.id, minAddedOrder],
+    [target.targetAtom2.id, minAddedOrder],
+  ])
+  // 快速失败：连最小新增键级都放不下 → 友好报错（合并式并环共享原子可能
+  // 不新增连接，所以真正的裁决在拓扑装配的最终键级和校验里）
+  const sharedValenceError = validateRingFuseSharedValence(
+    mol,
+    [target.targetAtom1, target.targetAtom2],
+    addedOrderByAtomId,
+  )
+
+  // 方向自动探索：交换共享边端点并尝试两侧，共四种共面构型（sp3 稠合时
+  // 再绕共享键滚转采样）。优先零合并的干净并环（外侧），其次才是合并式
+  // 并环（凹区拼稠环，如菲 bay → 芘）。
   const candidate = planRingFusePlacement({
     molecule: mol,
     fragment: frag,
@@ -61,18 +79,18 @@ export function fuseFragmentOnBond(
     targetMidpoint: targetFrame.midpoint,
     targetAxis1: targetFrame.axis1,
     preferredTargetAxis2: targetFrame.preferredAxis2,
-    orderOverride,
+    orderOverride: overridePhases[0] ?? new Map<string, 1 | 2 | 3>(),
+    orderOverrideAlternatives: overridePhases.slice(1),
     atomById,
   })
-  if (!candidate) return { ok: false, reason: '该键两侧空间都放不下新环' }
+  if (!candidate) {
+    return { ok: false, reason: sharedValenceError ?? '该键两侧空间都放不下新环' }
+  }
   // 没有几何合并时，共享端点必然各新增一条连接，可做严格键价检查。
-  // peri 路径会把模板原子合并到现有原子，必须由最终拓扑检查决定。
-  if (candidate.mergeCount === 0) {
-    const valenceError = validateRingFuseSharedValence(
-      mol,
-      [target.targetAtom1, target.targetAtom2],
-    )
-    if (valenceError) return { ok: false, reason: valenceError }
+  // peri/bay 路径会把模板原子合并到现有原子（共享原子未必新增连接），
+  // 它们由 remapAndMergeBonds 的最终键级和校验裁决。
+  if (candidate.mergeCount === 0 && sharedValenceError) {
+    return { ok: false, reason: sharedValenceError }
   }
   return { ok: true, molecule: candidate.molecule }
 }

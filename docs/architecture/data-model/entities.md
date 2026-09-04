@@ -53,7 +53,7 @@
 | 可变性 | **不可变**。被 Job 引用后永不原地更新；新参数或 schema 创建新 Spec。 |
 | 关系 | 1:N 被 Job 引用。 |
 
-`payload` 只保存方法、收敛阈值、输入端口 schema 等静态配置。分子、上游 Artifact 和每次运行不同的值属于 `JobInputBinding`。SQLite 可以把 payload 中的常用 `method` 和参数拆列/拆 JSON 保存，但 API 语义不变。`specDigest` 对规范化 Spec JSON 求 SHA-256，可用于去重和缓存，但不替代 ID。
+`payload` 只保存方法、收敛阈值、输入端口 schema 等静态配置。分子、上游 Artifact 和每次运行不同的值属于 `JobInputSnapshot`。SQLite 可以把 payload 中的常用 `method` 和参数拆列/拆 JSON 保存，但 API 语义不变。`specDigest` 对规范化 Spec JSON 求 SHA-256，可用于去重和缓存，但不替代 ID。
 
 ## Job
 
@@ -63,7 +63,7 @@
 | --- | --- |
 | ID | `jobId`；迁移后保留当前格式，新实现仍按不透明字符串处理 |
 | 核心字段 | `specId`、`status`、`name?`、`createdAt`、`queuedAt?`、`startedAt?`、`finishedAt?`、`updatedAt`、`errorCode?`、`errorMessage?`、`stateVersion`、`supersedesJobId?` |
-| 可变性 | 身份、Spec 和创建时间不可变；schema 4 正式提交中的 `created` 是 create → bind → queue 事务内状态，不提供原地改写 Binding 的窗口；进入 `queued` 后仅状态、租约、进度和终止信息可按状态机更新。 |
+| 可变性 | 身份、Spec 和创建时间不可变；schema 4 正式提交中的 `created` 是 create → freeze → queue 事务内状态，不提供原地改写 Snapshot 的窗口；进入 `queued` 后仅状态、租约、进度和终止信息可按状态机更新。 |
 | 关系 | N:1 引用 `CalculationSpec`；1:N 拥有绑定和产物；可属于多个 Workflow。 |
 
 约束：
@@ -75,18 +75,18 @@
 - 计算输出只在 `running` 中登记；终态后不得覆盖。额外派生结果应由新 Job 产生并引用原 Artifact。
 - 当前 `task_type` 和 `metadata.request` 在 v1 迁移时投影为 Spec；过渡期 API 可继续返回旧字段。
 
-## JobInputBinding
+## JobInputSnapshot
 
-`JobInputBinding` 是目标输入端口到**具体不可变值**的绑定。它回答“这次 Job 实际读取了什么”，不回答“工作流原本想从哪里取”。
+`JobInputSnapshot` 是某次 Job 排队时冻结的**具体不可变输入事实**。它回答“这次 Job 实际读取了什么”，不回答“工作流原本想从哪里取”。
 
-> **实施状态：xTB 主路径已实现。** Binding 的 SQL/模型支持三类来源；xTB 端口接受规范 Molecule Revision，排队时冻结 ID 与摘要，runner 执行前重新校验内容。其他计算引擎仍需各自注册端口契约。完整契约见 [JobInputBinding 设计](./bindings.md)。
+> **实施状态：xTB 主路径已实现。** Snapshot 的 SQL/模型支持三类来源；xTB 端口接受规范 Molecule Revision，排队时冻结 ID 与摘要，runner 执行前重新校验内容。其他计算引擎仍需各自注册端口契约。完整契约见 [JobInputSnapshot 设计](./input-snapshots.md)。
 
 | 项 | 定义 |
 | --- | --- |
 | ID | `jobInputBindingId`，建议 `binding_<ULID>` |
 | 核心字段 | `bindingId`、`jobId`、`inputName`、`sourceKind`、`literalJson?`、`moleculeRevisionId?`、`artifactId?`、`contentSha256`、`resolvedFromReferenceId?`、`createdAt` |
-| 可变性 | Binding 创建后不可更新；正式提交在同一事务中创建 Job、绑定输入并进入 `queued`。输入变化创建新 Job。 |
-| 关系 | N:1 属于 Job；按来源可选引用一个 Revision 或 Artifact；可追溯到一个 `JobInputReference`。 |
+| 可变性 | Snapshot 创建后不可更新；正式提交在同一事务中创建 Job、冻结输入并进入 `queued`。输入变化创建新 Job。 |
+| 关系 | N:1 属于 Job；按来源可选引用一个 Revision 或 Artifact；可追溯到一个 `WorkflowInputLink`。 |
 
 必须满足异或约束：
 
@@ -120,9 +120,9 @@
 
 当前 `artifacts.path` 是任务目录相对路径，既非内容身份也非稳定 API。其迁移和缺失文件处理见 [migration-v1.md](./migration-v1.md)。
 
-## JobInputReference
+## WorkflowInputLink
 
-`JobInputReference` 是 Workflow 中的设计时依赖边，将目标 Job 的命名输入端口指向上游 Job 的命名来源。
+`WorkflowInputLink` 是 Workflow 中的设计时数据边，将目标 Job 的命名输入端口连接到上游 Job 的命名来源。
 
 | 项 | 定义 |
 | --- | --- |
@@ -147,7 +147,7 @@
 | ID | `workflowId`；保留当前格式，新记录建议 `workflow_<ULID>` |
 | 核心字段 | `name`、`version`、`createdAt`、`updatedAt`；成员顺序保存在关联表 |
 | 可变性 | **可变聚合根**。保存时整图校验并令 `version + 1`；已排队 Job 的绑定不可随图更新。 |
-| 关系 | M:N 包含 Job；1:N 拥有 `JobInputReference`。 |
+| 关系 | M:N 包含 Job；1:N 拥有 `WorkflowInputLink`。 |
 
 成员列表顺序只用于稳定展示和同层节点排序，执行顺序必须由 DAG 拓扑排序得到。更新 Workflow 不得删除 Job 本身，也不得改写 Job 的状态、绑定或 Artifact。
 
@@ -161,7 +161,7 @@ flowchart TD
     F -->|是且边改变| R
     F -->|否| C["提交成员与引用，version + 1"]
 
-    Q["Job 请求进入 queued"] --> B{"所有必需端口已有具体 Binding？"}
+    Q["Job 请求进入 queued"] --> B{"所有必需端口已有具体 Snapshot？"}
     B -->|否| R2["保持 created 并返回校验错误"]
     B -->|是| I{"Revision / Artifact 存在且完整？"}
     I -->|否| R2

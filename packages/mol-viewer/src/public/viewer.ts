@@ -1,5 +1,16 @@
 export { default as MolViewer } from '../components/viewer/MolViewer'
-export type { InteractionMode, MolViewerProps } from '../components/viewer/MolViewer'
+export type {
+  BondPairGizmoConfig,
+  BondPairGizmoError,
+  BondPairGizmoErrorCode,
+  BondPairGizmoMode,
+  BondPairGizmoPhase,
+  BondPairGizmoValue,
+  InteractionMode,
+  MolViewerProps,
+  ReactionHighlight,
+  ReactionHighlightKind,
+} from '../components/viewer/MolViewer'
 export {
   createViewerRuntime,
   defaultViewerRuntime,
@@ -28,3 +39,5 @@ export {
   setViewportAxesVisible,
   setViewportGridVisible,
 } from '../viewport'
+export { useViewportStore } from '../store/viewportStore'
+export type { ViewportUiState } from '../store/viewportStore'

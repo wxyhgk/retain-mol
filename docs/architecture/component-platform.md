@@ -15,19 +15,18 @@
 ## 组件三层
 
 ```text
-components/ui
+@retainmol/ui-kit(app 侧 components/ui、components/data 为兼容薄壳)
   无业务语义的按钮、对话框、输入框、标签页
+  DataTable、VirtualList 等通用数据展示与交互
 
-components/data
-  DataTable、VirtualList、FileDropzone、AsyncBoundary、ChartFrame
-  只负责通用数据展示与交互
-
-features/*/components
+features/*/components 或 @retainmol/jobs 等 feature 包
   JobCard、XtbJobForm、AnalysisWorkspace、WorkflowCanvas
   组合领域状态、应用命令和共享组件
 ```
 
-依赖方向只能从 Feature 指向共享组件。`components/ui` 和 `components/data` 不能反向导入 Feature。
+依赖方向只能从 Feature 指向共享组件。`@retainmol/ui-kit` 不能反向导入 Feature 或业务包。
+
+任务管理已整体迁入 `@retainmol/jobs` 包(domain/application/infrastructure/model/components 五层原样保留),分子资产能力在 `@retainmol/molecule-assets` 包;app 通过两者的包根导入使用,`apps/retainmol/src/features/jobs` 目录已删除。
 
 ## 第三方 Adapter
 
@@ -35,8 +34,8 @@ features/*/components
 
 | 库 | 入口 |
 |---|---|
-| `@tanstack/react-table` | `components/data/DataTable.tsx` |
-| `react-virtuoso` | `components/data/VirtualList.tsx` |
+| `@tanstack/react-table` | `@retainmol/ui-kit` 的 DataTable |
+| `react-virtuoso` | `@retainmol/ui-kit` 的 VirtualList |
 | `react-dropzone` | `components/data/FileDropzone.tsx` |
 | `echarts` | `features/analysis/infrastructure/echartsAdapter.ts` |
 | `@xyflow/react` | `features/workflows/components/WorkflowCanvas.tsx` |
@@ -59,7 +58,7 @@ Analyze 工作区读取已完成任务的轨迹 Artifact。ECharts 只渲染后�
 
 ### 跨任务工作流
 
-React Flow 只编辑 Job DAG。边被持久化为 `JobInputReference`，引用来源 Job 的命名 Input 或 Artifact。分子结构本身仍由 `mol-viewer` 管理，不能存入 React Flow 节点状态。
+React Flow 只编辑 Job DAG。边被持久化为 `WorkflowInputLink`，连接来源 Job 的命名 Input 或 Artifact。分子结构本身仍由 `mol-viewer` 管理，不能存入 React Flow 节点状态。
 
 ### 协作
 

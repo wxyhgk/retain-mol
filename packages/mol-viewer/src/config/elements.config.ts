@@ -107,18 +107,31 @@ export function getElementConfig(symbol: string): ElementConfig {
  * （不改变任何已有分子的行为）。
  *
  * 规则：
- *  - 有孤对电子的元素（价电子 > maxBonds，如 N/O/S/P）：正电荷 +q（用一对孤对
+ *  - 有孤对电子的元素（价电子 > maxBonds，如 N/O/卤素）：正电荷 +q（用一对孤对
  *    成键，NH₃→NH₄⁺）、负电荷 −|q|（多一对孤对，H₂O→OH⁻）
- *  - 缺电子/无余电子元素（价电子 == maxBonds，如 C/B/H/Si）：±电荷都占用一个
- *    价位，−|q|（碳正/碳负离子都是 3 键）
+ *  - 缺电子/无余电子元素（价电子 <= maxBonds，如 B/Al/C/Si/H）：
+ *    · 阳离子：每失一个电子少一个成键位（CH₄ 设 +1 → CH₃⁺）
+ *    · 阴离子（仅主族 maxBonds <= 4 的元素走此支）：按轨道占据算——每得一个
+ *      电子先填一个空轨道【增加】一个成键位（B⁻→4，BH₄⁻/硼酸酯），轨道半满
+ *      （电子数 == 杂化轨道数 4，H/He 为 1）后再得的电子成孤对【减少】成键位
+ *      （C⁻→3，CH₃⁻）；即 min(电子数, 2×轨道数 − 电子数)，天然封顶于轨道数
+ *    · 超价/过渡金属（maxBonds > 4）阴离子不套轨道模型，维持 −|q| 旧语义
  *  - 每个未配对电子（自由基）占一个价位
- * 注：硼负离子（BH₄⁻ 应为 4 键）等电子缺陷体系此启发式偏保守，非常见手搭场景。
  */
 export function effectiveMaxBonds(symbol: string, charge = 0, radical = 0): number {
   const el = getElementConfig(symbol)
   const hasLonePair = el.valenceElectrons > el.maxBonds
-  const chargeShift = hasLonePair ? charge : -Math.abs(charge)
-  return Math.max(0, el.maxBonds + chargeShift - Math.abs(radical))
+  let bonds: number
+  if (hasLonePair) {
+    bonds = el.maxBonds + charge
+  } else if (charge < 0 && el.maxBonds <= 4) {
+    const orbitals = el.atomicNumber >= 1 && el.atomicNumber <= 2 ? 1 : 4
+    const electrons = el.valenceElectrons - charge
+    bonds = Math.min(electrons, 2 * orbitals - electrons)
+  } else {
+    bonds = el.maxBonds - Math.abs(charge)
+  }
+  return Math.max(0, bonds - Math.abs(radical))
 }
 
 export const COMMON_ELEMENT_SYMBOLS = ['H', 'C', 'N', 'O', 'F', 'P', 'S', 'Cl', 'Br', 'I', 'Si', 'B', 'Fe', 'Na', 'Ca']

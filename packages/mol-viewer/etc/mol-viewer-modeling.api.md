@@ -6,6 +6,19 @@
 
 import { z } from 'zod';
 
+// @public
+export function applyExpectedEffectCommand(molecule: Molecule, command: ExpectedEffectSupportedCommand): ApplyExpectedEffectCommandResult;
+
+// @public (undocumented)
+export type ApplyExpectedEffectCommandResult = {
+    readonly ok: true;
+    readonly molecule: Molecule;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+    readonly indeterminateReason: ExpectedEffectIndeterminateReason;
+};
+
 // @public (undocumented)
 export interface Atom {
     readonly charge?: number;
@@ -43,8 +56,99 @@ export interface Bond {
     readonly order: 1 | 2 | 3;
 }
 
+// @public (undocumented)
+export interface CanonicalAtomSnapshot {
+    // (undocumented)
+    readonly charge: number | null;
+    // (undocumented)
+    readonly coordinationDirections: readonly (readonly [number, number, number])[];
+    // (undocumented)
+    readonly coordinationGeometry: string | null;
+    // (undocumented)
+    readonly coordinationNumber: number | null;
+    // (undocumented)
+    readonly coordinationSites: readonly CanonicalCoordinationSite[];
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string | null;
+    // (undocumented)
+    readonly radical: number | null;
+    // (undocumented)
+    readonly symbol: string;
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+    // (undocumented)
+    readonly z: number;
+}
+
+// @public (undocumented)
+export interface CanonicalBondSnapshot {
+    // (undocumented)
+    readonly aromatic: boolean;
+    // (undocumented)
+    readonly atomId1: string;
+    // (undocumented)
+    readonly atomId2: string;
+    // (undocumented)
+    readonly coordinationSites: readonly CanonicalCoordinationSiteAssignment[];
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly order: 1 | 2 | 3;
+}
+
+// @public (undocumented)
+export interface CanonicalCoordinationSite {
+    // (undocumented)
+    readonly bondOrder: 1 | 2 | 3;
+    // (undocumented)
+    readonly direction: readonly [number, number, number];
+    // (undocumented)
+    readonly equivalenceGroup: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string;
+}
+
+// @public (undocumented)
+export interface CanonicalCoordinationSiteAssignment {
+    // (undocumented)
+    readonly atomId: string;
+    // (undocumented)
+    readonly siteId: string;
+}
+
+// @public (undocumented)
+export interface CanonicalMoleculeSnapshot {
+    // (undocumented)
+    readonly atoms: readonly CanonicalAtomSnapshot[];
+    // (undocumented)
+    readonly bonds: readonly CanonicalBondSnapshot[];
+    // (undocumented)
+    readonly name: string | null;
+}
+
 // @public
 export function commitEditPlan(input: EditPlan | unknown, runtime?: ViewerRuntime): ModelingCommitResult;
+
+// @public (undocumented)
+export function commitSelectedBondFragmentFusion(input: SelectedBondFragmentFusionCommitInput, runtime?: ViewerRuntime): SelectedBondFragmentFusionCommitResult;
+
+// @public
+export function compareExpectedEffect(expected: ExpectedEffectCompileResult, actual: ModelingEffectReceipt): ExpectedEffectComparison;
+
+// @public
+export function compileExpectedEffect(molecule: Molecule, plan: Pick<EditPlan, 'planId' | 'commands'>): ExpectedEffectCompileResult;
+
+// @public (undocumented)
+export function computeCanonicalMoleculeDigest(molecule: Molecule): string;
+
+// @public
+export function computeCanonicalSnapshotDigest(snapshot: CanonicalMoleculeSnapshot): string;
 
 // @public
 export function computeMoleculeRevision(molecule: Molecule): string;
@@ -73,6 +177,12 @@ export interface CoordinationSiteAssignment {
     // (undocumented)
     readonly siteId: string;
 }
+
+// @public (undocumented)
+export function createCanonicalEffectChanges(before: CanonicalMoleculeSnapshot, after: CanonicalMoleculeSnapshot): ExpectedEffectChanges;
+
+// @public
+export function createCanonicalMoleculeSnapshot(molecule: Molecule): CanonicalMoleculeSnapshot;
 
 // @public
 export function createHeadlessModelingContext(input: Molecule, options?: HeadlessModelingOptions): ModelingContext;
@@ -260,6 +370,107 @@ export const editPlanSchema: z.ZodObject<{
     }, z.core.$strict>], "kind">>;
 }, z.core.$strict>;
 
+// @public (undocumented)
+export const EXPECTED_EFFECT_SCHEMA_VERSION: 1;
+
+// @public (undocumented)
+export const EXPECTED_EFFECT_SEMANTICS: Readonly<Record<"atom.add" | "atom.replace" | "atom.remove" | "atom.move" | "atom.setCharge" | "atom.setRadical" | "atom.addHydrogen" | "bond.add" | "bond.remove" | "bond.setOrder" | "fragment.attach" | "fragment.bridge" | "fragment.fuse" | "geometry.setBondLength" | "geometry.setBondAngle" | "geometry.setDihedral" | "geometry.rotateGroup", ExpectedEffectSemanticsSupport>>;
+
+// @public (undocumented)
+export const EXPECTED_EFFECT_SUPPORTED_COMMAND_KINDS: readonly ["atom.add", "atom.replace", "atom.remove", "atom.move", "bond.add", "bond.remove", "bond.setOrder"];
+
+// @public (undocumented)
+export interface ExpectedEffect extends ModelingEffectReceipt {
+    // (undocumented)
+    readonly baseSnapshot: CanonicalMoleculeSnapshot;
+    // (undocumented)
+    readonly finalSnapshot: CanonicalMoleculeSnapshot;
+    // (undocumented)
+    readonly status: 'compiled';
+}
+
+// @public (undocumented)
+export interface ExpectedEffectChanges {
+    // (undocumented)
+    readonly atoms: readonly ExpectedEffectEntityChange<CanonicalAtomSnapshot>[];
+    // (undocumented)
+    readonly bonds: readonly ExpectedEffectEntityChange<CanonicalBondSnapshot>[];
+}
+
+// @public (undocumented)
+export type ExpectedEffectComparison = {
+    readonly verdict: 'pass';
+    readonly mismatches: readonly [];
+} | {
+    readonly verdict: 'reject';
+    readonly mismatches: readonly ExpectedEffectMismatch[];
+} | {
+    readonly verdict: 'indeterminate';
+    readonly reason: ExpectedEffectIndeterminateReason;
+    readonly message: string;
+    readonly mismatches: readonly [];
+};
+
+// @public (undocumented)
+export type ExpectedEffectCompileResult = ExpectedEffect | ExpectedEffectIndeterminate;
+
+// @public (undocumented)
+export interface ExpectedEffectEntityChange<T> {
+    // (undocumented)
+    readonly after: T | null;
+    // (undocumented)
+    readonly before: T | null;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public (undocumented)
+export interface ExpectedEffectIndeterminate {
+    // (undocumented)
+    readonly commandId?: string;
+    // (undocumented)
+    readonly commandIndex?: number;
+    // (undocumented)
+    readonly commandKind?: ModelingCommandKind;
+    // (undocumented)
+    readonly message: string;
+    // (undocumented)
+    readonly reason: ExpectedEffectIndeterminateReason;
+    // (undocumented)
+    readonly status: 'indeterminate';
+    // (undocumented)
+    readonly unsupportedCommandKinds?: readonly ModelingCommandKind[];
+}
+
+// @public (undocumented)
+export type ExpectedEffectIndeterminateReason = 'unsupported-effect-semantics' | 'invalid-effect-input';
+
+// @public (undocumented)
+export interface ExpectedEffectMismatch {
+    // (undocumented)
+    readonly code: ExpectedEffectMismatchCode;
+    // (undocumented)
+    readonly commandId?: string;
+    // (undocumented)
+    readonly commandIndex?: number;
+    // (undocumented)
+    readonly message: string;
+}
+
+// @public (undocumented)
+export type ExpectedEffectMismatchCode = 'schema-version-mismatch' | 'plan-id-mismatch' | 'base-digest-mismatch' | 'final-digest-mismatch' | 'missing-command-receipt' | 'extra-command-receipt' | 'command-order-mismatch' | 'command-kind-mismatch' | 'pre-digest-mismatch' | 'post-digest-mismatch' | 'atom-changes-mismatch' | 'bond-changes-mismatch';
+
+// @public (undocumented)
+export type ExpectedEffectSemanticsSupport = 'supported' | 'unsupported';
+
+// @public (undocumented)
+export type ExpectedEffectSupportedCommand = Extract<ModelingCommand, {
+    readonly kind: ExpectedEffectSupportedCommandKind;
+}>;
+
+// @public (undocumented)
+export type ExpectedEffectSupportedCommandKind = typeof EXPECTED_EFFECT_SUPPORTED_COMMAND_KINDS[number];
+
 // @public
 export function getModelingContext(runtime?: ViewerRuntime): ModelingContext;
 
@@ -280,6 +491,9 @@ export interface HeadlessModelingOptions {
         readonly bondIds?: readonly string[];
     };
 }
+
+// @public (undocumented)
+export function isExpectedEffectCommandSupported(kind: ModelingCommandKind): kind is ExpectedEffectSupportedCommand['kind'];
 
 // @public (undocumented)
 export const MODELING_COMMAND_KINDS: readonly ["atom.add", "atom.replace", "atom.remove", "atom.move", "atom.setCharge", "atom.setRadical", "atom.addHydrogen", "bond.add", "bond.remove", "bond.setOrder", "fragment.attach", "fragment.bridge", "fragment.fuse", "geometry.setBondLength", "geometry.setBondAngle", "geometry.setDihedral", "geometry.rotateGroup"];
@@ -404,6 +618,20 @@ export interface ModelingCommandBase {
     readonly commandId: string;
     // (undocumented)
     readonly kind: ModelingCommandKind;
+}
+
+// @public (undocumented)
+export interface ModelingCommandEffectReceipt {
+    // (undocumented)
+    readonly changes: ExpectedEffectChanges;
+    // (undocumented)
+    readonly commandId: string;
+    // (undocumented)
+    readonly kind: ModelingCommandKind;
+    // (undocumented)
+    readonly postDigest: string;
+    // (undocumented)
+    readonly preDigest: string;
 }
 
 // @public (undocumented)
@@ -584,6 +812,20 @@ export interface ModelingEditorIntentContext {
 }
 
 // @public (undocumented)
+export interface ModelingEffectReceipt {
+    // (undocumented)
+    readonly baseDigest: string;
+    // (undocumented)
+    readonly commands: readonly ModelingCommandEffectReceipt[];
+    // (undocumented)
+    readonly finalDigest: string;
+    // (undocumented)
+    readonly planId: string;
+    // (undocumented)
+    readonly schemaVersion: typeof EXPECTED_EFFECT_SCHEMA_VERSION;
+}
+
+// @public (undocumented)
 export interface ModelingIssue {
     // (undocumented)
     readonly code: ModelingIssueCode;
@@ -680,8 +922,110 @@ export interface Molecule {
 // @public (undocumented)
 export function parseEditPlan(input: unknown): EditPlanParseResult;
 
+// @public (undocumented)
+export function previewSelectedBondFragmentFusion(input: SelectedBondFragmentFusionPreviewInput, runtime?: ViewerRuntime): SelectedBondFragmentFusionPreviewResult;
+
 // @public
 export function replayEditPlan(molecule: Molecule, input: EditPlan | unknown, options?: HeadlessModelingOptions): ModelingDryRunResult;
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionCandidate {
+    // (undocumented)
+    readonly coordinatesStale: true;
+    // (undocumented)
+    readonly flippedAnchors: readonly boolean[];
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly molecule: Molecule;
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionCommitInput extends SelectedBondFragmentFusionPreviewInput {
+    // (undocumented)
+    readonly candidateKey: string;
+    // (undocumented)
+    readonly selectionVersion: number;
+    // (undocumented)
+    readonly targetObjectId: string;
+}
+
+// @public (undocumented)
+export type SelectedBondFragmentFusionCommitResult = SelectedBondFragmentFusionCommitSuccess | SelectedBondFragmentFusionFailure;
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionCommitSuccess {
+    // (undocumented)
+    readonly coordinatesStale: true;
+    // (undocumented)
+    readonly effect: SelectedBondFragmentFusionEffect;
+    // (undocumented)
+    readonly molecule: Molecule;
+    // (undocumented)
+    readonly ok: true;
+    // (undocumented)
+    readonly selectedTopologyKey: string;
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionDiagnostic {
+    // (undocumented)
+    readonly code: string;
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionEffect {
+    // (undocumented)
+    readonly addedAtomIds: readonly string[];
+    // (undocumented)
+    readonly addedBondIds: readonly string[];
+    // (undocumented)
+    readonly removedAtomIds: readonly string[];
+    // (undocumented)
+    readonly removedBondIds: readonly string[];
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionFailure {
+    // (undocumented)
+    readonly code: SelectedBondFragmentFusionFailureCode;
+    // (undocumented)
+    readonly ok: false;
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public (undocumented)
+export type SelectedBondFragmentFusionFailureCode = 'no-editable-active-molecule' | 'requires-two-selected-bonds' | 'selection-changed' | 'target-object-changed' | 'candidate-not-found' | 'stale-host' | 'candidate-no-longer-valid' | 'concurrent-store-change';
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionPreview {
+    // (undocumented)
+    readonly candidates: readonly SelectedBondFragmentFusionCandidate[];
+    // (undocumented)
+    readonly ok: true;
+    // (undocumented)
+    readonly rejected: readonly SelectedBondFragmentFusionDiagnostic[];
+    // (undocumented)
+    readonly selectionVersion: number;
+    // (undocumented)
+    readonly targetObjectId: string;
+}
+
+// @public (undocumented)
+export interface SelectedBondFragmentFusionPreviewInput {
+    // (undocumented)
+    readonly fragment: Molecule;
+    // (undocumented)
+    readonly fragmentBondIds: readonly [string, string];
+    // (undocumented)
+    readonly reconcileHydrogens?: boolean;
+}
+
+// @public (undocumented)
+export type SelectedBondFragmentFusionPreviewResult = SelectedBondFragmentFusionPreview | SelectedBondFragmentFusionFailure;
 
 // @public
 export function validateModelingCommandConstraints(command: ModelingCommand, constraints: ModelingConstraints | undefined): ModelingIssue | null;

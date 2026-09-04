@@ -11,6 +11,11 @@ import type { MolClipboard } from '../../lib/types'
 import type { SceneObject } from '../../lib/sceneObject'
 import type { UndoTransactionHandle } from '../contracts/transaction'
 import type { EditCommandResult } from '../../lib/builder/commands/shared'
+import type {
+  AlignBondPairDiagnostics,
+  AlignBondPairFailureCode,
+  AlignBondPairInput,
+} from '../../lib/builder/geometry/bondPairAlignment'
 
 // ── 场景 slice ──────────────────────────────────────────────────────────────
 export interface SceneSlice {
@@ -42,6 +47,7 @@ export interface SelectionSlice {
   selectAtom:     (id: string, multi?: boolean) => void
   selectAtoms:    (ids: Iterable<string>, mode?: 'replace' | 'add' | 'subtract') => void
   selectBond:     (id: string, multi?: boolean) => void
+  setSelection:   (atomIds: Iterable<string>, bondIds: Iterable<string>) => void
   clearSelection: () => void
 }
 
@@ -72,6 +78,9 @@ export interface EditSlice {
   setBondLength:          (aId: string, bId: string, length: number) => { ok: boolean; reason?: string }
   setBondAngle:           (aId: string, bId: string, cId: string, deg: number) => { ok: boolean; reason?: string }
   setDihedralAngle:       (aId: string, bId: string, cId: string, dId: string, deg: number) => { ok: boolean; reason?: string }
+  alignBondPair:          (input: AlignBondPairInput) =>
+    | { ok: true; diagnostics: AlignBondPairDiagnostics }
+    | { ok: false; code: AlignBondPairFailureCode; reason: string }
   autoInferBonds:         () => void
   addHydrogens:           (atomId?: string) => void
   /** 力场几何清理（MMFF94）：弛豫坐标到物理合理（一步 undo，不动拓扑）。返回是否成功 */

@@ -125,6 +125,28 @@ export const DEFAULT_MEASURE_STYLE: MeasureStyle;
 // @public (undocumented)
 export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe' | 'tube' | 'mtube';
 
+// @public
+export interface EditorHostPort {
+    // (undocumented)
+    readonly clearSelection: () => void;
+    // (undocumented)
+    readonly getSnapshot: () => EditorHostSnapshot;
+    // (undocumented)
+    readonly notify: (message: string) => void;
+    // (undocumented)
+    readonly replaceActiveMolecule: (molecule: Molecule) => string;
+    // (undocumented)
+    readonly subscribe: (listener: () => void) => () => void;
+}
+
+// @public
+export interface EditorHostSnapshot {
+    // (undocumented)
+    readonly activeMolecule: Molecule | null;
+    // (undocumented)
+    readonly activeObjectId: string | null;
+}
+
 // @public (undocumented)
 export interface ElementConfig {
     // (undocumented)

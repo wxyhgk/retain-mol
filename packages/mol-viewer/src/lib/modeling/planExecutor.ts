@@ -275,6 +275,7 @@ function executeCommand(state: WorkingState, command: ModelingCommand): CommandE
         command.position.y,
         command.position.z,
       )
+      if (result.ok === false) return { ok: false, reason: result.reason }
       const molecule = renameAddedAtom(state.molecule, result.molecule, command.atomId)
       return molecule
         ? { ok: true, changed: true, state: { ...state, molecule } }

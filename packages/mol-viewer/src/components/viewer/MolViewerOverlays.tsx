@@ -9,6 +9,13 @@ import BondLengthGizmo from './BondLengthGizmo'
 import BoxSelectOverlay from './BoxSelectOverlay'
 import MeasureOverlay from './MeasureOverlay'
 import RotateGizmo from './RotateGizmo'
+import BondPairAlignmentGizmo from './BondPairAlignmentGizmo'
+import type {
+  BondPairGizmoConfig,
+  BondPairGizmoError,
+  BondPairGizmoPhase,
+  BondPairGizmoValue,
+} from '../../lib/bondPairGizmo'
 import type { BoxRect } from '../../hooks/useCanvasPointerRouter'
 import {
   canEditInInteractionMode,
@@ -21,6 +28,9 @@ interface Props {
   readonly brushArmed: boolean
   readonly interactionMode: InteractionMode
   readonly boxRect: BoxRect | null
+  readonly bondPairGizmo: BondPairGizmoConfig | undefined
+  readonly onBondPairGizmoChange: ((value: BondPairGizmoValue, phase: BondPairGizmoPhase) => void) | undefined
+  readonly onBondPairGizmoError: ((error: BondPairGizmoError) => void) | undefined
   readonly children?: ReactNode
 }
 
@@ -31,6 +41,9 @@ export function MolViewerOverlays({
   brushArmed,
   interactionMode,
   boxRect,
+  bondPairGizmo,
+  onBondPairGizmoChange,
+  onBondPairGizmoError,
   children,
 }: Props) {
   const editingEnabled = canEditInInteractionMode(interactionMode)
@@ -38,10 +51,22 @@ export function MolViewerOverlays({
     <>
       <MeasureOverlay renderer={renderer} />
       <AtomLabelOverlay renderer={renderer} />
-      <RotateGizmo renderer={renderer} readOnly={!editingEnabled} />
+      <RotateGizmo
+        renderer={renderer}
+        enabled={editingEnabled && toolCan(activeTool, 'canEdit') && !bondPairGizmo?.enabled}
+        readOnly={!editingEnabled}
+      />
+      <BondPairAlignmentGizmo
+        renderer={renderer}
+        config={bondPairGizmo}
+        enabled={Boolean(bondPairGizmo?.enabled)}
+        readOnly={interactionMode === 'read-only'}
+        onChange={onBondPairGizmoChange}
+        onError={onBondPairGizmoError}
+      />
       <BondLengthGizmo
         renderer={renderer}
-        visible={toolCan(activeTool, 'canEdit') && brushArmed}
+        enabled={toolCan(activeTool, 'canEdit') && brushArmed}
         readOnly={!editingEnabled}
       />
       <BoxSelectOverlay rect={editingEnabled ? boxRect : null} />

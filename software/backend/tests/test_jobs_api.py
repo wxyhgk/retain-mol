@@ -279,10 +279,10 @@ def test_xtb_job_can_freeze_a_molecule_revision_as_its_structure(
 
     assert response.status_code == 201
     assert response.json()["request"]["moleculeRevisionId"] == revision.revision_id
-    binding = service.get_input_bindings(response.json()["id"])[0]
-    assert binding.source_kind == "molecule_revision"
-    assert binding.molecule_revision_id == revision.revision_id
-    assert binding.content_sha256 == revision.sha256
+    snapshot = service.get_input_snapshots(response.json()["id"])[0]
+    assert snapshot.source_kind == "molecule_revision"
+    assert snapshot.molecule_revision_id == revision.revision_id
+    assert snapshot.content_sha256 == revision.sha256
 
 
 def test_psi4_frequency_job_freezes_literal_structure(monkeypatch, tmp_path) -> None:
@@ -311,9 +311,94 @@ def test_psi4_frequency_job_freezes_literal_structure(monkeypatch, tmp_path) -> 
     assert response.status_code == 201
     assert response.json()["kind"] == "psi4-frequency"
     assert response.json()["request"]["structure"] == payload["structure"]
-    binding = service.get_input_bindings(response.json()["id"])[0]
-    assert binding.source_kind == "literal"
+    snapshot = service.get_input_snapshots(response.json()["id"])[0]
+    assert snapshot.source_kind == "literal"
     assert service.get_calculation_spec(response.json()["id"]).engine == "psi4"
+
+
+def test_job_type_data_and_runs_are_available_as_read_only_resources(
+    monkeypatch, tmp_path
+) -> None:
+    service = JobService(tmp_path / "data")
+    job = service.create_calculation_job(
+        "psi4-frequency",
+        "psi4",
+        {"method": "hf", "basis": "sto-3g"},
+        inputs={
+            "structure": {
+                "sourceKind": "literal",
+                "format": "molecule",
+                "value": {
+                    "format": "molecule",
+                    "structure": {
+                        "atoms": [
+                            {"id": "h", "symbol": "H", "x": 0, "y": 0, "z": 0}
+                        ]
+                    },
+                },
+            }
+        },
+    )
+    monkeypatch.setattr(jobs_router, "_load_get_job_service", lambda: lambda: service)
+    app = FastAPI()
+    app.include_router(jobs_router.router)
+    client = TestClient(app)
+
+    type_data = client.get(f"/jobs/{job.job_id}/type-data")
+    empty_runs = client.get(f"/jobs/{job.job_id}/runs")
+    claimed = service.claim_queued_job(job.job_id)
+    assert claimed is not None
+    run = service.get_active_job_run(job.job_id)
+    runs = client.get(f"/jobs/{job.job_id}/runs")
+    detail = client.get(f"/jobs/{job.job_id}/runs/{run.run_id}")
+
+    assert type_data.status_code == 200
+    assert type_data.json()["jobType"] == "psi4-frequency"
+    assert type_data.json()["data"]["parameters"]["method"] == "hf"
+    assert empty_runs.json() == []
+    assert runs.status_code == 200
+    assert runs.json()[0]["collectorId"] == "psi4-frequency"
+    assert detail.status_code == 200
+    assert detail.json()["runId"] == run.run_id
+
+
+def test_job_run_detail_rejects_a_run_owned_by_another_job(
+    monkeypatch, tmp_path
+) -> None:
+    service = JobService(tmp_path / "data")
+    jobs = [
+        service.create_calculation_job(
+            "psi4-frequency",
+            "psi4",
+            {},
+            inputs={
+                "structure": {
+                    "sourceKind": "literal",
+                    "format": "molecule",
+                    "value": {
+                        "format": "molecule",
+                        "structure": {
+                            "atoms": [
+                                {"id": "h", "symbol": "H", "x": 0, "y": 0, "z": 0}
+                            ]
+                        },
+                    },
+                }
+            },
+        )
+        for _ in range(2)
+    ]
+    service.claim_queued_job(jobs[0].job_id)
+    run = service.get_active_job_run(jobs[0].job_id)
+    monkeypatch.setattr(jobs_router, "_load_get_job_service", lambda: lambda: service)
+    app = FastAPI()
+    app.include_router(jobs_router.router)
+
+    response = TestClient(app).get(
+        f"/jobs/{jobs[1].job_id}/runs/{run.run_id}"
+    )
+
+    assert response.status_code == 404
 
 
 def test_psi4_job_requires_exactly_one_structure_source(monkeypatch, tmp_path) -> None:

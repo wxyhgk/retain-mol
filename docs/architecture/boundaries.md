@@ -42,6 +42,52 @@ Allowed dependency direction:
 - May import public APIs from `@retainmol/mol-viewer`.
 - Should not import deep internal files from `packages/mol-viewer/src/lib/...`.
 
+### `packages/ui-kit`
+
+无业务语义的共享 UI 层(shadcn/Radix 原语、DataTable/VirtualList、`cn`、`useUiThemeStore`)。
+
+Owns:
+- `components/ui` 原语、通用数据组件、全局 UI 主题 store。
+
+Must not own:
+- 任何化学/任务业务语义。
+- 对 `@retainmol/*` 业务包(含 mol-viewer)的依赖。
+
+Rule:
+- App 与 feature 包通过 `@retainmol/ui-kit` 根导入使用;app 侧 `components/ui/*`、`components/data/{DataTable,VirtualList}`、`lib/utils.ts`、`domain/uiThemeStore.ts` 是兼容 re-export 薄壳,不再新增实现。
+
+### `packages/molecule-assets`
+
+分子资产与不可变版本的领域、API 与查询能力。
+
+Owns:
+- 资产/版本类型、canonicalize、保存与加载、React Query hooks、`MoleculeDocumentControls`。
+
+Allowed dependency direction:
+- `@retainmol/mol-viewer` 仅限 `/core`、`/state` 子入口;`@retainmol/ui-kit` 根导入。
+- 不得依赖 `@retainmol/jobs` 或 app 代码。
+
+Rule:
+- 后端地址由宿主 app 启动时通过 `configureMoleculeAssetsApiBase` 注入;包内不读 `import.meta.env`。
+- App 侧 `features/molecule-assets/index.ts` 是兼容 re-export 薄壳。
+
+### `packages/jobs`
+
+任务管理(xTB/Psi4 计算 Job)的完整 feature 能力:领域类型、API client、wire 投影、React Query 查询层、UI store、任务中心与工作区组件、shelf 3D 视图。
+
+Owns:
+- Job 生命周期 UI 与服务端状态缓存(React Query)、任务表单与校验 schema、日志/产物展示。
+- `JobsApi` 接口与其 HTTP 实现之间的 wire 投影。
+
+Allowed dependency direction:
+- `@retainmol/mol-viewer` 仅限 `/core`、`/samples`、`/state`、`/styles`、`/three`、`/viewer` 子入口。
+- `@retainmol/molecule-assets`、`@retainmol/ui-kit` 根导入。
+- 不得依赖 app 代码;app 的 workflows 编辑器通过 `SimulationWorkspace` 的 `workflowEditor` prop 注入。
+
+Rule:
+- 后端地址由宿主 app 启动时通过 `configureJobsApiBase` 注入;包内不读 `import.meta.env`。
+- 包对外 API 只从 `src/index.ts` 导出;app 不再持有 `features/jobs` 目录。
+
 ### `packages/mol-viewer/src/index.ts`
 
 Public API surface for the app and future consumers.

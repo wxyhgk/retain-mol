@@ -76,7 +76,7 @@ def _optimization_chain(service: JobService):
     return workflow, source, target
 
 
-def test_workflow_persists_references_and_returns_topological_order(tmp_path: Path) -> None:
+def test_workflow_persists_input_links_and_keeps_wire_aliases(tmp_path: Path) -> None:
     service = JobService(tmp_path / "data")
     first = service.create_job("seed")
     second = service.create_job("optimize")
@@ -91,11 +91,14 @@ def test_workflow_persists_references_and_returns_topological_order(tmp_path: Pa
     reopened = JobService(tmp_path / "data").get_workflow(workflow.workflow_id)
     assert reopened.name == "Three stage workflow"
     assert reopened.job_ids == [first.job_id, second.job_id, third.job_id]
-    assert {(reference.source_job_id, reference.target_job_id) for reference in reopened.references} == {
+    assert {(link.source_job_id, link.target_job_id) for link in reopened.input_links} == {
         (first.job_id, second.job_id),
         (second.job_id, third.job_id),
     }
-    assert validate_workflow_dag(reopened.job_ids, reopened.references) == reopened.job_ids
+    assert validate_workflow_dag(reopened.job_ids, reopened.input_links) == reopened.job_ids
+    wire_payload = reopened.model_dump(mode="json", by_alias=True)
+    assert "references" in wire_payload
+    assert "input_links" not in wire_payload
 
 
 def test_workflow_rejects_cycles_and_references_outside_membership(tmp_path: Path) -> None:
@@ -170,7 +173,7 @@ def test_workflow_artifact_reference_uses_stable_artifact_identity(tmp_path: Pat
         }],
     )
 
-    assert workflow.references[0].source_artifact_id == artifact.artifact_id
+    assert workflow.input_links[0].source_artifact_id == artifact.artifact_id
     with pytest.raises(ValueError, match="does not belong"):
         service.create_workflow(
             "invalid artifact",
@@ -205,8 +208,8 @@ def test_ts_preparation_workflow_creates_semantic_draft_and_artifact_edges(
     assert target.status == "created"
     assert workflow.job_ids == [reactant.job_id, product.job_id, target.job_id]
     assert {
-        (reference.source_artifact_id, reference.target_input_name)
-        for reference in workflow.references
+        (link.source_artifact_id, link.target_input_name)
+        for link in workflow.input_links
     } == {
         (reactant_artifact.artifact_id, "reactant"),
         (product_artifact.artifact_id, "product"),
@@ -220,8 +223,8 @@ def test_ts_preparation_workflow_creates_semantic_draft_and_artifact_edges(
     )
     assert queued.status == "queued"
     assert {
-        (binding.input_name, binding.artifact_id)
-        for binding in queued.bindings
+        (snapshot.input_name, snapshot.artifact_id)
+        for snapshot in queued.input_snapshots
     } == {
         ("reactant", reactant_artifact.artifact_id),
         ("product", product_artifact.artifact_id),
@@ -309,7 +312,7 @@ def test_workflow_scheduler_freezes_downstream_inputs_after_source_succeeds(
     advanced = service.advance_workflow_execution(workflow.workflow_id)
     assert advanced.ready_job_ids == [target.job_id]
     assert service.get_job(target.job_id).status == "queued"
-    assert service.get_input_bindings(target.job_id)[0].artifact_id == artifact.artifact_id
+    assert service.get_input_snapshots(target.job_id)[0].artifact_id == artifact.artifact_id
 
     assert service.claim_queued_job(target.job_id) is not None
     service.update_status(target.job_id, "succeeded")

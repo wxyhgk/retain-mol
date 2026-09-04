@@ -18,6 +18,25 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
+try:
+    from jobs.contracts import (
+        ArtifactInputSource,
+        CreateJobRequest,
+        InlineInputSource,
+        MoleculeRevisionInputSource,
+        list_task_contracts,
+        resolve_task_contract,
+    )
+except ModuleNotFoundError:
+    from ..jobs.contracts import (
+        ArtifactInputSource,
+        CreateJobRequest,
+        InlineInputSource,
+        MoleculeRevisionInputSource,
+        list_task_contracts,
+        resolve_task_contract,
+    )
+
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
@@ -62,7 +81,7 @@ class JobThumbnailRequest(BaseModel):
     data_url: str = Field(alias="dataUrl", min_length=1)
 
 
-class JobInputReferenceRequest(BaseModel):
+class WorkflowInputLinkRequest(BaseModel):
     """One data dependency from an upstream job to a downstream job input."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -76,13 +95,16 @@ class JobInputReferenceRequest(BaseModel):
 
 
 class WorkflowRequest(BaseModel):
-    """A durable DAG of persisted job ids and input references."""
+    """A durable DAG of persisted job ids and input links."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     name: str = Field(min_length=1)
     job_ids: list[str] = Field(alias="jobIds", min_length=1)
-    references: list[JobInputReferenceRequest] = Field(default_factory=list)
+    input_links: list[WorkflowInputLinkRequest] = Field(
+        default_factory=list,
+        alias="references",
+    )
 
 
 class TsPreparationWorkflowRequest(BaseModel):
@@ -273,6 +295,90 @@ class _JobServiceAdapter:
     async def create_job(self, definition: dict[str, Any]) -> Any:
         return await self._call("create_job", definition)
 
+    async def create_calculation(self, request: CreateJobRequest) -> Any:
+        """Adapt the stable layered request to the current execution service."""
+        task_contract = resolve_task_contract(
+            request.definition.contract.kind,
+            request.definition.contract.engine,
+            request.definition.contract.version,
+        )
+        execution = (
+            request.execution.model_dump(mode="json", by_alias=True, exclude_none=True)
+            if request.execution is not None
+            else None
+        )
+        payload = task_contract.runtime_payload(
+            request.definition.parameters,
+            charge=request.definition.system.charge,
+            multiplicity=request.definition.system.multiplicity,
+            execution=execution,
+        )
+        inputs = await self._resolve_create_inputs(request)
+        metadata = {
+            "name": request.profile.name,
+            "description": request.profile.description,
+            "tags": request.profile.tags,
+            "schemaVersion": request.schema_version,
+            "contract": request.definition.contract.model_dump(
+                mode="json", by_alias=True
+            ),
+            "requestedOutputs": [
+                output.model_dump(mode="json", by_alias=True)
+                for output in request.definition.outputs
+            ],
+            "execution": execution or {},
+        }
+        job = await self._call(
+            "create_calculation_job",
+            task_contract.runtime_kind,
+            request.definition.contract.engine,
+            payload,
+            inputs=inputs,
+            metadata=metadata,
+        )
+        job_id = _job_id(job)
+        if not job_id:
+            raise RuntimeError("The jobs service returned a calculation without an id")
+        return await self.get_job(job_id)
+
+    async def _resolve_create_inputs(
+        self, request: CreateJobRequest
+    ) -> dict[str, dict[str, Any]]:
+        inputs: dict[str, dict[str, Any]] = {}
+        for port, source in request.inputs.ports.items():
+            if isinstance(source, InlineInputSource):
+                inputs[port] = {
+                    "sourceKind": "literal",
+                    "format": source.format,
+                    "value": source.value,
+                }
+                continue
+            if isinstance(source, MoleculeRevisionInputSource):
+                revision = await self._call(
+                    "get_molecule_revision", source.revision_id
+                )
+                revision_asset_id = _read_field(revision, "assetId", "asset_id")
+                if (
+                    source.molecule_id is not None
+                    and revision_asset_id != source.molecule_id
+                ):
+                    raise ValueError(
+                        f"Revision '{source.revision_id}' does not belong to molecule "
+                        f"'{source.molecule_id}'"
+                    )
+                inputs[port] = {
+                    "sourceKind": "molecule_revision",
+                    "format": "molecule",
+                    "moleculeRevisionId": source.revision_id,
+                }
+                continue
+            if isinstance(source, ArtifactInputSource):
+                artifact = await self._call("get_artifact", source.artifact_id)
+                inputs[port] = _artifact_input_descriptor(artifact)
+                continue
+            raise TypeError(f"Unsupported input source for port '{port}'")
+        return inputs
+
     async def list_jobs(self) -> Any:
         return await self._call("list_jobs")
 
@@ -308,12 +414,36 @@ class _JobServiceAdapter:
     async def list_artifacts(self, job_id: str) -> Any:
         return await self._call("list_artifacts", job_id)
 
+    async def get_job_type_data(self, job_id: str) -> Any:
+        await self.get_job(job_id)
+        return await self._call("get_job_type_data", job_id)
+
+    async def list_job_runs(self, job_id: str) -> Any:
+        await self.get_job(job_id)
+        return await self._call("list_job_runs", job_id)
+
+    async def get_job_run(self, job_id: str, run_id: str) -> Any:
+        await self.get_job(job_id)
+        try:
+            run = await self._call("get_job_run", run_id)
+        except ValueError as exc:
+            if exc.__class__.__name__ == "InvalidJobOperationError":
+                raise KeyError(run_id) from exc
+            raise
+        run_job_id = _read_field(run, "jobId", "job_id")
+        if run_job_id != job_id:
+            raise KeyError(run_id)
+        return run
+
     async def create_workflow(self, request: WorkflowRequest) -> Any:
         return await self._call(
             "create_workflow",
             request.name,
             request.job_ids,
-            [reference.model_dump(mode="json", by_alias=True) for reference in request.references],
+            [
+                link.model_dump(mode="json", by_alias=True)
+                for link in request.input_links
+            ],
         )
 
     async def create_ts_preparation_workflow(
@@ -340,7 +470,10 @@ class _JobServiceAdapter:
             workflow_id,
             request.name,
             request.job_ids,
-            [reference.model_dump(mode="json", by_alias=True) for reference in request.references],
+            [
+                link.model_dump(mode="json", by_alias=True)
+                for link in request.input_links
+            ],
         )
 
     async def get_workflow_schedule(self, workflow_id: str) -> Any:
@@ -475,6 +608,32 @@ def _job_id(job: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _read_field(value: Any, *names: str) -> Any:
+    if isinstance(value, dict):
+        for name in names:
+            if name in value:
+                return value[name]
+        return None
+    for name in names:
+        if hasattr(value, name):
+            return getattr(value, name)
+    return None
+
+
+def _artifact_input_descriptor(artifact: Any) -> dict[str, Any]:
+    artifact_id = _read_field(artifact, "artifactId", "artifact_id")
+    artifact_format = _read_field(artifact, "format")
+    if not isinstance(artifact_id, str) or not artifact_id:
+        raise ValueError("Resolved artifact has no id")
+    if not isinstance(artifact_format, str) or not artifact_format:
+        raise ValueError(f"Artifact '{artifact_id}' has no format")
+    return {
+        "sourceKind": "artifact",
+        "format": artifact_format,
+        "artifactId": artifact_id,
+    }
+
+
 def _is_xtb_optimization(job: Any) -> bool:
     if not isinstance(job, dict):
         job = jsonable_encoder(job)
@@ -552,6 +711,9 @@ def _frontend_artifact(artifact: Any) -> dict[str, Any]:
         "createdAt": payload.get("createdAt", payload.get("created_at")),
         "metadata": metadata,
     }
+    run_id = payload.get("runId", payload.get("run_id"))
+    if run_id is not None:
+        response["runId"] = run_id
     if isinstance(job_id, str) and job_id and isinstance(artifact_id, str) and artifact_id:
         response["downloadUrl"] = f"/jobs/{job_id}/artifacts/{artifact_id}/content"
     return response
@@ -633,6 +795,22 @@ async def create_job(request: JobCreateRequest) -> Any:
     """Create and persist a job definition."""
     service = _service_adapter()
     return await _run("create job", None, service.create_job(request.root))
+
+
+@router.get("/contracts")
+async def get_job_contracts() -> Any:
+    """List task contracts used by forms, workflows, and AI clients."""
+    return {"schemaVersion": 1, "contracts": list_task_contracts()}
+
+
+@router.post("/calculations", status_code=201)
+async def create_calculation_job(request: CreateJobRequest) -> Any:
+    """Create a calculation through the stable layered Job contract."""
+    service = _service_adapter()
+    job = await _run(
+        "create calculation job", None, service.create_calculation(request)
+    )
+    return _frontend_job(job)
 
 
 @router.post("/xtb/optimize", status_code=201)
@@ -906,6 +1084,42 @@ async def get_job(job_id: str = Path(min_length=1)) -> Any:
     service = _service_adapter()
     job = await _run("get job", job_id, service.get_job(job_id))
     return _frontend_job(job)
+
+
+@router.get("/{job_id}/type-data")
+async def get_job_type_data(job_id: str = Path(min_length=1)) -> Any:
+    """Return the immutable, versioned request interpreted by the JobType."""
+    service = _service_adapter()
+    return await _run(
+        "get job type data",
+        job_id,
+        service.get_job_type_data(job_id),
+    )
+
+
+@router.get("/{job_id}/runs")
+async def list_job_runs(job_id: str = Path(min_length=1)) -> Any:
+    """List concrete execution attempts for one durable Job."""
+    service = _service_adapter()
+    return await _run(
+        "list job runs",
+        job_id,
+        service.list_job_runs(job_id),
+    )
+
+
+@router.get("/{job_id}/runs/{run_id}")
+async def get_job_run(
+    job_id: str = Path(min_length=1),
+    run_id: str = Path(min_length=1),
+) -> Any:
+    """Return one execution attempt after verifying Job ownership."""
+    service = _service_adapter()
+    return await _run(
+        "get job run",
+        job_id,
+        service.get_job_run(job_id, run_id),
+    )
 
 
 @router.patch("/{job_id}")

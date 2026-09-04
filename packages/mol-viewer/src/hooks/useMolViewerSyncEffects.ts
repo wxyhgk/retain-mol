@@ -10,6 +10,13 @@ export interface ControlledSelectionSyncEffects {
   readonly getSelectionVersion: () => number
 }
 
+export interface ControlledSelectionPairSyncEffects {
+  readonly setSelection: (atomIds: Iterable<string>, bondIds: Iterable<string>) => void
+  readonly getSelectedAtomIds: () => ReadonlySet<string>
+  readonly getSelectedBondIds: () => ReadonlySet<string>
+  readonly getSelectionVersion: () => number
+}
+
 export interface ControlledSyncGuard {
   current: boolean
 }
@@ -49,6 +56,19 @@ export function commitControlledSelectedAtomsProp(
   return effects.getSelectionVersion()
 }
 
+export function commitControlledSelectionProps(
+  selectedAtomIds: ReadonlySet<string> | undefined,
+  selectedBondIds: ReadonlySet<string> | undefined,
+  effects: ControlledSelectionPairSyncEffects,
+): number | null {
+  if (selectedAtomIds === undefined && selectedBondIds === undefined) return null
+  effects.setSelection(
+    selectedAtomIds ?? effects.getSelectedAtomIds(),
+    selectedBondIds ?? effects.getSelectedBondIds(),
+  )
+  return effects.getSelectionVersion()
+}
+
 export function commitControlledMoleculePropToStore(
   molecule: Molecule | undefined,
   lastPropMolecule: Molecule | undefined,
@@ -69,6 +89,26 @@ export function commitControlledSelectedAtomsPropToStore(
     selectedAtomIds,
     {
       selectAtoms: (atomIds, mode) => getState().selectAtoms(atomIds, mode),
+      getSelectionVersion: () => getState().selectionVersion,
+    },
+  )
+}
+
+export function commitControlledSelectionPropsToStore(
+  selectedAtomIds: ReadonlySet<string> | undefined,
+  selectedBondIds: ReadonlySet<string> | undefined,
+  getState: () => Pick<
+    MoleculeState,
+    'setSelection' | 'selectedAtomIds' | 'selectedBondIds' | 'selectionVersion'
+  >,
+): number | null {
+  return commitControlledSelectionProps(
+    selectedAtomIds,
+    selectedBondIds,
+    {
+      setSelection: (atomIds, bondIds) => getState().setSelection(atomIds, bondIds),
+      getSelectedAtomIds: () => getState().selectedAtomIds,
+      getSelectedBondIds: () => getState().selectedBondIds,
       getSelectionVersion: () => getState().selectionVersion,
     },
   )

@@ -82,18 +82,21 @@ for (const sharedRoot of ['components/ui', 'components/data']) {
 
 // Heavy component libraries are isolated behind one adapter component per capability.
 const thirdPartyComponentAdapters = new Map([
-  ['@tanstack/react-table', 'components/data/DataTable.tsx'],
-  ['react-virtuoso', 'components/data/VirtualList.tsx'],
-  ['react-dropzone', 'components/data/FileDropzone.tsx'],
-  ['echarts', 'features/analysis/infrastructure/echartsAdapter.ts'],
-  ['@xyflow/react', 'features/workflows/components/WorkflowCanvas.tsx'],
+  ['@tanstack/react-table', ['components/data/DataTable.tsx']],
+  ['react-virtuoso', ['components/data/VirtualList.tsx']],
+  ['react-dropzone', ['components/data/FileDropzone.tsx']],
+  ['echarts', ['features/analysis/infrastructure/echartsAdapter.ts']],
+  ['@xyflow/react', [
+    'features/workflows/components/WorkflowCanvas.tsx',
+    'features/workflows/components/WorkflowReadOnlyCanvas.tsx',
+  ]],
 ])
 for (const file of walk(SRC_DIR)) {
   const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
   for (const specifier of collectModuleSpecifiers(readFileSync(file, 'utf8'))) {
-    for (const [packageName, allowedFile] of thirdPartyComponentAdapters) {
-      if ((specifier === packageName || specifier.startsWith(`${packageName}/`)) && rel !== allowedFile) {
-        violations.push(`${rel}: import ${specifier} through ${allowedFile}`)
+    for (const [packageName, allowedFiles] of thirdPartyComponentAdapters) {
+      if ((specifier === packageName || specifier.startsWith(`${packageName}/`)) && !allowedFiles.includes(rel)) {
+        violations.push(`${rel}: import ${specifier} through ${allowedFiles.join(' or ')}`)
       }
     }
   }
@@ -342,15 +345,23 @@ for (const file of walk(join(SRC_DIR, 'features/geometry-optimization/infrastruc
   }
 }
 
+for (const file of walk(join(SRC_DIR, 'features'))) {
+  const rel = relative(SRC_DIR, file).replaceAll('\\', '/')
+  if (!rel.includes('/infrastructure/')) continue
+  const source = readFileSync(file, 'utf8')
+  if (/\bimport\.meta\.env(?:\.|\[)/.test(source) && source.includes('VITE_RETAINMOL_BACKEND_URL')) {
+    violations.push(`${rel}: infrastructure must use injected backend URL from @/infrastructure/backendUrl instead of import.meta.env.VITE_RETAINMOL_BACKEND_URL`)
+  }
+}
+
 if (existsSync(join(SRC_DIR, 'domain/viewerAdapter.ts'))) {
   violations.push('domain/viewerAdapter.ts: use focused domain/viewer capability adapters')
 }
 
 for (const rel of [
   'components/panels/RightPanel.tsx',
-  'features/geometry/components/GeometryPanel.tsx',
-  'features/scene/components/ScenePanel.tsx',
 ]) {
+  if (!existsSync(join(SRC_DIR, rel))) continue
   const source = readFileSync(join(SRC_DIR, rel), 'utf8')
   if (/\buseMoleculeStore\s*\(\s*\)/.test(source)) {
     violations.push(`${rel}: subscribe through a focused molecule-store selector`)

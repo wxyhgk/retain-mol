@@ -137,8 +137,14 @@ class JobServiceTests(unittest.TestCase):
         self.assertEqual(copied.status, "queued")
         self.assertEqual(copied.metadata["sourceJobId"], source.job_id)
         self.assertEqual(copied.metadata["name"], "Copied")
-        self.assertEqual(copied.bindings[0].content_sha256, source.bindings[0].content_sha256)
-        self.assertNotEqual(copied.bindings[0].binding_id, source.bindings[0].binding_id)
+        self.assertEqual(
+            copied.input_snapshots[0].content_sha256,
+            source.input_snapshots[0].content_sha256,
+        )
+        self.assertNotEqual(
+            copied.input_snapshots[0].snapshot_id,
+            source.input_snapshots[0].snapshot_id,
+        )
         with self.assertRaises(InvalidJobOperationError):
             self.service.add_inputs(source.job_id, {"charge": 1})
 
@@ -183,12 +189,12 @@ class JobServiceTests(unittest.TestCase):
         self.assertEqual(retried.metadata["name"], "Second attempt")
         self.assertEqual(retried.metadata["request"]["name"], "Second attempt")
         self.assertEqual(
-            retried.bindings[0].content_sha256,
-            self.service.get_job(source.job_id).bindings[0].content_sha256,
+            retried.input_snapshots[0].content_sha256,
+            self.service.get_job(source.job_id).input_snapshots[0].content_sha256,
         )
         self.assertNotEqual(
-            retried.bindings[0].binding_id,
-            self.service.get_job(source.job_id).bindings[0].binding_id,
+            retried.input_snapshots[0].snapshot_id,
+            self.service.get_job(source.job_id).input_snapshots[0].snapshot_id,
         )
         self.assertEqual(retried.artifacts, [])
         self.assertFalse((self.data_root / "tasks" / retried.job_id / "xtb.log").exists())
@@ -337,10 +343,15 @@ class JobServiceTests(unittest.TestCase):
         self.assertEqual(persisted.status, "queued")
         self.assertEqual(persisted.state_version, 1)
         self.assertIsNotNone(persisted.queued_at)
-        self.assertEqual(len(persisted.bindings), 1)
-        self.assertEqual(persisted.bindings[0].input_name, "structure")
-        self.assertEqual(persisted.bindings[0].literal_value["structure"], payload["structure"])
-        self.assertRegex(persisted.bindings[0].content_sha256 or "", r"^[0-9a-f]{64}$")
+        self.assertEqual(len(persisted.input_snapshots), 1)
+        self.assertEqual(persisted.input_snapshots[0].input_name, "structure")
+        self.assertEqual(
+            persisted.input_snapshots[0].literal_value["structure"],
+            payload["structure"],
+        )
+        self.assertRegex(
+            persisted.input_snapshots[0].content_sha256 or "", r"^[0-9a-f]{64}$"
+        )
 
     def test_invalid_calculation_inputs_leave_no_partial_job(self) -> None:
         with self.assertRaises(InvalidJobInputError):
@@ -379,7 +390,7 @@ class JobServiceTests(unittest.TestCase):
 
         self.assertEqual(queued.status, "queued")
         self.assertEqual(queued.state_version, 1)
-        self.assertEqual(queued.bindings[0].source_kind, "literal")
+        self.assertEqual(queued.input_snapshots[0].source_kind, "literal")
 
     def test_workflow_artifact_reference_resolves_to_frozen_binding(self) -> None:
         source = self.service.create_job("xtb-optimization")
@@ -424,11 +435,13 @@ class JobServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(queued.status, "queued")
-        self.assertEqual(queued.bindings[0].source_kind, "artifact")
-        self.assertEqual(queued.bindings[0].artifact_id, artifact.artifact_id)
+        self.assertEqual(queued.input_snapshots[0].source_kind, "artifact")
         self.assertEqual(
-            queued.bindings[0].resolved_from_reference_id,
-            workflow.references[0].reference_id,
+            queued.input_snapshots[0].artifact_id, artifact.artifact_id
+        )
+        self.assertEqual(
+            queued.input_snapshots[0].resolved_from_link_id,
+            workflow.input_links[0].link_id,
         )
 
     def test_job_state_machine_rejects_skips_and_terminal_reentry(self) -> None:

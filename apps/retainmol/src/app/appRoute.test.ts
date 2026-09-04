@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   jobEditorPath,
   jobPath,
+  jobsPath,
   pathForAppRoute,
+  resolveJobsBucket,
   resolveAppRoute,
   resolveJobEditorRoute,
   resolveJobId,
@@ -20,6 +22,7 @@ describe('appRoute', () => {
     ['/workflows', 'workflows'],
     ['/editor', 'editor'],
     ['/templates/new', 'templates'],
+    ['/lab', 'lab'],
   ])('resolves %s as %s', (pathname, route) => {
     expect(resolveAppRoute(pathname)).toBe(route)
   })
@@ -58,5 +61,14 @@ describe('appRoute', () => {
       artifactId: 'artifact two',
     })
     expect(resolveJobEditorRoute('?artifactId=artifact-1')).toBeNull()
+  })
+
+  it('round-trips the jobs status bucket, treating all as the bare path', () => {
+    expect(jobsPath()).toBe('/jobs')
+    expect(jobsPath('all')).toBe('/jobs')
+    expect(jobsPath('active')).toBe('/jobs?bucket=active')
+    expect(resolveJobsBucket('?bucket=active')).toBe('active')
+    expect(resolveJobsBucket('?bucket=bogus')).toBeNull()
+    expect(resolveJobsBucket('')).toBeNull()
   })
 })

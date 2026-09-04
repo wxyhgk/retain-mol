@@ -1,4 +1,5 @@
 import type { Molecule } from '@retainmol/mol-viewer/core'
+import { resolveBackendUrl } from '@/infrastructure/backendUrl'
 
 // HTTP/SSE transport only. Store writes and task state belong to the application layer.
 
@@ -8,17 +9,12 @@ interface BrowserLocation {
 }
 
 export function resolveXtbApiBase(
-  configuredUrl: string | undefined = import.meta.env.VITE_RETAINMOL_BACKEND_URL,
+  configuredUrl: string | undefined = undefined,
   browserLocation: BrowserLocation | undefined = typeof window === 'undefined'
     ? undefined
     : window.location,
 ): string {
-  const configured = configuredUrl?.trim()
-  if (configured) return configured.replace(/\/$/, '')
-  if (browserLocation?.hostname) {
-    return `${browserLocation.protocol}//${browserLocation.hostname}:8000`
-  }
-  return 'http://127.0.0.1:8000'
+  return resolveBackendUrl(configuredUrl, browserLocation)
 }
 
 const XTB_API_BASE = resolveXtbApiBase()

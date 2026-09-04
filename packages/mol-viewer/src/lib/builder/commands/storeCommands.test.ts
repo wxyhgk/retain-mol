@@ -343,6 +343,8 @@ describe('store basic molecule commands', () => {
 
   it('adds and moves atoms through command results', () => {
     const added = runAddAtomCommand({ atoms: [], bonds: [] }, 'C', 1, 2, 3)
+    expect(added.ok).toBe(true)
+    if (!added.ok) return
     expect(added.molecule.atoms).toHaveLength(1)
     expect(added.molecule.atoms[0]).toMatchObject({ id: added.atomId, symbol: 'C', x: 1, y: 2, z: 3 })
 

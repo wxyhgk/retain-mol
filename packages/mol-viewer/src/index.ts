@@ -1,6 +1,17 @@
 // ── 组件 ─────────────────────────────────────────────────────────────────────
 export { default as MolViewer } from './components/viewer/MolViewer'
-export type { InteractionMode, MolViewerProps } from './components/viewer/MolViewer'
+export type {
+  BondPairGizmoConfig,
+  BondPairGizmoError,
+  BondPairGizmoErrorCode,
+  BondPairGizmoMode,
+  BondPairGizmoPhase,
+  BondPairGizmoValue,
+  InteractionMode,
+  MolViewerProps,
+  ReactionHighlight,
+  ReactionHighlightKind,
+} from './components/viewer/MolViewer'
 
 // ── 分子数据类型 & 工具函数 ────────────────────────────────────────────────────
 export type { Molecule, Atom, Bond } from './lib/molecule'
@@ -35,6 +46,17 @@ export type {
 export type { SelectorStoreApi, SelectorSubscribe } from './store/contracts/selectorStore'
 export type { UndoTransactionHandle } from './store/contracts/transaction'
 export type { EditCommandResult } from './lib/builder/commands/shared'
+export {
+  alignBondPair,
+  createBondPairAlignmentEditSession,
+} from './public/editing'
+export type {
+  AlignBondPairDiagnostics,
+  AlignBondPairFailureCode,
+  AlignBondPairInput,
+  AlignBondPairResult,
+  BondPairAlignmentEditSession,
+} from './public/editing'
 export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement, MolClipboard } from './lib/types'
 export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from './lib/types'
 

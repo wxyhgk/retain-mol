@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 2,
+  "coordinateScale": 1000,
+  "expected": {
+    "atoms": [
+      { "atomId": "B:core", "symbol": "B", "position": [0.0, 0.0, 0.0] },
+      { "atomId": "N:left", "symbol": "N", "position": [-1.4, 0.0, 0.3] },
+      { "atomId": "N:right", "symbol": "N", "position": [1.4, 0.0, 0.3] },
+      { "atomId": "C:center", "symbol": "C", "position": [0.0, 1.2, -0.3] },
+      { "atomId": "C:tail", "symbol": "C", "position": [0.0, 2.6, -0.6] }
+    ],
+    "bonds": [
+      { "bondId": "B-N:left", "atomId1": "B:core", "atomId2": "N:left", "order": "single" },
+      { "bondId": "B-N:right", "atomId1": "B:core", "atomId2": "N:right", "order": "single" },
+      { "bondId": "B-C:center", "atomId1": "B:core", "atomId2": "C:center", "order": "single" },
+      { "bondId": "C:center-C:tail", "atomId1": "C:center", "atomId2": "C:tail", "order": "single" }
+    ]
+  },
+  "candidate": {
+    "atoms": [
+      { "atomId": "B:core", "symbol": "B", "position": [0.0, 0.0, 0.0] },
+      { "atomId": "N:left", "symbol": "N", "position": [-1.4, 0.0, 0.3] },
+      { "atomId": "N:right", "symbol": "N", "position": [1.4, 0.0, 0.3] },
+      { "atomId": "C:center", "symbol": "C", "position": [0.0, 1.2, -0.3] },
+      { "atomId": "C:tail", "symbol": "C", "position": [0.0, 2.6, -0.6] }
+    ],
+    "bonds": [
+      { "bondId": "B-N:left", "atomId1": "B:core", "atomId2": "N:left", "order": "single" },
+      { "bondId": "B-N:right", "atomId1": "B:core", "atomId2": "N:right", "order": "single" },
+      { "bondId": "B-C:center", "atomId1": "B:core", "atomId2": "C:center", "order": "single" },
+      { "bondId": "C:center-C:tail", "atomId1": "C:center", "atomId2": "C:tail", "order": "single" }
+    ]
+  },
+  "policy": {
+    "policyId": "anchored-core-v2",
+    "requireGeometryConstraints": true,
+    "requireAllBondDistances": true,
+    "fixedAtomIds": ["B:core", "N:left", "N:right"],
+    "distanceBounds": [
+      {
+        "atomId1": "B:core",
+        "atomId2": "N:left",
+        "minAngstrom": 1.4,
+        "maxAngstrom": 1.46
+      },
+      {
+        "atomId1": "B:core",
+        "atomId2": "N:right",
+        "minAngstrom": 1.4,
+        "maxAngstrom": 1.46
+      },
+      {
+        "atomId1": "B:core",
+        "atomId2": "C:center",
+        "minAngstrom": 1.2,
+        "maxAngstrom": 1.28
+      },
+      {
+        "atomId1": "C:center",
+        "atomId2": "C:tail",
+        "minAngstrom": 1.414,
+        "maxAngstrom": 1.517
+      }
+    ],
+    "orientationChecks": [
+      {
+        "atomIds": ["B:core", "N:left", "N:right", "C:center"],
+        "minAbsVolume6": 100000000
+      }
+    ],
+    "rigidAtomGroups": [
+      {
+        "atomIds": ["B:core", "N:left", "N:right", "C:center"],
+        "maxSquaredDistanceDelta": 1000
+      }
+    ]
+  }
+}

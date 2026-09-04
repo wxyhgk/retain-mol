@@ -27,6 +27,8 @@ describe('renderer adapter registry', () => {
         setAxesVisible: () => undefined,
         setGridVisible: () => undefined,
         getViewPlaneLocal: () => ({ origin: [0, 0, 0], normal: [0, 0, 1] }),
+        focusReactionHighlights: () => false,
+        clearReactionHighlights: () => undefined,
       }),
     }
     const dispose = registerRendererAdapter(adapter)
@@ -47,6 +49,8 @@ describe('renderer adapter registry', () => {
         setAxesVisible: () => undefined,
         setGridVisible: () => undefined,
         getViewPlaneLocal: () => ({ origin: [0, 0, 0], normal: [0, 0, 1] }),
+        focusReactionHighlights: () => false,
+        clearReactionHighlights: () => undefined,
       }),
     }
     const unregister = registerRendererAdapter(adapter)

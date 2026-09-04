@@ -4,10 +4,53 @@
 
 ```ts
 
-import { JSX } from 'react/jsx-runtime';
+import { JSX } from 'react';
 import { StoreApi } from 'zustand';
 import { TemporalState } from 'zundo';
 import { UseBoundStore } from 'zustand';
+
+// @public
+export function alignBondPair(input: AlignBondPairInput, runtime?: ViewerRuntime): AlignBondPairResult;
+
+// @public (undocumented)
+export interface AlignBondPairDiagnostics {
+    // (undocumented)
+    readonly anchorDistance: number;
+    // (undocumented)
+    readonly axisAngleDegrees: number;
+    // (undocumented)
+    readonly movedAtomIds: ReadonlySet<string>;
+    readonly orientedVolume: number;
+}
+
+// @public (undocumented)
+export type AlignBondPairFailureCode = 'invalid-number' | 'invalid-angle' | 'invalid-distance' | 'unsupported-move-mode' | 'session-not-started' | 'reference-bond-not-found' | 'moving-bond-not-found' | 'same-bond' | 'reference-object-hidden' | 'moving-object-hidden' | 'moving-object-locked' | 'reference-anchor-not-on-bond' | 'moving-anchor-not-on-bond' | 'zero-length-reference-bond' | 'zero-length-moving-bond' | 'connected-bond-pair';
+
+// @public (undocumented)
+export interface AlignBondPairInput {
+    readonly anchorDistance: number;
+    readonly axisAngleDegrees: number;
+    readonly azimuthDegrees: number;
+    readonly coplanar: boolean;
+    readonly coplanarDirection?: 0 | 180;
+    readonly moveWholeFragment?: boolean;
+    readonly movingAnchorAtomId: string;
+    // (undocumented)
+    readonly movingBondId: string;
+    readonly referenceAnchorAtomId: string;
+    // (undocumented)
+    readonly referenceBondId: string;
+}
+
+// @public (undocumented)
+export type AlignBondPairResult = {
+    readonly ok: true;
+    readonly diagnostics: AlignBondPairDiagnostics;
+} | {
+    readonly ok: false;
+    readonly code: AlignBondPairFailureCode;
+    readonly reason: string;
+};
 
 // @public (undocumented)
 export interface AmbientLightProfile {
@@ -95,6 +138,65 @@ export type BondColorPolicy = 'element' | 'brighten-neutral' | 'fixed';
 // @public (undocumented)
 export type BondGeometryStyle = 'cylinder' | 'capsule';
 
+// @public (undocumented)
+export interface BondPairAlignmentEditSession {
+    // (undocumented)
+    cancel(): void;
+    // (undocumented)
+    end(): void;
+    // (undocumented)
+    readonly isActive: boolean;
+    // (undocumented)
+    start(): void;
+    // (undocumented)
+    update(input: AlignBondPairInput): AlignBondPairResult;
+}
+
+// @public (undocumented)
+export interface BondPairGizmoConfig {
+    // (undocumented)
+    readonly enabled: boolean;
+    // (undocumented)
+    readonly mode?: BondPairGizmoMode;
+    // (undocumented)
+    readonly movingAnchorAtomId: string;
+    // (undocumented)
+    readonly movingBondId: string;
+    // (undocumented)
+    readonly referenceAnchorAtomId: string;
+    // (undocumented)
+    readonly referenceBondId: string;
+    readonly showCoplanarHandles?: boolean;
+}
+
+// @public (undocumented)
+export interface BondPairGizmoError {
+    // (undocumented)
+    readonly code: BondPairGizmoErrorCode;
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public (undocumented)
+export type BondPairGizmoErrorCode = 'invalid-number' | 'invalid-angle' | 'invalid-distance' | 'unsupported-move-mode' | 'session-not-started' | 'reference-bond-not-found' | 'moving-bond-not-found' | 'same-bond' | 'reference-object-hidden' | 'moving-object-hidden' | 'moving-object-locked' | 'reference-anchor-not-on-bond' | 'moving-anchor-not-on-bond' | 'zero-length-reference-bond' | 'zero-length-moving-bond' | 'connected-bond-pair' | 'topology-changed';
+
+// @public (undocumented)
+export type BondPairGizmoMode = 'azimuth' | 'axis-angle' | 'both';
+
+// @public (undocumented)
+export type BondPairGizmoPhase = 'start' | 'preview' | 'commit' | 'cancel';
+
+// @public (undocumented)
+export interface BondPairGizmoValue {
+    // (undocumented)
+    readonly axisAngleDegrees: number;
+    readonly azimuthDegrees: number;
+    // (undocumented)
+    readonly coplanar: false | 0 | 180;
+    // (undocumented)
+    readonly distance: number;
+}
+
 // @public
 export function calculateMolecularWeight(atoms: readonly ElementLike[]): number | null;
 
@@ -172,6 +274,9 @@ export interface CoordinationSiteAssignment {
     // (undocumented)
     readonly siteId: string;
 }
+
+// @public
+export function createBondPairAlignmentEditSession(runtime?: ViewerRuntime): BondPairAlignmentEditSession;
 
 // @public (undocumented)
 export function createCenteredMoleculeFromTemplate(id: string): Molecule | undefined;
@@ -265,6 +370,7 @@ export interface EditorState {
     measureStyle: MeasureStyle;
     // (undocumented)
     measureType: MeasureType;
+    orphanedMeasurements: Measurement[];
     // (undocumented)
     pendingAtomIds: string[];
     // (undocumented)
@@ -334,6 +440,15 @@ export interface EditSlice {
     addOneHydrogen: (atomId: string) => void;
     // (undocumented)
     addOneHydrogens: (atomIds: readonly string[]) => void;
+    // (undocumented)
+    alignBondPair: (input: AlignBondPairInput) => {
+        ok: true;
+        diagnostics: AlignBondPairDiagnostics;
+    } | {
+        ok: false;
+        code: AlignBondPairFailureCode;
+        reason: string;
+    };
     // (undocumented)
     atomPositionVersion: number;
     // (undocumented)
@@ -729,6 +844,7 @@ export function MolViewer(props?: MolViewerProps): JSX.Element;
 // @public (undocumented)
 export interface MolViewerProps {
     appearance?: 'day' | 'night';
+    bondPairGizmo?: BondPairGizmoConfig;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -737,6 +853,8 @@ export interface MolViewerProps {
     interactionMode?: InteractionMode;
     // (undocumented)
     molecule?: Molecule;
+    onBondPairGizmoChange?: (value: BondPairGizmoValue, phase: BondPairGizmoPhase) => void;
+    onBondPairGizmoError?: (error: BondPairGizmoError) => void;
     // (undocumented)
     onMoleculeChange?: (mol: Molecule) => void;
     onRendererChange?: (renderer: RendererPort | null) => void;
@@ -744,11 +862,14 @@ export interface MolViewerProps {
     onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void;
     // (undocumented)
     overlays?: React.ReactNode;
+    reactionHighlights?: readonly ReactionHighlight[];
     // @deprecated (undocumented)
     readOnly?: boolean;
     runtime?: ViewerRuntime;
     // (undocumented)
     selectedAtomIds?: ReadonlySet<string>;
+    // (undocumented)
+    selectedBondIds?: ReadonlySet<string>;
     // (undocumented)
     showAtomLabels?: boolean;
     // (undocumented)
@@ -919,6 +1040,31 @@ export type PublicFragmentDirection = readonly [number, number, number];
 // @public (undocumented)
 export type PublicFragmentGroup = 'sp3' | 'sp2' | 'sp' | 'coordination' | 'ring' | 'group';
 
+// @public (undocumented)
+export interface ReactionHighlight {
+    // (undocumented)
+    readonly atomId1: string;
+    // (undocumented)
+    readonly atomId2: string;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly dashed?: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: ReactionHighlightKind;
+    // (undocumented)
+    readonly label?: string;
+    // (undocumented)
+    readonly opacity?: number;
+    // (undocumented)
+    readonly radius?: number;
+}
+
+// @public (undocumented)
+export type ReactionHighlightKind = 'breaking' | 'forming' | 'coordination';
+
 // @public
 export function registerForceFieldFromUrl(url: string): Promise<void>;
 
@@ -959,8 +1105,10 @@ export interface RendererPort extends RendererCapturePort, RendererViewportPort 
 
 // @public (undocumented)
 export interface RendererViewportPort {
+    clearReactionHighlights(): void;
     // (undocumented)
     fitToMolecule(atoms: Atom[]): void;
+    focusReactionHighlights(): boolean;
     // (undocumented)
     getViewPlaneLocal(): {
         origin: [number, number, number];
@@ -1164,6 +1312,8 @@ export interface SelectionSlice {
     selectedBondIds: Set<string>;
     // (undocumented)
     selectionVersion: number;
+    // (undocumented)
+    setSelection: (atomIds: Iterable<string>, bondIds: Iterable<string>) => void;
 }
 
 // @public (undocumented)

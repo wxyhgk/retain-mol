@@ -15,7 +15,7 @@ import type { DisplayMode } from '../lib/types'
 import type { Molecule } from '../lib/molecule'
 import {
   commitControlledMoleculePropToStore,
-  commitControlledSelectedAtomsPropToStore,
+  commitControlledSelectionPropsToStore,
   runControlledStoreCommit,
   shouldNotifyControlledStoreChange,
 } from './useMolViewerSyncEffects'
@@ -24,6 +24,7 @@ interface SyncProps {
   molecule?:          Molecule
   onMoleculeChange?:  (mol: Molecule) => void
   selectedAtomIds?:   ReadonlySet<string>
+  selectedBondIds?:   ReadonlySet<string>
   onSelectionChange?: (atomIds: Set<string>, bondIds: Set<string>) => void
   displayMode?:       DisplayMode
   theme?:             string
@@ -40,6 +41,7 @@ export function useMolViewerSync({
   molecule: moleculeProp,
   onMoleculeChange,
   selectedAtomIds: selectedAtomIdsProp,
+  selectedBondIds: selectedBondIdsProp,
   onSelectionChange,
   displayMode: displayModeProp,
   theme: themeProp,
@@ -92,13 +94,14 @@ export function useMolViewerSync({
   useEffect(() => {
     const version = runControlledStoreCommit(
       controlledSelectionCommitRef,
-      () => commitControlledSelectedAtomsPropToStore(
+      () => commitControlledSelectionPropsToStore(
         selectedAtomIdsProp,
+        selectedBondIdsProp,
         moleculeStore.getState,
       ),
     )
     if (version !== null) lastPropSelVersionRef.current = version
-  }, [selectedAtomIdsProp, moleculeStore])
+  }, [selectedAtomIdsProp, selectedBondIdsProp, moleculeStore])
 
   // ── store → onSelectionChange ────────────────────────────────────────────
   useEffect(() => {
