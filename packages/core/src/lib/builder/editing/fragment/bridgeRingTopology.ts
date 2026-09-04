@@ -259,17 +259,18 @@ function resolveTargetAtoms(
   | { readonly ok: false; readonly result: PlanBridgeRingResult } {
   const firstAtoms = [graph.atom(firstBond.atomId1), graph.atom(firstBond.atomId2)] as const
   const secondAtoms = [graph.atom(secondBond.atomId1), graph.atom(secondBond.atomId2)] as const
-  if (!firstAtoms[0] || !firstAtoms[1] || !secondAtoms[0] || !secondAtoms[1]) {
+  const [firstAtom1, firstAtom2, secondAtom1, secondAtom2] = [...firstAtoms, ...secondAtoms]
+  if (!firstAtom1 || !firstAtom2 || !secondAtom1 || !secondAtom2) {
     return { ok: false, result: failure('target-bond-invalid', '目标键引用了不存在的原子') }
   }
-  if ([...firstAtoms, ...secondAtoms].some(atom => atom.symbol === 'H')) {
+  if ([firstAtom1, firstAtom2, secondAtom1, secondAtom2].some(atom => atom.symbol === 'H')) {
     return { ok: false, result: failure('target-bond-invalid', '不能使用 X-H 键桥连七元环') }
   }
   return {
     ok: true,
     value: [
-      [firstAtoms[0], firstAtoms[1]],
-      [secondAtoms[0], secondAtoms[1]],
+      [firstAtom1, firstAtom2],
+      [secondAtom1, secondAtom2],
     ],
   }
 }
