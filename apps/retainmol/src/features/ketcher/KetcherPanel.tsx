@@ -2,8 +2,7 @@ import { Component, type ReactNode, useEffect, useRef, useState } from 'react'
 import { Editor } from 'ketcher-react'
 import 'ketcher-react/dist/index.css'
 import type { Ketcher, StructServiceProvider } from 'ketcher-core'
-import { parseMoleculeFile } from '@/features/molecule-placement/infrastructure/parseMoleculeFile'
-import { placeMoleculeInViewer } from '@/features/molecule-placement/application/placeMoleculeInViewer'
+import { parseMoleculeFile, placeMoleculeInViewer } from '@/features/molecule-placement'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 
 class KetcherErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
@@ -128,7 +127,7 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
         const kc = ketcherRef.current as unknown as { changeEvent?: { remove?: (f: () => void) => void } }
         const onChange = k?.__retainmolOnChange as (() => void) | undefined
         if (onChange) kc.changeEvent?.remove?.(onChange)
-      } catch {}
+      } catch { /* unsubscribe best-effort */ }
     }
   }, [])
 

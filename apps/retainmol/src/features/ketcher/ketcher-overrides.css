@@ -1,0 +1,19 @@
+/* 精简 Ketcher：隐藏与 RetainMol 顶栏/悬浮重复的系统工具栏 */
+.App-module_top__SBeSV {
+  display: none !important;
+}
+/* 底部模板栏过占空间，隐藏后由悬浮 Draw 统一管理 */
+.BottomToolbar-module_root__kjkSm {
+  display: none !important;
+}
+/* 左/右工具栏收窄，减少视觉重量 */
+.LeftToolbar-module_root__yhhZm {
+  border-right: 1px solid hsl(var(--border)) !important;
+}
+.RightToolbar-module_root__1D5hp {
+  border-left: 1px solid hsl(var(--border)) !important;
+}
+/* 画布区与分割线更干净 */
+.App-module_app__8cgyF {
+  background: white !important;
+}

@@ -1,1 +1,5 @@
 export { default as ToolStrip } from './ToolStrip'
+export { useBuildPaletteController } from './model/useBuildPaletteController'
+export type { BuildPaletteController } from './model/useBuildPaletteController'
+export { DrawPanel } from './components/workspace/DrawPanel'
+export { PeriodicTableSheet } from './components/PeriodicTable'

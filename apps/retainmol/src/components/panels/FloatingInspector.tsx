@@ -15,11 +15,6 @@ export function FloatingInspector({ open, onClose, workspaceMode }: FloatingInsp
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const dragRef = useRef<{ dx: number; dy: number } | null>(null)
 
-  const [initial, setInitial] = useState(false)
-  useEffect(() => {
-    if (open && !initial) setInitial(true)
-  }, [open, initial])
-
   const onPointerDown = (e: React.PointerEvent) => {
     const el = ref.current
     if (!el) return
@@ -42,7 +37,7 @@ export function FloatingInspector({ open, onClose, workspaceMode }: FloatingInsp
   }
   const onPointerUp = (e: React.PointerEvent) => {
     dragRef.current = null
-    try { (e.target as Element).releasePointerCapture(e.pointerId) } catch {}
+    try { (e.target as Element).releasePointerCapture(e.pointerId) } catch { /* capture may already be released */ }
   }
 
   useEffect(() => {
