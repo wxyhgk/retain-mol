@@ -183,6 +183,44 @@ M  END`
     expect(m.atoms.every(a => isFinite(a.x) && isFinite(a.y) && isFinite(a.z))).toBe(true)
   })
 
+  it('2D 芳香苯（type 4 键、无氢）→ 3D 苯（6H、平面、C–C 1.39，非环己烷化）', () => {
+    // 只改键行的键级字段，原子行不动
+    const aromatic2d = SDF_2D_BENZENE.split('\n').map(line =>
+      /^\s*\d+\s+\d+\s+[12]\s+0\s*$/.test(line) ? line.replace(/(\s+)[12](\s+0\s*)$/, '$14$2') : line,
+    ).join('\n')
+    const mol2d = parseMol(aromatic2d)
+    expect(mol2d.bonds).toHaveLength(6)
+    expect(mol2d.bonds.every(b => b.aromatic === true)).toBe(true)
+    const r = generate3D(mol2d)
+    expect(r.ok).toBe(true)
+    const m = r.molecule
+    expect(m.atoms.filter(a => a.symbol === 'C')).toHaveLength(6)
+    expect(m.atoms.filter(a => a.symbol === 'H')).toHaveLength(6)
+    const byId: Record<string, (typeof m.atoms)[number]> = Object.fromEntries(m.atoms.map(a => [a.id, a]))
+    const ccBonds = m.bonds.filter(b =>
+      byId[b.atomId1]?.symbol === 'C' && byId[b.atomId2]?.symbol === 'C')
+    expect(ccBonds).toHaveLength(6)
+    for (const b of ccBonds) {
+      const a1 = byId[b.atomId1]!, a2 = byId[b.atomId2]!
+      expect(Math.hypot(a1.x - a2.x, a1.y - a2.y, a1.z - a2.z)).toBeCloseTo(1.39, 1)
+    }
+    // OCL 保持原子顺序（输入即环序），用 Newell 法拟合环平面：皱褶环己烷偏差 ~0.7，平面苯 ~0
+    const ring = m.atoms.filter(a => a.symbol === 'C')
+    const cx = ring.reduce((s, a) => s + a.x, 0) / ring.length
+    const cy = ring.reduce((s, a) => s + a.y, 0) / ring.length
+    const cz = ring.reduce((s, a) => s + a.z, 0) / ring.length
+    let nx = 0, ny = 0, nz = 0
+    for (let i = 0; i < ring.length; i += 1) {
+      const p = ring[i]!, q = ring[(i + 1) % ring.length]!
+      nx += (p.y - q.y) * (p.z + q.z)
+      ny += (p.z - q.z) * (p.x + q.x)
+      nz += (p.x - q.x) * (p.y + q.y)
+    }
+    const nl = Math.hypot(nx, ny, nz)
+    const dev = Math.max(...ring.map(a => Math.abs(((a.x - cx) * nx + (a.y - cy) * ny + (a.z - cz) * nz) / nl)))
+    expect(dev).toBeLessThan(0.3)
+  })
+
   it('退化输入：单原子 → 原样返回 ok', () => {
     expect(generate3D({ atoms: [newAtom('C', 0, 0, 0)], bonds: [] }).ok).toBe(true)
   })

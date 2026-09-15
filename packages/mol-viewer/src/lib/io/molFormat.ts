@@ -7,6 +7,7 @@ import * as OCL from 'openchemlib'
 import type { Atom, Bond, Molecule } from '../molecule'
 import { newAtom, newBond } from '../molecule'
 import { splitConnectedComponents } from '../builder/analysis/fragments'
+import { kekulizeAromaticBonds } from './kekulize'
 import { RELAX } from '../../config/relax.config'
 
 // OCL 返回的 Molecule 对象类型
@@ -271,7 +272,16 @@ function minimizeConnected(frag: Molecule): { coords: Map<string, XYZ>; eBefore:
 export function generate3D(mol: Molecule): OptimizeResult {
   if (mol.atoms.length < 2 || mol.bonds.length === 0) return { molecule: mol, ok: true }
   try {
-    const oclMol = moleculeToOCL(mol)
+    // OCL 只认凯库勒式：芳香标记键先排成单双交替再交给距离几何
+    const kekule = kekulizeAromaticBonds(mol)
+    const ingest: Molecule = kekule.size === 0 ? mol : {
+      ...mol,
+      bonds: mol.bonds.map(b => {
+        const order = kekule.get(b.id)
+        return order === undefined ? b : { ...b, order }
+      }),
+    }
+    const oclMol = moleculeToOCL(ingest)
     const CG = (OCL as unknown as {
       ConformerGenerator: new (seed: number) => {
         getOneConformerAsMolecule: (m: OCLMol) => OCLMol | null

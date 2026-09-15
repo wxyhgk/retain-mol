@@ -238,3 +238,28 @@ describe('parseSdf', () => {
     expect(parseSdf('invalid molecule block with enough text\n$$$$\n')).toEqual([])
   })
 })
+
+const BENZENE_AROMATIC = `benzene
+  RetainMol
+
+  6  6  0  0  0  0  0  0  0  0999 V2000
+    1.3900    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.6950    1.2037    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.6950    1.2037    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.3900    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.6950   -1.2037    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.6950   -1.2037    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  4  0  0  0  0
+  2  3  4  0  0  0  0
+  3  4  4  0  0  0  0
+  4  5  4  0  0  0  0
+  5  6  4  0  0  0  0
+  6  1  4  0  0  0  0
+M  END`
+describe('parseMol 芳香键', () => {
+  it('type 4 键解析为 order 1 + aromatic（供凯库勒化与渲染使用）', () => {
+    const mol = parseMol(BENZENE_AROMATIC)
+    expect(mol.bonds).toHaveLength(6)
+    expect(mol.bonds.every(b => b.order === 1 && b.aromatic === true)).toBe(true)
+  })
+})
