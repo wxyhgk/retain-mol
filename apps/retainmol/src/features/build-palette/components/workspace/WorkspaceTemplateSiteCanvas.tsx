@@ -154,7 +154,7 @@ export function WorkspaceTemplateSiteCanvas({
 
   return (
     <div className="space-y-2.5">
-      <div className="overflow-hidden rounded-md border border-border bg-muted">
+      <div className="overflow-hidden rounded-md border border-border bg-background">
         <div className="flex h-9 items-center justify-between border-b border-border px-2.5">
           <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
             <MousePointer2 size={12} />
@@ -176,7 +176,7 @@ export function WorkspaceTemplateSiteCanvas({
           </div>
         </div>
       </div>
-      <div className={selection ? 'border-l-2 border-primary bg-primary px-2.5 py-2 text-primary-foreground' : 'border-l-2 border-border bg-muted px-2.5 py-2'}>
+      <div className={selection ? 'border-l-2 border-primary bg-primary px-2.5 py-2 text-primary-foreground' : 'border-l-2 border-border bg-background px-2.5 py-2'}>
         <div className={selection ? 'flex items-center gap-1.5 text-[11px] font-semibold text-primary-foreground' : 'text-[11px] font-semibold text-foreground'}>
           {selection && <Check size={13} />}
           {selection ? (selection.kind === 'atom' ? '原子连接位点已启用' : '并环边已启用') : '选择模板位点'}

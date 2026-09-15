@@ -95,7 +95,7 @@ export default function PubChemSearch({ onClose }: Props) {
 
           {/* 错误提示 */}
           {status === 'error' && (
-            <div className="flex items-center gap-2 border-t border-border bg-muted px-4 py-2.5 text-xs text-foreground">
+            <div className="flex items-center gap-2 border-t border-border bg-background px-4 py-2.5 text-xs text-foreground">
               <AlertCircle size={13} />
               {errorMsg}
             </div>
@@ -103,7 +103,7 @@ export default function PubChemSearch({ onClose }: Props) {
 
           {/* 2D 警告 */}
           {is2DWarning && (
-            <div className="border-t border-border bg-muted px-4 py-2.5 text-xs text-foreground">
+            <div className="border-t border-border bg-background px-4 py-2.5 text-xs text-foreground">
               未找到 3D 构型，导入时将使用距离几何生成初始 3D 结构
             </div>
           )}

@@ -93,7 +93,7 @@ export function AtomInspector({ model }: { model: AtomModel }) {
       </div></InspectorSection>
       <InspectorSection title={`邻接键 · ${model.neighbors.length}`}>
         {model.neighbors.length === 0 ? <div className="rounded-md border border-dashed border-border px-2.5 py-3 text-center text-xs text-muted-foreground">无邻接键</div> : (
-          <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-muted">{model.neighbors.map(neighbor => (
+          <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">{model.neighbors.map(neighbor => (
             <div key={neighbor.bond.id} className="flex min-w-0 items-center gap-2 px-2.5 py-2"><ElementSwatch symbol={neighbor.atom.symbol} /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{neighbor.atom.symbol} #{neighbor.atomNumber}</span><span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{neighbor.length.toFixed(3)} Å</span></div>
           ))}</div>
         )}
@@ -116,7 +116,7 @@ export function BondInspector({ model }: { model: BondModel }) {
         <PropertyRow label="两端" value={`${model.first.atom.symbol} #${model.first.number} · ${model.second.atom.symbol} #${model.second.number}`} />
         <PropertyRow label="键级" value={bondOrderLabel(model.bond.order)} /><PropertyRow label="芳香" value={model.bond.aromatic ? '是' : '否'} />
       </PropertyList></InspectorSection>
-      <InspectorSection title="键级"><div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-muted p-1">{([1, 2, 3] as const).map(order => (
+      <InspectorSection title="键级"><div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-background p-1">{([1, 2, 3] as const).map(order => (
         <button key={order} type="button" aria-pressed={model.bond.order === order} onClick={() => setBondOrder(model.bond.id, order)} className={cn('h-8 rounded text-xs font-medium transition-colors', model.bond.order === order ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>{bondOrderLabel(order)}</button>
       ))}</div></InspectorSection>
       <InspectorSection title="长度"><LabeledNumberInput label="键长" value={model.length} decimals={4} min={0.1} unit="Å" onCommit={value => { const result = setBondLength(model.first.atom.id, model.second.atom.id, value); if (!result.ok) flashHint(result.reason ?? '无法修改键长') }} /></InspectorSection>
@@ -144,7 +144,7 @@ function EditableGeometryPanel({ geometry }: { geometry: EditableLiveGeometry })
     if (!result.ok) flashHint(result.reason ?? `无法修改${label}`)
   }
   return (
-    <InspectorSection title={label}><div className="space-y-2 rounded-md border border-border bg-muted p-2.5">
+      <InspectorSection title={label}><div className="space-y-2 rounded-md border border-border bg-background p-2.5">
       <div className="flex min-w-0 flex-wrap items-center gap-1">{geometry.atoms.map(({ atom, number }, index) => <div key={atom.id} className="contents">{index > 0 && <span className="text-[11px] text-muted-foreground">—</span>}<EndpointBadge atom={atom} number={number} compact /></div>)}</div>
       <div className="font-mono text-[10px] text-muted-foreground">{geometry.label}</div>
       <LabeledNumberInput label={label} value={geometry.value} decimals={geometry.kind === 'distance' ? 4 : 3} min={geometry.kind === 'distance' ? 0.1 : undefined} max={geometry.kind === 'angle' ? 180 : undefined} unit={geometry.unit} onCommit={commit} />

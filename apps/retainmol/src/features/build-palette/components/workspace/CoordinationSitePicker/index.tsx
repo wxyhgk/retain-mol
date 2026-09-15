@@ -224,7 +224,7 @@ export function CoordinationSitePicker({
       </div>
 
       <div className="shrink-0 overflow-hidden rounded-md border border-border bg-card">
-        <div className="flex h-9 items-center gap-1.5 border-b border-border bg-muted px-2.5 text-[10px] text-muted-foreground">
+        <div className="flex h-9 items-center gap-1.5 border-b border-border bg-background px-2.5 text-[10px] text-muted-foreground">
           <MousePointer2 size={12} />
           <span>点击端点后立即启用该连接位点</span>
         </div>

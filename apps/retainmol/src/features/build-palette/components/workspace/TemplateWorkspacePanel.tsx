@@ -61,7 +61,7 @@ export function TemplateWorkspacePanel({ activeFragmentId, onPickTemplate, onPic
 
   return (
     <div className="space-y-5">
-      <div className="rounded-md border border-border bg-muted px-3 py-2.5">
+      <div className="rounded-md border border-border bg-background px-3 py-2.5">
         <div className="text-xs font-semibold text-foreground">模板库</div>
         <p className="mt-1 text-[10px] leading-4 text-muted-foreground">环系与完整模板统一从这里进入。打开模板后，在独立 3D 预览中选择原子或边。</p>
       </div>
@@ -101,7 +101,7 @@ export function TemplateWorkspacePanel({ activeFragmentId, onPickTemplate, onPic
 function TemplateSection({ title, templates, onOpen }: { title: string; templates: readonly CanvasTemplateSummary[]; onOpen: (id: string) => void }) {
   return (
     <WorkspaceSection title={title} meta={String(templates.length)}>
-      <div className="overflow-hidden rounded-md border border-border bg-muted">
+      <div className="overflow-hidden rounded-md border border-border bg-background">
         {templates.map((template, index) => (
           <button
             key={template.id}

@@ -62,7 +62,7 @@ export default function MeasurePanel({ compact = false }: MeasurePanelProps) {
           ))}
         </div>
         {activeTool === 'measure' && (
-          <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1.5 font-mono">
+          <div className="text-xs text-muted-foreground bg-background rounded px-2 py-1.5 font-mono">
             {measureHint}
           </div>
         )}

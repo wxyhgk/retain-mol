@@ -21,7 +21,7 @@ export function InspectorSection({ title, children }: { title: string; children:
 }
 
 export function PropertyList({ children }: { children: ReactNode }) {
-  return <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-muted">{children}</div>
+  return <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">{children}</div>
 }
 
 export function PropertyRow({ label, value }: { label: string; value: string }) {
@@ -137,8 +137,8 @@ export function ActionButton({ icon, label, danger = false, className, title, di
 
 export function CountTile({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted px-2.5 py-2.5">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded bg-accent text-muted-foreground [&_svg]:size-3.5">{icon}</span>
+    <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2.5">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded bg-background text-muted-foreground [&_svg]:size-3.5">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[10px] text-muted-foreground">{label}</span>
         <span className="block font-mono text-sm font-semibold tabular-nums text-foreground">{value}</span>
@@ -149,7 +149,7 @@ export function CountTile({ icon, label, value }: { icon: ReactNode; label: stri
 
 export function EndpointBadge({ atom, number, compact = false }: { atom: Atom; number: number; compact?: boolean }) {
   return (
-    <div className={cn('flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-muted', compact ? 'px-1.5 py-1' : 'flex-1 px-2 py-1.5')}>
+    <div className={cn('flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-background', compact ? 'px-1.5 py-1' : 'flex-1 px-2 py-1.5')}>
       <ElementSwatch symbol={atom.symbol} />
       <span className="min-w-0 truncate text-xs font-medium text-foreground">{atom.symbol} <span className="font-normal text-muted-foreground">#{number}</span></span>
     </div>

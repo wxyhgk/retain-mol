@@ -303,7 +303,7 @@ function BondSection(props: {
   const canConnect = props.selectedAtomCount === 2
   return (
     <div className="space-y-5">
-      <div className="rounded-md border border-border bg-muted px-3 py-2.5">
+      <div className="rounded-md border border-border bg-background px-3 py-2.5">
         <div className="flex items-center gap-2 text-[11px] font-semibold text-foreground">
           <MousePointer2 size={13} />先选择两个原子
         </div>
@@ -319,7 +319,7 @@ function BondSection(props: {
             'flex h-11 w-full items-center justify-center gap-2 rounded-md border text-xs font-semibold transition-colors',
             canConnect
               ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'cursor-not-allowed border-border bg-muted text-muted-foreground',
+              : 'cursor-not-allowed border-border bg-background text-muted-foreground',
           )}
         >
           <Link2 size={15} />
@@ -329,7 +329,7 @@ function BondSection(props: {
 
       <WorkspaceSection title="选中键" meta={props.selectedBond ? props.selectedBond.atomSymbols.join(' – ') : '未选择'}>
         {props.selectedBond ? (
-          <div className="space-y-2.5 rounded-md border border-border bg-muted p-2.5">
+          <div className="space-y-2.5 rounded-md border border-border bg-background p-2.5">
             <div role="group" aria-label="键级" className="grid grid-cols-3 gap-1.5">
               {([1, 2, 3] as const).map(order => (
                 <button
@@ -358,7 +358,7 @@ function BondSection(props: {
             </button>
           </div>
         ) : (
-          <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-border bg-muted text-[11px] text-muted-foreground">
+          <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-border bg-background text-[11px] text-muted-foreground">
             在画布中点击一根键
           </div>
         )}

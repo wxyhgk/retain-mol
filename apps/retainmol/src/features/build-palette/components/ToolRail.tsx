@@ -80,7 +80,7 @@ type ToolRailViewProps = {
 
 function ToolRailView({ workspaceTool, uiTheme, activate, onToggleInspector, showHelp, toggleTheme }: ToolRailViewProps) {
   return (
-    <Sidebar collapsible="none" className="w-[72px] border-r border-border bg-sidebar text-sidebar-foreground">
+    <Sidebar collapsible="none" className="w-[72px] border-r border-border bg-background text-sidebar-foreground">
       <SidebarContent className="gap-0 overflow-y-auto px-1.5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <SidebarGroup className="p-0">
           <SidebarMenu className="gap-0.5">

@@ -28,12 +28,12 @@ export function WorkspaceScenePanel() {
       </InspectorSection>
 
       {rows.length === 0 ? (
-        <div className="flex h-28 items-center justify-center rounded-md border border-dashed border-border bg-muted text-center text-[11px] leading-5 text-muted-foreground">
+        <div className="flex h-28 items-center justify-center rounded-md border border-dashed border-border bg-background text-center text-[11px] leading-5 text-muted-foreground">
           场景中没有对象<br />从导入或搜索添加分子
         </div>
       ) : (
         <InspectorSection title={`对象 · ${rows.length}`}>
-          <div className="overflow-hidden rounded-md border border-border bg-muted">
+          <div className="overflow-hidden rounded-md border border-border bg-background">
             {rows.map((row, index) => {
               const active = row.id === activeObjectId
               return (

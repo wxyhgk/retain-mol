@@ -284,7 +284,7 @@ function GeometryScrollArea({
         >
           <ChevronLeft size={14} />
         </button>
-        <div className="mx-2 flex flex-1 items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+        <div className="mx-2 flex flex-1 items-center justify-center rounded-md border border-dashed border-border bg-background px-4 py-2 text-xs text-muted-foreground">
           暂无可用构型 · 选取元素后可替换原子或添加构型
         </div>
         <button
@@ -389,7 +389,7 @@ function GeometryScrollArea({
                     onClick={() => onChooseFragment(fragment.id)}
                     className="gap-2"
                   >
-                    <span className="flex size-6 items-center justify-center rounded-sm border border-border bg-muted text-[10px] font-bold">
+                    <span className="flex size-6 items-center justify-center rounded-sm border border-border bg-background text-[10px] font-bold">
                       {paletteElement}
                     </span>
                     <span className="flex-1 truncate text-xs">{getFragmentLabel(fragment)} · {fragment.name}</span>
