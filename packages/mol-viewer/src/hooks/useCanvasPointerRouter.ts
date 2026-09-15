@@ -194,6 +194,9 @@ export function useCanvasPointerRouter(
   useEffect(() => {
     const r = rendererRef.current
     if (r) {
+      // 切工具时画布手势可能正按着原子：先取消（回滚拖拽事务、清预览），
+      // 再写 enabled——否则残留的 rotate 态会被 enabled=true 复活，拖拽中途视角乱转
+      r.cancelActiveInteraction()
       r.controls.enabled = shouldEnableCameraControls(
         interactionMode,
         toolCan(activeTool, 'transformsObject'),
