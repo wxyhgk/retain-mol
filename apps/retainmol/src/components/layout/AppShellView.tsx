@@ -10,18 +10,12 @@ import { BusyOverlay } from './BusyOverlay'
 import { SelectionHud } from './SelectionHud'
 import { StatusBar } from './StatusBar'
 import { ViewportToolbar } from './ViewportToolbar'
-import { JobEditorLoadSession, SimulationWorkspace, resolveOptimizedJobStructure } from '@retainmol/jobs'
-import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
-import { useEditorStore } from '@/domain/viewer/editorState'
+import { JobEditorLoadSession } from '@retainmol/jobs'
 import { editorHostPort } from '@/domain/viewer/editorHostPort'
-import type { JobArtifact, JobDetail } from '@retainmol/jobs'
-import { useMoleculeDocumentStore } from '@/features/molecule-assets'
 import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
 import { useViewportStore } from '@/domain/viewer/viewportStore'
 import { useBuildPaletteController } from '@/features/build-palette/model/useBuildPaletteController'
 
-const AnalysisWorkspace = lazy(() => import('@/features/analysis').then(module => ({ default: module.AnalysisWorkspace })))
-const WorkflowEditor = lazy(() => import('@/features/workflows').then(module => ({ default: module.WorkflowEditor })))
 const KetcherPanel = lazy(() => import('@/features/ketcher').then(m => ({ default: m.KetcherPanel })))
 
 function ResizeHandle() {
@@ -38,59 +32,17 @@ export function AppShellView({
   showInspector,
   searchOpen,
   onToggleInspector,
-  onWorkspaceModeChange,
   onOpenTemplateStudio,
   onOpenSearch,
   onCloseSearch,
   canvasFocus,
   uiTheme,
-  workspaceMode,
   workflowEditSession,
   jobEditSession,
   onCloseWorkflowEdit,
   onCloseJobEdit,
 }: AppShellViewProps) {
-  const activeMolecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
-  const activeObjectId = useMoleculeStore(state => state.activeObjectId)
-  const documentBinding = useMoleculeDocumentStore(state => (
-    activeObjectId ? state.bindingsByObjectId[activeObjectId] : undefined
-  ))
-  const pendingRevisionMetadata = useMoleculeDocumentStore(state => (
-    activeObjectId ? state.pendingRevisionMetadataByObjectId[activeObjectId] : undefined
-  ))
-  const jobStructure = {
-    name: activeMolecule.name,
-    atoms: activeMolecule.atoms.map(atom => ({
-      id: atom.id,
-      symbol: atom.symbol,
-      x: atom.x,
-      y: atom.y,
-      z: atom.z,
-    })),
-  }
-  const loadOptimizedStructure = (artifact: JobArtifact, job: JobDetail) => {
-    const store = useMoleculeStore.getState()
-    const targetObjectId = store.activeObjectId
-    const result = resolveOptimizedJobStructure(artifact, job, selectActiveMoleculeOrEmpty(store))
-    if (result.ok === false) {
-      useEditorStore.getState().flashHint(result.message)
-      return
-    }
-    store.setMolecule(result.molecule)
-    if (targetObjectId) {
-      useMoleculeDocumentStore.getState().setPendingRevisionMetadata(targetObjectId, {
-        derivedFromJobId: job.id,
-        derivedFromArtifactId: artifact.id,
-        ...(job.request && 'moleculeRevisionId' in job.request
-          ? { sourceRevisionId: job.request.moleculeRevisionId }
-          : {}),
-      })
-    }
-    useEditorStore.getState().flashHint(result.restoredSnapshot ? '已载入任务分子与 xTB 优化坐标' : '已载入 xTB 优化坐标')
-  }
   const gridVisible = useViewportStore(state => state.gridVisible)
-  const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
-  const leftDefaultSize = workspaceMode === 'simulate' ? 38 : workspaceMode === 'analyze' ? 32 : 28
   const buildController = useBuildPaletteController()
   // 悬浮窗承载全部 RightPanel 职责：Draw / Inspector / Scene / Display
   // 展开条件：检查器按钮 或 Draw 工具激活时（与旧版 showRightPanel 逻辑一致）
@@ -106,58 +58,26 @@ export function AppShellView({
     >
       <Toolbar
         showInspector={showInspector}
-        workspaceMode={workspaceMode}
         onToggleInspector={onToggleInspector}
-        onWorkspaceModeChange={onWorkspaceModeChange}
         onOpenTemplateStudio={onOpenTemplateStudio}
         onSearchOpen={onOpenSearch}
       />
       {searchOpen && <PubChemSearch onClose={onCloseSearch} />}
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-muted">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-background">
         <PanelGroup
           direction="horizontal"
           autoSaveId="retainmol-chem3d"
           className="flex min-h-0 flex-1"
         >
-          {hasLeftWorkspace ? (
-            <>
-              <Panel
-                defaultSize={leftDefaultSize}
-                minSize={22}
-                maxSize={50}
-                className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-card"
-              >
-                {workspaceMode === 'simulate' ? (
-                  <SimulationWorkspace
-                    structure={jobStructure}
-                    molecule={activeMolecule}
-                    objectId={activeObjectId}
-                    documentBinding={documentBinding ?? null}
-                    revisionMetadata={pendingRevisionMetadata}
-                    onLoadOptimizedStructure={loadOptimizedStructure}
-                    workflowEditor={WorkflowEditor}
-                  />
-                ) : (
-                  <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载分析模块</div>}>
-                    <AnalysisWorkspace />
-                  </Suspense>
-                )}
-              </Panel>
-              <ResizeHandle />
-            </>
-          ) : (
-            <>
-              <Panel defaultSize={48} minSize={25} className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-white">
-                <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载 2D 编辑器…</div>}>
-                  <KetcherPanel />
-                </Suspense>
-              </Panel>
-              <ResizeHandle />
-            </>
-          )}
+          <Panel defaultSize={48} minSize={25} className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-white">
+            <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载 2D 编辑器…</div>}>
+              <KetcherPanel />
+            </Suspense>
+          </Panel>
+          <ResizeHandle />
 
-            <Panel minSize={30} className="relative min-h-0 min-w-0 overflow-hidden bg-muted">
+            <Panel minSize={30} className="relative min-h-0 min-w-0 overflow-hidden bg-background">
               <div
                 className="relative h-full w-full overflow-hidden pb-6"
                 onPointerDownCapture={event => canvasFocus.begin(event.target)}
@@ -174,7 +94,7 @@ export function AppShellView({
             </Panel>
           </PanelGroup>
           {/* 顶层悬浮：承载全部 RightPanel（Draw / Inspector / Scene / Display），不参与 PanelGroup 布局，z-[80] 压盖画布 */}
-          <FloatingInspector open={showFloating} onClose={handleFloatingClose} workspaceMode={workspaceMode} />
+          <FloatingInspector open={showFloating} onClose={handleFloatingClose} />
 
           {workflowEditSession && (
             <div className="absolute inset-0 z-30 bg-background">

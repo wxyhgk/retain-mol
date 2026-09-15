@@ -5,15 +5,9 @@ import { useEditorStore } from '@/domain/viewer/editorState'
 import { WorkspaceDisplayPanel, WorkspaceScenePanel } from '@/features/workspace-panels'
 import { DrawPanel } from '@/features/build-palette/components/workspace/DrawPanel'
 import { useBuildPaletteController } from '@/features/build-palette/model/useBuildPaletteController'
-import type { WorkspaceMode } from '@/App'
 import { cn } from '@/lib/utils'
 
-export interface RightPanelProps {
-  workspaceMode?: WorkspaceMode
-}
-
-export default function RightPanel({ workspaceMode }: RightPanelProps) {
-  const hasLeftWorkspace = workspaceMode === 'simulate' || workspaceMode === 'analyze'
+export default function RightPanel() {
   const buildController = useBuildPaletteController()
   const isDraw = buildController.workspaceTool === 'draw'
   const [activeTab, setActiveTab] = useState<string>(isDraw ? 'draw' : 'inspector')
@@ -23,7 +17,7 @@ export default function RightPanel({ workspaceMode }: RightPanelProps) {
     if (isDraw) setActiveTab('draw')
   }, [isDraw])
 
-  const cols = hasLeftWorkspace ? (isDraw ? 'grid-cols-3' : 'grid-cols-2') : isDraw ? 'grid-cols-4' : 'grid-cols-3'
+  const cols = isDraw ? 'grid-cols-4' : 'grid-cols-3'
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
@@ -31,7 +25,7 @@ export default function RightPanel({ workspaceMode }: RightPanelProps) {
         <TabsList className={cn('grid h-10 w-full rounded-none bg-transparent p-0', cols)}>
           <PanelTab value="draw" label="Draw" />
           <PanelTab value="inspector" label="Inspector" />
-          {!hasLeftWorkspace && <PanelTab value="scene" label="Scene" />}
+          <PanelTab value="scene" label="Scene" />
           <PanelTab value="display" label="Display" />
         </TabsList>
       </div>
@@ -43,11 +37,9 @@ export default function RightPanel({ workspaceMode }: RightPanelProps) {
         <TabsContent value="inspector" className="mt-0 min-w-0">
           <InspectorContent />
         </TabsContent>
-        {!hasLeftWorkspace && (
-          <TabsContent value="scene" className="mt-0 min-w-0">
-            <WorkspaceScenePanel />
-          </TabsContent>
-        )}
+        <TabsContent value="scene" className="mt-0 min-w-0">
+          <WorkspaceScenePanel />
+        </TabsContent>
         <TabsContent value="display" className="mt-0 min-w-0">
           <WorkspaceDisplayPanel />
         </TabsContent>

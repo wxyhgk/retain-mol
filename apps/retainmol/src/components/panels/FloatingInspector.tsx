@@ -2,15 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { X, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RightPanel } from '@/components/panels'
-import type { WorkspaceMode } from '@/App'
 
 interface FloatingInspectorProps {
   open: boolean
   onClose: () => void
-  workspaceMode: WorkspaceMode
 }
 
-export function FloatingInspector({ open, onClose, workspaceMode }: FloatingInspectorProps) {
+export function FloatingInspector({ open, onClose }: FloatingInspectorProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const dragRef = useRef<{ dx: number; dy: number } | null>(null)
@@ -64,7 +62,7 @@ export function FloatingInspector({ open, onClose, workspaceMode }: FloatingInsp
       className="fixed z-[80] flex max-h-[calc(100dvh-72px)] w-[380px] max-w-[92vw] flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl"
     >
       <div
-        className="flex h-9 shrink-0 cursor-grab select-none items-center justify-between border-b border-border bg-muted/50 px-2 active:cursor-grabbing"
+        className="flex h-9 shrink-0 cursor-grab select-none items-center justify-between border-b border-border bg-background px-2 active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -79,7 +77,7 @@ export function FloatingInspector({ open, onClose, workspaceMode }: FloatingInsp
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden bg-card">
-        <RightPanel workspaceMode={workspaceMode} />
+        <RightPanel />
       </div>
     </div>
   )

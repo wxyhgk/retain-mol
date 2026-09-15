@@ -20,7 +20,7 @@ describe('appRoute', () => {
     ['/jobs', 'jobs'],
     ['/jobs/20260715-test', 'jobs'],
     ['/workflows', 'workflows'],
-    ['/editor', 'editor'],
+    ['/editor', 'dashboard'],
     ['/templates/new', 'templates'],
     ['/lab', 'lab'],
   ])('resolves %s as %s', (pathname, route) => {
@@ -31,11 +31,11 @@ describe('appRoute', () => {
     expect(pathForAppRoute('dashboard')).toBe('/')
     expect(pathForAppRoute('jobs')).toBe('/jobs')
     expect(pathForAppRoute('workflows')).toBe('/workflows')
-    expect(pathForAppRoute('editor')).toBe('/editor')
+    expect(pathForAppRoute('editor')).toBe('/')
   })
 
   it('round-trips workflow editor context through the URL', () => {
-    expect(workflowEditorPath('workflow 1', 'job/2')).toBe('/editor?workflowId=workflow+1&jobId=job%2F2')
+    expect(workflowEditorPath('workflow 1', 'job/2')).toBe('/?workflowId=workflow+1&jobId=job%2F2')
     expect(resolveWorkflowEditRoute('?workflowId=workflow+1&jobId=job%2F2')).toEqual({
       workflowId: 'workflow 1',
       jobId: 'job/2',
@@ -54,7 +54,7 @@ describe('appRoute', () => {
     expect(resolveJobId('/jobs/%E0%A4%A')).toBeNull()
 
     expect(jobEditorPath('job/one', 'artifact two')).toBe(
-      '/editor?sourceJobId=job%2Fone&artifactId=artifact+two',
+      '/?sourceJobId=job%2Fone&artifactId=artifact+two',
     )
     expect(resolveJobEditorRoute('?sourceJobId=job%2Fone&artifactId=artifact+two')).toEqual({
       jobId: 'job/one',

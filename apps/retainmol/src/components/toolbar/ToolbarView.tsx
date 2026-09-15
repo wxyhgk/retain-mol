@@ -4,21 +4,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import type { ToolbarModel } from './useToolbarModel'
-import type { WorkspaceMode } from '@/App'
 import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { selectAppBusyMessage, useAppTaskStore } from '@/store/appTaskStore'
 
 export interface ToolbarProps {
   showInspector: boolean
-  workspaceMode: WorkspaceMode
   onToggleInspector: () => void
-  onWorkspaceModeChange: (mode: WorkspaceMode) => void
   onOpenTemplateStudio: () => void
   onSearchOpen: () => void
 }
@@ -27,9 +23,7 @@ type ToolbarViewProps = ToolbarProps & ToolbarModel
 
 export function ToolbarView({
   showInspector,
-  workspaceMode,
   onToggleInspector,
-  onWorkspaceModeChange,
   onOpenTemplateStudio,
   onSearchOpen,
   history,
@@ -60,14 +54,6 @@ export function ToolbarView({
           <span className="hidden sm:inline">RetainMol</span>
         </span>
 
-        {/* 居中：工作模式 */}
-        <div className="hidden flex-1 justify-center md:flex">
-          <WorkspaceModeSwitch value={workspaceMode} onChange={onWorkspaceModeChange} />
-        </div>
-        <div className="flex flex-1 justify-center md:hidden">
-          <WorkspaceModeDropdown value={workspaceMode} onChange={onWorkspaceModeChange} />
-        </div>
-
         {/* 右侧：命令面板 + 检查器 */}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <Tip label="命令面板 (⌘K)" side="bottom">
@@ -79,7 +65,7 @@ export function ToolbarView({
             >
               <Search size={14} />
               <span className="hidden sm:inline">搜索</span>
-              <kbd className="ml-1 hidden rounded bg-muted px-1 py-0.5 font-sans text-xs text-muted-foreground md:inline">⌘K</kbd>
+              <kbd className="ml-1 hidden rounded bg-background px-1 py-0.5 font-sans text-xs text-muted-foreground md:inline">⌘K</kbd>
             </Button>
           </Tip>
           <Tip label={showInspector ? '收起检查器' : '展开检查器'} side="bottom">
@@ -111,75 +97,6 @@ export function ToolbarView({
         onSearchOpen={onSearchOpen}
       />
     </TooltipProvider>
-  )
-}
-
-const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; title?: string }> = [
-  { id: 'build', label: 'Build' },
-  { id: 'analyze', label: 'Analyze', title: 'Analyze 工作区即将接入分析结果与可视化' },
-  { id: 'simulate', label: 'Simulate', title: '打开计算任务工作区' },
-]
-
-function WorkspaceModeSwitch({
-  value,
-  onChange,
-}: {
-  value: WorkspaceMode
-  onChange: (mode: WorkspaceMode) => void
-}) {
-  return (
-    <nav
-      aria-label="工作模式"
-      className="flex h-9 w-[300px] items-center rounded-full border border-border bg-muted p-1 shadow-inner xl:w-[330px]"
-    >
-      {WORKSPACE_MODES.map(mode => (
-        <button
-          key={mode.id}
-          type="button"
-          aria-current={value === mode.id ? 'page' : undefined}
-          title={mode.title}
-          onClick={() => onChange(mode.id)}
-          className={cn(
-            'flex h-7 flex-1 items-center justify-center rounded-full text-[11px] font-medium transition-colors',
-            value === mode.id
-              ? 'border border-primary bg-primary font-semibold text-primary-foreground shadow-sm'
-              : 'text-muted-foreground hover:bg-background hover:text-foreground',
-          )}
-        >
-          {mode.label}
-        </button>
-      ))}
-    </nav>
-  )
-}
-
-function WorkspaceModeDropdown({
-  value,
-  onChange,
-}: {
-  value: WorkspaceMode
-  onChange: (mode: WorkspaceMode) => void
-}) {
-  const current = WORKSPACE_MODES.find(m => m.id === value) ?? WORKSPACE_MODES[0]
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium">
-          {current.label}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-32">
-        {WORKSPACE_MODES.map(mode => (
-          <DropdownMenuItem
-            key={mode.id}
-            onClick={() => onChange(mode.id)}
-            className={cn('text-xs', value === mode.id && 'bg-accent font-semibold')}
-          >
-            {mode.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }
 
@@ -300,7 +217,7 @@ function EditorCommandPalette({
             )}
           </div>
         </ScrollArea>
-        <div className="flex items-center justify-between border-t border-border bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-border bg-background px-4 py-2 text-xs text-muted-foreground">
           <span>↑↓ 选择 · 回车 执行 · Esc 关闭</span>
           <span>⌘K 快速打开</span>
         </div>

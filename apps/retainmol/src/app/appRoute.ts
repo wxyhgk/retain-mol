@@ -12,7 +12,6 @@ export interface JobEditorRouteState {
 
 export function resolveAppRoute(pathname: string): AppRoute {
   if (pathname.startsWith('/templates')) return 'templates'
-  if (pathname.startsWith('/editor')) return 'editor'
   if (pathname.startsWith('/jobs')) return 'jobs'
   if (pathname.startsWith('/workflows')) return 'workflows'
   if (pathname.startsWith('/lab')) return 'lab'
@@ -20,13 +19,13 @@ export function resolveAppRoute(pathname: string): AppRoute {
 }
 
 export function pathForAppRoute(route: Exclude<AppRoute, 'templates'>): string {
-  if (route === 'dashboard') return '/'
+  if (route === 'dashboard' || route === 'editor') return '/'
   return `/${route}`
 }
 
 export function workflowEditorPath(workflowId: string, jobId: string): string {
   const search = new URLSearchParams({ workflowId, jobId })
-  return `/editor?${search.toString()}`
+  return `/?${search.toString()}`
 }
 
 export function workflowPath(workflowId: string): string {
@@ -64,7 +63,7 @@ export function resolveJobId(pathname: string): string | null {
 export function jobEditorPath(jobId: string, artifactId?: string): string {
   const search = new URLSearchParams({ sourceJobId: jobId })
   if (artifactId) search.set('artifactId', artifactId)
-  return `/editor?${search.toString()}`
+  return `/?${search.toString()}`
 }
 
 export function resolveJobEditorRoute(search: string): JobEditorRouteState | null {
