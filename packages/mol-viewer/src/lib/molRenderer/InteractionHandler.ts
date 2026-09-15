@@ -215,7 +215,9 @@ export class InteractionHandler {
       this.handleAtomClickCandidate(atomId, e)
       return
     }
-    this.flushPendingAtomClick()
+    // 键/背景点击：挂起的原子单击已不可能组成双击，直接丢弃。
+    // 若立即 flush，用户“点原子A后迅速点键B”会先误触发 A 再触发 B。
+    this.cancelPendingAtomClick()
     const bondId = this._picker.bondIdAt(e.clientX, e.clientY)
     if (bondId) {
       this.onBondClick?.(bondId, e)
@@ -286,7 +288,12 @@ export class InteractionHandler {
     // 永久悬挂并连累后续所有编辑事务
     if (this._gesture.kind !== 'idle' || this._activePointerId !== null) return
     const hit = this._picker.atomHitAt(e.clientX, e.clientY)
-    if (!hit) return
+    if (!hit) {
+      // 空白按下：同上丢弃挂起单击。否则随后拖拽（转相机）结束，
+      // 280ms 定时器仍会凭空执行那次点击（误选中/误放置）。
+      this.cancelPendingAtomClick()
+      return
+    }
     const atomId = hit.object.userData.id as string
 
     if (this.canStartFragmentTorsion?.(atomId)) {

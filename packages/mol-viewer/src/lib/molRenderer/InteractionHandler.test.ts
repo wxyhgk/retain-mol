@@ -103,6 +103,33 @@ function queueAtomClick(
   }).handleAtomClickCandidate(atomId, event)
 }
 
+function dispatchEmptyPointerDown(handler: InteractionHandler, pointerId = 1) {
+  const mutable = handler as unknown as {
+    _picker: { atomHitAt: () => null }
+    handlePointerDown: (event: PointerEvent) => void
+  }
+  mutable._picker = { atomHitAt: () => null }
+  mutable.handlePointerDown({
+    button: 0,
+    clientX: 0,
+    clientY: 0,
+    pointerId,
+    stopImmediatePropagation: () => undefined,
+  } as unknown as PointerEvent)
+}
+
+function driveCanvasClick(
+  handler: InteractionHandler,
+  picker: { atomIdAt: () => string | null; bondIdAt: () => string | null },
+) {
+  const mutable = handler as unknown as {
+    _picker: { atomIdAt: () => string | null; bondIdAt: () => string | null }
+    handleClick: (event: MouseEvent) => void
+  }
+  mutable._picker = picker
+  mutable.handleClick({ clientX: 1, clientY: 1 } as MouseEvent)
+}
+
 describe('InteractionHandler lifecycle', () => {
   it('cancels atom drag state before edit callbacks are detached', () => {
     const { canvas, controls, handler } = createHandler()
@@ -288,5 +315,79 @@ describe('InteractionHandler atom click arbitration', () => {
 
     expect(calls).toEqual([])
     first.handler.dispose()
+  })
+
+  it('drops a pending atom click when pressing empty canvas', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+    handler.onAtomDoubleClick = id => calls.push(`double:${id}`)
+
+    queueAtomClick(handler, 'a1', { timeStamp: 100 })
+    dispatchEmptyPointerDown(handler)
+    vi.runAllTimers()
+
+    expect(calls).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+    handler.dispose()
+  })
+
+  it('drops (not flushes) a pending atom click on bond click', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+    handler.onAtomDoubleClick = id => calls.push(`double:${id}`)
+    handler.onBondClick = id => calls.push(`bond:${id}`)
+
+    queueAtomClick(handler, 'a1', { timeStamp: 100 })
+    driveCanvasClick(handler, { atomIdAt: () => null, bondIdAt: () => 'b1' })
+    expect(calls).toEqual(['bond:b1'])
+    vi.runAllTimers()
+
+    expect(calls).toEqual(['bond:b1'])
+    handler.dispose()
+  })
+
+  it('drops a pending atom click on background click', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+    handler.onBackgroundClick = () => calls.push('background')
+    handler.onAtomDoubleClick = id => calls.push(`double:${id}`)
+    const mutable = handler as unknown as {
+      _picker: {
+        atomIdAt: () => string | null
+        bondIdAt: () => string | null
+        raycasterAt: () => THREE.Raycaster
+      }
+      backgroundPosAt: () => { localPos: THREE.Vector3; viewDirLocal: THREE.Vector3 }
+      handleClick: (event: MouseEvent) => void
+    }
+    mutable._picker = { atomIdAt: () => null, bondIdAt: () => null, raycasterAt: () => new THREE.Raycaster() }
+    mutable.backgroundPosAt = () => ({
+      localPos: new THREE.Vector3(),
+      viewDirLocal: new THREE.Vector3(0, 0, 1),
+    })
+    mutable.handleClick({ clientX: 1, clientY: 1 } as MouseEvent)
+    expect(calls).toEqual(['background'])
+    vi.runAllTimers()
+
+    expect(calls).toEqual(['background'])
+    handler.dispose()
+  })
+
+  it('keeps pending across same-atom press so double-click still works', () => {
+    const { handler } = createHandler()
+    const calls: string[] = []
+    handler.onAtomClick = id => calls.push(`click:${id}`)
+    handler.onAtomDoubleClick = id => calls.push(`double:${id}`)
+
+    queueAtomClick(handler, 'a1', { timeStamp: 100, clientX: 10, clientY: 10 })
+    dispatchAtomPointerDown(handler, 'a1')
+    queueAtomClick(handler, 'a1', { timeStamp: 220, clientX: 12, clientY: 11, detail: 2 })
+    vi.runAllTimers()
+
+    expect(calls).toEqual(['double:a1'])
+    handler.dispose()
   })
 })
