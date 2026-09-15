@@ -10,7 +10,7 @@
     "version": "1.0.0"
   },
   "scene": {
-    "backgroundColor": "#f0f4f8",
+    "backgroundColor": "#ffffff",
     "highlightColor": "#00d4ff",
     "highlightOpacity": 0.35
   },
