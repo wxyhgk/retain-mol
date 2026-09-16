@@ -33,4 +33,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install Lean toolchain
+        run: |
+          curl -sSf https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Cache Lean toolchain and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            formal/geometry/.lake
+          key: lean-${{ runner.os }}-${{ hashFiles('formal/geometry/lean-toolchain', 'formal/geometry/lake-manifest.json', 'formal/geometry/lakefile.toml') }}
       - run: npm run verify
