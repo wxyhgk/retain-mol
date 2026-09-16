@@ -38,28 +38,33 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
   const ketcherRef = useRef<Ketcher | null>(null)
   const syncTimeoutRef = useRef<number | null>(null)
   const lastMolfileRef = useRef<string>('')
-  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'error'>('idle')
+  // 手动反馈展示窗：轮询/订阅的静默 idle 不得在此窗口内擦掉“已同步/画布空”提示
+  const suppressPollFlashRef = useRef(false)
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
   const [lastError, setLastError] = useState<string | null>(null)
-
-  const doSync = async (ketcher: Ketcher) => {
+  const doSync = async (ketcher: Ketcher, force = false) => {
+    // 手动反馈展示窗内，轮询/订阅直接让路（晚 800ms 再试，无事可做也不打扰）
+    if (!force && suppressPollFlashRef.current) return
     try {
       setSyncState('syncing')
       const molfile = await ketcher.getMolfile()
       // 空画布时 molfile 只有 header，无原子，parseMol 会抛或得空分子，跳过
-      if (!molfile || molfile === lastMolfileRef.current) {
-        setSyncState('idle')
+      const isEmptyCanvas = !molfile || (molfile.includes('  0  0') && molfile.split('\n').length < 10)
+      if (isEmptyCanvas) {
+        // 手动点击空画布要给反馈，否则用户以为按钮坏了
+        flashSyncResult(force ? 'empty' : 'idle')
         return
       }
-      // 简单判空：M  END 段前后无原子行（V2000 原子数 0）
-      if (molfile.includes('  0  0') && molfile.split('\n').length < 10) {
-        setSyncState('idle')
+      // 轮询/订阅靠去重防回声；手动按钮强制同步，不受去重影响
+      if (!force && molfile === lastMolfileRef.current) {
+        keepManualFlashOrIdle()
         return
       }
       lastMolfileRef.current = molfile
       console.debug('[Ketcher 2D→3D] molfile changed, parsing…', molfile.slice(0, 120))
       const parsed = await parseMoleculeFile(new File([molfile], 'ketcher.mol', { type: 'chemical/x-mdl-molfile' }))
       await placeMoleculeInViewer(parsed.molecule, { mode: 'replace', animate2DTo3D: true })
-      setSyncState('idle')
+      flashSyncResult(force ? 'synced' : 'idle')
       setLastError(null)
     } catch (e) {
       console.warn('[Ketcher 2D→3D] sync failed', e)
@@ -67,6 +72,31 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
       setLastError(e instanceof Error ? e.message : String(e))
       setTimeout(() => setSyncState('idle'), 2000)
     }
+  }
+
+  // 轮询/订阅的静默分支走这里：手动反馈展示窗内不碰状态
+  const keepManualFlashOrIdle = () => {
+    if (suppressPollFlashRef.current) return
+    setSyncState('idle')
+  }
+
+  // 同步结果反馈：手动触发给明确提示（已同步/画布空），轮询保持静默 idle
+  const flashSyncResult = (result: 'idle' | 'synced' | 'empty') => {
+    if (result === 'idle') {
+      keepManualFlashOrIdle()
+      return
+    }
+    suppressPollFlashRef.current = true
+    if (result === 'empty') {
+      setSyncState('error')
+      setLastError('2D 画布为空，未同步')
+    } else {
+      setSyncState('synced')
+    }
+    setTimeout(() => {
+      suppressPollFlashRef.current = false
+      setSyncState('idle')
+    }, 2000)
   }
 
   const debouncedSync = (ketcher: Ketcher) => {
@@ -163,7 +193,7 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
     <div className="h-full w-full overflow-hidden bg-white flex flex-col">
       <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-b bg-card px-2 text-[11px]">
         <span className="shrink-0 whitespace-nowrap text-muted-foreground">
-          {syncState === 'syncing' ? '同步到 3D…' : syncState === 'error' ? `同步失败: ${lastError ?? ''}` : '2D ↔ 3D 自动同步'}
+          {syncState === 'syncing' ? '同步到 3D…' : syncState === 'synced' ? '已同步到 3D ✓' : syncState === 'error' ? `同步失败: ${lastError ?? ''}` : '2D ↔ 3D 自动同步'}
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <button
@@ -176,7 +206,7 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
           <button
             type="button"
             className="whitespace-nowrap rounded border bg-background px-2 py-0.5 text-[11px] hover:bg-accent"
-            onClick={() => ketcherRef.current && doSync(ketcherRef.current)}
+            onClick={() => ketcherRef.current && doSync(ketcherRef.current, true)}
           >
             同步到 3D
           </button>
