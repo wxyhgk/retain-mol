@@ -1,0 +1,1 @@
+{"version":3,"file":"assert.modern.js","sources":["../../src/utilities/assert.ts"],"sourcesContent":[null],"names":["assert","value","message","Error"],"mappings":";;;;;;;;;;;;;;;AAagB,SAAAA,MAAMA,CAACC,KAAc,EAAEC,OAAgB,EAAA;EACrD,IAAI,CAACD,KAAK,EAAE;IACV,MAAM,IAAIE,KAAK,CAACD,OAAO,KAAA,IAAA,IAAPA,OAAO,KAAPA,KAAAA,CAAAA,GAAAA,OAAO,GAAI,kBAAkB,CAAC,CAAA;AAChD,GAAA;AACF;;;;"}

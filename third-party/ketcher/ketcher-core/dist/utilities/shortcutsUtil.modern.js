@@ -1,0 +1,46 @@
+/****************************************************************************
+ * Copyright 2021 EPAM Systems
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ***************************************************************************/
+import { isMacOs } from 'react-device-detect';
+
+var shortcutAliasMap = {
+  Escape: 'Esc',
+  Delete: 'Del',
+  Mod: isMacOs ? '⌘' : 'Ctrl',
+  Alt: isMacOs ? 'Option' : 'Alt'
+};
+function shortcutStr(shortcut) {
+  if (!shortcut) {
+    return '';
+  }
+  var shortcutKey = Array.isArray(shortcut) ? shortcut[0] : shortcut;
+  return shortcutKey.replace(/(\b[a-z]\b$|Mod|Escape|Delete|Alt)/g, function (key) {
+    return shortcutAliasMap[key] || key.toUpperCase();
+  });
+}
+var generateMenuShortcuts = function generateMenuShortcuts(obj) {
+  return Object.keys(obj).reduce(function (acc, key) {
+    var _obj$key;
+    if ((_obj$key = obj[key]) !== null && _obj$key !== void 0 && _obj$key.shortcut) {
+      var shortcut = obj[key].shortcut;
+      var processedShortcut = shortcutStr(shortcut);
+      acc[key] = processedShortcut;
+    }
+    return acc;
+  }, {});
+};
+
+export { generateMenuShortcuts, shortcutStr };
+//# sourceMappingURL=shortcutsUtil.modern.js.map

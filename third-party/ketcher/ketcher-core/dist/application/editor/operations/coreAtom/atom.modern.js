@@ -1,0 +1,149 @@
+/****************************************************************************
+ * Copyright 2021 EPAM Systems
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ***************************************************************************/
+import _classCallCheck from '@babel/runtime/helpers/classCallCheck';
+import _createClass from '@babel/runtime/helpers/createClass';
+import _defineProperty from '@babel/runtime/helpers/defineProperty';
+import _slicedToArray from '@babel/runtime/helpers/slicedToArray';
+import _toConsumableArray from '@babel/runtime/helpers/toConsumableArray';
+import '../../../../utilities/runAsyncAction.modern.js';
+import { KetcherLogger } from '../../../../utilities/KetcherLogger.modern.js';
+import '../../../../utilities/SettingsManager.modern.js';
+import '../../../../utilities/keynorm.modern.js';
+import 'react-device-detect';
+import '../../../../utilities/clipboardUtils.modern.js';
+
+function addAtomToMoleculeStruct(atom, atomInMoleculeStruct) {
+  var bondsInMoleculeStruct = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : [];
+  var moleculeStruct = atom.monomer.monomerItem.struct;
+  moleculeStruct.atoms.set(atom.atomIdInMicroMode, atomInMoleculeStruct);
+  bondsInMoleculeStruct.forEach(function (_ref) {
+    var bondId = _ref.bondId,
+      bond = _ref.bond;
+    moleculeStruct.bonds.set(bondId, bond);
+  });
+}
+function deleteAtomFromMoleculeStruct(atom) {
+  var moleculeStruct = atom.monomer.monomerItem.struct;
+  var atomInMoleculeStruct = moleculeStruct.atoms.get(atom.atomIdInMicroMode);
+  if (!atomInMoleculeStruct) {
+    KetcherLogger.warn('Atom is not found in molecule struct during deletion');
+    return;
+  }
+  var bondsInMoleculeStruct = moleculeStruct.bonds.filter(function (_, bond) {
+    return bond.begin === atom.atomIdInMicroMode || bond.end === atom.atomIdInMicroMode;
+  });
+  moleculeStruct.atoms["delete"](atom.atomIdInMicroMode);
+  bondsInMoleculeStruct.forEach(function (_, bondId) {
+    moleculeStruct.bonds["delete"](bondId);
+  });
+  return {
+    atomInMoleculeStruct: atomInMoleculeStruct,
+    bondsInMoleculeStruct: _toConsumableArray(bondsInMoleculeStruct.entries()).map(function (_ref2) {
+      var _ref3 = _slicedToArray(_ref2, 2),
+        bondId = _ref3[0],
+        bond = _ref3[1];
+      return {
+        bondId: bondId,
+        bond: bond
+      };
+    })
+  };
+}
+var AtomAddOperation = function () {
+  function AtomAddOperation(addAtomChangeModel, deleteAtomChangeModel) {
+    _classCallCheck(this, AtomAddOperation);
+    _defineProperty(this, "addAtomChangeModel", void 0);
+    _defineProperty(this, "deleteAtomChangeModel", void 0);
+    _defineProperty(this, "atom", void 0);
+    _defineProperty(this, "deletedMoleculeStructItems", void 0);
+    _defineProperty(this, "priority", 2);
+    this.addAtomChangeModel = addAtomChangeModel;
+    this.deleteAtomChangeModel = deleteAtomChangeModel;
+    this.atom = this.addAtomChangeModel();
+  }
+  _createClass(AtomAddOperation, [{
+    key: "execute",
+    value: function execute() {
+      this.atom = this.addAtomChangeModel(this.atom);
+      if (this.deletedMoleculeStructItems) {
+        addAtomToMoleculeStruct(this.atom, this.deletedMoleculeStructItems.atomInMoleculeStruct, this.deletedMoleculeStructItems.bondsInMoleculeStruct);
+      }
+    }
+  }, {
+    key: "invert",
+    value: function invert() {
+      if (this.atom) {
+        this.deleteAtomChangeModel(this.atom);
+      }
+      this.deletedMoleculeStructItems = deleteAtomFromMoleculeStruct(this.atom);
+    }
+  }, {
+    key: "executeAfterAllOperations",
+    value: function executeAfterAllOperations(renderersManager) {
+      renderersManager.addAtom(this.atom);
+    }
+  }, {
+    key: "invertAfterAllOperations",
+    value: function invertAfterAllOperations(renderersManager) {
+      renderersManager.deleteAtom(this.atom);
+    }
+  }]);
+  return AtomAddOperation;
+}();
+var AtomDeleteOperation = function () {
+  function AtomDeleteOperation(atom, deleteAtomChangeModel, addAtomChangeModel) {
+    _classCallCheck(this, AtomDeleteOperation);
+    _defineProperty(this, "atom", void 0);
+    _defineProperty(this, "deleteAtomChangeModel", void 0);
+    _defineProperty(this, "addAtomChangeModel", void 0);
+    _defineProperty(this, "deletedMoleculeStructItems", void 0);
+    _defineProperty(this, "priority", 2);
+    this.atom = atom;
+    this.deleteAtomChangeModel = deleteAtomChangeModel;
+    this.addAtomChangeModel = addAtomChangeModel;
+  }
+  _createClass(AtomDeleteOperation, [{
+    key: "execute",
+    value: function execute() {
+      this.deleteAtomChangeModel();
+      this.deletedMoleculeStructItems = deleteAtomFromMoleculeStruct(this.atom);
+    }
+  }, {
+    key: "invert",
+    value: function invert() {
+      this.addAtomChangeModel(this.atom);
+      if (this.deletedMoleculeStructItems) {
+        addAtomToMoleculeStruct(this.atom, this.deletedMoleculeStructItems.atomInMoleculeStruct, this.deletedMoleculeStructItems.bondsInMoleculeStruct);
+      }
+    }
+  }, {
+    key: "invertAfterAllOperations",
+    value: function invertAfterAllOperations(renderersManager) {
+      renderersManager.addAtom(this.atom);
+      renderersManager.rerenderSGroups();
+    }
+  }, {
+    key: "executeAfterAllOperations",
+    value: function executeAfterAllOperations(renderersManager) {
+      renderersManager.deleteAtom(this.atom);
+      renderersManager.rerenderSGroups();
+    }
+  }]);
+  return AtomDeleteOperation;
+}();
+
+export { AtomAddOperation, AtomDeleteOperation };
+//# sourceMappingURL=atom.modern.js.map

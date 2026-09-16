@@ -1,0 +1,37 @@
+import type { RaphaelPaper } from 'raphael';
+import type { RGroupAttachmentPoint } from '../../../domain/entities/rgroupAttachmentPoint';
+import { Vec2 } from '../../../domain/entities/vec2';
+import type ReAtom from './reatom';
+import ReObject from './reobject';
+import type ReStruct from './restruct';
+import type { Render } from '../raphaelRender';
+import type { RenderOptions } from '../render.types';
+declare class ReRGroupAttachmentPoint extends ReObject {
+    item: RGroupAttachmentPoint;
+    reAtom: ReAtom;
+    lineDirectionVector: Vec2;
+    static readonly LINE_OUTLINE_WIDTH = 0.36;
+    static readonly OUTLINE_PADDING = 0.15;
+    static readonly CURVE_OUTLINE_WIDTH = 1;
+    static readonly CURVE_OUTLINE_HEIGHT = 0.42;
+    constructor(item: RGroupAttachmentPoint, reAtom: ReAtom);
+    get normalizedLineDirectionVector(): Vec2;
+    get normalizedCurveDirectionVector(): Vec2;
+    get startPoint(): Vec2;
+    get middlePoint(): Vec2;
+    get endPoint(): Vec2;
+    get outlineEndPoint(): Vec2;
+    static isSelectable(): boolean;
+    getOutlinePoints(isHighlight?: boolean): readonly [Vec2, Vec2, Vec2, Vec2, Vec2, Vec2, Vec2, Vec2, Vec2, Vec2, Vec2, Vec2, Vec2, Vec2];
+    getDistanceTo(destination: Vec2): number;
+    private readonly makeHighlightePlate;
+    show(restruct: ReStruct, rgroupAttachmentPointId: number): void;
+    private addTestAttributes;
+    private getHoverPlatePath;
+    makeHoverPlate(render: Render): any;
+    makeSelectionPlate(_restruct: ReStruct, paper: RaphaelPaper, options: RenderOptions): any;
+    drawHover(render: Render): any;
+    private getAttachmentPointDirectionVector;
+    private isTrisectionAttachmentPoint;
+}
+export { ReRGroupAttachmentPoint };

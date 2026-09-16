@@ -1,0 +1,36 @@
+import type { D3SvgElementSelection } from '../../../render/types';
+import type { PolymerBond } from '../../../../domain/entities/PolymerBond';
+import { BaseRenderer } from '../BaseRenderer';
+export declare class FlexModePolymerBondRenderer extends BaseRenderer {
+    readonly polymerBond: PolymerBond;
+    private get editorEvents();
+    private selectionElement;
+    private previousStateOfIsMonomersOnSameHorizontalLine;
+    private path;
+    bodyElement?: D3SvgElementSelection<SVGLineElement, this>;
+    constructor(polymerBond: PolymerBond);
+    get rootBBox(): DOMRect | undefined;
+    get width(): number;
+    get height(): number;
+    private get scaledPosition();
+    moveSelection(): void;
+    appendBond(rootElement: any): D3SvgElementSelection<SVGLineElement, this> | undefined;
+    generateLinearBondPath(): void;
+    generateEnvelopingBondPath(): void;
+    private addCornerBasedOnDirection;
+    private adjustPointForCorner;
+    appendBondGraph(rootElement: any): D3SvgElementSelection<SVGLineElement, this> | undefined;
+    private getExpandedBoundingBox;
+    private getPointOnBBox;
+    private appendRootElement;
+    show(): void;
+    drawSelection(): void;
+    moveEnd(): void;
+    private moveGraphBondEnd;
+    moveStart(): void;
+    private moveGraphBondStart;
+    protected appendHoverAreaElement(): void;
+    appendHover(): void;
+    removeHover(): string | D3SvgElementSelection<SVGPathElement, void>;
+    remove(): void;
+}

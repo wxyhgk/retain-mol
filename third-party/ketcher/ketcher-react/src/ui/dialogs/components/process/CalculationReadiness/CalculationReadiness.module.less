@@ -1,0 +1,103 @@
+@import '../../../../../style/variables.less';
+
+.dialog {
+  width: 520px;
+  color: @color-text-primary;
+}
+
+.intro {
+  margin: 0 0 12px;
+  color: @color-text-secondary;
+}
+
+.inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  input {
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid @color-grey-4;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 16px 0 0;
+
+  div {
+    padding: 8px;
+    border: 1px solid @color-grey-4;
+    border-radius: 4px;
+    background: @color-background-secondary;
+  }
+
+  dt {
+    color: @color-text-secondary;
+    font-size: 11px;
+  }
+
+  dd {
+    margin: 4px 0 0;
+    font-size: 14px;
+    font-weight: 500;
+  }
+}
+
+.revision {
+  margin: 10px 0;
+  color: @color-text-secondary;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.ready {
+  color: @color-text-primary;
+  font-weight: 500;
+}
+
+.error,
+.issueError {
+  color: @color-secondary-red;
+}
+
+.issues {
+  max-height: 250px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 62px 1fr;
+    gap: 4px 8px;
+    padding: 8px 0;
+    border-top: 1px solid @color-grey-3;
+  }
+
+  span,
+  small {
+    color: @color-text-primary;
+  }
+
+  small {
+    grid-column: 2;
+    font-family: monospace;
+  }
+}
+
+.issueWarning strong {
+  color: @color-text-secondary;
+}

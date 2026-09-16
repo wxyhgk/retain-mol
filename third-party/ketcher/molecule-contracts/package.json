@@ -1,0 +1,42 @@
+{
+  "name": "molecule-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.14.1"
+  },
+  "description": "Versioned JSON contracts for RetainMol molecule editing",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./schemas/edit-request.json": "./dist/schemas/edit-request.json",
+    "./schemas/document.json": "./dist/schemas/document.json",
+    "./schemas/commit-request.json": "./dist/schemas/commit-request.json",
+    "./schemas/history-request.json": "./dist/schemas/history-request.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc && tsc -p tsconfig.cjs.json && node scripts/export-schemas.mjs",
+    "test:types": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "jsonschema": "^1.5.0"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://retainmol.invalid/schemas/molecule-commit-request.v1.json",
+  "type": "object",
+  "properties": {
+    "preparedId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  },
+  "required": [
+    "preparedId",
+    "requestId"
+  ],
+  "additionalProperties": false,
+  "propertyNames": {
+    "enum": [
+      "preparedId",
+      "requestId"
+    ]
+  }
+}

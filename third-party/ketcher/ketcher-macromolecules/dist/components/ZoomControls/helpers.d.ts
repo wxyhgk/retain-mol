@@ -1,0 +1,26 @@
+export declare const hotkeysShortcuts: {
+    RNASequenceType: string;
+    DNASequenceType: string;
+    PEPTIDESequenceTYpe: string;
+    exit: string;
+    switchSelectTool: string;
+    undo: string;
+    redo: string;
+    erase: string;
+    bondSingle: string;
+    bondHydrogen: string;
+    clear: string;
+    'zoom-plus': string;
+    'zoom-minus': string;
+    'zoom-reset': string;
+    'select-all': string;
+    hand: string;
+    'hide-scrollbars': string;
+    createRnaAntisenseStrand: string;
+    createDnaAntisenseStrand: string;
+    toggleMacromoleculesPropertiesVisibility: string;
+    arrangeRing: string;
+};
+export declare const getIntegerFromString: (zoomInput: string | undefined) => number;
+export declare const getValidZoom: (zoom: number, currentZoom: number) => number;
+export declare const updateInputString: (zoom: number, inputElement: HTMLInputElement | null) => void;

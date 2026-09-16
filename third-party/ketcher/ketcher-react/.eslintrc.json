@@ -1,0 +1,157 @@
+{
+  "root": false,
+  "env": {
+    "browser": true
+  },
+  "extends": [
+    "plugin:react/jsx-runtime",
+    "plugin:jsx-a11y/recommended",
+    "plugin:react-hooks/recommended",
+    "plugin:react-you-might-not-need-an-effect/legacy-recommended",
+    "plugin:jest/recommended"
+  ],
+  "rules": {
+    "jsx-a11y/label-has-associated-control": "warn",
+    "jsx-a11y/no-static-element-interactions": "warn",
+    "jsx-a11y/no-autofocus": "warn",
+    "jsx-a11y/no-noninteractive-element-interactions": "warn",
+    "jsx-a11y/alt-text": "warn",
+    "jsx-a11y/click-events-have-key-events": "warn",
+    "@typescript-eslint/consistent-type-imports": [
+      "error",
+      {
+        "prefer": "type-imports",
+        "fixStyle": "separate-type-imports"
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "assert",
+            "message": "Node's 'assert' module breaks browser bundlers (see issue #3733). Use `import { assert } from 'ketcher-core'` instead."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "rules": {
+        "no-useless-constructor": "off",
+        "@typescript-eslint/no-useless-constructor": "error"
+      }
+    },
+    {
+      "files": ["**/*.d.ts"],
+      "rules": {
+        "@typescript-eslint/consistent-type-imports": "off"
+      }
+    },
+    {
+      "files": [
+        "**/__tests__/**/*.[jt]s?(x)",
+        "**/?(*.)+(spec|test).[jt]s?(x)"
+      ],
+      "extends": ["plugin:testing-library/react"],
+      "rules": {
+        "testing-library/no-container": "warn",
+        "testing-library/no-node-access": "warn"
+      }
+    },
+    {
+      "files": [
+        "src/bootstrap/builders/ketcher/KetcherBuilder.ts",
+        "src/editor/Editor.ts",
+        "src/editor/tool/template.ts",
+        "src/editor/tool/text.ts",
+        "src/editor/utils/functionalGroupsTooltip.ts",
+        "src/ui/App/initApp.tsx",
+        "src/ui/data/convert/structconv.ts",
+        "src/ui/dialogs/legacy/template/TemplateTable.tsx",
+        "src/ui/components/ContextMenu/hooks/useBondSGroupAttach.ts",
+        "src/ui/components/ContextMenu/hooks/useBondSGroupEdit.ts",
+        "src/ui/dialogs/components/toolbox/RgroupLogic/components/IfThenSelect/IfThenSelect.tsx",
+        "src/ui/toolbars/ToolbarGroupItem/ToolbarMultiToolItem/usePortalOpening.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-non-null-assertion": "warn"
+      }
+    },
+    {
+      "files": [
+        "src/editor/Editor.ts",
+        "src/editor/HoverIcon.ts",
+        "src/editor/tool/Tool.ts",
+        "src/editor/tool/atom.ts",
+        "src/editor/tool/bond.ts",
+        "src/editor/tool/chain.ts",
+        "src/editor/tool/charge.ts",
+        "src/editor/tool/eraser.ts",
+        "src/editor/tool/helper/dropAndMerge.ts",
+        "src/editor/tool/helper/lasso.ts",
+        "src/editor/tool/helper/locate.ts",
+        "src/editor/tool/paste.ts",
+        "src/editor/tool/reactionmap.ts",
+        "src/editor/tool/reactionplus.ts",
+        "src/editor/tool/rotate-controller.test.ts",
+        "src/editor/tool/rotate-controller.ts",
+        "src/editor/tool/rotate.ts",
+        "src/editor/tool/sgroup.ts",
+        "src/editor/tool/simpleobject.ts",
+        "src/editor/tool/template.ts",
+        "src/editor/tool/text.ts",
+        "src/editor/utils/customOnChangeHandler.ts",
+        "src/ui/App/initApp.tsx",
+        "src/ui/Portal/Portal.tsx",
+        "src/ui/action/action.types.ts",
+        "src/ui/action/isHidden.ts",
+        "src/ui/primitives/form/SchemaInput/SchemaInput.tsx",
+        "src/ui/primitives/form/colorPicker/ColorPicker.tsx",
+        "src/ui/primitives/view/savebutton.tsx",
+        "src/ui/data/convert/structConverter.ts",
+        "src/ui/data/convert/structconv.ts",
+        "src/ui/data/schema/options-schema.ts",
+        "src/ui/dialogs/legacy/index.ts",
+        "src/ui/dialogs/legacy/template/TemplateDialog.tsx",
+        "src/ui/dialogs/legacy/template/TemplateTable.tsx",
+        "src/ui/dialogs/legacy/toolbox/enhancedStereo/enhancedStereo.tsx",
+        "src/ui/state/functionalGroups/index.ts",
+        "src/ui/state/handleHotkeysOverItem.ts",
+        "src/ui/state/hotkeys.ts",
+        "src/ui/state/shared.ts",
+        "src/ui/utils/index.ts",
+        "src/ui/views/AppClipArea.tsx",
+        "src/ui/components/StructEditor/InfoPanel.tsx",
+        "src/ui/components/StructEditor/InfoTooltip.tsx",
+        "src/ui/dialogs/Modal.tsx",
+        "src/ui/dialogs/components/Text/Text.tsx",
+        "src/ui/dialogs/components/document/Open/Open.tsx",
+        "src/ui/dialogs/components/meta/Settings/Settings.tsx",
+        "src/ui/dialogs/components/process/Miew/Miew.tsx",
+        "src/ui/dialogs/components/toolbox/Atom/Atom.container.ts",
+        "src/ui/dialogs/components/toolbox/Attach/Attach.container.ts",
+        "src/ui/dialogs/components/toolbox/Automap/Automap.container.ts",
+        "src/ui/dialogs/components/toolbox/Bond/Bond.container.ts",
+        "src/ui/dialogs/components/toolbox/FG/RemoveFG.tsx",
+        "src/ui/dialogs/components/toolbox/RgroupLogic/RgroupLogic.container.ts",
+        "src/ui/dialogs/components/toolbox/RgroupLogic/components/IfThenSelect/IfThenSelect.tsx",
+        "src/ui/dialogs/modal.types.ts",
+        "src/ui/toolbars/ArrowScroll/ArrowScroll.tsx",
+        "src/ui/toolbars/BottomToolbar/BottomToolbar.tsx",
+        "src/ui/toolbars/BottomToolbar/TemplatesList/TemplatesList.tsx",
+        "src/ui/toolbars/FloatingTools/FloatingTools.container.ts",
+        "src/ui/toolbars/LeftToolbar/LeftToolbar.container.ts",
+        "src/ui/toolbars/RightToolbar/AtomsList/AtomsList.tsx",
+        "src/ui/toolbars/RightToolbar/RightToolbar.tsx",
+        "src/ui/toolbars/TopToolbar/TopToolbar.container.ts",
+        "src/typings.d.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "warn"
+      }
+    }
+  ]
+}

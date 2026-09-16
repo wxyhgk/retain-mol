@@ -1,0 +1,1 @@
+{"version":3,"file":"index.js","sources":["../../../../../src/application/editor/operations/rgroupAttachmentPoint/index.ts"],"sourcesContent":[null],"names":["RGroupAttachmentPointAdd","InverseConstructor","RGroupAttachmentPointRemove"],"mappings":";;;;;;;;;;;;;;;;;;;;;;AAGAA,iDAAwB,CAACC,kBAAkB,GAAGC,uDAA2B,CAAA;AACzEA,uDAA2B,CAACD,kBAAkB,GAAGD,iDAAwB;;;;;"}

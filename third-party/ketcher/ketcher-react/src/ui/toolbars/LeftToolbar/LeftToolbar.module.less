@@ -1,0 +1,84 @@
+/****************************************************************************
+ * Copyright 2021 EPAM Systems
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ***************************************************************************/
+
+@import '../toolbar';
+
+.root {
+  .toolbar();
+  .vertical-toolbar();
+
+  width: 68px;
+  margin-top: 0;
+  margin-left: 0;
+  padding-right: 0;
+  align-items: center;
+  background: transparent;
+
+  // TODO: change group style, if will decide to get rid of delimiter everywhere
+  .group:not(:last-of-type) {
+    border-bottom: none;
+  }
+}
+
+.buttons {
+  overflow: hidden;
+  padding-right: 5px;
+  scroll-behavior: smooth;
+}
+
+.borderOff {
+  border-bottom: none !important;
+}
+
+.groupItem {
+  padding: 2px;
+  background-color: @color-background-primary;
+  border-radius: 6px;
+  border: 1px solid @color-border-hover;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+
+  // TODO: move to action button styles, when all buttons will have same style
+  svg {
+    right: 3px;
+    bottom: 3px;
+  }
+
+  button {
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+
+    & > svg {
+      top: 3px;
+      left: 3px;
+    }
+  }
+}
+
+.placeholder {
+  width: 28px;
+  height: 28px;
+  margin: 2px;
+  box-sizing: border-box;
+  border: 1px dashed #e1e5ea;
+  border-radius: 4px;
+  background: transparent;
+  opacity: 0.45;
+}

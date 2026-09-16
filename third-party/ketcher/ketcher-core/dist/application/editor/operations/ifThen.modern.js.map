@@ -1,0 +1,1 @@
+{"version":3,"file":"ifThen.modern.js","sources":["../../../../src/application/editor/operations/ifThen.ts"],"sourcesContent":[null],"names":["UpdateIfThen","InverseConstructor","RestoreIfThen"],"mappings":";;;;;;;;;;;;;;;;;;;;AAmBAA,YAAY,CAACC,kBAAkB,GAAGC,aAAa,CAAA;AAC/CA,aAAa,CAACD,kBAAkB,GAAGD,YAAY"}

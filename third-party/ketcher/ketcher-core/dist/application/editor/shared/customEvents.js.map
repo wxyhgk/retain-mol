@@ -1,0 +1,1 @@
+{"version":3,"file":"customEvents.js","sources":["../../../../src/application/editor/shared/customEvents.ts"],"sourcesContent":[null],"names":["MonomerCreationAttachmentPointClickEvent","MonomerCreationComponentStructureUpdateEvent"],"mappings":";;;;;;;;;;;;;;;;;;;AAGO,IAAMA,wCAAwC,GACnD,sCAAqC;AAEhC,IAAMC,4CAA4C,GACvD;;;;;"}

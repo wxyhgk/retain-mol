@@ -1,0 +1,1 @@
+{"version":3,"file":"descriptors.modern.js","sources":["../../../../src/application/editor/operations/descriptors.ts"],"sourcesContent":[null],"names":["AlignDescriptors","InverseConstructor","RestoreDescriptorsPosition"],"mappings":";;;;;;;;;;;;;;;;;;;;AAmBAA,gBAAgB,CAACC,kBAAkB,GAAGC,0BAA0B,CAAA;AAChEA,0BAA0B,CAACD,kBAAkB,GAAGD,gBAAgB"}

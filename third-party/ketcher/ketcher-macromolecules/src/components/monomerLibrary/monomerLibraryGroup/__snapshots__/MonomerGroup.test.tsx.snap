@@ -1,0 +1,760 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`Monomer Group should apply correct style if selected 1`] = `
+<div
+  class="css-w61mbe"
+  data-monomer-item-id="RRMonomerName___RRName"
+  data-testid="RRMonomerName___RRName"
+>
+  <span
+    class="css-uahybi"
+  >
+    R
+  </span>
+  <div
+    aria-label=""
+    class="css-daj1kg"
+    data-mui-internal-clone-element="true"
+  >
+    <svg
+      class="autochain css-1u7bcdc"
+      name="monomer-autochain"
+    />
+  </div>
+  <button
+    aria-label="Toggle favorite"
+    class="star "
+    type="button"
+  >
+    ★
+  </button>
+</div>
+`;
+
+exports[`Monomer Group should render correct with title prop 1`] = `
+{
+  "asFragment": [Function],
+  "baseElement": <body>
+    <div>
+      <div
+        class="css-4weiu8"
+      >
+        <div
+          class="css-a0lsh8"
+        >
+          Mock title
+        </div>
+        <div
+          class="css-1a3tnc1"
+        >
+          <div
+            class="css-mfw0go"
+            data-monomer-item-id="RRMonomerName___RRName"
+            data-testid="RRMonomerName___RRName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              R
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+          <div
+            class="css-1mkwiyz"
+            data-monomer-item-id="mAMonomerName___mAName"
+            data-testid="mAMonomerName___mAName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              m
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+          <div
+            class="css-rt02do"
+            data-monomer-item-id="dDMonomerName___dDName"
+            data-testid="dDMonomerName___dDName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              d
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+          <div
+            class="css-mfw0go"
+            data-monomer-item-id="arRMonomerName___arRName"
+            data-testid="arRMonomerName___arRName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              ar
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+          <div
+            class="css-1mkwiyz"
+            data-monomer-item-id="LdLMonomerName___LdLRName"
+            data-testid="LdLMonomerName___LdLRName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              Ld
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>,
+  "container": <div>
+    <div
+      class="css-4weiu8"
+    >
+      <div
+        class="css-a0lsh8"
+      >
+        Mock title
+      </div>
+      <div
+        class="css-1a3tnc1"
+      >
+        <div
+          class="css-mfw0go"
+          data-monomer-item-id="RRMonomerName___RRName"
+          data-testid="RRMonomerName___RRName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            R
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+        <div
+          class="css-1mkwiyz"
+          data-monomer-item-id="mAMonomerName___mAName"
+          data-testid="mAMonomerName___mAName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            m
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+        <div
+          class="css-rt02do"
+          data-monomer-item-id="dDMonomerName___dDName"
+          data-testid="dDMonomerName___dDName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            d
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+        <div
+          class="css-mfw0go"
+          data-monomer-item-id="arRMonomerName___arRName"
+          data-testid="arRMonomerName___arRName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            ar
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+        <div
+          class="css-1mkwiyz"
+          data-monomer-item-id="LdLMonomerName___LdLRName"
+          data-testid="LdLMonomerName___LdLRName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            Ld
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>,
+  "debug": [Function],
+  "findAllByAltText": [Function],
+  "findAllByDisplayValue": [Function],
+  "findAllByLabelText": [Function],
+  "findAllByPlaceholderText": [Function],
+  "findAllByRole": [Function],
+  "findAllByTestId": [Function],
+  "findAllByText": [Function],
+  "findAllByTitle": [Function],
+  "findByAltText": [Function],
+  "findByDisplayValue": [Function],
+  "findByLabelText": [Function],
+  "findByPlaceholderText": [Function],
+  "findByRole": [Function],
+  "findByTestId": [Function],
+  "findByText": [Function],
+  "findByTitle": [Function],
+  "getAllByAltText": [Function],
+  "getAllByDisplayValue": [Function],
+  "getAllByLabelText": [Function],
+  "getAllByPlaceholderText": [Function],
+  "getAllByRole": [Function],
+  "getAllByTestId": [Function],
+  "getAllByText": [Function],
+  "getAllByTitle": [Function],
+  "getByAltText": [Function],
+  "getByDisplayValue": [Function],
+  "getByLabelText": [Function],
+  "getByPlaceholderText": [Function],
+  "getByRole": [Function],
+  "getByTestId": [Function],
+  "getByText": [Function],
+  "getByTitle": [Function],
+  "queryAllByAltText": [Function],
+  "queryAllByDisplayValue": [Function],
+  "queryAllByLabelText": [Function],
+  "queryAllByPlaceholderText": [Function],
+  "queryAllByRole": [Function],
+  "queryAllByTestId": [Function],
+  "queryAllByText": [Function],
+  "queryAllByTitle": [Function],
+  "queryByAltText": [Function],
+  "queryByDisplayValue": [Function],
+  "queryByLabelText": [Function],
+  "queryByPlaceholderText": [Function],
+  "queryByRole": [Function],
+  "queryByTestId": [Function],
+  "queryByText": [Function],
+  "queryByTitle": [Function],
+  "rerender": [Function],
+  "unmount": [Function],
+}
+`;
+
+exports[`Monomer Group should render correct without title prop 1`] = `
+{
+  "asFragment": [Function],
+  "baseElement": <body>
+    <div>
+      <div
+        class="css-4weiu8"
+      >
+        <div
+          class="css-1a3tnc1"
+        >
+          <div
+            class="css-mfw0go"
+            data-monomer-item-id="RRMonomerName___RRName"
+            data-testid="RRMonomerName___RRName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              R
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+          <div
+            class="css-1mkwiyz"
+            data-monomer-item-id="mAMonomerName___mAName"
+            data-testid="mAMonomerName___mAName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              m
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+          <div
+            class="css-rt02do"
+            data-monomer-item-id="dDMonomerName___dDName"
+            data-testid="dDMonomerName___dDName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              d
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+          <div
+            class="css-mfw0go"
+            data-monomer-item-id="arRMonomerName___arRName"
+            data-testid="arRMonomerName___arRName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              ar
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+          <div
+            class="css-1mkwiyz"
+            data-monomer-item-id="LdLMonomerName___LdLRName"
+            data-testid="LdLMonomerName___LdLRName"
+          >
+            <span
+              class="css-uahybi"
+            >
+              Ld
+            </span>
+            <div
+              aria-label=""
+              class="css-daj1kg"
+              data-mui-internal-clone-element="true"
+            >
+              <svg
+                class="autochain css-1u7bcdc"
+                name="monomer-autochain"
+              />
+            </div>
+            <button
+              aria-label="Toggle favorite"
+              class="star "
+              type="button"
+            >
+              ★
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>,
+  "container": <div>
+    <div
+      class="css-4weiu8"
+    >
+      <div
+        class="css-1a3tnc1"
+      >
+        <div
+          class="css-mfw0go"
+          data-monomer-item-id="RRMonomerName___RRName"
+          data-testid="RRMonomerName___RRName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            R
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+        <div
+          class="css-1mkwiyz"
+          data-monomer-item-id="mAMonomerName___mAName"
+          data-testid="mAMonomerName___mAName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            m
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+        <div
+          class="css-rt02do"
+          data-monomer-item-id="dDMonomerName___dDName"
+          data-testid="dDMonomerName___dDName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            d
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+        <div
+          class="css-mfw0go"
+          data-monomer-item-id="arRMonomerName___arRName"
+          data-testid="arRMonomerName___arRName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            ar
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+        <div
+          class="css-1mkwiyz"
+          data-monomer-item-id="LdLMonomerName___LdLRName"
+          data-testid="LdLMonomerName___LdLRName"
+        >
+          <span
+            class="css-uahybi"
+          >
+            Ld
+          </span>
+          <div
+            aria-label=""
+            class="css-daj1kg"
+            data-mui-internal-clone-element="true"
+          >
+            <svg
+              class="autochain css-1u7bcdc"
+              name="monomer-autochain"
+            />
+          </div>
+          <button
+            aria-label="Toggle favorite"
+            class="star "
+            type="button"
+          >
+            ★
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>,
+  "debug": [Function],
+  "findAllByAltText": [Function],
+  "findAllByDisplayValue": [Function],
+  "findAllByLabelText": [Function],
+  "findAllByPlaceholderText": [Function],
+  "findAllByRole": [Function],
+  "findAllByTestId": [Function],
+  "findAllByText": [Function],
+  "findAllByTitle": [Function],
+  "findByAltText": [Function],
+  "findByDisplayValue": [Function],
+  "findByLabelText": [Function],
+  "findByPlaceholderText": [Function],
+  "findByRole": [Function],
+  "findByTestId": [Function],
+  "findByText": [Function],
+  "findByTitle": [Function],
+  "getAllByAltText": [Function],
+  "getAllByDisplayValue": [Function],
+  "getAllByLabelText": [Function],
+  "getAllByPlaceholderText": [Function],
+  "getAllByRole": [Function],
+  "getAllByTestId": [Function],
+  "getAllByText": [Function],
+  "getAllByTitle": [Function],
+  "getByAltText": [Function],
+  "getByDisplayValue": [Function],
+  "getByLabelText": [Function],
+  "getByPlaceholderText": [Function],
+  "getByRole": [Function],
+  "getByTestId": [Function],
+  "getByText": [Function],
+  "getByTitle": [Function],
+  "queryAllByAltText": [Function],
+  "queryAllByDisplayValue": [Function],
+  "queryAllByLabelText": [Function],
+  "queryAllByPlaceholderText": [Function],
+  "queryAllByRole": [Function],
+  "queryAllByTestId": [Function],
+  "queryAllByText": [Function],
+  "queryAllByTitle": [Function],
+  "queryByAltText": [Function],
+  "queryByDisplayValue": [Function],
+  "queryByLabelText": [Function],
+  "queryByPlaceholderText": [Function],
+  "queryByRole": [Function],
+  "queryByTestId": [Function],
+  "queryByText": [Function],
+  "queryByTitle": [Function],
+  "rerender": [Function],
+  "unmount": [Function],
+}
+`;

@@ -1,5 +1,10 @@
 node_modules/
 dist/
+# Vendored Ketcher sources ship their prebuilt dist (rebuilding needs the
+# rollup/WASM toolchain); everything else under dist/ stays ignored.
+!third-party/ketcher/*/dist/
+# npm 会把 file: 依赖自身的依赖装进包目录（与根 node_modules 同理的可再生安装产物，不提交）
+third-party/ketcher/*/node_modules/
 .cache/
 *.local
 .DS_Store

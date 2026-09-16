@@ -1,0 +1,174 @@
+/****************************************************************************
+ * Copyright 2021 EPAM Systems
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ***************************************************************************/
+
+import type { Action } from './actions/action';
+import type {
+  MonomerCreationState,
+  Render,
+  RenderOptions,
+} from 'application/render';
+import type { Struct } from 'domain/entities/struct';
+import type { selectionKeys } from './shared/constants';
+import type { PipelineSubscription, Subscription } from 'subscription';
+import type { IRnaPreset } from './tools/Tool';
+import type { MonomerOrAmbiguousType, AttachmentPointName } from 'domain/types';
+import type { BaseMonomer } from 'domain/entities/BaseMonomer';
+
+export type EditMonomerVariant = 'single' | 'identical' | 'non-identical';
+
+export interface EditMonomerPayload {
+  fgIds: number[];
+  variant: EditMonomerVariant;
+}
+
+export type EditorSelection = Partial<
+  Record<typeof selectionKeys[number], number[]>
+> & {
+  enhancedFlags?: number[];
+};
+export type FloatingToolsParams = {
+  visible?: boolean;
+  rotateHandlePosition?: { x: number; y: number };
+};
+
+export type EditorOptions = Partial<
+  RenderOptions & {
+    viewOnlyMode: boolean;
+  }
+>;
+
+export enum EditorType {
+  Micromolecules = 0,
+  Macromolecules = 1,
+}
+
+/** A completed model change, separate from transient tool previews. */
+export type EditorDocumentChangeReason =
+  | 'edit'
+  | 'undo'
+  | 'redo'
+  | 'replace'
+  | 'untracked'
+  | 'mode'
+  | 'dispose';
+
+export type MoleculeCanvasCommitResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: 'busy' | 'changed' | 'render' | 'rollback';
+      message: string;
+    };
+
+export interface Editor {
+  isDitrty: () => boolean;
+  setOrigin: () => void;
+  struct: (
+    struct?: Struct,
+    needToCenterStruct?: boolean,
+    x?: number,
+    y?: number,
+  ) => Struct;
+  structToAddFragment: (struct: Struct, x?: number, y?: number) => Struct;
+  subscribe: (eventName: string, handler: (data?: any) => any) => any;
+  unsubscribe: (eventName: string, subscriber: any) => void;
+  subscribeDocumentChanges?: (
+    listener: (reason: EditorDocumentChangeReason) => void,
+  ) => () => void;
+  notifyDocumentChange?: (reason: EditorDocumentChangeReason) => void;
+  disposeDocumentObservers?: () => void;
+  getMoleculeEditBusyReason?(): string | null;
+  getMoleculeEditUnavailableReason?(): string | null;
+  commitMoleculeStruct?(
+    candidate: Struct,
+    expected: Struct,
+    onCommitted: () => void,
+  ): MoleculeCanvasCommitResult;
+  selection: (arg?: EditorSelection | 'all' | null) => EditorSelection | null;
+  undo: () => void;
+  redo: () => void;
+  clear: () => void;
+  clearHistory: () => void;
+  options(): RenderOptions;
+  options(value: EditorOptions): void;
+  setOptions: (opts: string) => void;
+  zoom: (value?: any) => any;
+  structSelected: () => Struct;
+  explicitSelected: () => EditorSelection;
+  centerStruct: () => void;
+  zoomAccordingContent: (struct: Struct) => void;
+  errorHandler: ((message: string) => void) | null;
+  event: {
+    message: Subscription;
+    tooltip: Subscription;
+    elementEdit: PipelineSubscription;
+    bondEdit: PipelineSubscription;
+    zoomIn: PipelineSubscription;
+    zoomOut: PipelineSubscription;
+    rgroupEdit: PipelineSubscription;
+    sgroupEdit: PipelineSubscription;
+    sdataEdit: PipelineSubscription;
+    quickEdit: PipelineSubscription;
+    attachEdit: PipelineSubscription;
+    removeFG: PipelineSubscription;
+    editMonomer: PipelineSubscription;
+    change: Subscription;
+    selectionChange: PipelineSubscription;
+    aromatizeStruct: PipelineSubscription;
+    dearomatizeStruct: PipelineSubscription;
+    enhancedStereoEdit: PipelineSubscription;
+    confirm: PipelineSubscription;
+    showInfo: PipelineSubscription;
+    apiSettings: PipelineSubscription;
+    cursor: Subscription;
+    updateFloatingTools: Subscription<FloatingToolsParams>;
+  };
+  update: (
+    action: Action | true,
+    ignoreHistory?: boolean,
+    options?: { resizeCanvas: boolean },
+  ) => void;
+  render: Render;
+  // supposed to be RotateController from 'ketcher-react' package
+  rotateController: any;
+  macromoleculeConvertionError: string | null | undefined;
+  setMacromoleculeConvertionError: (errorMessage: string) => void;
+  clearMacromoleculeConvertionError: () => void;
+  serverSettings: object;
+  focusCliparea: () => void;
+  closeMonomerCreationWizard: (restoreOriginalStruct?: boolean) => void;
+  ketcherId: string;
+  isMonomerCreationWizardActive: boolean;
+  readonly isMonomerCreationDocumentTransitioning?: boolean;
+  monomerCreationState: MonomerCreationState;
+}
+
+export type LibraryItemDragState = {
+  item: IRnaPreset | MonomerOrAmbiguousType;
+  position: {
+    x: number;
+    y: number;
+  };
+} | null;
+
+/**
+ * Identifies a specific free attachment point on a monomer.
+ * Used to track drag-over hover targets during library-item drag operations.
+ */
+export type AttachmentPointTarget = {
+  monomer: BaseMonomer;
+  attachmentPointName: AttachmentPointName;
+};

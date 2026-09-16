@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "recognition-fixtures.v1",
+  "generator": "Open Babel 3",
+  "depiction": "512px black-and-white skeletal formula without labels",
+  "fixtures": [
+    {
+      "id": "blind-001",
+      "smiles": "CCCC1CCC(C1CC)C",
+      "atomCount": 11,
+      "bondCount": 11,
+      "imageFile": "blind-001.png",
+      "molFile": "blind-001.mol",
+      "sdfFile": "blind-001.sdf"
+    },
+    {
+      "id": "blind-002",
+      "smiles": "NCCC1CCC(CC1)OCC",
+      "atomCount": 12,
+      "bondCount": 12,
+      "imageFile": "blind-002.png",
+      "molFile": "blind-002.mol",
+      "sdfFile": "blind-002.sdf"
+    },
+    {
+      "id": "blind-003",
+      "smiles": "CCC1CCOCC1C(C)C",
+      "atomCount": 11,
+      "bondCount": 11,
+      "imageFile": "blind-003.png",
+      "molFile": "blind-003.mol",
+      "sdfFile": "blind-003.sdf"
+    },
+    {
+      "id": "blind-004",
+      "smiles": "CCC1(C)CCC1OCC(C)C",
+      "atomCount": 12,
+      "bondCount": 12,
+      "imageFile": "blind-004.png",
+      "molFile": "blind-004.mol",
+      "sdfFile": "blind-004.sdf"
+    },
+    {
+      "id": "blind-005",
+      "smiles": "CCCN1CCC(CC1)CC",
+      "atomCount": 11,
+      "bondCount": 11,
+      "imageFile": "blind-005.png",
+      "molFile": "blind-005.mol",
+      "sdfFile": "blind-005.sdf"
+    },
+    {
+      "id": "blind-006",
+      "smiles": "CCOC1COCCC1CC",
+      "atomCount": 11,
+      "bondCount": 11,
+      "imageFile": "blind-006.png",
+      "molFile": "blind-006.mol",
+      "sdfFile": "blind-006.sdf"
+    },
+    {
+      "id": "blind-007",
+      "smiles": "CCC1CCCCCC1C",
+      "atomCount": 10,
+      "bondCount": 10,
+      "imageFile": "blind-007.png",
+      "molFile": "blind-007.mol",
+      "sdfFile": "blind-007.sdf"
+    },
+    {
+      "id": "blind-008",
+      "smiles": "CC(CC1COCCC1C)C",
+      "atomCount": 11,
+      "bondCount": 11,
+      "imageFile": "blind-008.png",
+      "molFile": "blind-008.mol",
+      "sdfFile": "blind-008.sdf"
+    },
+    {
+      "id": "blind-009",
+      "smiles": "CCCOC1CCC(CC1)CN",
+      "atomCount": 12,
+      "bondCount": 12,
+      "imageFile": "blind-009.png",
+      "molFile": "blind-009.mol",
+      "sdfFile": "blind-009.sdf"
+    },
+    {
+      "id": "blind-010",
+      "smiles": "CCCN1CCOCC1CC",
+      "atomCount": 11,
+      "bondCount": 11,
+      "imageFile": "blind-010.png",
+      "molFile": "blind-010.mol",
+      "sdfFile": "blind-010.sdf"
+    }
+  ]
+}

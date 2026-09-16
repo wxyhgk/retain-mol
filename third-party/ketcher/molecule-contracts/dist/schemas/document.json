@@ -1,0 +1,276 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://retainmol.invalid/schemas/molecule-document.v1.json",
+  "title": "RetainMol basic graph document v1",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "retainmol.molecule-document.v1"
+    },
+    "profile": {
+      "const": "basic-graph-v1"
+    },
+    "documentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "atoms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "element": {
+            "type": "string",
+            "enum": [
+              "H",
+              "He",
+              "Li",
+              "Be",
+              "B",
+              "C",
+              "N",
+              "O",
+              "F",
+              "Ne",
+              "Na",
+              "Mg",
+              "Al",
+              "Si",
+              "P",
+              "S",
+              "Cl",
+              "Ar",
+              "K",
+              "Ca",
+              "Sc",
+              "Ti",
+              "V",
+              "Cr",
+              "Mn",
+              "Fe",
+              "Co",
+              "Ni",
+              "Cu",
+              "Zn",
+              "Ga",
+              "Ge",
+              "As",
+              "Se",
+              "Br",
+              "Kr",
+              "Rb",
+              "Sr",
+              "Y",
+              "Zr",
+              "Nb",
+              "Mo",
+              "Tc",
+              "Ru",
+              "Rh",
+              "Pd",
+              "Ag",
+              "Cd",
+              "In",
+              "Sn",
+              "Sb",
+              "Te",
+              "I",
+              "Xe",
+              "Cs",
+              "Ba",
+              "La",
+              "Ce",
+              "Pr",
+              "Nd",
+              "Pm",
+              "Sm",
+              "Eu",
+              "Gd",
+              "Tb",
+              "Dy",
+              "Ho",
+              "Er",
+              "Tm",
+              "Yb",
+              "Lu",
+              "Hf",
+              "Ta",
+              "W",
+              "Re",
+              "Os",
+              "Ir",
+              "Pt",
+              "Au",
+              "Hg",
+              "Tl",
+              "Pb",
+              "Bi",
+              "Po",
+              "At",
+              "Rn",
+              "Fr",
+              "Ra",
+              "Ac",
+              "Th",
+              "Pa",
+              "U",
+              "Np",
+              "Pu",
+              "Am",
+              "Cm",
+              "Bk",
+              "Cf",
+              "Es",
+              "Fm",
+              "Md",
+              "No",
+              "Lr",
+              "Rf",
+              "Db",
+              "Sg",
+              "Bh",
+              "Hs",
+              "Mt",
+              "Ds",
+              "Rg",
+              "Cn",
+              "Nh",
+              "Fl",
+              "Mc",
+              "Lv",
+              "Ts",
+              "Og"
+            ]
+          },
+          "charge": {
+            "type": "integer",
+            "minimum": -8,
+            "maximum": 8
+          },
+          "isotope": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 400
+          },
+          "position": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": -1000000,
+                "maximum": 1000000
+              },
+              "y": {
+                "type": "number",
+                "minimum": -1000000,
+                "maximum": 1000000
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false,
+            "propertyNames": {
+              "enum": [
+                "x",
+                "y"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "element",
+          "charge"
+        ],
+        "additionalProperties": false,
+        "propertyNames": {
+          "enum": [
+            "id",
+            "element",
+            "charge",
+            "isotope",
+            "position"
+          ]
+        }
+      }
+    },
+    "bonds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "begin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "end": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "single",
+              "double",
+              "triple"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "begin",
+          "end",
+          "order"
+        ],
+        "additionalProperties": false,
+        "propertyNames": {
+          "enum": [
+            "id",
+            "begin",
+            "end",
+            "order"
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "profile",
+    "documentId",
+    "revision",
+    "atoms",
+    "bonds"
+  ],
+  "additionalProperties": false,
+  "propertyNames": {
+    "enum": [
+      "schema",
+      "profile",
+      "documentId",
+      "revision",
+      "atoms",
+      "bonds"
+    ]
+  }
+}

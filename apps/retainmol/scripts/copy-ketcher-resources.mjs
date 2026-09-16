@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const appRoot = join(__dirname, '..')
-const src = join(appRoot, '../../../ketcher-retainmol/packages/ketcher-react/dist')
+const src = join(appRoot, '../../third-party/ketcher/ketcher-react/dist')
 const dest = join(appRoot, 'public/ketcher-dist')
 
 if (!existsSync(src)) {

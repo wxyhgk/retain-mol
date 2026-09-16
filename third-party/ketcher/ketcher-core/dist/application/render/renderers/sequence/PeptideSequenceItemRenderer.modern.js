@@ -1,0 +1,79 @@
+/****************************************************************************
+ * Copyright 2021 EPAM Systems
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ***************************************************************************/
+import _classCallCheck from '@babel/runtime/helpers/classCallCheck';
+import _createClass from '@babel/runtime/helpers/createClass';
+import _possibleConstructorReturn from '@babel/runtime/helpers/possibleConstructorReturn';
+import _assertThisInitialized from '@babel/runtime/helpers/assertThisInitialized';
+import _get from '@babel/runtime/helpers/get';
+import _getPrototypeOf from '@babel/runtime/helpers/getPrototypeOf';
+import _inherits from '@babel/runtime/helpers/inherits';
+import _classPrivateFieldGet from '@babel/runtime/helpers/classPrivateFieldGet';
+import { BaseSequenceItemRenderer } from './BaseSequenceItemRenderer.modern.js';
+
+function _callSuper(t, o, e) { return o = _getPrototypeOf(o), _possibleConstructorReturn(t, _isNativeReflectConstruct() ? Reflect.construct(o, e || [], _getPrototypeOf(t).constructor) : o.apply(t, e)); }
+function _isNativeReflectConstruct() { try { var t = !Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function () {})); } catch (t) {} return (_isNativeReflectConstruct = function _isNativeReflectConstruct() { return !!t; })(); }
+function _classPrivateFieldInitSpec(e, t, a) { _checkPrivateRedeclaration(e, t), t.set(e, a); }
+function _checkPrivateRedeclaration(e, t) { if (t.has(e)) throw new TypeError("Cannot initialize the same private elements twice on an object"); }
+var _NO_ANALOGUE_SYMBOL = new WeakMap();
+var PeptideSequenceItemRenderer = function (_BaseSequenceItemRend) {
+  _inherits(PeptideSequenceItemRenderer, _BaseSequenceItemRend);
+  function PeptideSequenceItemRenderer() {
+    var _this;
+    _classCallCheck(this, PeptideSequenceItemRenderer);
+    for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+      args[_key] = arguments[_key];
+    }
+    _this = _callSuper(this, PeptideSequenceItemRenderer, [].concat(args));
+    _classPrivateFieldInitSpec(_assertThisInitialized(_this), _NO_ANALOGUE_SYMBOL, {
+      writable: true,
+      value: '@'
+    });
+    return _this;
+  }
+  _createClass(PeptideSequenceItemRenderer, [{
+    key: "symbolToDisplay",
+    get: function get() {
+      return this.node.monomer.monomerItem.props.MonomerNaturalAnalogCode || _classPrivateFieldGet(this, _NO_ANALOGUE_SYMBOL);
+    }
+  }, {
+    key: "drawLine",
+    value: function drawLine() {
+      var _this$rootElement;
+      var TEXT_COLOR = '#333333';
+      (_this$rootElement = this.rootElement) === null || _this$rootElement === void 0 || _this$rootElement.append('path').attr('d', 'M 0,3 L 12,3').attr('stroke', TEXT_COLOR).attr('stroke-linecap', 'round').attr('stroke-width', '1.7px');
+    }
+  }, {
+    key: "drawModification",
+    value: function drawModification() {
+      var isAsparticAcidWithDifferentR3 = this.node.monomer.monomerItem.label === 'D*';
+      if (isAsparticAcidWithDifferentR3) return;
+      if (this.symbolToDisplay === _classPrivateFieldGet(this, _NO_ANALOGUE_SYMBOL)) return;
+      this.drawLine();
+    }
+  }, {
+    key: "appendRootElement",
+    value: function appendRootElement() {
+      var _this$rootElement2;
+      this.rootElement = _get(_getPrototypeOf(PeptideSequenceItemRenderer.prototype), "appendRootElement", this).call(this);
+      (_this$rootElement2 = this.rootElement) === null || _this$rootElement2 === void 0 || _this$rootElement2.attr('data-symbol-type', 'Peptide');
+      return this.rootElement;
+    }
+  }]);
+  return PeptideSequenceItemRenderer;
+}(BaseSequenceItemRenderer);
+
+export { PeptideSequenceItemRenderer };
+//# sourceMappingURL=PeptideSequenceItemRenderer.modern.js.map

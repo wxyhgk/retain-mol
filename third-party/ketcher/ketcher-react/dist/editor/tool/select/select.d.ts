@@ -1,0 +1,30 @@
+import type { Tool } from '../Tool';
+import { type SelectMode } from './select.types';
+import type { EditableSelectionToolContext } from './selectionToolContext';
+declare class SelectTool implements Tool {
+    #private;
+    private readonly editor;
+    private dragCtx;
+    private previousMouseMoveEvent?;
+    isMouseDown: boolean;
+    isReadyForCopy: boolean;
+    isCopied: boolean;
+    readonly isMoving = false;
+    private lastHoveredFragmentId?;
+    private lastHoveredFragmentTarget;
+    private readonly multitailArrowMoveTool;
+    private readonly reactionArrowMoveTool;
+    constructor(editor: EditableSelectionToolContext, mode: SelectMode);
+    isSelectionRunning(): boolean;
+    isMoleculeEditIdle(): boolean;
+    mousedown(event: PointerEvent): void;
+    mousemove(event: PointerEvent): true | undefined;
+    mouseup(event: PointerEvent): void;
+    dblclick(event: PointerEvent): true | undefined;
+    mouseleave(): void;
+    private isDraggingStructureOnSaltOrSolvent;
+    private isCloseToEdgeOfCanvas;
+    private handleMoveCloseToEdgeOfCanvas;
+    private moveViewBox;
+}
+export default SelectTool;

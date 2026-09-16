@@ -1,0 +1,1 @@
+{"version":3,"file":"isGenericAtom.modern.js","sources":["../../../src/domain/helpers/isGenericAtom.ts"],"sourcesContent":[null],"names":["isGenericAtom","label","genericsList","includes"],"mappings":";;;;;;;;;;;;;;;;;AA0BM,SAAUA,aAAaA,CAACC,KAAa,EAAA;AACzC,EAAA,OAAOC,YAAY,CAACC,QAAQ,CAACF,KAAK,CAAC,CAAA;AACrC;;;;"}

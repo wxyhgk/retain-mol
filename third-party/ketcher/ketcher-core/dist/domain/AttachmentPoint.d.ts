@@ -1,0 +1,64 @@
+import type { PolymerBond } from './entities/PolymerBond';
+import type { D3SvgElementSelection } from '../application/render/types';
+import { type Selection } from 'd3';
+import type { BaseMonomer } from './entities/BaseMonomer';
+import { type Coordinates } from './helpers/attachmentPointCalculations';
+import { type AttachmentPointConstructorParams, AttachmentPointName } from './types';
+import { MonomerToAtomBond } from './entities/MonomerToAtomBond';
+export declare class AttachmentPoint {
+    static readonly attachmentPointVector = 6;
+    static readonly attachmentPointLength: number;
+    static readonly labelOffset = 3.5;
+    static readonly radius = 3;
+    static readonly dragTargetRadius = 5;
+    static readonly labelSize: {
+        x: number;
+        y: number;
+    };
+    static readonly DRAG_TARGET_INDICATOR_FONT_SIZE = "5px";
+    static readonly colors: {
+        fillUsed: string;
+        fill: string;
+        fillPotentially: string;
+        strokeUsed: string;
+        stroke: string;
+        strokePotentially: string;
+    };
+    protected rootElement: D3SvgElementSelection<SVGGElement, void>;
+    protected attachmentPoint: D3SvgElementSelection<SVGGElement, this> | null;
+    monomer: BaseMonomer;
+    protected bodyWidth: number;
+    protected bodyHeight: number;
+    protected attachmentPointName: AttachmentPointName;
+    protected canvasOffset: Coordinates;
+    protected centerOfMonomer: Coordinates;
+    protected element: Selection<SVGGElement, this, HTMLElement, never> | undefined;
+    private hoverableArea;
+    protected initialAngle: number;
+    private readonly isUsed;
+    private readonly isDragTarget;
+    private readonly isDragCircleHover;
+    private readonly isSnake;
+    private get editorEvents();
+    private readonly applyZoomForPositionCalculation;
+    constructor(constructorParams: AttachmentPointConstructorParams, skipInit?: boolean);
+    private get fill();
+    protected get stroke(): string;
+    removeAttachmentPoint(): void;
+    protected renderAttachmentPointByCoordinates(attachmentOnBorder: Coordinates, attachmentPointCoordinates: Coordinates, labelCoordinatesOnMonomer: Coordinates): D3SvgElementSelection<SVGGElement, this>;
+    private renderHoverableArea;
+    appendAttachmentPoint(): D3SvgElementSelection<SVGGElement, this>;
+    raise(): void;
+    updateAttachmentPointStyleForHover(): void;
+    rotateToAngle(polymerBond: PolymerBond | MonomerToAtomBond, flip?: boolean): number;
+    protected getCoordinates(angleDegrees: number): {
+        x: number;
+        y: number;
+    }[];
+    updateCoords(): void;
+    private catchThePoint;
+    getElement(): Selection<SVGGElement, this, HTMLElement, never> | undefined;
+    getAttachmentPointName(): AttachmentPointName;
+    getHoverableArea(): Selection<SVGGElement, this, HTMLElement, never> | undefined;
+    getAngle(): number;
+}

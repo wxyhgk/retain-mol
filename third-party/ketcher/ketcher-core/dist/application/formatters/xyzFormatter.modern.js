@@ -1,0 +1,519 @@
+/****************************************************************************
+ * Copyright 2021 EPAM Systems
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ***************************************************************************/
+import _slicedToArray from '@babel/runtime/helpers/slicedToArray';
+import _defineProperty from '@babel/runtime/helpers/defineProperty';
+import _asyncToGenerator from '@babel/runtime/helpers/asyncToGenerator';
+import _classCallCheck from '@babel/runtime/helpers/classCallCheck';
+import _createClass from '@babel/runtime/helpers/createClass';
+import _toConsumableArray from '@babel/runtime/helpers/toConsumableArray';
+import _regeneratorRuntime from '@babel/runtime/regenerator';
+import { getComputationalFormatMetadata, setComputationalFormatMetadata } from './computationalFormatMetadata.modern.js';
+import { Elements } from '../../domain/constants/elements.modern.js';
+import '../../domain/constants/element.types.modern.js';
+import '../../domain/constants/generics.modern.js';
+import '../../domain/constants/chains.modern.js';
+import '../../domain/constants/monomers.modern.js';
+import { Atom } from '../../domain/entities/atom.modern.js';
+import '../../domain/entities/atomList.modern.js';
+import '../../domain/entities/bond.modern.js';
+import '../../domain/entities/fixedPrecision.modern.js';
+import '../../domain/entities/fragment.modern.js';
+import '../../domain/entities/functionalGroup.modern.js';
+import '../../domain/entities/halfBond.modern.js';
+import '../../domain/entities/loop.modern.js';
+import '../../domain/entities/rgroup.modern.js';
+import '../../domain/entities/rgroupAttachmentPoint.modern.js';
+import '../../domain/entities/rxnArrow.modern.js';
+import '../../domain/entities/rxnPlus.modern.js';
+import '../../domain/entities/sgroup.modern.js';
+import '../../domain/entities/sgroupForest.modern.js';
+import '../../domain/entities/simpleObject.modern.js';
+import { Struct } from '../../domain/entities/struct.modern.js';
+import '../../domain/entities/text.modern.js';
+import '../../domain/entities/pile.modern.js';
+import { Vec2 } from '../../domain/entities/vec2.modern.js';
+import '../../domain/entities/box2Abs.modern.js';
+import '../../domain/entities/pool.modern.js';
+import '../../domain/entities/image.modern.js';
+import '../../domain/entities/multitailArrow.modern.js';
+import '../../domain/entities/highlight.modern.js';
+import '../../domain/entities/sGroupAttachmentPoint.modern.js';
+import '../../domain/entities/monomerMicromolecule.modern.js';
+import '../../domain/entities/Peptide.modern.js';
+import '../../domain/entities/BaseMonomer.modern.js';
+import '../../domain/entities/Chem.modern.js';
+import '../../domain/entities/Sugar.modern.js';
+import '../../domain/entities/RNABase.modern.js';
+import '../../domain/entities/Phosphate.modern.js';
+import '../../domain/entities/Axis.modern.js';
+import '../../domain/entities/Nucleoside.modern.js';
+import '../../domain/entities/Nucleotide.modern.js';
+import '../../domain/entities/monomer-chains/types.modern.js';
+import '../../domain/entities/monomer-chains/Chain.modern.js';
+import '../../domain/entities/monomer-chains/ChainsCollection.modern.js';
+import '../../domain/entities/MonomerSequenceNode.modern.js';
+import '../../domain/entities/EmptySequenceNode.modern.js';
+import '../../domain/entities/LinkerSequenceNode.modern.js';
+import '../../domain/entities/UnresolvedMonomer.modern.js';
+import '../../domain/entities/UnsplitNucleotide.modern.js';
+import '../../domain/entities/PolymerBond.modern.js';
+import '../../domain/entities/AmbiguousMonomer.modern.js';
+import '../../domain/entities/MonomerToAtomBond.modern.js';
+import '../../domain/entities/HydrogenBond.modern.js';
+import '../../domain/entities/SGroupDrawingEntity.modern.js';
+import '../../domain/entities/BackBoneSequenceNode.modern.js';
+import '../../domain/entities/Command.modern.js';
+import '../../utilities/runAsyncAction.modern.js';
+import '../../utilities/KetcherLogger.modern.js';
+import '../../utilities/SettingsManager.modern.js';
+import '../../utilities/keynorm.modern.js';
+import 'react-device-detect';
+import '../../utilities/clipboardUtils.modern.js';
+import '../../domain/entities/CoreAtom.modern.js';
+import '../../domain/entities/CoreStereoFlag.modern.js';
+import '@babel/runtime/helpers/typeof';
+
+function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
+function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
+var EXTENDED_XYZ_PROPERTIES = 'Properties';
+function parseError(message, lineNumber) {
+  var location = lineNumber ? " at line ".concat(lineNumber) : '';
+  return new Error("XYZ parse error".concat(location, ": ").concat(message));
+}
+function normalizeElementSymbol(symbol) {
+  if (!symbol) return '';
+  return symbol[0].toUpperCase() + symbol.slice(1).toLowerCase();
+}
+function parseFiniteNumber(value, description, lineNumber) {
+  var parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw parseError("invalid ".concat(description, " \"").concat(value !== null && value !== void 0 ? value : '', "\""), lineNumber);
+  }
+  return parsed;
+}
+function parseAtomCount(value, lineNumber) {
+  var parsed = Number(value.trim());
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw parseError("invalid atom count \"".concat(value.trim(), "\""), lineNumber);
+  }
+  return parsed;
+}
+function getXYZLines(content) {
+  var lines = content.replace(/^\uFEFF/, '').split(/\r\n|[\n\r]/g);
+  var firstLineIndex = lines.findIndex(function (line) {
+    return line.trim().length > 0;
+  });
+  if (firstLineIndex === -1) throw parseError('missing atom count');
+  var atomCount = parseAtomCount(lines[firstLineIndex], firstLineIndex + 1);
+  var commentLineIndex = firstLineIndex + 1;
+  if (commentLineIndex >= lines.length) {
+    throw parseError('missing comment line', commentLineIndex + 1);
+  }
+  var atomLines = lines.slice(commentLineIndex + 1).map(function (line, index) {
+    return {
+      content: line.trim(),
+      lineNumber: commentLineIndex + index + 2
+    };
+  }).filter(function (_ref) {
+    var content = _ref.content;
+    return content.length > 0;
+  });
+  if (atomLines.length < atomCount) {
+    throw parseError("expected ".concat(atomCount, " atoms, found ").concat(atomLines.length));
+  }
+  if (atomLines.length > atomCount) {
+    throw parseError('multiple XYZ frames are not supported');
+  }
+  return {
+    atomCount: atomCount,
+    comment: lines[commentLineIndex],
+    atomLines: atomLines
+  };
+}
+function getElement(value, lineNumber) {
+  var symbol = value;
+  if (/^\d+$/.test(value)) {
+    var _Elements$get$label, _Elements$get;
+    var atomicNumber = Number(value);
+    symbol = (_Elements$get$label = (_Elements$get = Elements.get(atomicNumber)) === null || _Elements$get === void 0 ? void 0 : _Elements$get.label) !== null && _Elements$get$label !== void 0 ? _Elements$get$label : '';
+  }
+  var normalized = normalizeElementSymbol(symbol);
+  if (!Elements.get(normalized)) {
+    throw parseError("unsupported element \"".concat(value, "\""), lineNumber);
+  }
+  return normalized;
+}
+function addAtom(struct, symbol, coordinates, lineNumber) {
+  var x = parseFiniteNumber(coordinates[0], 'x coordinate', lineNumber);
+  var y = parseFiniteNumber(coordinates[1], 'y coordinate', lineNumber);
+  var z = parseFiniteNumber(coordinates[2], 'z coordinate', lineNumber);
+  return struct.atoms.add(new Atom({
+    label: getElement(symbol, lineNumber),
+    pp: new Vec2(x, -y, z)
+  }));
+}
+function formatNumber(value) {
+  return Object.is(value, -0) ? '0' : String(value);
+}
+function getCoordinateValues(atom) {
+  return [formatNumber(atom.pp.x), formatNumber(-atom.pp.y), formatNumber(atom.pp.z)];
+}
+function serializeXYZAtoms(struct) {
+  return Array.from(struct.atoms.values()).map(function (atom) {
+    return [atom.label].concat(_toConsumableArray(getCoordinateValues(atom))).join(' ');
+  });
+}
+function parseHeaderFields(comment) {
+  var fields = {};
+  var fieldPattern = /([A-Za-z_][A-Za-z0-9_]*)=("(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\S+)/g;
+  var match;
+  while (match = fieldPattern.exec(comment)) {
+    var rawValue = match[2];
+    fields[match[1]] = rawValue.startsWith('"') && rawValue.endsWith('"') || rawValue.startsWith("'") && rawValue.endsWith("'") ? rawValue.slice(1, -1).replace(/\\([\\"'])/g, '$1') : rawValue;
+  }
+  return fields;
+}
+function getFieldCaseInsensitive(fields, name) {
+  var key = Object.keys(fields).find(function (candidate) {
+    return candidate.toLowerCase() === name.toLowerCase();
+  });
+  return key ? fields[key] : undefined;
+}
+function parseProperties(value) {
+  if (!value) throw parseError('missing Properties descriptor', 2);
+  var fields = value.split(':');
+  if (fields.length % 3 !== 0) {
+    throw parseError("invalid Properties descriptor \"".concat(value, "\""), 2);
+  }
+  var properties = [];
+  for (var index = 0; index < fields.length; index += 3) {
+    var columns = Number(fields[index + 2]);
+    if (!fields[index] || !fields[index + 1] || !Number.isSafeInteger(columns) || columns < 1) {
+      throw parseError("invalid Properties descriptor \"".concat(value, "\""), 2);
+    }
+    properties.push({
+      name: fields[index],
+      type: fields[index + 1],
+      columns: columns
+    });
+  }
+  return properties;
+}
+function parseOptionalNumber(value, description) {
+  if (value === undefined) return undefined;
+  var parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw parseError("invalid ".concat(description, " \"").concat(value, "\""), 2);
+  }
+  return parsed;
+}
+function parseOptionalMultiplicity(value) {
+  var parsed = parseOptionalNumber(value, 'multiplicity');
+  if (parsed !== undefined && (!Number.isSafeInteger(parsed) || parsed < 1)) {
+    throw parseError("invalid multiplicity \"".concat(value, "\""), 2);
+  }
+  return parsed;
+}
+function findProperty(properties, names) {
+  return properties.find(function (property) {
+    return names.includes(property.name.toLowerCase());
+  });
+}
+function quoteHeaderValue(value) {
+  return /^[^\s"']+$/.test(value) ? value : "\"".concat(value.replace(/([\\"])/g, '\\$1'), "\"");
+}
+function getTotalFormalCharge(struct) {
+  return Array.from(struct.atoms.values()).reduce(function (sum, atom) {
+    var _atom$charge;
+    return sum + ((_atom$charge = atom.charge) !== null && _atom$charge !== void 0 ? _atom$charge : 0);
+  }, 0);
+}
+var XYZFormatter = function () {
+  function XYZFormatter() {
+    _classCallCheck(this, XYZFormatter);
+  }
+  _createClass(XYZFormatter, [{
+    key: "getStringFromStructureAsync",
+    value: function () {
+      var _getStringFromStructureAsync = _asyncToGenerator(_regeneratorRuntime.mark(function _callee(struct) {
+        var _metadata$comment;
+        var metadata, comment;
+        return _regeneratorRuntime.wrap(function _callee$(_context) {
+          while (1) switch (_context.prev = _context.next) {
+            case 0:
+              metadata = getComputationalFormatMetadata(struct);
+              comment = (_metadata$comment = metadata === null || metadata === void 0 ? void 0 : metadata.comment) !== null && _metadata$comment !== void 0 ? _metadata$comment : struct.name;
+              return _context.abrupt("return", [String(struct.atoms.size), comment].concat(_toConsumableArray(serializeXYZAtoms(struct))).join('\n'));
+            case 3:
+            case "end":
+              return _context.stop();
+          }
+        }, _callee);
+      }));
+      function getStringFromStructureAsync(_x) {
+        return _getStringFromStructureAsync.apply(this, arguments);
+      }
+      return getStringFromStructureAsync;
+    }()
+  }, {
+    key: "getStructureFromStringAsync",
+    value: function () {
+      var _getStructureFromStringAsync = _asyncToGenerator(_regeneratorRuntime.mark(function _callee2(content) {
+        var _getXYZLines, comment, atomLines, struct;
+        return _regeneratorRuntime.wrap(function _callee2$(_context2) {
+          while (1) switch (_context2.prev = _context2.next) {
+            case 0:
+              _getXYZLines = getXYZLines(content), comment = _getXYZLines.comment, atomLines = _getXYZLines.atomLines;
+              struct = new Struct();
+              struct.name = comment.trim();
+              atomLines.forEach(function (_ref2) {
+                var atomLine = _ref2.content,
+                  lineNumber = _ref2.lineNumber;
+                var fields = atomLine.split(/\s+/);
+                if (fields.length < 4) throw parseError('truncated atom record', lineNumber);
+                addAtom(struct, fields[0], fields.slice(1, 4), lineNumber);
+              });
+              setComputationalFormatMetadata(struct, {
+                comment: comment
+              });
+              return _context2.abrupt("return", struct);
+            case 6:
+            case "end":
+              return _context2.stop();
+          }
+        }, _callee2);
+      }));
+      function getStructureFromStringAsync(_x2) {
+        return _getStructureFromStringAsync.apply(this, arguments);
+      }
+      return getStructureFromStringAsync;
+    }()
+  }]);
+  return XYZFormatter;
+}();
+var ExtendedXYZFormatter = function () {
+  function ExtendedXYZFormatter() {
+    _classCallCheck(this, ExtendedXYZFormatter);
+  }
+  _createClass(ExtendedXYZFormatter, [{
+    key: "getStringFromStructureAsync",
+    value: function () {
+      var _getStringFromStructureAsync2 = _asyncToGenerator(_regeneratorRuntime.mark(function _callee3(struct) {
+        var _extMetadata$properti, _extMetadata$fields, _Object$keys$find, _Object$keys$find2, _Object$keys$find3, _metadata$molecularCh;
+        var metadata, extMetadata, properties, fields, propertiesKey, chargeKey, multiplicityKey, header, atomLines;
+        return _regeneratorRuntime.wrap(function _callee3$(_context3) {
+          while (1) switch (_context3.prev = _context3.next) {
+            case 0:
+              metadata = getComputationalFormatMetadata(struct);
+              extMetadata = metadata === null || metadata === void 0 ? void 0 : metadata.extendedXYZ;
+              properties = (_extMetadata$properti = extMetadata === null || extMetadata === void 0 ? void 0 : extMetadata.properties) !== null && _extMetadata$properti !== void 0 ? _extMetadata$properti : [{
+                name: 'species',
+                type: 'S',
+                columns: 1
+              }, {
+                name: 'pos',
+                type: 'R',
+                columns: 3
+              }];
+              fields = _objectSpread({}, (_extMetadata$fields = extMetadata === null || extMetadata === void 0 ? void 0 : extMetadata.fields) !== null && _extMetadata$fields !== void 0 ? _extMetadata$fields : {});
+              propertiesKey = (_Object$keys$find = Object.keys(fields).find(function (key) {
+                return key.toLowerCase() === EXTENDED_XYZ_PROPERTIES.toLowerCase();
+              })) !== null && _Object$keys$find !== void 0 ? _Object$keys$find : EXTENDED_XYZ_PROPERTIES;
+              fields[propertiesKey] = properties.flatMap(function (property) {
+                return [property.name, property.type, property.columns];
+              }).join(':');
+              chargeKey = (_Object$keys$find2 = Object.keys(fields).find(function (key) {
+                return ['charge', 'molecular_charge'].includes(key.toLowerCase());
+              })) !== null && _Object$keys$find2 !== void 0 ? _Object$keys$find2 : 'charge';
+              multiplicityKey = (_Object$keys$find3 = Object.keys(fields).find(function (key) {
+                return ['multiplicity', 'molecular_multiplicity'].includes(key.toLowerCase());
+              })) !== null && _Object$keys$find3 !== void 0 ? _Object$keys$find3 : 'multiplicity';
+              fields[chargeKey] = String((_metadata$molecularCh = metadata === null || metadata === void 0 ? void 0 : metadata.molecularCharge) !== null && _metadata$molecularCh !== void 0 ? _metadata$molecularCh : getTotalFormalCharge(struct));
+              if ((metadata === null || metadata === void 0 ? void 0 : metadata.molecularMultiplicity) !== null && (metadata === null || metadata === void 0 ? void 0 : metadata.molecularMultiplicity) !== undefined) {
+                fields[multiplicityKey] = String(metadata.molecularMultiplicity);
+              } else {
+                Object.keys(fields).forEach(function (key) {
+                  if (['multiplicity', 'molecular_multiplicity'].includes(key.toLowerCase())) {
+                    delete fields[key];
+                  }
+                });
+              }
+              header = Object.entries(fields).map(function (_ref3) {
+                var _ref4 = _slicedToArray(_ref3, 2),
+                  key = _ref4[0],
+                  value = _ref4[1];
+                return "".concat(key, "=").concat(quoteHeaderValue(value));
+              }).join(' ');
+              atomLines = Array.from(struct.atoms.entries()).map(function (_ref5) {
+                var _ref6 = _slicedToArray(_ref5, 2),
+                  atomId = _ref6[0],
+                  atom = _ref6[1];
+                var importedValues = extMetadata === null || extMetadata === void 0 ? void 0 : extMetadata.atomValues.get(atomId);
+                return properties.flatMap(function (property) {
+                  var _importedValues$prope;
+                  var propertyName = property.name.toLowerCase();
+                  if (['species', 'element'].includes(propertyName)) return [atom.label];
+                  if (['pos', 'position', 'positions'].includes(propertyName)) {
+                    return getCoordinateValues(atom);
+                  }
+                  if (propertyName === 'z' && property.columns === 1) {
+                    var _Elements$get$number, _Elements$get2;
+                    return [String((_Elements$get$number = (_Elements$get2 = Elements.get(atom.label)) === null || _Elements$get2 === void 0 ? void 0 : _Elements$get2.number) !== null && _Elements$get$number !== void 0 ? _Elements$get$number : atom.label)];
+                  }
+                  return (_importedValues$prope = importedValues === null || importedValues === void 0 ? void 0 : importedValues[property.name]) !== null && _importedValues$prope !== void 0 ? _importedValues$prope : Array.from({
+                    length: property.columns
+                  }, function () {
+                    return property.type.toUpperCase() === 'S' ? '""' : '0';
+                  });
+                }).join(' ');
+              });
+              return _context3.abrupt("return", [String(struct.atoms.size), header].concat(_toConsumableArray(atomLines)).join('\n'));
+            case 13:
+            case "end":
+              return _context3.stop();
+          }
+        }, _callee3);
+      }));
+      function getStringFromStructureAsync(_x3) {
+        return _getStringFromStructureAsync2.apply(this, arguments);
+      }
+      return getStringFromStructureAsync;
+    }()
+  }, {
+    key: "getStructureFromStringAsync",
+    value: function () {
+      var _getStructureFromStringAsync2 = _asyncToGenerator(_regeneratorRuntime.mark(function _callee4(content) {
+        var _getFieldCaseInsensit, _getFieldCaseInsensit2, _getFieldCaseInsensit3;
+        var _getXYZLines2, comment, atomLines, fields, properties, speciesProperty, positionProperty, expectedColumns, struct, atomValues, molecularCharge, molecularMultiplicity, extendedXYZ;
+        return _regeneratorRuntime.wrap(function _callee4$(_context4) {
+          while (1) switch (_context4.prev = _context4.next) {
+            case 0:
+              _getXYZLines2 = getXYZLines(content), comment = _getXYZLines2.comment, atomLines = _getXYZLines2.atomLines;
+              fields = parseHeaderFields(comment);
+              properties = parseProperties(getFieldCaseInsensitive(fields, EXTENDED_XYZ_PROPERTIES));
+              speciesProperty = findProperty(properties, ['species', 'element', 'z']);
+              positionProperty = findProperty(properties, ['pos', 'position', 'positions']);
+              if (!(!speciesProperty || speciesProperty.columns !== 1)) {
+                _context4.next = 7;
+                break;
+              }
+              throw parseError('Properties must define a one-column species/element/Z');
+            case 7:
+              if (!(!positionProperty || positionProperty.columns !== 3)) {
+                _context4.next = 9;
+                break;
+              }
+              throw parseError('Properties must define a three-column pos');
+            case 9:
+              expectedColumns = properties.reduce(function (sum, property) {
+                return sum + property.columns;
+              }, 0);
+              struct = new Struct();
+              atomValues = new Map();
+              atomLines.forEach(function (_ref7) {
+                var _atomLine$match;
+                var atomLine = _ref7.content,
+                  lineNumber = _ref7.lineNumber;
+                var values = (_atomLine$match = atomLine.match(/"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\S+/g)) !== null && _atomLine$match !== void 0 ? _atomLine$match : [];
+                if (values.length !== expectedColumns) {
+                  throw parseError("expected ".concat(expectedColumns, " atom fields, found ").concat(values.length), lineNumber);
+                }
+                var valuesByProperty = {};
+                var offset = 0;
+                properties.forEach(function (property) {
+                  valuesByProperty[property.name] = values.slice(offset, offset + property.columns);
+                  offset += property.columns;
+                });
+                var atomId = addAtom(struct, valuesByProperty[speciesProperty.name][0], valuesByProperty[positionProperty.name], lineNumber);
+                atomValues.set(atomId, valuesByProperty);
+              });
+              molecularCharge = parseOptionalNumber((_getFieldCaseInsensit = getFieldCaseInsensitive(fields, 'charge')) !== null && _getFieldCaseInsensit !== void 0 ? _getFieldCaseInsensit : getFieldCaseInsensitive(fields, 'molecular_charge'), 'charge');
+              molecularMultiplicity = parseOptionalMultiplicity((_getFieldCaseInsensit2 = getFieldCaseInsensitive(fields, 'multiplicity')) !== null && _getFieldCaseInsensit2 !== void 0 ? _getFieldCaseInsensit2 : getFieldCaseInsensitive(fields, 'molecular_multiplicity'));
+              extendedXYZ = {
+                fields: fields,
+                properties: properties,
+                atomValues: atomValues
+              };
+              setComputationalFormatMetadata(struct, {
+                comment: comment,
+                molecularCharge: molecularCharge,
+                molecularMultiplicity: molecularMultiplicity,
+                sourceGeometryUnits: 'angstrom',
+                extendedXYZ: extendedXYZ
+              });
+              struct.name = (_getFieldCaseInsensit3 = getFieldCaseInsensitive(fields, 'name')) !== null && _getFieldCaseInsensit3 !== void 0 ? _getFieldCaseInsensit3 : '';
+              return _context4.abrupt("return", struct);
+            case 19:
+            case "end":
+              return _context4.stop();
+          }
+        }, _callee4);
+      }));
+      function getStructureFromStringAsync(_x4) {
+        return _getStructureFromStringAsync2.apply(this, arguments);
+      }
+      return getStructureFromStringAsync;
+    }()
+  }]);
+  return ExtendedXYZFormatter;
+}();
+function isXYZString(content) {
+  try {
+    var _getXYZLines3 = getXYZLines(content),
+      atomLines = _getXYZLines3.atomLines;
+    return atomLines.every(function (_ref8) {
+      var line = _ref8.content,
+        lineNumber = _ref8.lineNumber;
+      var values = line.split(/\s+/);
+      if (values.length < 4) return false;
+      getElement(values[0], lineNumber);
+      values.slice(1, 4).forEach(function (value, index) {
+        return parseFiniteNumber(value, ['x', 'y', 'z'][index], lineNumber);
+      });
+      return true;
+    });
+  } catch (_unused) {
+    return false;
+  }
+}
+function isExtendedXYZString(content) {
+  try {
+    var _getXYZLines4 = getXYZLines(content),
+      comment = _getXYZLines4.comment,
+      atomLines = _getXYZLines4.atomLines;
+    var fields = parseHeaderFields(comment);
+    var properties = parseProperties(getFieldCaseInsensitive(fields, EXTENDED_XYZ_PROPERTIES));
+    var expectedColumns = properties.reduce(function (sum, property) {
+      return sum + property.columns;
+    }, 0);
+    var speciesProperty = findProperty(properties, ['species', 'element', 'z']);
+    var positionProperty = findProperty(properties, ['pos', 'position', 'positions']);
+    return Boolean((speciesProperty === null || speciesProperty === void 0 ? void 0 : speciesProperty.columns) === 1 && (positionProperty === null || positionProperty === void 0 ? void 0 : positionProperty.columns) === 3 && atomLines.every(function (_ref9) {
+      var _atomLine$match2;
+      var atomLine = _ref9.content;
+      var values = (_atomLine$match2 = atomLine.match(/"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\S+/g)) !== null && _atomLine$match2 !== void 0 ? _atomLine$match2 : [];
+      return values.length === expectedColumns;
+    }));
+  } catch (_unused2) {
+    return false;
+  }
+}
+function isExtendedXYZComment(comment) {
+  return getFieldCaseInsensitive(parseHeaderFields(comment), EXTENDED_XYZ_PROPERTIES) !== undefined;
+}
+
+export { ExtendedXYZFormatter, XYZFormatter, isExtendedXYZComment, isExtendedXYZString, isXYZString };
+//# sourceMappingURL=xyzFormatter.modern.js.map

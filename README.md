@@ -25,8 +25,8 @@ TanStack Query · Ketcher（2D）· OpenChemLib
 
 ## 快速开始
 
-前置要求：Node 20+、npm 10+。Ketcher 相关包从同级的 `ketcher-retainmol` 目录解析
-（`file:../../../ketcher-retainmol`）；`predev` / `prebuild` 会把它的静态资源拷到
+前置要求：Node 20+、npm 10+。Ketcher 相关包已 vendoring 进 `third-party/ketcher`
+（含预构建 `dist`，见该目录 README），无需外部目录；`predev` / `prebuild` 会把它的静态资源拷到
 `apps/retainmol/public/ketcher-dist`（生成物，已忽略，不提交）。
 
 ```bash

@@ -1,0 +1,10 @@
+export declare const CORNER_LENGTH = 4;
+export declare const DOUBLE_CORNER_LENGTH: number;
+export declare const generateCornerFromTopToRight: () => string;
+export declare const generateCornerFromLeftToTop: () => string;
+export declare const generateCornerFromBottomToRight: () => string;
+export declare const generateCornerFromBottomToLeft: () => string;
+export declare const generateCornerFromLeftToBottom: () => string;
+export declare const generateCornerFromTopToLeft: () => string;
+export declare const generateCornerFromRightToTop: () => string;
+export declare const generateCornerFromRightToBottom: () => string;

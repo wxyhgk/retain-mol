@@ -1,0 +1,146 @@
+/****************************************************************************
+ * Copyright 2021 EPAM Systems
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ***************************************************************************/
+
+import { KetcherLogger } from 'utilities';
+import { SupportedFormat } from './structFormatter.types';
+import { isQCSchemaMolecule } from './qcSchemaFormatter';
+import { isExtendedXYZString, isXYZString } from './xyzFormatter';
+
+function isIdtString(s: string): boolean {
+  // Phosphorothioate nucleotide sequence: A, C, G, T, U joined by *
+  const idtBaseSeq = /^[ACGTUacgtu](\*[ACGTUacgtu])+$/;
+  // IDT modification token: /3Name/, /5Name/, /iName/, /rName/
+  const idtModToken = /\/[35ir][A-Za-z0-9][A-Za-z0-9-]*\/?/;
+  return idtBaseSeq.test(s) || idtModToken.test(s);
+}
+
+export function identifyStructFormat(
+  stringifiedStruct: string,
+  isMacromolecules = false,
+): SupportedFormat {
+  // Mimic Indigo/molecule_auto_loader.cpp as much as possible
+  const sanitizedString = stringifiedStruct.trim();
+
+  if (/^@<TRIPOS>MOLECULE\b/i.test(sanitizedString)) {
+    return SupportedFormat.mol2;
+  }
+
+  try {
+    const parsedJSON = JSON.parse(sanitizedString);
+    if (isQCSchemaMolecule(parsedJSON)) {
+      return SupportedFormat.qcSchema;
+    }
+    if (parsedJSON) {
+      return SupportedFormat.ket;
+    }
+  } catch (e) {
+    KetcherLogger.error('identifyStructFormat.ts::identifyStructFromat', e);
+  } // eslint-disable-line
+
+  if (isExtendedXYZString(sanitizedString)) {
+    return SupportedFormat.extendedXYZ;
+  }
+
+  if (isXYZString(sanitizedString)) return SupportedFormat.xyz;
+
+  const isRXN = sanitizedString.includes('$RXN');
+  const isSDF = sanitizedString.includes('\n$$$$');
+  const isV2000 = sanitizedString.includes('V2000');
+  const isV3000 = sanitizedString.includes('V3000');
+
+  if (isRXN) {
+    return SupportedFormat.rxn;
+  }
+
+  if (isSDF) {
+    if (isV2000) {
+      return SupportedFormat.sdf;
+    } else {
+      return SupportedFormat.sdfV3000;
+    }
+  }
+
+  if (isV2000) {
+    return SupportedFormat.mol;
+  }
+
+  if (isV3000) {
+    return SupportedFormat.molV3000;
+  }
+
+  const match = /^(M {2}END|\$END MOL)$/m.exec(sanitizedString);
+
+  if (match) {
+    const end = (match.index ?? 0) + match[0].length;
+    if (
+      end === sanitizedString.length ||
+      sanitizedString.slice(end, end + 20).search(/^\$(MOL|END CTAB)$/m) !== -1
+    ) {
+      return SupportedFormat.mol;
+    }
+  }
+
+  if (
+    sanitizedString.startsWith('<') &&
+    sanitizedString.indexOf('<molecule') !== -1
+  ) {
+    return SupportedFormat.cml;
+  }
+
+  const clearStr = sanitizedString
+    .replace(/\s/g, '')
+    .replace(/(\\r)|(\\n)/g, '');
+  const isBase64String =
+    /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
+  const cdxHeader = 'VjCD0100';
+  if (
+    clearStr.length % 4 === 0 &&
+    isBase64String.test(clearStr) &&
+    window.atob(clearStr).startsWith(cdxHeader)
+  ) {
+    return SupportedFormat.cdx;
+  }
+
+  if (sanitizedString.startsWith('InChI')) {
+    return SupportedFormat.inChI;
+  }
+
+  if (sanitizedString.indexOf('<CDXML') !== -1) {
+    return SupportedFormat.cdxml;
+  }
+
+  if (sanitizedString.startsWith('>')) {
+    return SupportedFormat.fasta;
+  }
+
+  if (isIdtString(sanitizedString)) {
+    return SupportedFormat.idt;
+  }
+
+  if (sanitizedString.indexOf('\n') === -1 && !isMacromolecules) {
+    // TODO: smiles regexp
+    return SupportedFormat.smiles;
+  }
+
+  const isSequence = /^[a-zA-Z\s]*$/.test(sanitizedString);
+  const isThreeLetter = /^(?:(?:[A-Z][a-z]{2})\s?)+$/.test(sanitizedString);
+
+  if (!isThreeLetter && isSequence) {
+    return SupportedFormat.sequence;
+  }
+
+  return SupportedFormat.unknown;
+}

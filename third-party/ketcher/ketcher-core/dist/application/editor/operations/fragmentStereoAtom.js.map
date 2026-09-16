@@ -1,0 +1,1 @@
+{"version":3,"file":"fragmentStereoAtom.js","sources":["../../../../src/application/editor/operations/fragmentStereoAtom.ts"],"sourcesContent":[null],"names":["FragmentAddStereoAtom","InverseConstructor","FragmentDeleteStereoAtom"],"mappings":";;;;;;;;;;;;;;;;;;;;;;AAmBAA,2CAAqB,CAACC,kBAAkB,GAAGC,iDAAwB,CAAA;AACnEA,iDAAwB,CAACD,kBAAkB,GAAGD,2CAAqB;;;;;"}

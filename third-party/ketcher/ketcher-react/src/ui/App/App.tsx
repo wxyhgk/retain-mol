@@ -1,0 +1,157 @@
+/****************************************************************************
+ * Copyright 2021 EPAM Systems
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ***************************************************************************/
+
+import {
+  BottomToolbarContainer,
+  LeftToolbarContainer,
+  RightToolbarContainer,
+  TopToolbarContainer,
+} from '../toolbars';
+import { useCallback, useEffect } from 'react';
+import { createTheme, Snackbar, ThemeProvider } from '@mui/material';
+import AppClipArea from '../views/AppClipArea';
+import { AppHiddenContainer } from './AppHidden';
+import AppModalContainer from '../dialogs';
+import ConnectedEditor from '../views/Editor';
+import classes from './App.module.less';
+import { initFGroups, initFGTemplates } from '../state/functionalGroups';
+import {
+  initSaltsAndSolvents,
+  initSaltsAndSolventsTemplates,
+} from '../state/saltsAndSolvents';
+import {
+  useAppContext,
+  useSubscriptionOnEvents,
+  useSettings,
+} from '../../hooks';
+import { initLib } from '../state/templates/init-lib';
+import { ketcherProvider } from 'ketcher-core';
+import { useAppDispatch } from '../state/hooks';
+import { selectSnackbarNotificationText } from '../state/notifications';
+import { useSelector } from 'react-redux';
+import { IconButton } from 'components';
+
+interface AppCallProps {
+  checkServer: () => void;
+  togglerComponent?: JSX.Element;
+}
+
+const muiTheme = createTheme({
+  components: {
+    MuiButtonBase: {
+      defaultProps: {
+        disableRipple: true,
+      },
+    },
+  },
+});
+
+type Props = AppCallProps;
+
+const App = (props: Props) => {
+  const dispatch = useAppDispatch();
+  const { checkServer } = props;
+  const snackbarNotificationText = useSelector(selectSnackbarNotificationText);
+
+  // Enable bidirectional sync between Redux and Core settings
+  // This ensures settings changes in macromolecules mode are reflected in small molecules mode
+  useSettings();
+
+  useSubscriptionOnEvents();
+  const { ketcherId, prevKetcherId } = useAppContext();
+
+  const handleCloseSnackbarNotification = useCallback(() => {
+    dispatch({ type: 'HIDE_SNACKBAR_NOTIFICATION' });
+  }, [dispatch]);
+
+  useEffect(() => {
+    checkServer();
+    dispatch(initFGTemplates());
+    dispatch(initSaltsAndSolventsTemplates());
+
+    return () => {
+      dispatch(initLib([]));
+      dispatch(initSaltsAndSolvents([]));
+      dispatch(initFGroups([]));
+      // App component is unmounted after editor components (MicromoleculeEditor.tsx and ketcher-react/src/Editor.tsx)
+      // due to asynchronous behaviour (see packages/ketcher-react/src/MicromoleculesEditor.tsx, appRootRef.current.unmount call).
+      // In other hand we still ketcher instance in ketcherProvider for useSubscriptionOnEvents cleanup function.
+      // So we need to remove ketcher instance from ketcherProvider here.
+      // Ideally is to remove ketcher instance in cleanup function of the most parent component (MicromoleculesEditor, or Editor, depends on usage)
+      ketcherProvider.removeKetcherInstance(ketcherId);
+    };
+  }, []);
+
+  // Temporary workaround: add proper types for Editor
+  const Editor = ConnectedEditor as React.ComponentType<{
+    className: string;
+    ketcherId: string;
+    prevKetcherId: string;
+  }>;
+
+  return (
+    <ThemeProvider theme={muiTheme}>
+      <div className={classes.app}>
+        <AppHiddenContainer />
+        <Editor
+          prevKetcherId={prevKetcherId}
+          ketcherId={ketcherId}
+          className={classes.canvas}
+        />
+
+        <TopToolbarContainer
+          className={classes.top}
+          togglerComponent={props.togglerComponent}
+        />
+        <div className={classes.toolsPanel}>
+          <div className={classes.toolsHeader}>Tools</div>
+          <div className={classes.toolsScroll}>
+            <LeftToolbarContainer className={classes.left} />
+            <BottomToolbarContainer className={classes.templates} />
+          </div>
+        </div>
+        <RightToolbarContainer className={classes.right} />
+
+        <AppClipArea />
+        <AppModalContainer ketcherId={ketcherId} />
+        <Snackbar
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          open={Boolean(snackbarNotificationText)}
+          onClose={handleCloseSnackbarNotification}
+          autoHideDuration={6000}
+        >
+          <div
+            className={classes.toastNotification}
+            data-testid="notification-banner"
+          >
+            <div className={classes.toastNotificationText}>
+              {snackbarNotificationText}
+            </div>
+            <IconButton
+              iconName="close"
+              className={classes.toastNotificationCloseIcon}
+              testId="notification-banner-close-button"
+              onClick={handleCloseSnackbarNotification}
+            />
+          </div>
+        </Snackbar>
+      </div>
+    </ThemeProvider>
+  );
+};
+
+export type { AppCallProps };
+export { App };
