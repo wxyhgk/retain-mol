@@ -37,6 +37,11 @@ export interface Atom {
   readonly charge?: number
   /** 未配对电子数（自由基）；每个占一个价位，并计入分子多重度 */
   readonly radical?: number
+  /**
+   * 四面体手性（R/S，由取代基 CIP 排名确定）。缺席 = 未指定，绝不默认为某一种。
+   * 显示/哈希/计算读它；楔形画法另存 Bond.wedge，两者由命令层保持一致。
+   */
+  readonly chirality?: 'R' | 'S'
   readonly label?: string
   /** Builder-authored transition-metal coordination preset. */
   readonly coordinationGeometry?: string
@@ -54,6 +59,13 @@ export interface Bond {
   readonly atomId2: string
   readonly order: 1 | 2 | 3
   readonly aromatic?: boolean
+  /**
+   * 楔形键：窄端在 atomId1，up=实楔（出纸）、down=虚楔（入纸）。
+   * 缺席 = 无楔形标注。SDF/V2000 往返的保真载体。
+   */
+  readonly wedge?: 'up' | 'down'
+  /** 双键顺反（E/Z）。缺席 = 未指定；本期只读 */
+  readonly ez?: 'E' | 'Z'
   /** Coordination sites consumed at either endpoint of this bond. */
   readonly coordinationSites?: readonly CoordinationSiteAssignment[]
 }

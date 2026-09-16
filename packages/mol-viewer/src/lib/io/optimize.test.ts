@@ -221,6 +221,32 @@ M  END`
     expect(dev).toBeLessThan(0.3)
   })
 
+  it('指定手性原样继承（L-乳酸 S 不变，H 数正确）', () => {
+    const input = parseMol(OCL.Molecule.fromSmiles('C[C@H](O)C(=O)O').toMolfile())
+    expect(input.atoms.filter(a => a.chirality !== undefined).map(a => a.chirality)).toEqual(['S'])
+    const r = generate3D(input)
+    expect(r.ok).toBe(true)
+    const m = r.molecule
+    expect(m.atoms.filter(a => a.symbol === 'H')).toHaveLength(6)
+    expect(m.atoms.filter(a => a.chirality !== undefined).map(a => a.chirality)).toEqual(['S'])
+    expect(m.bonds.filter(b => b.wedge !== undefined).map(b => b.wedge)).toEqual(['down'])
+  })
+
+  it('未指定不蒙：无 wedge 输入输出全 undefined', () => {
+    const r = generate3D(parseMol(OCL.Molecule.fromSmiles('CCC(O)C(=O)O').toMolfile()))
+    expect(r.ok).toBe(true)
+    expect(r.molecule.atoms.filter(a => a.chirality !== undefined)).toHaveLength(0)
+    expect(r.molecule.bonds.filter(b => b.ez !== undefined)).toHaveLength(0)
+  })
+
+  it('E/Z 原样继承（trans/cis 丁烯）', () => {
+    for (const [smi, ez] of [['C/C=C/C', 'E'], ['C/C=C\\C', 'Z']] as const) {
+      const r = generate3D(parseMol(OCL.Molecule.fromSmiles(smi).toMolfile()))
+      expect(r.ok).toBe(true)
+      expect(r.molecule.bonds.filter(b => b.order === 2).map(b => b.ez)).toEqual([ez])
+    }
+  })
+
   it('退化输入：单原子 → 原样返回 ok', () => {
     expect(generate3D({ atoms: [newAtom('C', 0, 0, 0)], bonds: [] }).ok).toBe(true)
   })

@@ -76,8 +76,13 @@ export function newAtom(symbol: string, x = 0, y = 0, z = 0): Atom {
   return { id: genId(), symbol, x, y, z }
 }
 
-export function newBond(atomId1: string, atomId2: string, order: 1 | 2 | 3 = 1): Bond {
-  return { id: genId(), atomId1, atomId2, order }
+export function newBond(
+  atomId1: string,
+  atomId2: string,
+  order: 1 | 2 | 3 = 1,
+  init?: Pick<Bond, 'wedge' | 'ez' | 'aromatic'>,
+): Bond {
+  return { id: genId(), atomId1, atomId2, order, ...init }
 }
 
 export function centerMolecule(mol: Molecule): Molecule {

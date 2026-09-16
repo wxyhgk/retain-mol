@@ -12,23 +12,77 @@ import { RELAX } from '../../config/relax.config'
 
 // OCL 返回的 Molecule 对象类型
 type OCLMol = ReturnType<typeof OCL.Molecule.fromMolfile>
+/** OCL 立体化学读写。OCL 版本间 API 名有差异，统一走具名断言 + 可选调用。 */
+interface OCLStereoAccess {
+  ensureHelperArrays?: (mask: number) => void
+  getAtomParity?: (index: number) => number
+  getAtomCIPParity?: (index: number) => number
+  getBondCIPParity?: (index: number) => number
+  setAtomParity?: (index: number, parity: number) => void
+}
 
+/**
+ * OCL parity+CIP 双读 → R/S。parity 非零且 CIP 明确才认，
+ * 其余一切（双楔打架/unknown/either/非立体中心）归 undefined，绝不蒙。
+ * R/S↔parity 位映射由 L-乳酸锚点单测锁死（S↔parity2）。
+ */
+function readAtomChirality(access: OCLStereoAccess, index: number): 'R' | 'S' | undefined {
+  const parity = access.getAtomParity?.(index) ?? OCL.Molecule.cAtomParityNone
+  const specified =
+    parity === OCL.Molecule.cAtomParity1 || parity === OCL.Molecule.cAtomParity2
+  if (!specified) return undefined
+  const cip = access.getAtomCIPParity?.(index) ?? OCL.Molecule.cAtomCIPParityNone
+  if (cip === OCL.Molecule.cAtomCIPParityRorM) return 'R'
+  if (cip === OCL.Molecule.cAtomCIPParitySorP) return 'S'
+  return undefined
+}
+
+/** 双键 CIP 读 E/Z；读不到或非 E/Z 归 undefined。本期只读不写。 */
+function readBondEz(access: OCLStereoAccess, index: number): 'E' | 'Z' | undefined {
+  const cip = access.getBondCIPParity?.(index) ?? OCL.Molecule.cBondCIPParityNone
+  if (cip === OCL.Molecule.cBondCIPParityEorP) return 'E'
+  if (cip === OCL.Molecule.cBondCIPParityZorM) return 'Z'
+  return undefined
+}
+
+/**
+ * OCL 键向位 → wedge。OCL 无公开常量名：Up 位 256 / Down 位 128，
+ * 窄端在 bond atom0（moleculeToOCL 按序写，往返测试锁死端点序）。
+ * 只在端点确为立体中心时采信——单键上的 Up/Down 也可能是 E/Z 方向描述。
+ */
+const OCL_BOND_UP_BIT = 256
+const OCL_BOND_DOWN_BIT = 128
+
+function readBondWedge(bondType: number, hasParity: readonly boolean[], a1: number, a2: number): 'up' | 'down' | undefined {
+  if (!hasParity[a1] && !hasParity[a2]) return undefined
+  const up = (bondType & OCL_BOND_UP_BIT) !== 0
+  const down = (bondType & OCL_BOND_DOWN_BIT) !== 0
+  if (up === down) return undefined
+  return up ? 'up' : 'down'
+}
 // ─── OCL ↔ 我们的 Molecule 互转 ──────────────────────────
 
 function oclToMolecule(oclMol: OCLMol, fallbackName = 'Imported'): Molecule {
+  // 手性与芳香都是 OCL 惰性辅助数组：先 ensure 再读，否则读到过期/空值
+  const stereoAccess: OCLStereoAccess = oclMol as unknown as OCLStereoAccess
+  stereoAccess.ensureHelperArrays?.(OCL.Molecule.cHelperParities)
   const atoms: Atom[] = []
+  const hasParity: boolean[] = []
   const na = oclMol.getAllAtoms()
   for (let i = 0; i < na; i++) {
     // OCL 内部对 y 和 z 取反（toMolfile 写 -y/-z，fromMolfile 读时再次取反）。
     // 用 -getAtomY / -getAtomZ 还原为 SDF 文件中的原始坐标。
-    atoms.push(newAtom(
+    const base = newAtom(
       oclMol.getAtomLabel(i),
        oclMol.getAtomX(i),
       -oclMol.getAtomY(i),
       -oclMol.getAtomZ(i),
-    ))
+    )
+    const parity = stereoAccess.getAtomParity?.(i) ?? OCL.Molecule.cAtomParityNone
+    hasParity.push(parity === OCL.Molecule.cAtomParity1 || parity === OCL.Molecule.cAtomParity2)
+    const chirality = readAtomChirality(stereoAccess, i)
+    atoms.push(chirality === undefined ? base : { ...base, chirality })
   }
-
   const bonds: Bond[] = []
   const nb = oclMol.getAllBonds()
   const isAromaticBondFn = (oclMol as unknown as { isAromaticBond?: (i: number) => boolean }).isAromaticBond?.bind(oclMol)
@@ -41,7 +95,17 @@ function oclToMolecule(oclMol: OCLMol, fallbackName = 'Imported'): Molecule {
     const atom1 = atoms[a1]
     const atom2 = atoms[a2]
     if (atom1 === undefined || atom2 === undefined) continue
-    bonds.push({ ...newBond(atom1.id, atom2.id, order), ...(aromatic ? { aromatic: true } : {}) })
+    // 键向位只在端点确为立体中心时才采信为 wedge——否则可能是 E/Z 方向描述。
+    // 烯丙位手性中心兼 E/Z 描述的歧义个案暂不区分（见 readBondWedge 注释）。
+    const ez = order === 2 ? readBondEz(stereoAccess, i) : undefined
+    const wedge = order === 1 ? readBondWedge(oclMol.getBondType(i), hasParity, a1, a2) : undefined
+    bonds.push({
+      ...newBond(atom1.id, atom2.id, order, {
+        ...(aromatic ? { aromatic: true } : {}),
+        ...(ez === undefined ? {} : { ez }),
+        ...(wedge === undefined ? {} : { wedge }),
+      }),
+    })
   }
 
   // OCL 在部分版本里可能有 getName()，没有则用首行兜底
@@ -53,13 +117,17 @@ export function moleculeToOCL(mol: Molecule): OCLMol {
   const oclMol = new OCL.Molecule(mol.atoms.length || 16, mol.bonds.length || 16)
   const idxMap = new Map<string, number>()
   const getAtomicNo = (OCL.Molecule as unknown as { getAtomicNoFromLabel(s: string): number }).getAtomicNoFromLabel
-
+  const stereoAccess: OCLStereoAccess = oclMol as unknown as OCLStereoAccess
   for (const a of mol.atoms) {
     const atomicNo = getAtomicNo(a.symbol) || 6  // 未识别时退化为碳
     const idx = oclMol.addAtom(atomicNo)
     oclMol.setAtomX(idx, a.x)
     oclMol.setAtomY(idx, -a.y)   // OCL 导出时再次取反，补偿以写出正确值
     oclMol.setAtomZ(idx, -a.z)
+    if (a.chirality === 'R' || a.chirality === 'S') {
+      // R/S→parity 位与读端互逆（L-乳酸锚点单测锁死）；有 wedge 时 OCL 优先写存下的键向
+      stereoAccess.setAtomParity?.(idx, a.chirality === 'R' ? OCL.Molecule.cAtomParity1 : OCL.Molecule.cAtomParity2)
+    }
     idxMap.set(a.id, idx)
   }
   const BOND_TYPE: Record<1 | 2 | 3, number> = {
@@ -73,7 +141,13 @@ export function moleculeToOCL(mol: Molecule): OCLMol {
     const a1 = idxMap.get(b.atomId1)
     const a2 = idxMap.get(b.atomId2)
     if (a1 === undefined || a2 === undefined) continue
-    const bondType = BOND_TYPE[b.order]
+    let bondType = BOND_TYPE[b.order]
+    if (b.order === 1 && (b.wedge === 'up' || b.wedge === 'down')) {
+      // 窄端在 atomId1（addOrChangeBond 保持端点序，往返测试锁死）
+      bondType =
+        OCL.Molecule.cBondTypeSingle |
+        (b.wedge === 'up' ? OCL_BOND_UP_BIT : OCL_BOND_DOWN_BIT)
+    }
     if (bondType === undefined) continue
     addOrChangeBond.call(oclMol, a1, a2, bondType)
   }
@@ -262,6 +336,38 @@ function minimizeConnected(frag: Molecule): { coords: Map<string, XYZ>; eBefore:
   for (const a of optimized) coords.set(a.id, { x: a.x + dx, y: a.y + dy, z: a.z + dz })
   return { coords, eBefore, eAfter }
 }
+/**
+ * generate3D 专用：CG 输出只继承输入原子的 chirality/ez/wedge。
+ * CG 会给未指定手性中心凭空指派对映体——输入没有的标记一律剥掉，
+ * 新增 H 一律无标记。对应关系按序（moleculeToOCL 按序写，CG 按序追加 H），
+ * 元素符号对不上就整批剥离（退回全未指定，绝不张冠李戴）。
+ */
+function inheritInputStereochemistry(input: Molecule, output: Molecule): Molecule {
+  let aligned = output.atoms.length >= input.atoms.length
+  if (aligned) {
+    for (let i = 0; i < input.atoms.length; i += 1) {
+      if (output.atoms[i]?.symbol !== input.atoms[i]?.symbol) {
+        aligned = false
+        break
+      }
+    }
+  }
+  const atoms = output.atoms.map((a, i) => {
+    const chirality = aligned ? input.atoms[i]?.chirality : undefined
+    if (a.chirality === chirality) return a
+    const { chirality: _omitChirality, ...rest } = a
+    return chirality === undefined ? rest : { ...rest, chirality }
+  })
+  const bonds = output.bonds.map((b, i) => {
+    const src = aligned ? input.bonds[i] : undefined
+    const ez = src?.order === 2 && b.order === 2 ? src.ez : undefined
+    const wedge = src?.order === 1 && b.order === 1 ? src.wedge : undefined
+    if (b.ez === ez && b.wedge === wedge) return b
+    const { ez: _omitEz, wedge: _omitWedge, ...rest } = b
+    return { ...rest, ...(ez === undefined ? {} : { ez }), ...(wedge === undefined ? {} : { wedge }) }
+  })
+  return { ...output, atoms, bonds }
+}
 
 /**
  * 2D → 3D：从平面结构（2D SDF/SMILES）生成合理的三维构象。
@@ -292,7 +398,8 @@ export function generate3D(mol: Molecule): OptimizeResult {
     if (!mol3d) return { molecule: mol, ok: false, reason: '无法生成 3D 构象（结构可能过于复杂或含不支持的原子）' }
 
     // 距离几何结果就是最终结果；MMFF/UFF 由调用方通过独立命令触发。
-    const initial = oclToMolecule(mol3d, mol.name ?? '3D structure')
+    // 手性只继承输入：CG 蒙出来的对映体在此剥掉，绝不存回。
+    const initial = inheritInputStereochemistry(mol, oclToMolecule(mol3d, mol.name ?? '3D structure'))
     return { molecule: initial, ok: true }
   } catch (e) {
     return { molecule: mol, ok: false, reason: `3D 生成失败：${(e as Error).message}` }

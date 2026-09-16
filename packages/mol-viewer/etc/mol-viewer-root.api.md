@@ -66,6 +66,7 @@ export type AromaticBondStyle = 'dashed' | 'single' | 'kekule';
 // @public (undocumented)
 export interface Atom {
     readonly charge?: number;
+    readonly chirality?: 'R' | 'S';
     readonly coordinationDirections?: readonly (readonly [number, number, number])[];
     readonly coordinationGeometry?: string;
     readonly coordinationNumber?: number;
@@ -126,10 +127,12 @@ export interface Bond {
     // (undocumented)
     readonly atomId2: string;
     readonly coordinationSites?: readonly CoordinationSiteAssignment[];
+    readonly ez?: 'E' | 'Z';
     // (undocumented)
     readonly id: string;
     // (undocumented)
     readonly order: 1 | 2 | 3;
+    readonly wedge?: 'up' | 'down';
 }
 
 // @public (undocumented)
@@ -882,7 +885,7 @@ export interface MolViewerProps {
 export function newAtom(symbol: string, x?: number, y?: number, z?: number): Atom;
 
 // @public (undocumented)
-export function newBond(atomId1: string, atomId2: string, order?: 1 | 2 | 3): Bond;
+export function newBond(atomId1: string, atomId2: string, order?: 1 | 2 | 3, init?: Pick<Bond, 'wedge' | 'ez' | 'aromatic'>): Bond;
 
 // @public (undocumented)
 export interface OptimizeResult {

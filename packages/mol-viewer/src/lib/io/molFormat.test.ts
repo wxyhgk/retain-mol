@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import * as OCL from 'openchemlib'
 import { parseMol, exportMol, parseSdf, exportSdf, is2D } from './molFormat'
+import type { Molecule } from '../molecule'
 
 const METHANE = `methane
   RetainMol
@@ -261,5 +263,66 @@ describe('parseMol 芳香键', () => {
     const mol = parseMol(BENZENE_AROMATIC)
     expect(mol.bonds).toHaveLength(6)
     expect(mol.bonds.every(b => b.order === 1 && b.aromatic === true)).toBe(true)
+  })
+})
+
+function chiralLabels(mol: Molecule): (string | undefined)[] {
+  return mol.atoms.filter(a => a.chirality !== undefined).map(a => a.chirality)
+}
+
+function wedgeDirs(mol: Molecule): (string | undefined)[] {
+  return mol.bonds.filter(b => b.wedge !== undefined).map(b => b.wedge)
+}
+
+describe('parseMol/exportMol 手性往返', () => {
+  // L-乳酸（S）：SMILES 经 OCL 转 molfile，保证 wedge 画法权威
+  function lactateMolfile(): string {
+    return OCL.Molecule.fromSmiles('C[C@H](O)C(=O)O').toMolfile()
+  }
+
+  it('wedge 读成 S（L-乳酸锚点）', () => {
+    const mol = parseMol(lactateMolfile())
+    expect(chiralLabels(mol)).toEqual(['S'])
+  })
+
+  it('导出再读回字母不变', () => {
+    expect(chiralLabels(parseMol(exportMol(parseMol(lactateMolfile()))))).toEqual(['S'])
+  })
+
+  it('导出 molfile 含有 wedge 键行', () => {
+    const out = exportMol(parseMol(lactateMolfile()))
+    const wedgeLines = out.split('\n').filter(line => /^ *\d+ +\d+ +\d+ +[16] /.test(line))
+    expect(wedgeLines.length).toBeGreaterThan(0)
+  })
+
+  it('wedge 方向与端点序原样往返', () => {
+    const mol = parseMol(lactateMolfile())
+    expect(wedgeDirs(mol)).toEqual(['down'])
+    const out = exportMol(mol)
+    // 窄端在 atomId1：导出键行端点序与 stereo 列与输入一致
+    expect(out.split('\n').filter(line => /^ *2 +3 +1 +6 /.test(line))).toHaveLength(1)
+    expect(wedgeDirs(parseMol(out))).toEqual(['down'])
+  })
+
+  it('反向 wedge 读成对立字母', () => {
+    const flipped = lactateMolfile().split('\n').map(line => {
+      const match = /^( *\d+ +\d+ +\d+ +)([16])( )/.exec(line)
+      if (!match) return line
+      return `${match[1]}${match[2] === '1' ? '6' : '1'}${match[3]}${line.slice(match[0].length)}`
+    }).join('\n')
+    expect(chiralLabels(parseMol(flipped))).toEqual(['R'])
+  })
+
+  it('无手性输入不凭空产生 stereo', () => {
+    expect(chiralLabels(parseMol(METHANE))).toEqual([])
+  })
+
+  it('E/Z 只读：trans/cis 丁烯', () => {
+    const ezOf = (smi: string): (string | undefined)[] =>
+      parseMol(OCL.Molecule.fromSmiles(smi).toMolfile()).bonds
+        .filter(b => b.order === 2)
+        .map(b => b.ez)
+    expect(ezOf('C/C=C/C')).toEqual(['E'])
+    expect(ezOf('C/C=C\\C')).toEqual(['Z'])
   })
 })

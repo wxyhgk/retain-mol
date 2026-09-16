@@ -25,6 +25,7 @@ export class AromaticRingCache {
 // @public (undocumented)
 export interface Atom {
     readonly charge?: number;
+    readonly chirality?: 'R' | 'S';
     readonly coordinationDirections?: readonly (readonly [number, number, number])[];
     readonly coordinationGeometry?: string;
     readonly coordinationNumber?: number;
@@ -85,10 +86,12 @@ export interface Bond {
     // (undocumented)
     readonly atomId2: string;
     readonly coordinationSites?: readonly CoordinationSiteAssignment[];
+    readonly ez?: 'E' | 'Z';
     // (undocumented)
     readonly id: string;
     // (undocumented)
     readonly order: 1 | 2 | 3;
+    readonly wedge?: 'up' | 'down';
 }
 
 // @public (undocumented)
