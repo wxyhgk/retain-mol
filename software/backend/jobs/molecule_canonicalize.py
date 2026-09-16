@@ -162,7 +162,7 @@ def _normalize_bond(bond: dict[str, Any]) -> dict[str, Any]:
 
 def _topology_atom(atom: dict[str, Any]) -> dict[str, Any]:
     normalized = _normalize_atom(atom)
-    for key in ("x", "y", "z", "coordinationDirections"):
+    for key in ("x", "y", "z", "chirality", "coordinationDirections"):
         normalized.pop(key, None)
     sites = normalized.get("coordinationSites")
     if isinstance(sites, list):
@@ -175,7 +175,8 @@ def _topology_atom(atom: dict[str, Any]) -> dict[str, Any]:
 
 def _topology_bond(bond: dict[str, Any]) -> dict[str, Any]:
     normalized = _normalize_bond(bond)
-    normalized.pop("id", None)
+    for key in ("id", "wedge", "ez"):
+        normalized.pop(key, None)
     return normalized
 
 

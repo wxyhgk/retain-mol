@@ -2,6 +2,7 @@ import { Component, type ReactNode, useEffect, useRef, useState } from 'react'
 import { Editor } from 'ketcher-react'
 import 'ketcher-react/dist/index.css'
 import type { Ketcher, StructServiceProvider } from 'ketcher-core'
+import { exportMol } from '@retainmol/mol-viewer/io'
 import { parseMoleculeFile, placeMoleculeInViewer } from '@/features/molecule-placement'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 
@@ -72,6 +73,33 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
     if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current)
     syncTimeoutRef.current = window.setTimeout(() => doSync(ketcher), 450)
   }
+  // 3D→2D 手动推送：把当前 3D 分子导出 molfile 写入 Ketcher，写后回读更新 lastMolfileRef 以吞掉轮询回声
+  const pushTo2D = async (ketcher: Ketcher) => {
+    try {
+      setSyncState('syncing')
+      const active = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
+      if (active.atoms.length === 0) {
+        setSyncState('idle')
+        return
+      }
+      const molfile = exportMol(active)
+      await ketcher.setMolecule(molfile)
+      // 回读 Ketcher 规范化后的 molfile 作为回声基线；失败则退回导出的原文
+      try {
+        const echoed = await ketcher.getMolfile()
+        lastMolfileRef.current = echoed || molfile
+      } catch {
+        lastMolfileRef.current = molfile
+      }
+      setSyncState('idle')
+      setLastError(null)
+    } catch (e) {
+      console.warn('[Ketcher 3D→2D] push failed', e)
+      setSyncState('error')
+      setLastError(e instanceof Error ? e.message : String(e))
+      setTimeout(() => setSyncState('idle'), 2000)
+    }
+  }
 
   const handleInit = (ketcher: Ketcher) => {
     ketcherRef.current = ketcher
@@ -137,15 +165,22 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
         <span className="text-muted-foreground">
           {syncState === 'syncing' ? '同步到 3D…' : syncState === 'error' ? `同步失败: ${lastError ?? ''}` : '2D ↔ 3D 自动同步'}
         </span>
-        <button
-          type="button"
-          className="rounded border bg-background px-2 py-0.5 text-[11px] hover:bg-accent"
-          onClick={() => ketcherRef.current && doSync(ketcherRef.current)}
-        >
-          同步到 3D
-        </button>
-      </div>
-      <div className="min-h-0 flex-1">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded border bg-background px-2 py-0.5 text-[11px] hover:bg-accent"
+            onClick={() => ketcherRef.current && pushTo2D(ketcherRef.current)}
+          >
+            推送到 2D
+          </button>
+          <button
+            type="button"
+            className="rounded border bg-background px-2 py-0.5 text-[11px] hover:bg-accent"
+            onClick={() => ketcherRef.current && doSync(ketcherRef.current)}
+          >
+            同步到 3D
+          </button>
+        </div>
         <Editor
           staticResourcesUrl="/ketcher-dist"
           structServiceProvider={provider}

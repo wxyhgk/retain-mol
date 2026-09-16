@@ -112,6 +112,7 @@ function topologyAtom(atom: Atom): JsonObject {
     z: undefined,
     coordinationDirections: undefined,
     coordinationSites: undefined,
+    chirality: undefined,
   }
 
   if (atom.coordinationSites) {
@@ -124,7 +125,7 @@ function topologyAtom(atom: Atom): JsonObject {
 }
 
 function topologyBond(bond: Bond): JsonObject {
-  return { ...normalizeBond(bond), id: undefined }
+  return { ...normalizeBond(bond), id: undefined, wedge: undefined, ez: undefined }
 }
 
 /** Canonical v1 representation of all molecule content, including coordinates. */

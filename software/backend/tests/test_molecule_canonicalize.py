@@ -62,3 +62,65 @@ def test_canonical_json_and_graph_validation_are_strict() -> None:
         validate_molecule(invalid)
     with pytest.raises(InvalidMoleculeError, match="finite"):
         stable_canonical_json({"coordinate": float("nan")})
+
+
+def _chiral_molecule(
+    chirality: str | None = None,
+    wedge: str | None = None,
+    ez: str | None = None,
+) -> dict:
+    center: dict = {"id": "c1", "symbol": "C", "x": 0, "y": 0, "z": 0}
+    if chirality is not None:
+        center["chirality"] = chirality
+    wedge_bond: dict = {"id": "b1", "atomId1": "c1", "atomId2": "n1", "order": 1}
+    if wedge is not None:
+        wedge_bond["wedge"] = wedge
+    ez_bond: dict = {"id": "b5", "atomId1": "c2", "atomId2": "c3", "order": 2}
+    if ez is not None:
+        ez_bond["ez"] = ez
+    return {
+        "name": "chiral",
+        "atoms": [
+            center,
+            {"id": "n1", "symbol": "N", "x": 1, "y": 0, "z": 0},
+            {"id": "o1", "symbol": "O", "x": 0, "y": 1, "z": 0},
+            {"id": "h1", "symbol": "H", "x": 0, "y": 0, "z": 1},
+            {"id": "c2", "symbol": "C", "x": -1, "y": 0, "z": 0},
+            {"id": "c3", "symbol": "C", "x": -2.3, "y": 0, "z": 0},
+        ],
+        "bonds": [
+            wedge_bond,
+            {"id": "b2", "atomId1": "c1", "atomId2": "o1", "order": 1},
+            {"id": "b3", "atomId1": "c1", "atomId2": "h1", "order": 1},
+            {"id": "b4", "atomId1": "c1", "atomId2": "c2", "order": 1},
+            ez_bond,
+        ],
+    }
+
+
+def test_content_hash_distinguishes_stereo_chemistry() -> None:
+    assert molecule_content_hash(_chiral_molecule(chirality="R")) != (
+        molecule_content_hash(_chiral_molecule(chirality="S"))
+    )
+    assert molecule_content_hash(_chiral_molecule()) != (
+        molecule_content_hash(_chiral_molecule(chirality="R"))
+    )
+    assert molecule_content_hash(_chiral_molecule(wedge="up")) != (
+        molecule_content_hash(_chiral_molecule(wedge="down"))
+    )
+    assert molecule_content_hash(_chiral_molecule(ez="E")) != (
+        molecule_content_hash(_chiral_molecule(ez="Z"))
+    )
+
+
+def test_topology_fingerprint_ignores_stereo_chemistry() -> None:
+    plain = molecule_topology_fingerprint(_chiral_molecule())
+    assert molecule_topology_fingerprint(_chiral_molecule(chirality="R")) == plain
+    assert molecule_topology_fingerprint(_chiral_molecule(chirality="S")) == plain
+    assert molecule_topology_fingerprint(_chiral_molecule(wedge="up")) == plain
+    assert molecule_topology_fingerprint(_chiral_molecule(wedge="down")) == plain
+    assert molecule_topology_fingerprint(_chiral_molecule(ez="E")) == plain
+    assert molecule_topology_fingerprint(_chiral_molecule(ez="Z")) == plain
+    changed = _chiral_molecule()
+    changed["bonds"][1]["order"] = 2
+    assert molecule_topology_fingerprint(changed) != plain

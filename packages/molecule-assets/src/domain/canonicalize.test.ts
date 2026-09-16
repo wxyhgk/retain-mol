@@ -89,4 +89,24 @@ describe('topology fingerprint', () => {
     await expect(computeTopologyFingerprint(moved)).resolves.toBe(original)
     await expect(computeTopologyFingerprint(changedBond)).resolves.not.toBe(original)
   })
+
+  it('ignores stereo annotations but keeps content hash sensitive to them', async () => {
+    const rLabeled: Molecule = {
+      ...molecule,
+      atoms: molecule.atoms.map(atom => (atom.id === 'c1' ? { ...atom, chirality: 'R' as const } : atom)),
+      bonds: molecule.bonds.map(bond =>
+        bond.id === 'co' ? { ...bond, ez: 'E' as const } : { ...bond, wedge: 'up' as const },
+      ),
+    }
+    const sLabeled: Molecule = {
+      ...rLabeled,
+      atoms: rLabeled.atoms.map(atom => (atom.id === 'c1' ? { ...atom, chirality: 'S' as const } : atom)),
+      bonds: rLabeled.bonds.map(bond =>
+        bond.id === 'co' ? { ...bond, ez: 'Z' as const } : { ...bond, wedge: 'down' as const },
+      ),
+    }
+    await expect(computeTopologyFingerprint(rLabeled)).resolves.toBe(await computeTopologyFingerprint(sLabeled))
+    await expect(computeTopologyFingerprint(rLabeled)).resolves.toBe(await computeTopologyFingerprint(molecule))
+    await expect(computeContentHash(rLabeled)).resolves.not.toBe(await computeContentHash(sLabeled))
+  })
 })
