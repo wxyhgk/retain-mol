@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { ArrowLeftRight, Atom as AtomIcon, Eraser, FlaskConical, Link2, Minus, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Atom as AtomIcon, Eraser, FlaskConical, Hexagon, Link2, Minus, Plus, Trash2 } from 'lucide-react'
 import { COMMON_ELEMENT_SYMBOLS, getElementConfig } from '@retainmol/mol-viewer/core'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
@@ -28,15 +28,32 @@ type MultiModel = Extract<InspectorModel, { mode: 'multi' }>
 /** 去氢由 mol-viewer 的 P1 构建操作提供；可选成员使其在落地前保持兼容。 */
 type RemoveHydrogensFn = (options?: { onlySelected?: boolean }) => void
 
+/** 三段式分段选择：与键级按钮组共用视觉语言（选中态 bg-primary） */
+function SegmentedControl<T extends string | number>({ ariaLabel, onSelect, options, value }: {
+  ariaLabel: string
+  onSelect: (value: T) => void
+  options: readonly { value: T; label: string }[]
+  value: T | undefined
+}) {
+  return (
+    <div role="group" aria-label={ariaLabel} className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-background p-1">
+      {options.map(option => (
+        <button key={String(option.value)} type="button" aria-pressed={value === option.value} onClick={() => onSelect(option.value)} className={cn('h-8 rounded text-xs font-medium transition-colors', value === option.value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>{option.label}</button>
+      ))}
+    </div>
+  )
+}
+
 export function MoleculeInspector({ model }: {
   model: Extract<InspectorModel, { mode: 'molecule' }>
 }) {
-  const { autoInferBonds, addHydrogens, clearMolecule, removeHydrogens } = useMoleculeStore(useShallow(state => {
+  const { autoInferBonds, addHydrogens, clearMolecule, normalizeAromaticity, removeHydrogens } = useMoleculeStore(useShallow(state => {
     const withRemoveHydrogens: typeof state & { removeHydrogens?: RemoveHydrogensFn } = state
     return {
       autoInferBonds: state.autoInferBonds,
       addHydrogens: state.addHydrogens,
       clearMolecule: state.clearMolecule,
+      normalizeAromaticity: state.normalizeAromaticity,
       removeHydrogens: withRemoveHydrogens.removeHydrogens,
     }
   }))
@@ -56,6 +73,7 @@ export function MoleculeInspector({ model }: {
           <ActionButton icon={<Link2 />} label="推断键" disabled={model.atomCount < 2} onClick={autoInferBonds} />
           <ActionButton icon={<FlaskConical />} label="补氢" disabled={isEmpty} onClick={() => addHydrogens()} />
           <ActionButton icon={<Minus />} label="去氢" disabled={isEmpty} title={removeHydrogens ? '去除显式氢' : '去氢能力尚未就绪'} onClick={() => removeHydrogens?.()} />
+          <ActionButton icon={<Hexagon />} label="芳香化" disabled={isEmpty} title="感知芳香环并排布单双键" onClick={() => normalizeAromaticity()} />
           <ActionButton danger icon={<Eraser />} label="清空" disabled={isEmpty} className="col-span-2" onClick={() => { if (confirm('清空所有原子和键？')) clearMolecule() }} />
         </div>
       </InspectorSection>
@@ -77,7 +95,9 @@ export function AtomInspector({ model }: { model: AtomModel }) {
     replaceAtom: state.replaceAtom,
     setAtomCharge: state.setAtomCharge,
     setAtomRadical: state.setAtomRadical,
+    setChirality: state.setChirality,
   })))
+  const flashHint = useEditorStore(state => state.flashHint)
   const flipAvailability = actions.canFlipChirality(atom.id)
   const addHydrogenAvailability = actions.canAddOneHydrogen(atom.id)
   const elementOptions = atom.symbol === '' || COMMON_ELEMENT_SYMBOLS.includes(atom.symbol) ? COMMON_ELEMENT_SYMBOLS : [atom.symbol, ...COMMON_ELEMENT_SYMBOLS]
@@ -102,6 +122,7 @@ export function AtomInspector({ model }: { model: AtomModel }) {
           <span className="min-w-0 flex-1 truncate text-xs text-foreground">{model.chirality === 'unspecified' ? '未指定' : model.chirality}</span>
           <ActionButton icon={<ArrowLeftRight />} label="翻转" disabled={!flipAvailability.ok} title={flipAvailability.ok ? '交换两取代基分支（R↔S）' : flipAvailability.reason} onClick={() => actions.flipChirality(atom.id)} />
         </div>
+        <SegmentedControl ariaLabel="指定手性" value={model.chirality === 'unspecified' ? 'none' : model.chirality} onSelect={value => { const result = actions.setChirality(atom.id, value); if (!result.ok) flashHint(result.reason ?? '无法指定手性') }} options={[{ value: 'R', label: 'R' }, { value: 'S', label: 'S' }, { value: 'none', label: '无' }] as const} />
         {!flipAvailability.ok && flipAvailability.reason && (
           <div className="mt-1 text-[10px] leading-4 text-muted-foreground">{flipAvailability.reason}</div>
         )}
@@ -127,7 +148,7 @@ export function AtomInspector({ model }: { model: AtomModel }) {
 }
 
 export function BondInspector({ model }: { model: BondModel }) {
-  const { removeBond, setBondLength, setBondOrder } = useMoleculeStore(useShallow(state => ({ removeBond: state.removeBond, setBondLength: state.setBondLength, setBondOrder: state.setBondOrder })))
+  const { removeBond, setBondLength, setBondOrder, setBondWedge, setEZ } = useMoleculeStore(useShallow(state => ({ removeBond: state.removeBond, setBondLength: state.setBondLength, setBondOrder: state.setBondOrder, setBondWedge: state.setBondWedge, setEZ: state.setEZ })))
   const flashHint = useEditorStore(state => state.flashHint)
   return (
     <InspectorLayout>
@@ -139,6 +160,8 @@ export function BondInspector({ model }: { model: BondModel }) {
       <InspectorSection title="键级"><div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-background p-1">{([1, 2, 3] as const).map(order => (
         <button key={order} type="button" aria-pressed={model.bond.order === order} onClick={() => setBondOrder(model.bond.id, order)} className={cn('h-8 rounded text-xs font-medium transition-colors', model.bond.order === order ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>{bondOrderLabel(order)}</button>
       ))}</div></InspectorSection>
+      <InspectorSection title="楔形"><SegmentedControl ariaLabel="楔形" value={model.bond.wedge ?? 'none'} onSelect={value => setBondWedge(model.bond.id, value)} options={[{ value: 'up', label: '楔形上' }, { value: 'down', label: '楔形下' }, { value: 'none', label: '无' }] as const} /></InspectorSection>
+      <InspectorSection title="E/Z"><SegmentedControl ariaLabel="双键顺反" value={model.bond.ez ?? 'none'} onSelect={value => { const result = setEZ(model.bond.id, value); if (!result.ok) flashHint(result.reason ?? '无法指定顺反') }} options={[{ value: 'E', label: 'E' }, { value: 'Z', label: 'Z' }, { value: 'none', label: '无' }] as const} /></InspectorSection>
       <InspectorSection title="长度"><LabeledNumberInput label="键长" value={model.length} decimals={4} min={0.1} unit="Å" onCommit={value => { const result = setBondLength(model.first.atom.id, model.second.atom.id, value); if (!result.ok) flashHint(result.reason ?? '无法修改键长') }} /></InspectorSection>
       <div className="border-t border-border pt-3"><ActionButton danger icon={<Trash2 />} label="删除键" className="w-full" onClick={() => removeBond(model.bond.id)} /></div>
     </InspectorLayout>
@@ -146,9 +169,27 @@ export function BondInspector({ model }: { model: BondModel }) {
 }
 
 export function MultiSelectionInspector({ model }: { model: MultiModel }) {
+  const { setAtomCharges, setBondOrders } = useMoleculeStore(useShallow(state => ({ setAtomCharges: state.setAtomCharges, setBondOrders: state.setBondOrders })))
+  const bondIds = model.bonds.map(bond => bond.id)
+  const atomIds = model.atoms.map(({ atom }) => atom.id)
+  const firstOrder = model.bonds[0]?.order
+  const commonOrder = firstOrder !== undefined && model.bonds.every(bond => bond.order === firstOrder) ? firstOrder : undefined
+  const aromaticCount = model.bonds.filter(bond => bond.aromatic).length
+  const charges = model.atoms.map(({ atom }) => atom.charge ?? 0)
+  const firstCharge = charges[0]
+  const commonCharge = firstCharge !== undefined && charges.every(charge => charge === firstCharge) ? firstCharge : 0
   return (
     <InspectorLayout>
       <InspectorSection title="选择"><div className="grid grid-cols-2 gap-2"><CountTile icon={<AtomIcon />} label="原子" value={model.selectedAtomCount} /><CountTile icon={<Link2 />} label="键" value={model.selectedBondCount} /></div></InspectorSection>
+      {bondIds.length > 0 && (
+        <InspectorSection title={`批量键级 · ${model.selectedBondCount}`}>
+          <SegmentedControl ariaLabel="批量键级" value={commonOrder} onSelect={order => setBondOrders(bondIds, order)} options={([1, 2, 3] as const).map(order => ({ value: order, label: bondOrderLabel(order) }))} />
+          {aromaticCount > 0 && <div className="mt-1 text-[10px] leading-4 text-muted-foreground">含 {aromaticCount} 条芳香键，改级后将清除芳香标记</div>}
+        </InspectorSection>
+      )}
+      {atomIds.length > 0 && (
+        <InspectorSection title={`批量电荷 · ${model.selectedAtomCount}`}><PropertyList><PropertyControlRow label="形式电荷"><IntegerStepper value={commonCharge} min={-4} max={4} format={formatCharge} onChange={value => setAtomCharges(atomIds, value)} /></PropertyControlRow></PropertyList></InspectorSection>
+      )}
       {model.geometry && <EditableGeometryPanel geometry={model.geometry} />}
     </InspectorLayout>
   )
