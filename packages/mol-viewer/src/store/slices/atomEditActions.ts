@@ -20,6 +20,8 @@ import {
   runReplaceAtomsCommand,
   runSetAtomChargeCommand,
   runSetAtomRadicalCommand,
+  runFlipChiralityCommand,
+  getFlipChiralityAvailabilityCommand,
 } from '../../lib/builder/commands/atom'
 
 type AtomEditActions = Pick<
@@ -36,6 +38,8 @@ type AtomEditActions = Pick<
   | 'removeAtoms'
   | 'setAtomCharge'
   | 'setAtomRadical'
+  | 'flipChirality'
+  | 'canFlipChirality'
   | 'growFromHydrogen'
 >
 
@@ -128,6 +132,19 @@ export function createAtomEditActions({
           runSetAtomRadicalCommand(mol, atomId, radical),
         ),
       ),
+
+    flipChirality: (atomId) =>
+      set((s) =>
+        applyActiveMoleculeEdit(s, (mol) =>
+          runFlipChiralityCommand(mol, atomId),
+        ),
+      ),
+
+    canFlipChirality: (atomId) => {
+      const mol = getActiveMol(get())
+      if (!mol) return { ok: false, reason: '没有活跃分子' }
+      return getFlipChiralityAvailabilityCommand(mol, atomId)
+    },
 
     growFromHydrogen: (atomId, symbol) =>
       set((s) =>

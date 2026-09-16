@@ -96,6 +96,10 @@ export interface EditSlice {
   setAtomCharge:          (atomId: string, charge: number) => void
   /** 设未配对电子数（自由基）并按新有效价态增删 H */
   setAtomRadical:         (atomId: string, radical: number) => void
+  /** 翻转手性中心（R↔S，未指定保持）：交换两取代基分支 + 标签翻转 + wedge 互换，一步 undo */
+  flipChirality:          (atomId: string) => void
+  /** 翻转前置检查（C/Si、四显式单键配体、非芳香、非平面） */
+  canFlipChirality:       (atomId: string) => { ok: boolean; reason?: string }
   growFromHydrogen:       (atomId: string, symbol: string) => void
   bondViaHydrogen:        (sourceHId: string, targetId: string) => { ok: boolean; reason?: string }
   bondSelectedAtoms:      () => { ok: boolean; reason?: string }

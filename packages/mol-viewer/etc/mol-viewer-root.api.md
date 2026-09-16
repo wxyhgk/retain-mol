@@ -479,6 +479,10 @@ export interface EditSlice {
         allowedAtomIds: readonly string[];
         reason?: string;
     };
+    canFlipChirality: (atomId: string) => {
+        ok: boolean;
+        reason?: string;
+    };
     // (undocumented)
     centerMolecule: () => void;
     cleanupGeometry: () => {
@@ -503,6 +507,7 @@ export interface EditSlice {
     cycleBondOrder: (id: string) => void;
     // (undocumented)
     endTransaction: (owner?: string) => void;
+    flipChirality: (atomId: string) => void;
     // (undocumented)
     growFromHydrogen: (atomId: string, symbol: string) => void;
     // (undocumented)

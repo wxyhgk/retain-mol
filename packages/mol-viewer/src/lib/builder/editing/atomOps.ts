@@ -3,13 +3,15 @@
  * 纯函数，不修改入参，返回新 Molecule。
  */
 
-import type { Molecule, Atom } from '../../molecule'
+import type { Molecule, Atom, Bond } from '../../molecule'
 import { newAtom, newBond } from '../../molecule'
 import { getElementConfig } from '../../../config/elements.config'
 import { degree, hParentOf, hNeighborsOf } from '../graph'
 import { calcAddAtomOnExisting, calcBondLength } from '../geometry/vsepr'
 import { maxValence, targetValence, valenceUsed } from '../valence'
-import { getHydrogenAdditionAvailability } from '../../chemistry/policies/atomPolicy'
+import { getHydrogenAdditionAvailability, isPotentialStereoCenter } from '../../chemistry/policies/atomPolicy'
+import { getConnectedFragment } from '../analysis/fragments'
+import { flipTetraBranches, parityFromCoords } from '../../stereo/geometry'
 
 /** 原子的有效成键数（读取自身电荷/自由基） */
 function atomMaxBonds(a: Atom): number {
@@ -184,4 +186,92 @@ export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
   }
 
   return current
+}
+
+export type FlipChiralityAvailability =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string }
+
+/**
+ * 翻转前置检查：C/Si、四显式单键配体、非芳香、非平面。
+ * 隐 H 中心直接拒绝（先补显式 H 再翻；看不见的第四配体无法搬运）。
+ */
+export function flipChiralityAvailability(mol: Molecule, atomId: string): FlipChiralityAvailability {
+  const center = mol.atoms.find(a => a.id === atomId)
+  if (!center) return { ok: false, reason: '原子不存在' }
+  if (!isPotentialStereoCenter(mol, atomId)) {
+    if (center.symbol !== 'C' && center.symbol !== 'Si') {
+      return { ok: false, reason: '仅 C / Si 支持翻转（N 会快速消旋，无指定意义）' }
+    }
+    return { ok: false, reason: '需要 4 个单键配体且全部显式存在（含 H），且不在芳香环上' }
+  }
+  const ligands = mol.bonds
+    .filter(b => b.atomId1 === atomId || b.atomId2 === atomId)
+    .map(b => (b.atomId1 === atomId ? b.atomId2 : b.atomId1))
+  const [l0, l1, l2, l3] = ligands.map(id => mol.atoms.find(a => a.id === id))
+  if (!l0 || !l1 || !l2 || !l3) return { ok: false, reason: '原子不存在' }
+  if (parityFromCoords([l0, l1, l2, l3]) === 0) {
+    return { ok: false, reason: '中心已平面化，无需翻转' }
+  }
+  return { ok: true }
+}
+
+/**
+ * 翻转手性中心：交换分支最小的一对取代基（含 wedge 互换），R↔S 标签同步翻转，
+ * 未指定保持未指定。失败原样返回同一引用。调用方包进 undo 事务。
+ * 奇置换必反转手性，与 CIP 无关，故无需重算排名。
+ */
+export function flipChirality(mol: Molecule, atomId: string): Molecule {
+  if (!flipChiralityAvailability(mol, atomId).ok) return mol
+  const center = mol.atoms.find(a => a.id === atomId)
+  if (!center) return mol
+  const ligandIds = mol.bonds
+    .filter(b => b.atomId1 === atomId || b.atomId2 === atomId)
+    .map(b => (b.atomId1 === atomId ? b.atomId2 : b.atomId1))
+  const cut = mol.bonds.filter(b => b.atomId1 !== atomId && b.atomId2 !== atomId)
+  let best: [string, string] | null = null
+  let bestSize = Number.POSITIVE_INFINITY
+  for (let i = 0; i < ligandIds.length; i += 1) {
+    for (let j = i + 1; j < ligandIds.length; j += 1) {
+      const a = ligandIds[i]
+      const b = ligandIds[j]
+      if (a === undefined || b === undefined) continue
+      const size =
+        getConnectedFragment(mol.atoms, cut, a).size +
+        getConnectedFragment(mol.atoms, cut, b).size
+      if (size < bestSize) {
+        bestSize = size
+        best = [a, b]
+      }
+    }
+  }
+  if (!best) return mol
+  const flipped = flipTetraBranches(mol, atomId, best[0], best[1])
+  if (!flipped) return mol
+  const toggled: 'R' | 'S' | undefined = center.chirality === 'R' ? 'S' : center.chirality === 'S' ? 'R' : undefined
+  const atoms = flipped.molecule.atoms.map(a => {
+    if (a.id !== atomId || toggled === undefined) return a
+    return { ...a, chirality: toggled }
+  })
+  const bondOf = (lid: string): Bond | undefined =>
+    flipped.molecule.bonds.find(
+      b => (b.atomId1 === atomId && b.atomId2 === lid) || (b.atomId1 === lid && b.atomId2 === atomId),
+    )
+  const bondA = bondOf(best[0])
+  const bondB = bondOf(best[1])
+  if (!bondA || !bondB) return mol
+  const withWedge = (b: Bond, wedge: 'up' | 'down' | undefined): Bond => {
+    if (b.wedge === wedge) return b
+    if (wedge === undefined) {
+      const { wedge: _omitWedge, ...rest } = b
+      return rest
+    }
+    return { ...b, wedge }
+  }
+  const bonds = flipped.molecule.bonds.map(b => {
+    if (b.id === bondA.id) return withWedge(b, bondB.wedge)
+    if (b.id === bondB.id) return withWedge(b, bondA.wedge)
+    return b
+  })
+  return { ...flipped.molecule, atoms, bonds }
 }

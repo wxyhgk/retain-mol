@@ -41,3 +41,17 @@ export function getHydrogenAdditionAvailability(
   if (valenceUsed(molecule, atomId) >= max) return { ok: false, reason: '已满键，无法加 H' }
   return { ok: true }
 }
+
+/**
+ * 潜在手性中心：C/Si + 4 个各不相同的显式单键配体（非芳香）。
+ * 只看拓扑；平面性另由翻转可用性判定。overlay 角标与翻转 op 共用此定义。
+ */
+export function isPotentialStereoCenter(mol: Molecule, atomId: string): boolean {
+  const center = mol.atoms.find(a => a.id === atomId)
+  if (!center || (center.symbol !== 'C' && center.symbol !== 'Si')) return false
+  const spokes = mol.bonds.filter(b => b.atomId1 === atomId || b.atomId2 === atomId)
+  if (spokes.length !== 4 || spokes.some(b => b.order !== 1 || b.aromatic === true)) return false
+  const ligands = spokes.map(b => (b.atomId1 === atomId ? b.atomId2 : b.atomId1))
+  if (new Set(ligands).size !== 4) return false
+  return ligands.every(id => mol.atoms.some(a => a.id === id))
+}

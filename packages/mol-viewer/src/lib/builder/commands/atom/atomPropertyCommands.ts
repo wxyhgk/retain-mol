@@ -1,5 +1,5 @@
 import type { Molecule } from '../../../molecule'
-import { resaturateAtom } from '../../editing/atomOps'
+import { flipChirality, flipChiralityAvailability, resaturateAtom, type FlipChiralityAvailability } from '../../editing/atomOps'
 import { editChanged, editFailed, editUnchanged, type EditCommandResult } from '../shared'
 
 function withOptionalNumberProperty<
@@ -42,4 +42,18 @@ export function runSetAtomRadicalCommand(
       atom.id === atomId ? withOptionalNumberProperty(atom, 'radical', radical) : atom),
   }
   return editChanged(resaturateAtom(withRadical, atomId))
+}
+
+export function runFlipChiralityCommand(molecule: Molecule, atomId: string): EditCommandResult {
+  const availability = flipChiralityAvailability(molecule, atomId)
+  if (availability.ok === false) return editFailed(availability.reason)
+  const next = flipChirality(molecule, atomId)
+  return next === molecule ? editUnchanged() : editChanged(next)
+}
+
+export function getFlipChiralityAvailabilityCommand(
+  molecule: Molecule,
+  atomId: string,
+): FlipChiralityAvailability {
+  return flipChiralityAvailability(molecule, atomId)
 }

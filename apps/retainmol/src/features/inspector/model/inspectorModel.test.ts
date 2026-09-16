@@ -102,4 +102,16 @@ describe('buildInspectorModel', () => {
 
     expect(model.mode).toBe('molecule')
   })
+
+  it('exposes atom chirality for the inspector row', () => {
+    const plain = buildInspectorModel(molecule, ['c'], [])
+    expect(plain.mode === 'atom' ? plain.chirality : null).toBe('unspecified')
+
+    const labeled: Molecule = {
+      ...molecule,
+      atoms: molecule.atoms.map(a => (a.id === 'c' ? { ...a, chirality: 'R' as const } : a)),
+    }
+    const model = buildInspectorModel(labeled, ['c'], [])
+    expect(model.mode === 'atom' ? model.chirality : null).toBe('R')
+  })
 })

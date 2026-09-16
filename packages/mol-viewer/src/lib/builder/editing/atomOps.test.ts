@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { newAtom, newBond } from '../../molecule'
 import { calcAngle } from '../geometry/measure'
-import { autoAddHydrogens, growByReplacingH, replaceAtomSymbol } from './atomOps'
+import { autoAddHydrogens, growByReplacingH, replaceAtomSymbol, flipChirality, flipChiralityAvailability } from './atomOps'
+import { parityFromCoords } from '../../stereo/geometry'
+import type { Molecule } from '../../molecule'
 
 describe('autoAddHydrogens', () => {
   it('空碳补 4 个 H → CH4', () => {
@@ -234,5 +236,107 @@ describe('growByReplacingH', () => {
 })
 
 // ─────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────
+// flipChirality — 翻转手性中心
+// ─────────────────────────────────────────────────────────
+
+function chiralTetra(): { mol: Molecule; centerId: string } {
+  const center = newAtom('C', 0, 0, 0)
+  const ligands = [
+    newAtom('F', 1, 1, 1),
+    newAtom('Cl', 1, -1, -1),
+    newAtom('Br', -1, 1, -1),
+    newAtom('H', -1, -1, 1),
+  ]
+  return {
+    mol: {
+      atoms: [center, ...ligands],
+      bonds: ligands.map(l => newBond(center.id, l.id, 1)),
+    },
+    centerId: center.id,
+  }
+}
+
+function ligandParity(mol: Molecule, centerId: string): 1 | -1 | 0 {
+  const ligandIds = mol.bonds
+    .filter(b => b.atomId1 === centerId || b.atomId2 === centerId)
+    .map(b => (b.atomId1 === centerId ? b.atomId2 : b.atomId1))
+  const pts = ligandIds.map(id => mol.atoms.find(a => a.id === id)!)
+  return parityFromCoords([pts[0]!, pts[1]!, pts[2]!, pts[3]!])
+}
+
+describe('flipChirality', () => {
+  it('R→S：标签翻转且几何体积变号', () => {
+    const { mol, centerId } = chiralTetra()
+    const withR: Molecule = {
+      ...mol,
+      atoms: mol.atoms.map(a => (a.id === centerId ? { ...a, chirality: 'R' as const } : a)),
+    }
+    expect(flipChiralityAvailability(withR, centerId)).toEqual({ ok: true })
+    const before = ligandParity(withR, centerId)
+    expect(before).not.toBe(0)
+
+    const flipped = flipChirality(withR, centerId)
+    expect(flipped).not.toBe(withR)
+    expect(flipped.atoms.find(a => a.id === centerId)?.chirality).toBe('S')
+    expect(ligandParity(flipped, centerId)).toBe(before === 1 ? -1 : 1)
+    expect(flipped.atoms).toHaveLength(withR.atoms.length)
+    expect(flipped.bonds).toEqual(withR.bonds)
+  })
+
+  it('未指定保持未指定，但几何照样翻转', () => {
+    const { mol, centerId } = chiralTetra()
+    const before = ligandParity(mol, centerId)
+    const flipped = flipChirality(mol, centerId)
+    expect(flipped.atoms.find(a => a.id === centerId)?.chirality).toBeUndefined()
+    expect(ligandParity(flipped, centerId)).toBe(before === 1 ? -1 : 1)
+  })
+
+  it('wedge 随分支互换', () => {
+    const { mol, centerId } = chiralTetra()
+    const [b0, b1] = mol.bonds
+    const wedged: Molecule = {
+      ...mol,
+      bonds: mol.bonds.map(b => (b.id === b0!.id ? { ...b, wedge: 'up' as const } : b)),
+    }
+    const flipped = flipChirality(wedged, centerId)
+    // 最小分支对即前两条键：wedge 从 b0 挪到 b1
+    expect(flipped.bonds.find(b => b.id === b0!.id)?.wedge).toBeUndefined()
+    expect(flipped.bonds.find(b => b.id === b1!.id)?.wedge).toBe('up')
+  })
+
+  it('不可翻转返回同一引用并给理由', () => {
+    const { mol, centerId } = chiralTetra()
+    const nCenter = newAtom('N', 0, 0, 0)
+    const nMol: Molecule = {
+      atoms: [nCenter, ...mol.atoms.filter(a => a.id !== centerId)],
+      bonds: mol.bonds.map(b => ({
+        ...b,
+        atomId1: b.atomId1 === centerId ? nCenter.id : b.atomId1,
+        atomId2: b.atomId2 === centerId ? nCenter.id : b.atomId2,
+      })),
+    }
+    expect(flipChiralityAvailability(nMol, nCenter.id).ok).toBe(false)
+    expect(flipChirality(nMol, nCenter.id)).toBe(nMol)
+
+    const three = {
+      ...mol,
+      atoms: mol.atoms.slice(0, 4),
+      bonds: mol.bonds.slice(0, 3),
+    }
+    expect(flipChiralityAvailability(three, centerId).ok).toBe(false)
+    expect(flipChirality(three, centerId)).toBe(three)
+
+    const flat: Molecule = {
+      ...mol,
+      atoms: mol.atoms.map(a => ({ ...a, z: 0 })),
+    }
+    expect(flipChiralityAvailability(flat, centerId)).toEqual({
+      ok: false,
+      reason: '中心已平面化，无需翻转',
+    })
+  })
+})
 // bondByReplacingH — 桥氢（多键 H）不留悬空键
 // ─────────────────────────────────────────────────────────

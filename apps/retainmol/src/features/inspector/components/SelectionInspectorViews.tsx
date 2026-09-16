@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { Atom as AtomIcon, Eraser, FlaskConical, Link2, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Atom as AtomIcon, Eraser, FlaskConical, Link2, Plus, Trash2 } from 'lucide-react'
 import { COMMON_ELEMENT_SYMBOLS, getElementConfig } from '@retainmol/mol-viewer/core'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
@@ -62,12 +62,15 @@ export function AtomInspector({ model }: { model: AtomModel }) {
   const actions = useMoleculeStore(useShallow(state => ({
     addOneHydrogen: state.addOneHydrogen,
     canAddOneHydrogen: state.canAddOneHydrogen,
+    canFlipChirality: state.canFlipChirality,
+    flipChirality: state.flipChirality,
     moveAtom: state.moveAtom,
     removeAtom: state.removeAtom,
     replaceAtom: state.replaceAtom,
     setAtomCharge: state.setAtomCharge,
     setAtomRadical: state.setAtomRadical,
   })))
+  const flipAvailability = actions.canFlipChirality(atom.id)
   const addHydrogenAvailability = actions.canAddOneHydrogen(atom.id)
   const elementOptions = atom.symbol === '' || COMMON_ELEMENT_SYMBOLS.includes(atom.symbol) ? COMMON_ELEMENT_SYMBOLS : [atom.symbol, ...COMMON_ELEMENT_SYMBOLS]
   return (
@@ -86,6 +89,15 @@ export function AtomInspector({ model }: { model: AtomModel }) {
         <PropertyControlRow label="形式电荷"><IntegerStepper value={atom.charge ?? 0} min={-4} max={4} format={formatCharge} onChange={value => actions.setAtomCharge(atom.id, value)} /></PropertyControlRow>
         <PropertyControlRow label="自由基"><IntegerStepper value={atom.radical ?? 0} min={0} max={3} format={value => value === 0 ? '无' : String(value)} onChange={value => actions.setAtomRadical(atom.id, value)} /></PropertyControlRow>
       </PropertyList></InspectorSection>
+      <InspectorSection title="手性">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-xs text-foreground">{model.chirality === 'unspecified' ? '未指定' : model.chirality}</span>
+          <ActionButton icon={<ArrowLeftRight />} label="翻转" disabled={!flipAvailability.ok} title={flipAvailability.ok ? '交换两取代基分支（R↔S）' : flipAvailability.reason} onClick={() => actions.flipChirality(atom.id)} />
+        </div>
+        {!flipAvailability.ok && flipAvailability.reason && (
+          <div className="mt-1 text-[10px] leading-4 text-muted-foreground">{flipAvailability.reason}</div>
+        )}
+      </InspectorSection>
       <InspectorSection title="坐标"><div className="grid min-w-0 grid-cols-3 gap-2">
         <LabeledNumberInput label="X" value={atom.x} decimals={4} onCommit={value => actions.moveAtom(atom.id, value, atom.y, atom.z)} />
         <LabeledNumberInput label="Y" value={atom.y} decimals={4} onCommit={value => actions.moveAtom(atom.id, atom.x, value, atom.z)} />

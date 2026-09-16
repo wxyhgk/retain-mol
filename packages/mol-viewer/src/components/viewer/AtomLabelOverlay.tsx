@@ -4,6 +4,7 @@ import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
+import { isPotentialStereoCenter } from '../../lib/chemistry/policies/atomPolicy'
 import { ATOM_LABEL as L } from '../../config/overlay.config'
 import { CAMERA } from '../../config/camera.config'
 import { resolveRenderProfile } from '../../styles'
@@ -83,23 +84,47 @@ export default function AtomLabelOverlay({ renderer }: Props) {
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       for (const atom of molecule.atoms) {
-        const q = atom.charge ?? 0
-        const rad = atom.radical ?? 0
-        if (q === 0 && rad === 0) continue
         const p = renderer.projectLocalToScreen(new THREE.Vector3(atom.x, atom.y, atom.z), w, h)
         if (p.x < -L.viewportMargin || p.x > w + L.viewportMargin || p.y < -L.viewportMargin || p.y > h + L.viewportMargin) continue
-        const mag = Math.abs(q)
-        const sign = q > 0 ? '+' : '−'
-        const chargeTxt = q === 0 ? '' : (mag === 1 ? sign : `${mag}${sign}`)
-        const txt = chargeTxt + (rad > 0 ? '•' : '')
-        const bx = p.x + 8 * badgeScale, by = p.y - 10 * badgeScale
-        const tw = ctx.measureText(txt).width
-        ctx.fillStyle = q > 0 ? 'rgba(59,130,246,0.92)' : q < 0 ? 'rgba(239,68,68,0.92)' : 'rgba(107,114,128,0.92)'
-        ctx.beginPath()
-        ctx.roundRect(bx - 3, by - badgeFont * 0.62, tw + 6, badgeFont * 1.24, 4)
-        ctx.fill()
-        ctx.fillStyle = '#fff'
-        ctx.fillText(txt, bx, by)
+        const q = atom.charge ?? 0
+        const rad = atom.radical ?? 0
+        const bx = p.x + 8 * badgeScale
+        const by = p.y - 10 * badgeScale
+        if (q !== 0 || rad !== 0) {
+          const mag = Math.abs(q)
+          const sign = q > 0 ? '+' : '−'
+          const txt = (q === 0 ? '' : mag === 1 ? sign : `${mag}${sign}`) + (rad > 0 ? '•' : '')
+          const tw = ctx.measureText(txt).width
+          ctx.fillStyle = q > 0 ? 'rgba(59,130,246,0.92)' : q < 0 ? 'rgba(239,68,68,0.92)' : 'rgba(107,114,128,0.92)'
+          ctx.beginPath()
+          ctx.roundRect(bx - 3, by - badgeFont * 0.62, tw + 6, badgeFont * 1.24, 4)
+          ctx.fill()
+          ctx.fillStyle = '#fff'
+          ctx.fillText(txt, bx, by)
+        }
+        // ── 手性徽标：R/S 实心紫标；潜在中心未指定显示空心 ? ──
+        const chiralTxt = atom.chirality ?? (isPotentialStereoCenter(molecule, atom.id) ? '?' : '')
+        if (chiralTxt !== '') {
+          const cx = p.x + 8 * badgeScale
+          const cy = by + badgeFont * 1.15
+          ctx.font = `bold ${badgeFont}px monospace`
+          const ctw = ctx.measureText(chiralTxt).width
+          ctx.beginPath()
+          ctx.roundRect(cx - 3, cy - badgeFont * 0.62, ctw + 6, badgeFont * 1.24, 4)
+          if (atom.chirality) {
+            ctx.fillStyle = 'rgba(124,58,237,0.92)'
+            ctx.fill()
+            ctx.fillStyle = '#fff'
+          } else {
+            ctx.fillStyle = 'rgba(255,255,255,0.75)'
+            ctx.fill()
+            ctx.strokeStyle = 'rgba(107,114,128,0.9)'
+            ctx.lineWidth = 1
+            ctx.stroke()
+            ctx.fillStyle = 'rgba(107,114,128,1)'
+          }
+          ctx.fillText(chiralTxt, cx, cy)
+        }
       }
 
       const profileLabels = resolveRenderProfile(renderer.renderStyle).atomLabels
