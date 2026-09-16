@@ -338,6 +338,7 @@ export interface EditSlice {
     growFromHydrogen: (atomId: string, symbol: string) => void;
     // (undocumented)
     moveAtom: (id: string, x: number, y: number, z: number) => void;
+    normalizeAromaticity: () => void;
     // (undocumented)
     pasteAtoms: (clipboard: MolClipboard) => string[];
     // (undocumented)
@@ -346,6 +347,9 @@ export interface EditSlice {
     removeAtoms: (atomIds: readonly string[]) => void;
     // (undocumented)
     removeBond: (id: string) => void;
+    removeHydrogens: (options?: {
+        onlySelected?: boolean;
+    }) => void;
     removeSelected: () => void;
     // (undocumented)
     replaceAtom: (atomId: string, symbol: string) => void;
@@ -354,6 +358,7 @@ export interface EditSlice {
     // (undocumented)
     runTransaction: <T>(owner: string, operation: () => T) => T;
     setAtomCharge: (atomId: string, charge: number) => void;
+    setAtomCharges: (ids: readonly string[], charge: number) => void;
     // (undocumented)
     setAtomPositions: (positions: ReadonlyMap<string, {
         x: number;
@@ -373,8 +378,18 @@ export interface EditSlice {
     };
     // (undocumented)
     setBondOrder: (id: string, order: 1 | 2 | 3) => void;
+    setBondOrders: (ids: readonly string[], order: 1 | 2 | 3) => void;
+    setBondWedge: (id: string, wedge: 'up' | 'down' | 'none') => void;
+    setChirality: (atomId: string, chirality: 'R' | 'S' | 'none') => {
+        ok: boolean;
+        reason?: string;
+    };
     // (undocumented)
     setDihedralAngle: (aId: string, bId: string, cId: string, dId: string, deg: number) => {
+        ok: boolean;
+        reason?: string;
+    };
+    setEZ: (bondId: string, ez: 'E' | 'Z' | 'none') => {
         ok: boolean;
         reason?: string;
     };

@@ -83,6 +83,8 @@ export interface EditSlice {
     | { ok: false; code: AlignBondPairFailureCode; reason: string }
   autoInferBonds:         () => void
   addHydrogens:           (atomId?: string) => void
+  /** 去显式 H（autoAddHydrogens 的逆操作）：默认全部分子；onlySelected 且有选中时只去选中原子上的 H */
+  removeHydrogens:        (options?: { onlySelected?: boolean }) => void
   /** 力场几何清理（MMFF94）：弛豫坐标到物理合理（一步 undo，不动拓扑）。返回是否成功 */
   cleanupGeometry:        () => { ok: boolean; reason?: string }
   canAddOneHydrogen:      (atomId: string) => { ok: boolean; reason?: string }
@@ -94,12 +96,24 @@ export interface EditSlice {
   removeAtoms:            (atomIds: readonly string[]) => void
   /** 设形式电荷并按新有效价态增删 H（N⁺→长第4个H、O⁻→掉一个H） */
   setAtomCharge:          (atomId: string, charge: number) => void
-  /** 设未配对电子数（自由基）并按新有效价态增删 H */
-  setAtomRadical:         (atomId: string, radical: number) => void
   /** 翻转手性中心（R↔S，未指定保持）：交换两取代基分支 + 标签翻转 + wedge 互换，一步 undo */
   flipChirality:          (atomId: string) => void
   /** 翻转前置检查（C/Si、四显式单键配体、非芳香、非平面） */
   canFlipChirality:       (atomId: string) => { ok: boolean; reason?: string }
+  /** 设未配对电子数（自由基）并按新有效价态增删 H */
+  setAtomRadical:         (atomId: string, radical: number) => void
+  /** 设楔形键（窄端在 bond.atomId1）；'none' 清除标记，一步 undo */
+  setBondWedge:           (id: string, wedge: 'up' | 'down' | 'none') => void
+  /** 设手性 R/S：parity 不符翻转分支+标记，相符只改标记；'none' 清标记与连键楔形。门控失败返回 reason */
+  setChirality:           (atomId: string, chirality: 'R' | 'S' | 'none') => { ok: boolean; reason?: string }
+  /** 设双键 E/Z：几何已是目标只补标记，否则交换一端取代基分支（含几何）；'none' 只清标记 */
+  setEZ:                  (bondId: string, ez: 'E' | 'Z' | 'none') => { ok: boolean; reason?: string }
+  /** 芳香性归一化：感知芳香环后凯库勒化排单双交替，一步 undo */
+  normalizeAromaticity:   () => void
+  /** 批量设键级（一步 undo，逐键价态门控，不合规的键跳过） */
+  setBondOrders:          (ids: readonly string[], order: 1 | 2 | 3) => void
+  /** 批量设形式电荷并重饱和（一步 undo，逐原子门控） */
+  setAtomCharges:         (ids: readonly string[], charge: number) => void
   growFromHydrogen:       (atomId: string, symbol: string) => void
   bondViaHydrogen:        (sourceHId: string, targetId: string) => { ok: boolean; reason?: string }
   bondSelectedAtoms:      () => { ok: boolean; reason?: string }

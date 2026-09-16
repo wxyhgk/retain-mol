@@ -3,6 +3,7 @@ import type { EditActionContext } from './editActionTypes'
 import type { Molecule } from '../../lib/molecule'
 import {
   applyActiveMoleculeEdit,
+  applyActiveMoleculeEditWithMeta,
   applyActiveMoleculeEditWithSelection,
   applyActiveMoleculeSelectionCommand,
 } from './helpers'
@@ -11,8 +12,12 @@ import {
   runBondSelectedAtomsCommand,
   runBondViaHydrogenCommand,
   runCycleBondOrderCommand,
+  runNormalizeAromaticityCommand,
   runRemoveBondCommand,
   runSetBondOrderCommand,
+  runSetBondOrdersCommand,
+  runSetBondWedgeCommand,
+  runSetEZCommand,
 } from '../../lib/builder/commands/bond'
 import {
   runSyncSelectionToMoleculeCommand,
@@ -55,6 +60,10 @@ type BondEditActions = Pick<
   | 'addBond'
   | 'removeBond'
   | 'setBondOrder'
+  | 'setBondOrders'
+  | 'setBondWedge'
+  | 'setEZ'
+  | 'normalizeAromaticity'
   | 'cycleBondOrder'
   | 'bondViaHydrogen'
   | 'bondSelectedAtoms'
@@ -80,6 +89,29 @@ export function createBondEditActions({
         ),
       ),
 
+
+    setBondOrders: (ids, order) =>
+      set((s) =>
+        applyActiveMoleculeEdit(s, (mol) => runSetBondOrdersCommand(mol, ids, order)),
+      ),
+
+    setBondWedge: (id, wedge) =>
+      set((s) =>
+        applyActiveMoleculeEdit(s, (mol) => runSetBondWedgeCommand(mol, id, wedge)),
+      ),
+
+    setEZ: (bondId, ez) =>
+      applyActiveMoleculeEditWithMeta(
+        get,
+        set,
+        (mol) => runSetEZCommand(mol, bondId, ez),
+        () => ({}),
+      ),
+
+    normalizeAromaticity: () =>
+      set((s) =>
+        applyActiveMoleculeEdit(s, (mol) => runNormalizeAromaticityCommand(mol)),
+      ),
     setBondOrder: (id, order) =>
       set((s) =>
         applyActiveMoleculeEdit(s, (mol) => runSetBondOrderCommand(mol, id, order)),

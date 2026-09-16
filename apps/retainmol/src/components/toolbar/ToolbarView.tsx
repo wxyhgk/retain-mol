@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import type { ToolbarModel } from './useToolbarModel'
+import { MoleculeDocumentControls } from '@/features/molecule-assets'
+import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { selectAppBusyMessage, useAppTaskStore } from '@/store/appTaskStore'
@@ -54,6 +56,11 @@ export function ToolbarView({
           <span className="hidden sm:inline">RetainMol</span>
         </span>
 
+        {/* 文档保存：真实保存控件（Ctrl+S 由其监听承接） */}
+        <div className="flex shrink-0 items-center gap-1">
+          <MoleculeDocumentControls editorHost={editorHostPort} />
+        </div>
+
         {/* 右侧：命令面板 + 检查器 */}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <Tip label="命令面板 (⌘K)" side="bottom">
@@ -98,6 +105,15 @@ export function ToolbarView({
       />
     </TooltipProvider>
   )
+}
+
+/**
+ * 真实保存入口：向 window 重放一次 Ctrl+S，由工具栏已挂载的
+ * MoleculeDocumentControls 的监听承接并执行保存（handleEditorShortcut
+ * 不处理 Ctrl+S，此处不再经过它，避免双重保存）。
+ */
+function triggerMoleculeSave() {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }))
 }
 
 function EditorCommandPalette({
@@ -158,7 +174,7 @@ function EditorCommandPalette({
         items: [
           { label: 'PubChem 搜索', hint: '⌘K', onRun: () => run(onSearchOpen) },
           { label: '打开模板工作台', onRun: () => run(onOpenTemplateStudio) },
-          { label: '保存分子 (Ctrl+S)', hint: 'Ctrl+S', onRun: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true })) },
+          { label: '保存分子 (Ctrl+S)', hint: 'Ctrl+S', onRun: () => run(triggerMoleculeSave) },
         ].filter(item => filter(item.label)),
       },
       {

@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { ArrowLeftRight, Atom as AtomIcon, Eraser, FlaskConical, Link2, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Atom as AtomIcon, Eraser, FlaskConical, Link2, Minus, Plus, Trash2 } from 'lucide-react'
 import { COMMON_ELEMENT_SYMBOLS, getElementConfig } from '@retainmol/mol-viewer/core'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
@@ -25,14 +25,21 @@ type AtomModel = Extract<InspectorModel, { mode: 'atom' }>
 type BondModel = Extract<InspectorModel, { mode: 'bond' }>
 type MultiModel = Extract<InspectorModel, { mode: 'multi' }>
 
+/** 去氢由 mol-viewer 的 P1 构建操作提供；可选成员使其在落地前保持兼容。 */
+type RemoveHydrogensFn = (options?: { onlySelected?: boolean }) => void
+
 export function MoleculeInspector({ model }: {
   model: Extract<InspectorModel, { mode: 'molecule' }>
 }) {
-  const { autoInferBonds, addHydrogens, clearMolecule } = useMoleculeStore(useShallow(state => ({
-    autoInferBonds: state.autoInferBonds,
-    addHydrogens: state.addHydrogens,
-    clearMolecule: state.clearMolecule,
-  })))
+  const { autoInferBonds, addHydrogens, clearMolecule, removeHydrogens } = useMoleculeStore(useShallow(state => {
+    const withRemoveHydrogens: typeof state & { removeHydrogens?: RemoveHydrogensFn } = state
+    return {
+      autoInferBonds: state.autoInferBonds,
+      addHydrogens: state.addHydrogens,
+      clearMolecule: state.clearMolecule,
+      removeHydrogens: withRemoveHydrogens.removeHydrogens,
+    }
+  }))
   const isEmpty = model.atomCount === 0
   return (
     <InspectorLayout>
@@ -48,6 +55,7 @@ export function MoleculeInspector({ model }: {
         <div className="grid min-w-0 grid-cols-2 gap-2">
           <ActionButton icon={<Link2 />} label="推断键" disabled={model.atomCount < 2} onClick={autoInferBonds} />
           <ActionButton icon={<FlaskConical />} label="补氢" disabled={isEmpty} onClick={() => addHydrogens()} />
+          <ActionButton icon={<Minus />} label="去氢" disabled={isEmpty} title={removeHydrogens ? '去除显式氢' : '去氢能力尚未就绪'} onClick={() => removeHydrogens?.()} />
           <ActionButton danger icon={<Eraser />} label="清空" disabled={isEmpty} className="col-span-2" onClick={() => { if (confirm('清空所有原子和键？')) clearMolecule() }} />
         </div>
       </InspectorSection>

@@ -12,6 +12,7 @@ import {
   runAddHydrogensCommand,
   runAddOneHydrogenCommand,
   runAddOneHydrogensCommand,
+  runRemoveHydrogensCommand,
   runAddAtomCommand,
   runGrowFromHydrogenCommand,
   runRemoveAtomCommand,
@@ -19,7 +20,9 @@ import {
   runReplaceAtomCommand,
   runReplaceAtomsCommand,
   runSetAtomChargeCommand,
+  runSetAtomChargesCommand,
   runSetAtomRadicalCommand,
+  runSetChiralityCommand,
   runFlipChiralityCommand,
   getFlipChiralityAvailabilityCommand,
 } from '../../lib/builder/commands/atom'
@@ -29,6 +32,7 @@ type AtomEditActions = Pick<
   | 'addAtom'
   | 'removeAtom'
   | 'addHydrogens'
+  | 'removeHydrogens'
   | 'canAddOneHydrogen'
   | 'canAddOneHydrogens'
   | 'addOneHydrogen'
@@ -37,7 +41,9 @@ type AtomEditActions = Pick<
   | 'replaceAtoms'
   | 'removeAtoms'
   | 'setAtomCharge'
+  | 'setAtomCharges'
   | 'setAtomRadical'
+  | 'setChirality'
   | 'flipChirality'
   | 'canFlipChirality'
   | 'growFromHydrogen'
@@ -71,6 +77,22 @@ export function createAtomEditActions({
           runAddHydrogensCommand(mol, atomId),
         ),
       ),
+
+    removeHydrogens: (options) => {
+      const state = get()
+      const mol = getActiveMol(state)
+      if (!mol) return
+      // onlySelected 且有选中：只去选中原子上的 H；否则全部分子
+      const selected = [...state.selectedAtomIds]
+      const targets = options?.onlySelected === true && selected.length > 0
+        ? selected
+        : undefined
+      set((s) =>
+        applyActiveMoleculeEdit(s, (current) =>
+          runRemoveHydrogensCommand(current, targets),
+        ),
+      )
+    },
 
     canAddOneHydrogen: (atomId) => {
       const mol = getActiveMol(get())
@@ -131,6 +153,21 @@ export function createAtomEditActions({
         applyActiveMoleculeEdit(s, (mol) =>
           runSetAtomRadicalCommand(mol, atomId, radical),
         ),
+      ),
+
+    setAtomCharges: (atomIds, charge) =>
+      set((s) =>
+        applyActiveMoleculeEdit(s, (mol) =>
+          runSetAtomChargesCommand(mol, atomIds, charge),
+        ),
+      ),
+
+    setChirality: (atomId, chirality) =>
+      applyActiveMoleculeEditWithMeta(
+        get,
+        set,
+        (mol) => runSetChiralityCommand(mol, atomId, chirality),
+        () => ({}),
       ),
 
     flipChirality: (atomId) =>

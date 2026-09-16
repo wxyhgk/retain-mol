@@ -275,3 +275,80 @@ export function flipChirality(mol: Molecule, atomId: string): Molecule {
   })
   return { ...flipped.molecule, atoms, bonds }
 }
+/**
+ * 存储配体序下的几何 parity（setChirality 的参考系：R↔+1、S↔−1）。
+ * CIP 排名交给 OCL；编辑层只保证“奇置换必反转”，与 CIP 无关的内部约定。
+ * 配体不足 4 个或有缺失返回 null。
+ */
+export function chiralityParity(mol: Molecule, atomId: string): 1 | -1 | 0 | null {
+  const ligandIds = mol.bonds
+    .filter(b => b.atomId1 === atomId || b.atomId2 === atomId)
+    .map(b => (b.atomId1 === atomId ? b.atomId2 : b.atomId1))
+  if (ligandIds.length !== 4) return null
+  const ligands = ligandIds.map(id => mol.atoms.find(a => a.id === id))
+  if (ligands.some(ligand => ligand === undefined)) return null
+  return parityFromCoords(ligands as [Atom, Atom, Atom, Atom])
+}
+
+function withoutWedge(bond: Bond): Bond {
+  if (bond.wedge === undefined) return bond
+  const { wedge: _omitted, ...rest } = bond
+  return rest
+}
+
+function withoutChirality(atom: Atom): Atom {
+  if (atom.chirality === undefined) return atom
+  const { chirality: _omitted, ...rest } = atom
+  return rest
+}
+
+/**
+ * 清除手性标记与中心连键的楔形；无事可做返回同一引用（'none' 语义）。
+ */
+export function clearChirality(mol: Molecule, atomId: string): Molecule {
+  const center = mol.atoms.find(a => a.id === atomId)
+  if (!center) return mol
+  const needsAtom = center.chirality !== undefined
+  const needsBonds = mol.bonds.some(
+    b => (b.atomId1 === atomId || b.atomId2 === atomId) && b.wedge !== undefined,
+  )
+  if (!needsAtom && !needsBonds) return mol
+  return {
+    ...mol,
+    atoms: needsAtom
+      ? mol.atoms.map(a => (a.id === atomId ? withoutChirality(a) : a))
+      : mol.atoms,
+    bonds: needsBonds
+      ? mol.bonds.map(b =>
+          (b.atomId1 === atomId || b.atomId2 === atomId) ? withoutWedge(b) : b)
+      : mol.bonds,
+  }
+}
+
+/**
+ * 设定手性 R/S：parity 相符只改标记，不符走 flipChirality 分支交换（含 wedge 互换）。
+ * 调用前须通过 flipChiralityAvailability；门控失败/退化返回同一引用。
+ * 调用方包进 undo 事务。
+ */
+export function setChirality(mol: Molecule, atomId: string, target: 'R' | 'S'): Molecule {
+  if (flipChiralityAvailability(mol, atomId).ok === false) return mol
+  const center = mol.atoms.find(a => a.id === atomId)
+  if (!center) return mol
+  const parity = chiralityParity(mol, atomId)
+  if (parity === null || parity === 0) return mol
+  const desired: 1 | -1 = target === 'R' ? 1 : -1
+  if (parity !== desired) {
+    const flipped = flipChirality(mol, atomId)
+    if (flipped === mol) return mol
+    if (flipped.atoms.some(a => a.id === atomId && a.chirality === target)) return flipped
+    return {
+      ...flipped,
+      atoms: flipped.atoms.map(a => (a.id === atomId ? { ...a, chirality: target } : a)),
+    }
+  }
+  if (center.chirality === target) return mol
+  return {
+    ...mol,
+    atoms: mol.atoms.map(a => (a.id === atomId ? { ...a, chirality: target } : a)),
+  }
+}

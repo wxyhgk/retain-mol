@@ -1,4 +1,5 @@
 import type { Molecule } from '../../../molecule'
+import { removeTerminalHydrogens } from '../../../chemistry/policies/explicitHydrogenPolicy'
 import { autoAddHydrogens, addOneHydrogen, growByReplacingH, substituteAtomElement } from '../../editing/atomOps'
 import {
   getHydrogenAdditionAvailability,
@@ -11,6 +12,16 @@ export function runAddHydrogensCommand(
   atomId?: string,
 ): EditCommandResult {
   const next = autoAddHydrogens(molecule, atomId)
+  return next === molecule
+    ? editUnchanged()
+    : editChanged(next)
+}
+
+export function runRemoveHydrogensCommand(
+  molecule: Molecule,
+  targetAtomIds?: readonly string[],
+): EditCommandResult {
+  const next = removeTerminalHydrogens(molecule, targetAtomIds)
   return next === molecule
     ? editUnchanged()
     : editChanged(next)

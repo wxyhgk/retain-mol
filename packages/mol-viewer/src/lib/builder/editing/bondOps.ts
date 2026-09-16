@@ -12,6 +12,8 @@ import {
   supportedBondOrders,
   validateBondAddition,
 } from '../../chemistry/policies/bondPolicy'
+import { flipTetraBranches } from '../../stereo/geometry'
+import { calcDihedral } from '../../geometry/measure'
 
 /** 判断两个原子之间是否允许成键 */
 export function canBond(
@@ -184,4 +186,104 @@ export function cycleBondLength(mol: Molecule, bondId: string): CycleBondLengthR
     moved: true,
     molecule: movedMol,
   }
+}
+
+// ── 双键 E/Z（顺反）────────────────────────────────────────────────────────────
+
+export type BondEZAvailability =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string }
+
+interface EZEnds {
+  readonly bond: Bond
+  readonly endA: Atom
+  readonly endB: Atom
+  readonly subsA: Atom[]
+  readonly subsB: Atom[]
+}
+
+/** 双键两端 + 各端除对端外的取代基（按存储键序）。端点/取代基缺失返回 null。 */
+function ezEnds(mol: Molecule, bondId: string): EZEnds | null {
+  const bond = mol.bonds.find(b => b.id === bondId)
+  if (!bond) return null
+  const atomById = new Map(mol.atoms.map(a => [a.id, a]))
+  const endA = atomById.get(bond.atomId1)
+  const endB = atomById.get(bond.atomId2)
+  if (!endA || !endB) return null
+  const substituentsOf = (endId: string): Atom[] => {
+    const result: Atom[] = []
+    for (const b of mol.bonds) {
+      if (b.id === bondId) continue
+      const otherId = b.atomId1 === endId ? b.atomId2 : b.atomId2 === endId ? b.atomId1 : null
+      if (otherId === null) continue
+      const other = atomById.get(otherId)
+      if (other) result.push(other)
+    }
+    return result
+  }
+  return { bond, endA, endB, subsA: substituentsOf(endA.id), subsB: substituentsOf(endB.id) }
+}
+
+/**
+ * E/Z 前置检查：双键、非芳香、两端各至少一个显式取代基。
+ * 隐 H 端直接拒绝（先补显式 H 再设；看不见的取代基无法判定顺反）。
+ */
+export function bondEZAvailability(mol: Molecule, bondId: string): BondEZAvailability {
+  const ends = ezEnds(mol, bondId)
+  if (!ends) return { ok: false, reason: '键不存在' }
+  if (ends.bond.order !== 2) return { ok: false, reason: 'E/Z 只支持双键' }
+  if (ends.bond.aromatic === true) return { ok: false, reason: '芳香键不支持 E/Z' }
+  if (ends.subsA.length === 0 || ends.subsB.length === 0) {
+    return { ok: false, reason: '双键两端缺少取代基，无法判定 E/Z' }
+  }
+  return { ok: true }
+}
+
+/**
+ * 从几何读当前 E/Z：二面角 s1–a=b–s2（s 取各端首个取代基），
+ * |d| ≤ 90° 为同侧（Z），否则为反侧（E）。读不到返回 null。
+ */
+export function currentEZFromGeometry(mol: Molecule, bondId: string): 'E' | 'Z' | null {
+  const ends = ezEnds(mol, bondId)
+  if (!ends || ends.bond.order !== 2 || ends.bond.aromatic === true) return null
+  const [s1, s2] = [ends.subsA[0], ends.subsB[0]]
+  if (!s1 || !s2) return null
+  const dihedral = calcDihedral(s1, ends.endA, ends.endB, s2)
+  if (!Number.isFinite(dihedral)) return null
+  return Math.abs(dihedral) <= 90 ? 'Z' : 'E'
+}
+
+function withEZLabel(mol: Molecule, bondId: string, ez: 'E' | 'Z'): Molecule {
+  const bond = mol.bonds.find(b => b.id === bondId)
+  if (!bond || bond.ez === ez) return mol
+  return { ...mol, bonds: mol.bonds.map(b => (b.id === bondId ? { ...b, ez } : b)) }
+}
+
+/**
+ * 设定 E/Z：几何已是目标只补标记；否则在首个有两个显式取代基的端上
+ * 做取代基分支坐标互换（flipTetraBranches 同款刚性搬运），标记同步。
+ * 几何与标记一步落盘，调用方包进 undo 事务。失败返回同一引用。
+ */
+export function setBondEZ(mol: Molecule, bondId: string, target: 'E' | 'Z'): Molecule {
+  const ends = ezEnds(mol, bondId)
+  if (!ends || bondEZAvailability(mol, bondId).ok === false) return mol
+  if (currentEZFromGeometry(mol, bondId) === target) return withEZLabel(mol, bondId, target)
+  const swapEnd = ends.subsA.length >= 2
+    ? { center: ends.endA, subs: ends.subsA }
+    : ends.subsB.length >= 2
+      ? { center: ends.endB, subs: ends.subsB }
+      : null
+  if (!swapEnd) return mol
+  const [first, second] = [swapEnd.subs[0] as Atom, swapEnd.subs[1] as Atom]
+  const flipped = flipTetraBranches(mol, swapEnd.center.id, first.id, second.id)
+  if (!flipped) return mol
+  return withEZLabel(flipped.molecule, bondId, target)
+}
+
+/** 清除 E/Z 标记（不动几何）；无标记返回同一引用。 */
+export function clearBondEZ(mol: Molecule, bondId: string): Molecule {
+  const bond = mol.bonds.find(b => b.id === bondId)
+  if (!bond || bond.ez === undefined) return mol
+  const { ez: _omitted, ...rest } = bond
+  return { ...mol, bonds: mol.bonds.map(b => (b.id === bondId ? rest : b)) }
 }
