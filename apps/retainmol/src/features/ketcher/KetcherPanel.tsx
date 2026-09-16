@@ -161,26 +161,28 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
 
   return (
     <div className="h-full w-full overflow-hidden bg-white flex flex-col">
-      <div className="flex h-7 shrink-0 items-center justify-between border-b bg-card px-2 text-[11px]">
-        <span className="text-muted-foreground">
+      <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-b bg-card px-2 text-[11px]">
+        <span className="shrink-0 whitespace-nowrap text-muted-foreground">
           {syncState === 'syncing' ? '同步到 3D…' : syncState === 'error' ? `同步失败: ${lastError ?? ''}` : '2D ↔ 3D 自动同步'}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            className="rounded border bg-background px-2 py-0.5 text-[11px] hover:bg-accent"
+            className="whitespace-nowrap rounded border bg-background px-2 py-0.5 text-[11px] hover:bg-accent"
             onClick={() => ketcherRef.current && pushTo2D(ketcherRef.current)}
           >
             推送到 2D
           </button>
           <button
             type="button"
-            className="rounded border bg-background px-2 py-0.5 text-[11px] hover:bg-accent"
+            className="whitespace-nowrap rounded border bg-background px-2 py-0.5 text-[11px] hover:bg-accent"
             onClick={() => ketcherRef.current && doSync(ketcherRef.current)}
           >
             同步到 3D
           </button>
         </div>
+      </div>
+      <div className="min-h-0 w-full flex-1">
         <Editor
           staticResourcesUrl="/ketcher-dist"
           structServiceProvider={provider}
