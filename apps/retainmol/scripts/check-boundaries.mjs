@@ -85,7 +85,6 @@ const thirdPartyComponentAdapters = new Map([
   ['@tanstack/react-table', ['components/data/DataTable.tsx']],
   ['react-virtuoso', ['components/data/VirtualList.tsx']],
   ['react-dropzone', ['components/data/FileDropzone.tsx']],
-  ['echarts', ['features/analysis/infrastructure/echartsAdapter.ts']],
   ['@xyflow/react', [
     'features/workflows/components/WorkflowCanvas.tsx',
     'features/workflows/components/WorkflowReadOnlyCanvas.tsx',
