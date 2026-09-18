@@ -5,6 +5,7 @@ export {
   computeMoleculeContentHash,
   computeMoleculeTopologyFingerprint,
   computeTopologyFingerprint,
+  sha256Bytes,
   stableCanonicalJson,
 } from './domain/canonicalize'
 export {

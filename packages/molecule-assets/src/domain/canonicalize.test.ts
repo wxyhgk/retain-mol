@@ -1,11 +1,15 @@
 import type { Molecule } from '@retainmol/mol-viewer/core'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   canonicalizeMolecule,
   computeContentHash,
   computeTopologyFingerprint,
+  sha256Bytes,
   stableCanonicalJson,
 } from './canonicalize'
+
+const sha256HexOf = (value: string): string =>
+  Array.from(sha256Bytes(new TextEncoder().encode(value)), byte => byte.toString(16).padStart(2, '0')).join('')
 
 const molecule: Molecule = {
   name: 'formaldehyde',
@@ -43,6 +47,23 @@ describe('stableCanonicalJson', () => {
   it('rejects non-finite numbers instead of hashing them as null', () => {
     expect(() => stableCanonicalJson({ coordinate: Number.NaN }))
       .toThrow('Canonical JSON only supports finite numbers')
+  })
+})
+
+describe('sha256Bytes', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('matches NIST vectors', () => {
+    expect(sha256HexOf('')).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
+    expect(sha256HexOf('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+  })
+
+  it('falls back to the same digest without WebCrypto', async () => {
+    const expected = await computeContentHash(molecule)
+    vi.stubGlobal('crypto', undefined)
+    await expect(computeContentHash(molecule)).resolves.toBe(expected)
   })
 })
 
