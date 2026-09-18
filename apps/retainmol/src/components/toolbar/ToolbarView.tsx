@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Atom, Command, PanelRight, Search } from 'lucide-react'
+import { Atom, Command, PanelRight, Save, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -8,8 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import type { ToolbarModel } from './useToolbarModel'
-import { MoleculeDocumentControls } from '@/features/molecule-assets'
 import { editorHostPort } from '@/domain/viewer/editorHostPort'
+import { useLocalSaveStore } from '@/domain/localMoleculeSave'
 import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { selectAppBusyMessage, useAppTaskStore } from '@/store/appTaskStore'
@@ -33,9 +33,14 @@ export function ToolbarView({
 }: ToolbarViewProps) {
   const [paletteOpen, setPaletteOpen] = useState(false)
 
-  // Ctrl+K / Cmd+K 打开命令面板
+  // Ctrl+K / Cmd+K 打开命令面板；Ctrl+S 保存到浏览器（编辑器唯一的保存位置）
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        saveActiveMoleculeToBrowser()
+        return
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         setPaletteOpen(value => !value)
@@ -56,9 +61,19 @@ export function ToolbarView({
           <span className="hidden sm:inline">RetainMol</span>
         </span>
 
-        {/* 文档保存：真实保存控件（Ctrl+S 由其监听承接） */}
+        {/* 保存：只写浏览器本地（编辑器不做后端保存） */}
         <div className="flex shrink-0 items-center gap-1">
-          <MoleculeDocumentControls editorHost={editorHostPort} />
+          <Tip label="保存到浏览器 (Ctrl+S)" side="bottom">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground"
+              onClick={() => saveActiveMoleculeToBrowser()}
+            >
+              <Save size={14} />
+              <span className="hidden sm:inline">保存</span>
+            </Button>
+          </Tip>
         </div>
 
         {/* 右侧：命令面板 + 检查器 */}
@@ -108,12 +123,13 @@ export function ToolbarView({
 }
 
 /**
- * 真实保存入口：向 window 重放一次 Ctrl+S，由工具栏已挂载的
- * MoleculeDocumentControls 的监听承接并执行保存（handleEditorShortcut
- * 不处理 Ctrl+S，此处不再经过它，避免双重保存）。
+ * 显式保存入口：当前活动分子写入浏览器本地（localStorage），成功回提示。
+ * Ctrl+S、工具栏按钮、命令面板共用此唯一入口。
  */
-function triggerMoleculeSave() {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }))
+function saveActiveMoleculeToBrowser(): void {
+  const molecule = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
+  const ok = useLocalSaveStore.getState().recordSave(molecule)
+  editorHostPort.notify(ok ? '已保存到浏览器' : '画布为空，无需保存')
 }
 
 function EditorCommandPalette({
@@ -173,8 +189,7 @@ function EditorCommandPalette({
         title: '分子与搜索',
         items: [
           { label: 'PubChem 搜索', hint: '⌘K', onRun: () => run(onSearchOpen) },
-          { label: '打开模板工作台', onRun: () => run(onOpenTemplateStudio) },
-          { label: '保存分子 (Ctrl+S)', hint: 'Ctrl+S', onRun: () => run(triggerMoleculeSave) },
+          { label: '保存到浏览器 (Ctrl+S)', hint: 'Ctrl+S', disabled: isEmpty, onRun: () => run(() => saveActiveMoleculeToBrowser()) },
         ].filter(item => filter(item.label)),
       },
       {
