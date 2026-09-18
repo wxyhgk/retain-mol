@@ -63,7 +63,13 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
       lastMolfileRef.current = molfile
       console.debug('[Ketcher 2D→3D] molfile changed, parsing…', molfile.slice(0, 120))
       const parsed = await parseMoleculeFile(new File([molfile], 'ketcher.mol', { type: 'chemical/x-mdl-molfile' }))
-      await placeMoleculeInViewer(parsed.molecule, { mode: 'replace', animate2DTo3D: true })
+      const placedId = await placeMoleculeInViewer(parsed.molecule, { mode: 'replace', animate2DTo3D: true })
+      if (!placedId) {
+        // 被更新的放置请求取代：不谎报成功，接替者会自己报；只把状态让回 idle
+        console.debug('[Ketcher 2D→3D] placement superseded, skipping feedback')
+        keepManualFlashOrIdle()
+        return
+      }
       flashSyncResult(force ? 'synced' : 'idle')
       setLastError(null)
     } catch (e) {

@@ -43,19 +43,19 @@ function ethane(): { mol: Molecule; c1Id: string; c2Id: string } {
   return { mol, c1Id: c1.id, c2Id: c2.id }
 }
 
-/** 四面体手性中心：中心 C + 4 个显式单键配体，配体按 LIGANDS 顺序成键 */
+/** 四面体手性中心：中心 C + 4 个化学各异的显式单键配体（H/F/O/C）。配体若全同则按收紧定义不是手性中心，门控会拒绝——几何坐标保持四面体非平面。 */
 function chiralCenter(): { mol: Molecule; centerId: string; ligandIds: [string, string, string, string]; bondIds: string[] } {
-  const ligands = [
-    { x: 1, y: 1, z: 1 },
-    { x: 1, y: -1, z: -1 },
-    { x: -1, y: 1, z: -1 },
-    { x: -1, y: -1, z: 1 },
+  const ligands: Array<{ symbol: string; x: number; y: number; z: number }> = [
+    { symbol: 'H', x: 1, y: 1, z: 1 },
+    { symbol: 'F', x: 1, y: -1, z: -1 },
+    { symbol: 'O', x: -1, y: 1, z: -1 },
+    { symbol: 'C', x: -1, y: -1, z: 1 },
   ]
   const center = newAtom('C', 0, 0, 0)
   const atoms = [center]
   const bonds = []
   for (const p of ligands) {
-    const ligand = newAtom('C', p.x, p.y, p.z)
+    const ligand = newAtom(p.symbol, p.x, p.y, p.z)
     atoms.push(ligand)
     bonds.push(newBond(center.id, ligand.id, 1))
   }
