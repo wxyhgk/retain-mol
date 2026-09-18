@@ -160,7 +160,6 @@ function EditorCommandPalette({
     setQuery('')
     fn()
   }, [onOpenChange])
-
   type CommandItem = { label: string; hint?: string; disabled?: boolean; onRun: () => void }
   const groups = useMemo<Array<{ title: string; items: CommandItem[] }>>(() => {
     const q = query.trim().toLowerCase()
@@ -178,6 +177,8 @@ function EditorCommandPalette({
         items: [
           { label: '导入分子（替换当前）', onRun: () => void fileIO.importXYZ() },
           { label: '导入分子（添加到场景）', onRun: () => void fileIO.importXYZToScene() },
+          { label: '导入 MOL/SDF（替换当前）', onRun: () => void fileIO.importMolSdf() },
+          { label: '导入 MOL/SDF（添加到场景）', onRun: () => void fileIO.importMolSdfToScene() },
           { label: '导出 XYZ', disabled: isEmpty, onRun: () => fileIO.exportCurrentXYZ() },
           { label: '导出 MOL', disabled: isEmpty, onRun: () => fileIO.exportCurrentMol() },
           { label: '导出 SDF', disabled: isEmpty, onRun: () => fileIO.exportCurrentSdf() },

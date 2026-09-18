@@ -38,10 +38,12 @@ export function useFileIO() {
     if (!file) return
     const parsed = await parseMoleculeFile(file)
     if (parsed.moleculeCount > 1) alert(`SDF 包含 ${parsed.moleculeCount} 个分子，已导入第一个`)
-    await placeMoleculeInViewer(parsed.molecule, {
+    const placedId = await placeMoleculeInViewer(parsed.molecule, {
       mode,
       animate2DTo3D: !file.name.toLowerCase().endsWith('.xyz'),
     })
+    // 门控丢弃（另有放置任务在跑）不抛错：明确告诉用户，否则像点了没反应
+    if (!placedId) alert('导入被丢弃：有其他放置任务正在进行，请稍后重试')
   }, [])
 
   const importXYZ = useCallback(() => {
