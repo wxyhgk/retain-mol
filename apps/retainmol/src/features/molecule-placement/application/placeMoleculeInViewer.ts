@@ -77,9 +77,10 @@ export async function placeMoleculeInViewer(
       getPlacementSceneRevision(),
     )) return null
 
-    const final = centerMolecule(result.ok ? result.molecule : molecule)
+    // generate3D 的失败结果也带补氢后的分子（展平保留），直接提交它
+    const final = centerMolecule(result.molecule)
     if (!result.ok) {
-      useEditorStore.getState().flashHint(`距离几何失败，已保留二维结构：${result.reason ?? '未知原因'}`)
+      useEditorStore.getState().flashHint(`距离几何失败，已保留二维结构并补氢：${result.reason ?? '未知原因'}`)
       return commitMolecule(final, request)
     }
 

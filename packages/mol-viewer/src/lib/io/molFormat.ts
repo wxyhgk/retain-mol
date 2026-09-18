@@ -7,6 +7,7 @@ import * as OCL from 'openchemlib'
 import type { Atom, Bond, Molecule } from '../molecule'
 import { newAtom, newBond } from '../molecule'
 import { splitConnectedComponents } from '../builder/analysis/fragments'
+import { autoAddHydrogens } from '../builder/editing/atomOps'
 import { kekulizeAromaticBonds } from './kekulize'
 import { RELAX } from '../../config/relax.config'
 
@@ -377,6 +378,16 @@ function inheritInputStereochemistry(input: Molecule, output: Molecule): Molecul
  */
 export function generate3D(mol: Molecule): OptimizeResult {
   if (mol.atoms.length < 2 || mol.bonds.length === 0) return { molecule: mol, ok: true }
+  // 含氢保证：OCL ConformerGenerator 对多片段输入成功返回却不补氢（单片段正常），
+  // 失败路径更是什么都不做。自有 VSEPR 补氢兜底——已含氢时 need 为 0 自然无操作。
+  // 补氢自身失败不翻转 ok（保持既有结果，行为退化为修前）。
+  const ensureHydrogens = (input: Molecule): Molecule => {
+    try {
+      return autoAddHydrogens(input)
+    } catch {
+      return input
+    }
+  }
   try {
     // OCL 只认凯库勒式：芳香标记键先排成单双交替再交给距离几何
     const kekule = kekulizeAromaticBonds(mol)
@@ -395,14 +406,14 @@ export function generate3D(mol: Molecule): OptimizeResult {
     }).ConformerGenerator
     // 固定种子 → 同一结构每次得到相同 3D（可复现）
     const mol3d = new CG(RELAX.seed).getOneConformerAsMolecule(oclMol)
-    if (!mol3d) return { molecule: mol, ok: false, reason: '无法生成 3D 构象（结构可能过于复杂或含不支持的原子）' }
+    if (!mol3d) return { molecule: ensureHydrogens(mol), ok: false, reason: '无法生成 3D 构象（结构可能过于复杂或含不支持的原子）' }
 
     // 距离几何结果就是最终结果；MMFF/UFF 由调用方通过独立命令触发。
     // 手性只继承输入：CG 蒙出来的对映体在此剥掉，绝不存回。
     const initial = inheritInputStereochemistry(mol, oclToMolecule(mol3d, mol.name ?? '3D structure'))
-    return { molecule: initial, ok: true }
+    return { molecule: ensureHydrogens(initial), ok: true }
   } catch (e) {
-    return { molecule: mol, ok: false, reason: `3D 生成失败：${(e as Error).message}` }
+    return { molecule: ensureHydrogens(mol), ok: false, reason: `3D 生成失败：${(e as Error).message}` }
   }
 }
 

@@ -246,10 +246,36 @@ M  END`
       expect(r.molecule.bonds.filter(b => b.order === 2).map(b => b.ez)).toEqual([ez])
     }
   })
+  it('多片段输入也补氢（2× 骨架乙烷 → 4C + 12H）', () => {
+    const r = generate3D(parseMol(OCL.Molecule.fromSmiles('CC.CC').toMolfile()))
+    expect(r.ok).toBe(true)
+    // OCL ConformerGenerator 对多片段成功返回却不补氢：兜底后必须含氢
+    expect(r.molecule.atoms.filter(a => a.symbol === 'C')).toHaveLength(4)
+    expect(r.molecule.atoms.filter(a => a.symbol === 'H')).toHaveLength(12)
+  })
 
+  it('带电中心按价态补氢（[NMe4]+ → N 上 0H、甲基 12H）', () => {
+    const r = generate3D(parseMol(OCL.Molecule.fromSmiles('[N+](C)(C)(C)C').toMolfile()))
+    // OCL ConformerGenerator 在季铵 N 上失败走 ok:false：失败结果同样必须含氢
+    expect(r.ok).toBe(false)
+    const byId = new Map(r.molecule.atoms.map(a => [a.id, a]))
+    const nAtoms = r.molecule.atoms.filter(a => a.symbol === 'N')
+    expect(nAtoms).toHaveLength(1)
+    const hOnN = r.molecule.bonds.filter(b => {
+      const other = b.atomId1 === nAtoms[0]!.id
+        ? byId.get(b.atomId2)
+        : b.atomId2 === nAtoms[0]!.id
+          ? byId.get(b.atomId1)
+          : undefined
+      return other?.symbol === 'H'
+    })
+    expect(hOnN).toHaveLength(0)
+    expect(r.molecule.atoms.filter(a => a.symbol === 'H')).toHaveLength(12)
+  })
   it('退化输入：单原子 → 原样返回 ok', () => {
     expect(generate3D({ atoms: [newAtom('C', 0, 0, 0)], bonds: [] }).ok).toBe(true)
   })
+
 
   it('二维四面体碳经过距离几何后具有明显的 z 轴厚度', () => {
     const carbon = newAtom('C', 0, 0, 0)
