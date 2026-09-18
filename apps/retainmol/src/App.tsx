@@ -5,12 +5,16 @@ import { useAppClipboardShortcuts } from '@/hooks/useAppClipboardShortcuts'
 import { useAppKeyboardShortcuts } from '@/hooks/useAppKeyboardShortcuts'
 import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import { canonicalizeMolecule } from '@/features/molecule-assets'
 import {
-  canonicalizeMolecule,
-  computeContentHash,
-  useMoleculeDocumentStore,
-} from '@/features/molecule-assets'
+  isDirtyVsSave,
+  readCrashSnapshot,
+  readLocalSave,
+  removeCrashSnapshot,
+  useLocalSaveStore,
+  writeCrashSnapshot,
+  type LocalMoleculeRecord,
+} from '@/domain/localMoleculeSave'
 import {
   TemplateStudioPage,
 } from '@/features/template-studio'
@@ -73,9 +77,9 @@ export default function App() {
     <>
       {crashRecovery.offer && (
         <div className="fixed inset-x-0 top-0 z-[200] flex flex-wrap items-center justify-center gap-3 border-b border-border bg-card px-4 py-2 text-xs text-card-foreground shadow-sm">
-          <span>检测到未保存的编辑草稿（{snapshotTime}），是否恢复？</span>
+          <span>{crashRecovery.offer.kind === 'save' ? `上次保存在浏览器的工作（${snapshotTime}），是否恢复？` : `检测到未保存的编辑草稿（${snapshotTime}），是否恢复？`}</span>
           <span className="flex items-center gap-2">
-            <Button size="sm" onClick={crashRecovery.restore}>恢复草稿</Button>
+            <Button size="sm" onClick={crashRecovery.restore}>{crashRecovery.offer.kind === 'save' ? '恢复' : '恢复草稿'}</Button>
             <Button size="sm" variant="outline" onClick={crashRecovery.discard}>丢弃</Button>
           </span>
         </div>
@@ -101,72 +105,16 @@ export default function App() {
   )
 }
 
-const CRASH_SNAPSHOT_KEY = 'retainmol/crash-snapshot/active-molecule-v1'
-const CRASH_SNAPSHOT_DEBOUNCE_MS = 2000
+/** 恢复提议：崩溃草稿优先（未保存的新工作），其次是显式本地保存。 */
+type RecoveryOffer = LocalMoleculeRecord & { kind: 'crash' | 'save' }
 
-interface CrashSnapshot {
-  readonly version: 1
-  readonly savedAt: string
-  readonly canonical: string
-  readonly molecule: Molecule
-}
-
-function readCrashSnapshot(): CrashSnapshot | null {
-  try {
-    const raw = window.localStorage.getItem(CRASH_SNAPSHOT_KEY)
-    if (!raw) return null
-    const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return null
-    if (!('version' in parsed) || parsed.version !== 1) return null
-    if (!('canonical' in parsed) || typeof parsed.canonical !== 'string') return null
-    if (!('molecule' in parsed) || !parsed.molecule || typeof parsed.molecule !== 'object') return null
-    if (!('atoms' in parsed.molecule) || !Array.isArray(parsed.molecule.atoms)) return null
-    const snapshot: CrashSnapshot = parsed as CrashSnapshot
-    return snapshot
-  } catch {
-    return null
-  }
-}
-
-function removeCrashSnapshot() {
-  try {
-    window.localStorage.removeItem(CRASH_SNAPSHOT_KEY)
-  } catch {
-    // 快照清理失败不影响编辑
-  }
-}
-
-/** 脏检查：与 MoleculeDocumentControls 相同的判定逻辑，刷新/关闭前提示。 */
+/** 脏检查：画布非空且与浏览器显式保存不一致（无后端）。 */
 function useDirtyBeforeUnload() {
-  const activeObjectId = useMoleculeStore(state => state.activeObjectId)
   const molecule = useMoleculeStore(state => (
     state.activeObjectId ? state.objectsById[state.activeObjectId]?.molecule ?? null : null
   ))
-  const binding = useMoleculeDocumentStore(state => (
-    activeObjectId ? state.bindingsByObjectId[activeObjectId] : undefined
-  ))
-  const pendingRevisionMetadata = useMoleculeDocumentStore(state => (
-    activeObjectId ? state.pendingRevisionMetadataByObjectId[activeObjectId] : undefined
-  ))
-  const [contentHash, setContentHash] = useState<string | null>(null)
-  useEffect(() => {
-    let current = true
-    void (async () => {
-      const hash = molecule ? await computeContentHash(molecule) : null
-      if (current) setContentHash(hash)
-    })()
-    return () => { current = false }
-  }, [molecule])
-  const dirty = Boolean(
-    activeObjectId
-    && molecule
-    && contentHash
-    && (
-      !binding
-      || binding.savedContentHash !== contentHash
-      || Boolean(pendingRevisionMetadata && Object.keys(pendingRevisionMetadata).length > 0)
-    ),
-  )
+  const savedCanonical = useLocalSaveStore(state => state.savedCanonical)
+  const dirty = isDirtyVsSave(molecule, savedCanonical)
   const dirtyRef = useRef(dirty)
   useEffect(() => {
     dirtyRef.current = dirty
@@ -182,79 +130,66 @@ function useDirtyBeforeUnload() {
 }
 
 /**
- * 自动保存/崩溃恢复：防抖记录当前活动分子的快照作为兜底。
- * 快照从不与文档存储争用：显式保存后（不再 dirty）自动清除，保存优先。
+ * 自动保存/崩溃恢复：防抖记录当前活动分子的快照作为兜底（纯浏览器）。
+ * 启动时先看崩溃草稿（与当前不同才提示），再看显式本地保存。
  */
+const CRASH_SNAPSHOT_DEBOUNCE_MS = 2000
+
 function useCrashRecovery() {
-  const [offer, setOffer] = useState<CrashSnapshot | null>(() => {
-    const snapshot = readCrashSnapshot()
-    if (!snapshot || snapshot.molecule.atoms.length === 0) {
-      if (snapshot) removeCrashSnapshot()
-      return null
-    }
-    try {
-      const current = useMoleculeStore.getState()
-      const active = current.activeObjectId
-        ? current.objectsById[current.activeObjectId]?.molecule ?? null
-        : null
-      if (active && canonicalizeMolecule(active) === snapshot.canonical) {
-        removeCrashSnapshot()
-        return null
+  const [offer, setOffer] = useState<RecoveryOffer | null>(() => {
+    const current = useMoleculeStore.getState()
+    const active = current.activeObjectId
+      ? current.objectsById[current.activeObjectId]?.molecule ?? null
+      : null
+    const differs = (canonical: string): boolean => {
+      if (!active || active.atoms.length === 0) return true
+      try {
+        return canonicalizeMolecule(active) !== canonical
+      } catch {
+        return true
       }
-    } catch {
-      // 比对失败则保留恢复提示，由用户决定
     }
-    return snapshot
+    const snapshot = readCrashSnapshot()
+    if (snapshot && snapshot.molecule.atoms.length > 0) {
+      if (!differs(snapshot.canonical)) {
+        removeCrashSnapshot()
+      } else {
+        return { ...snapshot, kind: 'crash' } as RecoveryOffer
+      }
+    }
+    const save = readLocalSave()
+    if (save && save.molecule.atoms.length > 0 && differs(save.canonical)) {
+      return { ...save, kind: 'save' } as RecoveryOffer
+    }
+    return null
   })
   const activeObjectId = useMoleculeStore(state => state.activeObjectId)
   const molecule = useMoleculeStore(state => (
     state.activeObjectId ? state.objectsById[state.activeObjectId]?.molecule ?? null : null
   ))
+  const savedCanonical = useLocalSaveStore(state => state.savedCanonical)
   useEffect(() => {
     if (offer) return
     if (!activeObjectId || !molecule) return
-    if (molecule.atoms.length === 0) {
+    if (!isDirtyVsSave(molecule, savedCanonical)) {
       removeCrashSnapshot()
       return
     }
     const timer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const canonical = canonicalizeMolecule(molecule)
-          const hash = await computeContentHash(molecule)
-          const documents = useMoleculeDocumentStore.getState()
-          const binding = documents.bindingsByObjectId[activeObjectId]
-          const pending = documents.pendingRevisionMetadataByObjectId[activeObjectId]
-          const dirty = !binding
-            || binding.savedContentHash !== hash
-            || Boolean(pending && Object.keys(pending).length > 0)
-          if (!dirty) {
-            removeCrashSnapshot()
-            return
-          }
-          const snapshot: CrashSnapshot = {
-            version: 1,
-            savedAt: new Date().toISOString(),
-            canonical,
-            molecule,
-          }
-          window.localStorage.setItem(CRASH_SNAPSHOT_KEY, JSON.stringify(snapshot))
-        } catch {
-          // 快照失败不影响编辑
-        }
-      })()
+      writeCrashSnapshot(molecule)
     }, CRASH_SNAPSHOT_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [offer, activeObjectId, molecule])
+  }, [offer, activeObjectId, molecule, savedCanonical])
   const restore = useCallback(() => {
     if (!offer) return
     editorHostPort.replaceActiveMolecule(offer.molecule)
-    editorHostPort.notify('已恢复未保存的编辑草稿')
+    editorHostPort.notify(offer.kind === 'save' ? '已恢复浏览器保存的工作' : '已恢复未保存的编辑草稿')
     setOffer(null)
   }, [offer])
   const discard = useCallback(() => {
-    removeCrashSnapshot()
+    // 丢弃崩溃草稿清槽；显式保存只关闭本次提示（下次打开仍可恢复）
+    if (offer?.kind === 'crash') removeCrashSnapshot()
     setOffer(null)
-  }, [])
+  }, [offer])
   return { offer, restore, discard }
 }
