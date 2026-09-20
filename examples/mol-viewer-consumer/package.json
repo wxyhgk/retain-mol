@@ -1,0 +1,29 @@
+{
+  "name": "mol-viewer-consumer-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "resources": "node scripts/copy-resources.mjs",
+    "dev": "npm run resources && vite --host 127.0.0.1 --port 5273 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test scripts/consumer.test.mjs",
+    "build": "npm run resources && npm run typecheck && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5273 --strictPort"
+  },
+  "dependencies": {
+    "@retainmol/mol-viewer": "0.1.29",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "three": "0.184.0",
+    "openchemlib": "9.21.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.2.4",
+    "tailwindcss": "4.2.4",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.184.0",
+    "typescript": "~6.0.2",
+    "vite": "8.0.10"
+  }
+}

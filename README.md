@@ -14,6 +14,7 @@
 | `packages/ui-kit` | `@retainmol/ui-kit` | 无业务语义的共享 UI（禁止依赖业务包） |
 | `packages/molecule-assets` | `@retainmol/molecule-assets` | 不可变 Revision + CAS 并发的分子资产 |
 | `packages/jobs` | `@retainmol/jobs` | 任务提交 / 管理 + 3D 展柜 |
+| `examples/mol-viewer-consumer` | 独立消费者示例（非 workspace） | 通过真实打包产物验证外部 React 宿主接入 |
 
 依赖方向（由 `check:boundaries` 强制）：
 `ui-kit → mol-viewer / molecule-assets → jobs → app`，禁止反向依赖。
@@ -39,7 +40,12 @@ npm run dev --workspace retainmol
 
 ```bash
 npm run verify   # 凭据扫描 → 形式化几何 → 边界检查 → lint → 类型 → 测试 → 构建 → API 门禁 → 打包自测
+npm run example:viewer  # 独立宿主示例，http://127.0.0.1:5273
+npm run verify:viewer-consumer  # tarball 安装、公共 API 回归、消费者类型与生产构建
 ```
+
+外部项目接入步骤、实例边界及浏览器验收状态见
+[mol-viewer 独立宿主接入](docs/mol-viewer/consumer-integration.md)。
 
 几点约定：
 

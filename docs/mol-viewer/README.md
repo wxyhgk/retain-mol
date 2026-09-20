@@ -4,6 +4,10 @@
 
 App 层应该把它当成一个独立的分子引擎使用。App 代码应优先通过 `@retainmol/mol-viewer/*` 公开子路径导入，不要直接深挖包内部实现。
 
+外部项目可从[独立宿主接入](./consumer-integration.md)与
+[可运行示例](../../examples/mol-viewer-consumer/README.md)开始；示例安装实际 tarball，
+覆盖编辑、手性、历史和 MOL 往返，并单独记录真实浏览器验收状态。
+
 多人并行开发前先阅读 `docs/architecture/collaboration-audit-2026-07-13.md`，其中列出了可并行 owner 区域、必须协调的共享热点和剩余 P1 风险。
 
 ## 目录总览
@@ -309,7 +313,7 @@ App layer
 npm run verify
 ```
 
-如果改动会影响 App 行为，还需要在本地 Vite 端口做浏览器 smoke。当前本地开发默认应是 `5173`，除非端口被其他进程占用。
+如果改动会影响 App 行为，还需要在本地 Vite 端口做浏览器 smoke。RetainMol App 配置端口为 `5300`；独立消费者示例使用 `5273`，端口占用时先确认监听者，不停止其他服务。
 
 具体步骤见 [浏览器 Smoke](./testing/browser-smoke.md)。
 

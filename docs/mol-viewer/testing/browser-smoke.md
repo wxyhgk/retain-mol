@@ -14,8 +14,12 @@ npm run build --workspace @retainmol/mol-viewer
 npm run dev --workspace retainmol -- --host 0.0.0.0
 ```
 
-固定使用 `http://127.0.0.1:5173/`。如果 5173 被占用，应先处理占用进程，
-不要把临时端口写入验证记录。
+RetainMol App 当前配置为 `http://127.0.0.1:5300/`。
+如端口被占用，先确认监听者，不停止不属于本次任务的服务。
+
+外部包接入使用 `npm run example:viewer` 启动独立消费者（端口 `5273`）。
+该入口安装真实 tarball，双实例与挂卸载步骤及验证状态见
+[独立宿主接入](../consumer-integration.md)。
 
 ## 主应用工作流
 
@@ -31,10 +35,11 @@ npm run dev --workspace retainmol -- --host 0.0.0.0
 打开隔离用例：
 
 ```text
-http://127.0.0.1:5173/?test=readonly
+http://127.0.0.1:5300/?test=readonly
 ```
 
-API 测试页一次只挂载一个 `MolViewer`，避免多个实例争用全局 store。验证：
+App API 测试页一次只挂载一个 `MolViewer`，这些旧用例使用默认共享 store。
+这不代表包只能单实例；隔离实例需各自传入 `createViewerRuntime()`，详见独立宿主示例。验证：
 
 1. 初始“触发次数”为 `0`，状态为“只读正常”。
 2. 点击原子、点击空白并拖动画布。
@@ -42,4 +47,4 @@ API 测试页一次只挂载一个 `MolViewer`，避免多个实例争用全局 
 4. 检查本次页面加载之后的 console error/page error，应为 0。
 
 其他受控 API 可分别使用 `?test=molecule`、`?test=selection` 和
-`?test=display`。测试页采用单用例挂载，不应恢复为四个 viewer 同时挂载。
+`?test=display`。测试页采用单用例挂载，不应让多个可编辑 viewer 争用同一默认 runtime。
