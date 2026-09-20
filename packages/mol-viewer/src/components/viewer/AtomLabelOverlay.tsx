@@ -4,7 +4,6 @@ import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
-import { isPotentialStereoCenter } from '../../lib/chemistry/policies/atomPolicy'
 import { ATOM_LABEL as L } from '../../config/overlay.config'
 import { CAMERA } from '../../config/camera.config'
 import { resolveRenderProfile } from '../../styles'
@@ -102,8 +101,9 @@ export default function AtomLabelOverlay({ renderer }: Props) {
           ctx.fillStyle = '#fff'
           ctx.fillText(txt, bx, by)
         }
-        // ── 手性徽标：R/S 实心紫标；潜在中心未指定显示空心 ? ──
-        const chiralTxt = atom.chirality ?? (isPotentialStereoCenter(molecule, atom.id) ? '?' : '')
+        // ── 手性徽标：只显示已指定的 R/S；未指定的潜在中心不显示
+        // （没有手性中心就不显示，避免满屏问号干扰建模）
+        const chiralTxt = atom.chirality ?? ''
         if (chiralTxt !== '') {
           const cx = p.x + 8 * badgeScale
           const cy = by + badgeFont * 1.15
