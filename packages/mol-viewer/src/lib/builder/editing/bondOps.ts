@@ -12,7 +12,7 @@ import {
   supportedBondOrders,
   validateBondAddition,
 } from '../../chemistry/policies/bondPolicy'
-import { flipTetraBranches } from '../../stereo/geometry'
+import { swapBranchDirections } from '../../stereo/geometry'
 import { calcDihedral } from '../../geometry/measure'
 
 /** 判断两个原子之间是否允许成键 */
@@ -261,7 +261,7 @@ function withEZLabel(mol: Molecule, bondId: string, ez: 'E' | 'Z'): Molecule {
 
 /**
  * 设定 E/Z：几何已是目标只补标记；否则在首个有两个显式取代基的端上
- * 做取代基分支坐标互换（flipTetraBranches 同款刚性搬运），标记同步。
+ * 做取代基分支方向互换，保留各自键长，标记同步。
  * 几何与标记一步落盘，调用方包进 undo 事务。失败返回同一引用。
  */
 export function setBondEZ(mol: Molecule, bondId: string, target: 'E' | 'Z'): Molecule {
@@ -275,8 +275,9 @@ export function setBondEZ(mol: Molecule, bondId: string, target: 'E' | 'Z'): Mol
       : null
   if (!swapEnd) return mol
   const [first, second] = [swapEnd.subs[0] as Atom, swapEnd.subs[1] as Atom]
-  const flipped = flipTetraBranches(mol, swapEnd.center.id, first.id, second.id)
+  const flipped = swapBranchDirections(mol, swapEnd.center.id, first.id, second.id)
   if (!flipped) return mol
+  if (currentEZFromGeometry(flipped.molecule, bondId) !== target) return mol
   return withEZLabel(flipped.molecule, bondId, target)
 }
 

@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { Molecule as OCLMolecule, Resources } from 'openchemlib'
 import type { Molecule } from '../molecule'
 import { clearChirality, setChirality } from '../builder/editing/atomOps'
 import { runReplaceAtomCommand } from '../builder/commands/atom'
-import { exportMol, parseMol } from '../io/molFormat'
+import { exportMol, generate3D, parseMol } from '../io/molFormat'
 import { computeCanonicalMoleculeDigest } from '../modeling/effects/canonical'
 import { compileExpectedEffect } from '../modeling/effects/compiler'
 import { createHeadlessModelingContext } from '../modeling/headless'
 import { dryRunEditPlan } from '../modeling/planExecutor'
-import { reconcileAtomChirality } from './perception'
+import { perceiveAtomChirality, reconcileAtomChirality } from './perception'
+import { flipTetraBranches } from './geometry'
 
 function tetrahedron(): Molecule {
   return {
@@ -27,6 +29,32 @@ function label(mol: Molecule, chirality: 'R' | 'S'): Molecule {
 }
 
 describe('stereochemistry correctness', () => {
+  it('rotates a branch containing another stereocenter without inverting that center', () => {
+    Resources.registerFromNodejs()
+    const generated = generate3D(parseMol(OCLMolecule.fromSmiles('C[C@H](F)[C@H](Br)Cl').toMolfile()))
+    expect(generated.ok).toBe(true)
+    const mol = generated.molecule
+    const before = perceiveAtomChirality(mol)
+    expect(before.size).toBe(2)
+    const [center, other] = [...before.keys()] as [string, string]
+    const hydrogen = mol.bonds.filter(b => b.atomId1 === center || b.atomId2 === center)
+      .map(b => mol.atoms.find(a => a.id === (b.atomId1 === center ? b.atomId2 : b.atomId1))!)
+      .find(a => a.symbol === 'H')!
+    const result = flipTetraBranches(mol, center, other, hydrogen.id)
+    expect(result).not.toBeNull()
+    const after = perceiveAtomChirality(result!.molecule)
+    expect(after.get(center)).toBe(before.get(center) === 'R' ? 'S' : 'R')
+    expect(after.get(other)).toBe(before.get(other))
+    for (const bond of mol.bonds) {
+      const distance = (m: Molecule) => {
+        const a = m.atoms.find(atom => atom.id === bond.atomId1)!
+        const b = m.atoms.find(atom => atom.id === bond.atomId2)!
+        return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+      }
+      expect(distance(result!.molecule)).toBeCloseTo(distance(mol), 10)
+    }
+  })
+
   for (const target of ['R', 'S'] as const) {
     for (const reordered of ['original', 'swap-bonds', 'reverse-atoms']) {
       it(`sets actual CIP ${target} with reordered atoms/bonds=${reordered}`, () => {
@@ -38,7 +66,11 @@ describe('stereochemistry correctness', () => {
         const restored = parseMol(exportMol(result))
         expect(restored.atoms.find(a => a.symbol === 'C')?.chirality).toBe(target)
         for (const atom of result.atoms) {
-          expect(restored.atoms.find(a => a.symbol === atom.symbol)).toMatchObject({ x: atom.x, y: atom.y, z: atom.z })
+          const reloaded = restored.atoms.find(a => a.symbol === atom.symbol)!
+          // MOL V2000 writes four decimal places, including rotated coordinates.
+          expect(reloaded.x).toBeCloseTo(atom.x, 4)
+          expect(reloaded.y).toBeCloseTo(atom.y, 4)
+          expect(reloaded.z).toBeCloseTo(atom.z, 4)
         }
       })
     }

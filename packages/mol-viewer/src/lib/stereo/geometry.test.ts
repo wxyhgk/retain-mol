@@ -87,6 +87,63 @@ function chiralMolecule(): { mol: Molecule; centerId: string; ligandIds: [string
 }
 
 describe('flipTetraBranches', () => {
+  it('preserves each unequal bond length and branch geometry around an off-origin center', () => {
+    const { mol, centerId, ligandIds } = chiralMolecule()
+    const input: Molecule = { ...mol, atoms: mol.atoms.map(atom => {
+      const factor = atom.id === ligandIds[0] ? 1.333 / Math.sqrt(3)
+        : atom.id === ligandIds[1] ? 1.940 / Math.sqrt(3) : 1
+      return { ...atom, x: atom.x * factor + 4, y: atom.y * factor - 2, z: atom.z * factor + 3 }
+    }) }
+    const saved = structuredClone(input)
+    const flipped = flipTetraBranches(input, centerId, ligandIds[0], ligandIds[1])!.molecule
+    const distance = (m: Molecule, a: string, b: string) => {
+      const p = m.atoms.find(atom => atom.id === a)!
+      const q = m.atoms.find(atom => atom.id === b)!
+      return Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z)
+    }
+    for (const bond of input.bonds) {
+      expect(distance(flipped, bond.atomId1, bond.atomId2)).toBeCloseTo(distance(input, bond.atomId1, bond.atomId2), 10)
+    }
+    // Including the fixed center checks the attachment angle as well as internal distances.
+    const branch = [centerId, ligandIds[0], input.atoms[5]!.id, input.atoms[6]!.id]
+    for (const a of branch) for (const b of branch) {
+      expect(distance(flipped, a, b)).toBeCloseTo(distance(input, a, b), 10)
+    }
+    const volume = (m: Molecule) => {
+      const points = branch.map(id => m.atoms.find(atom => atom.id === id)!)
+      const vectors = points.map(p => [p.x, p.y, p.z] as [number, number, number])
+      return signedTetraVolume(vectors[0]!, vectors[1]!, vectors[2]!, vectors[3]!)
+    }
+    expect(Math.abs(volume(input))).toBeGreaterThan(STEREO_VOLUME_EPS)
+    expect(volume(flipped)).toBeCloseTo(volume(input), 10) // a proper rotation, never a mirror of the branch
+    const twice = flipTetraBranches(flipped, centerId, ligandIds[0], ligandIds[1])!.molecule
+    for (const atom of input.atoms) {
+      const restored = twice.atoms.find(a => a.id === atom.id)!
+      expect(restored.x).toBeCloseTo(atom.x, 10)
+      expect(restored.y).toBeCloseTo(atom.y, 10)
+      expect(restored.z).toBeCloseTo(atom.z, 10)
+    }
+    expect(input).toEqual(saved)
+  })
+
+  it('rejects connected branches or a branch that also contains another center ligand', () => {
+    const { mol, centerId, ligandIds } = chiralMolecule()
+    const shared = { ...mol, bonds: [...mol.bonds, newBond(ligandIds[0], ligandIds[1], 1)] }
+    const ring = { ...mol, bonds: [...mol.bonds, newBond(ligandIds[0], ligandIds[2], 1)] }
+    expect(flipTetraBranches(shared, centerId, ligandIds[0], ligandIds[1])).toBeNull()
+    expect(flipTetraBranches(ring, centerId, ligandIds[0], ligandIds[1])).toBeNull()
+    // The two independent substituents on that ring center can still be swapped.
+    expect(flipTetraBranches(ring, centerId, ligandIds[1], ligandIds[3])).not.toBeNull()
+  })
+
+  it('rejects a ligand at the center or non-finite branch coordinates', () => {
+    const { mol, centerId, ligandIds } = chiralMolecule()
+    const coincident = { ...mol, atoms: mol.atoms.map(a => a.id === ligandIds[0] ? { ...a, x: 0, y: 0, z: 0 } : a) }
+    const invalid = { ...mol, atoms: mol.atoms.map((a, i) => i === 5 ? { ...a, x: NaN } : a) }
+    expect(flipTetraBranches(coincident, centerId, ligandIds[0], ligandIds[1])).toBeNull()
+    expect(flipTetraBranches(invalid, centerId, ligandIds[0], ligandIds[1])).toBeNull()
+  })
+
   it('交换两分支后体积变号、分支内部几何不变、其余原子不动', () => {
     const { mol, centerId, ligandIds } = chiralMolecule()
     const [a, b] = [ligandIds[0]!, ligandIds[1]!]

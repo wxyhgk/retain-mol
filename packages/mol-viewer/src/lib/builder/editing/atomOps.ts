@@ -218,14 +218,16 @@ export function flipChiralityAvailability(mol: Molecule, atomId: string): FlipCh
 }
 
 /**
- * 翻转手性中心：交换分支最小的一对取代基（含 wedge 互换），R↔S 标签同步翻转，
+ * 翻转手性中心：旋转分支最小的一对独立取代基，保留键长（含 wedge 互换），R↔S 标签同步翻转，
  * 未指定保持未指定。失败原样返回同一引用。调用方包进 undo 事务。
- * 奇置换必反转手性，与 CIP 无关，故无需重算排名。
+ * 提交前复核真实 CIP 已反转，失败不修改分子。
  */
 export function flipChirality(mol: Molecule, atomId: string): Molecule {
   if (!flipChiralityAvailability(mol, atomId).ok) return mol
   const center = mol.atoms.find(a => a.id === atomId)
   if (!center) return mol
+  const originalChirality = perceiveAtomChirality(mol).get(atomId)
+  if (originalChirality === undefined) return mol
   const ligandIds = mol.bonds
     .filter(b => b.atomId1 === atomId || b.atomId2 === atomId)
     .map(b => (b.atomId1 === atomId ? b.atomId2 : b.atomId1))
@@ -240,6 +242,7 @@ export function flipChirality(mol: Molecule, atomId: string): Molecule {
       const branchA = getConnectedFragment(mol.atoms, cut, a)
       const branchB = getConnectedFragment(mol.atoms, cut, b)
       if ([...branchA].some(id => branchB.has(id))) continue
+      if (ligandIds.some(id => (id !== a && branchA.has(id)) || (id !== b && branchB.has(id)))) continue
       const size = branchA.size + branchB.size
       if (size < bestSize) {
         bestSize = size
@@ -275,7 +278,10 @@ export function flipChirality(mol: Molecule, atomId: string): Molecule {
     if (b.id === bondB.id) return withWedge(b, bondA.wedge)
     return b
   })
-  return reconcileAtomChirality({ ...flipped.molecule, atoms, bonds })
+  const result = { ...flipped.molecule, atoms, bonds }
+  const target = originalChirality === 'R' ? 'S' : 'R'
+  if (perceiveAtomChirality(result).get(atomId) !== target) return mol
+  return reconcileAtomChirality(result)
 }
 /**
  * 存储配体序下的几何 parity，仅用于几何检查，不代表 CIP R/S。

@@ -1,5 +1,6 @@
 import type { Molecule } from '../molecule'
-import { cross, dot, sub, type Vec3 } from '../math/vec3'
+import { add, cross, dot, length, sub, type Vec3 } from '../math/vec3'
+import { applyQuat, quatFromUnitVectors, type Quat } from '../math/quat'
 
 /**
  * 手性几何内核：纯函数，不依赖 OCL、不碰 store。
@@ -83,12 +84,12 @@ export interface FlipTetraResult {
 }
 
 /**
- * 翻转手性：把配体 A、B 各自所在分支整体刚性平移互换位置。
- * 奇置换 ⟹ 体积变号，与 CIP 无关；R/S 标签是否翻转调用方负责（必翻）。
- * 只换位置不动拓扑；分支内部几何完整保留，中心两根键取对方原键长，
- * 调用后建议走一次几何 relax。退化（配体与中心重合）返回 null。
+ * 绕中心对两个独立分支作互逆刚性旋转，交换键方向，保留各自键长。
+ * 正旋转保留分支内部距离、连接角和其他手性中心；不镜像整个分支。
+ * 中心及未参与分支固定。共享/环内分支、无效坐标返回 null。
+ * 不保证分支之间无碰撞或达到能量极小；CIP 仍由调用方独立复核。
  */
-export function flipTetraBranches(
+export function swapBranchDirections(
   mol: Molecule,
   centerId: string,
   ligandAId: string,
@@ -100,23 +101,54 @@ export function flipTetraBranches(
   const ligandA = atomById.get(ligandAId)
   const ligandB = atomById.get(ligandBId)
   if (!center || !ligandA || !ligandB) return null
-  const bondedToCenter = (id: string): boolean =>
-    mol.bonds.some(
-      b =>
-        (b.atomId1 === centerId && b.atomId2 === id) ||
-        (b.atomId1 === id && b.atomId2 === centerId),
-    )
-  if (!bondedToCenter(ligandAId) || !bondedToCenter(ligandBId)) return null
-  const dx = ligandB.x - ligandA.x
-  const dy = ligandB.y - ligandA.y
-  const dz = ligandB.z - ligandA.z
-  if (Math.hypot(dx, dy, dz) < 1e-6) return null
+  const ligandIds = mol.bonds.filter(b => b.atomId1 === centerId || b.atomId2 === centerId)
+    .map(b => b.atomId1 === centerId ? b.atomId2 : b.atomId1)
+  if (new Set(ligandIds).size !== ligandIds.length
+    || !ligandIds.includes(ligandAId) || !ligandIds.includes(ligandBId)) return null
+  const origin = toVec3(center)
+  if (!origin.every(Number.isFinite)) return null
+  const ligands = ligandIds.map(id => atomById.get(id))
+  if (ligands.some(a => {
+    if (!a || !toVec3(a).every(Number.isFinite)) return true
+    const distance = length(sub(toVec3(a), origin))
+    return !Number.isFinite(distance) || distance < 1e-6
+  })) return null
   const branchA = branchBeyond(mol, centerId, ligandAId)
   const branchB = branchBeyond(mol, centerId, ligandBId)
+  // A moving branch may attach to the center only at its own ligand.
+  if (ligandIds.some(id => (id !== ligandAId && branchA.has(id))
+    || (id !== ligandBId && branchB.has(id)))) return null
+  if (mol.atoms.some(a => (branchA.has(a.id) || branchB.has(a.id))
+    && !toVec3(a).every(Number.isFinite))) return null
+  const rotationA = quatFromUnitVectors(sub(toVec3(ligandA), origin), sub(toVec3(ligandB), origin))
+  const rotationB: Quat = [-rotationA[0], -rotationA[1], -rotationA[2], rotationA[3]]
   const atoms = mol.atoms.map(a => {
-    if (branchA.has(a.id)) return { ...a, x: a.x + dx, y: a.y + dy, z: a.z + dz }
-    if (branchB.has(a.id)) return { ...a, x: a.x - dx, y: a.y - dy, z: a.z - dz }
-    return a
+    const rotation = branchA.has(a.id) ? rotationA : branchB.has(a.id) ? rotationB : null
+    if (!rotation) return a
+    const [x, y, z] = add(origin, applyQuat(sub(toVec3(a), origin), rotation))
+    return { ...a, x, y, z }
   })
+  if (atoms.some(a => !toVec3(a).every(Number.isFinite))) return null
   return { molecule: { ...mol, atoms }, result: { flippedAId: ligandAId, flippedBId: ligandBId } }
+}
+
+/** Tetrahedral variant: require four ligands and verify inversion before returning. */
+export function flipTetraBranches(
+  mol: Molecule,
+  centerId: string,
+  ligandAId: string,
+  ligandBId: string,
+): { molecule: Molecule; result: FlipTetraResult } | null {
+  const ligandIds = mol.bonds.filter(b => b.atomId1 === centerId || b.atomId2 === centerId)
+    .map(b => b.atomId1 === centerId ? b.atomId2 : b.atomId1)
+  if (ligandIds.length !== 4) return null
+  const flipped = swapBranchDirections(mol, centerId, ligandAId, ligandBId)
+  if (!flipped) return null
+  const parity = (molecule: Molecule) => {
+    const byId = new Map(molecule.atoms.map(a => [a.id, a]))
+    return parityFromCoords([byId.get(ligandIds[0]!)!, byId.get(ligandIds[1]!)!, byId.get(ligandIds[2]!)!, byId.get(ligandIds[3]!)!])
+  }
+  const before = parity(mol)
+  if (before === 0 || parity(flipped.molecule) !== -before) return null
+  return flipped
 }

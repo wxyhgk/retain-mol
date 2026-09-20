@@ -3,12 +3,14 @@
  * 只断言可观察行为（分子状态 + 单步 undo），风格同 bondEditActions.test.ts。
  */
 import { beforeEach, describe, expect, it } from 'vitest'
+import { Molecule as OCLMolecule, Resources } from 'openchemlib'
 import type { Molecule } from '../../lib/molecule'
 import { newAtom, newBond } from '../../lib/molecule'
 import { autoAddHydrogens } from '../../lib/builder/editing/atomOps'
 import { parityFromCoords } from '../../lib/stereo/geometry'
 import { perceiveAtomChirality } from '../../lib/stereo/perception'
 import { getAtomChiralityState } from '../../lib/stereo/atomChiralityState'
+import { exportMol, generate3D, parseMol } from '../../lib/io/molFormat'
 import { useMoleculeStore } from '../moleculeStore'
 
 const store = () => useMoleculeStore.getState()
@@ -78,7 +80,7 @@ function storedParity(mol: Molecule, centerId: string): 1 | -1 | 0 {
 }
 
 /** 反式 2-丁烯骨架：s1a 上左 / s2a 下左 / s1b 下右 / s2b 上右，首取代基对反侧（E） */
-function transButene(): { mol: Molecule; doubleId: string; s1aId: string } {
+function transButene(): { mol: Molecule; doubleId: string; s1aId: string; s2aId: string } {
   const a = newAtom('C', -0.67, 0, 0)
   const b = newAtom('C', 0.67, 0, 0)
   const s1a = newAtom('C', -1.44, 0.9, 0)
@@ -96,7 +98,7 @@ function transButene(): { mol: Molecule; doubleId: string; s1aId: string } {
       newBond(b.id, s2b.id, 1),
     ],
   }
-  return { mol, doubleId: doubleBond.id, s1aId: s1a.id }
+  return { mol, doubleId: doubleBond.id, s1aId: s1a.id, s2aId: s2a.id }
 }
 
 /** 苯式单环：6 个 C，边长 1.39（芳香键长窗口内），全单键、无芳香标记 */
@@ -183,6 +185,47 @@ describe('setBondWedge', () => {
 })
 
 describe('setChirality', () => {
+  it('CC(F)(Br)I keeps every bond length through R/S edits, undo/redo and MOL reload', () => {
+    Resources.registerFromNodejs()
+    const generated = generate3D(parseMol(OCLMolecule.fromSmiles('CC(F)(Br)I').toMolfile()))
+    expect(generated.ok).toBe(true)
+    reset(generated.molecule)
+    const original = activeMolecule()
+    const centerId = original.atoms.find(a => getAtomChiralityState(original, a.id).computed !== null)!.id
+    const target = getAtomChiralityState(original, centerId).computed === 'R' ? 'S' : 'R'
+    const bondLength = (m: Molecule, aId: string, bId: string) => {
+      const a = m.atoms.find(atom => atom.id === aId)!
+      const b = m.atoms.find(atom => atom.id === bId)!
+      return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+    }
+    expect(store().setChirality(centerId, target)).toEqual({ ok: true })
+    const edited = activeMolecule()
+    for (const bond of original.bonds) {
+      expect(bondLength(edited, bond.atomId1, bond.atomId2)).toBeCloseTo(bondLength(original, bond.atomId1, bond.atomId2), 10)
+    }
+    expect(getAtomChiralityState(edited, centerId)).toEqual({ specified: target, computed: target })
+    expect(pastLength()).toBe(1)
+    temporal().undo()
+    expect(activeMolecule()).toEqual(original)
+    temporal().redo()
+    expect(activeMolecule()).toEqual(edited)
+    const reloaded = parseMol(exportMol(edited))
+    const center = reloaded.atoms.find(a => a.chirality === target)!
+    expect(center).toBeDefined()
+    for (const symbol of ['F', 'Br', 'I']) {
+      const before = original.atoms.find(a => a.symbol === symbol)!
+      const after = reloaded.atoms.find(a => a.symbol === symbol)!
+      expect(Math.abs(bondLength(reloaded, center.id, after.id) - bondLength(original, centerId, before.id))).toBeLessThan(0.0002)
+    }
+    for (let i = 0; i < 6; i += 1) {
+      store().flipChirality(centerId)
+      expect(getAtomChiralityState(activeMolecule(), centerId).computed).toBe(i % 2 === 0 ? target === 'R' ? 'S' : 'R' : target)
+      for (const bond of original.bonds) {
+        expect(bondLength(activeMolecule(), bond.atomId1, bond.atomId2)).toBeCloseTo(bondLength(original, bond.atomId1, bond.atomId2), 10)
+      }
+    }
+  })
+
   it('指定、清除和 undo/redo 同步读数，但不会把几何推断写成指定状态', () => {
     const { mol, centerId } = chiralCenter()
     reset(mol)
@@ -281,6 +324,21 @@ describe('setChirality', () => {
 })
 
 describe('setEZ', () => {
+  it('swapping unequal substituents at a double-bond end also preserves their lengths', () => {
+    const { mol, doubleId, s2aId } = transButene()
+    const input = { ...mol, atoms: mol.atoms.map(a => a.id === s2aId ? { ...a, y: -0.6 } : a) }
+    reset(input)
+    expect(store().setEZ(doubleId, 'Z')).toEqual({ ok: true })
+    for (const bond of input.bonds) {
+      const distance = (m: Molecule) => {
+        const a = m.atoms.find(atom => atom.id === bond.atomId1)!
+        const b = m.atoms.find(atom => atom.id === bond.atomId2)!
+        return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+      }
+      expect(distance(activeMolecule())).toBeCloseTo(distance(input), 10)
+    }
+  })
+
   it('E→Z 交换一端取代基坐标并同步标记，一步 undo 含几何', () => {
     const { mol, doubleId, s1aId } = transButene()
     reset(mol)
