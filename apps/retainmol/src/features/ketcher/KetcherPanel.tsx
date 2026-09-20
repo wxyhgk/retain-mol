@@ -5,6 +5,7 @@ import type { Ketcher, StructServiceProvider } from 'ketcher-core'
 import { exportMol } from '@retainmol/mol-viewer/io'
 import { parseMoleculeFile, placeMoleculeInViewer } from '@/features/molecule-placement'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { molfileSyncKey } from './molfileSyncKey'
 
 class KetcherErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
   state = { hasError: false, message: '' }
@@ -56,7 +57,7 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
         return
       }
       // 轮询/订阅靠去重防回声；手动按钮强制同步，不受去重影响
-      if (!force && molfile === lastMolfileRef.current) {
+      if (!force && molfileSyncKey(molfile) === molfileSyncKey(lastMolfileRef.current)) {
         keepManualFlashOrIdle()
         return
       }
@@ -172,7 +173,7 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
       ketcherRef.current
         .getMolfile()
         .then((mf) => {
-          if (mf && mf !== lastMolfileRef.current) debouncedSync(ketcherRef.current as Ketcher)
+          if (mf && molfileSyncKey(mf) !== molfileSyncKey(lastMolfileRef.current)) debouncedSync(ketcherRef.current as Ketcher)
         })
         .catch(() => {})
     }, 800)

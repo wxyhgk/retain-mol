@@ -8,6 +8,7 @@ import { newAtom, newBond } from '../../lib/molecule'
 import { autoAddHydrogens } from '../../lib/builder/editing/atomOps'
 import { parityFromCoords } from '../../lib/stereo/geometry'
 import { perceiveAtomChirality } from '../../lib/stereo/perception'
+import { getAtomChiralityState } from '../../lib/stereo/atomChiralityState'
 import { useMoleculeStore } from '../moleculeStore'
 
 const store = () => useMoleculeStore.getState()
@@ -182,6 +183,28 @@ describe('setBondWedge', () => {
 })
 
 describe('setChirality', () => {
+  it('指定、清除和 undo/redo 同步读数，但不会把几何推断写成指定状态', () => {
+    const { mol, centerId } = chiralCenter()
+    reset(mol)
+    const read = () => getAtomChiralityState(activeMolecule(), centerId)
+    const initial = read()
+    expect(initial.specified).toBeNull()
+    expect(initial.computed).not.toBeNull()
+    expect(pastLength()).toBe(0)
+    store().setChirality(centerId, 'R')
+    expect(read()).toEqual({ specified: 'R', computed: 'R' })
+    store().setChirality(centerId, 'none')
+    expect(read()).toEqual({ specified: null, computed: 'R' })
+    temporal().undo()
+    expect(read()).toEqual({ specified: 'R', computed: 'R' })
+    temporal().undo()
+    expect(read()).toEqual(initial)
+    temporal().redo()
+    expect(read()).toEqual({ specified: 'R', computed: 'R' })
+    temporal().redo()
+    expect(read()).toEqual({ specified: null, computed: 'R' })
+  })
+
   it('CIP 相符只改标记，再次设置不压历史', () => {
     const { mol, centerId } = chiralCenter()
     reset(mol)

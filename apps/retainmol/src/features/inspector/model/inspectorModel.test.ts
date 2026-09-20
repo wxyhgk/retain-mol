@@ -105,13 +105,28 @@ describe('buildInspectorModel', () => {
 
   it('exposes atom chirality for the inspector row', () => {
     const plain = buildInspectorModel(molecule, ['c'], [])
-    expect(plain.mode === 'atom' ? plain.chirality : null).toBe('unspecified')
+    expect(plain.mode === 'atom' ? plain.chirality : null).toEqual({ specified: null, computed: null })
 
     const labeled: Molecule = {
       ...molecule,
       atoms: molecule.atoms.map(a => (a.id === 'c' ? { ...a, chirality: 'R' as const } : a)),
     }
     const model = buildInspectorModel(labeled, ['c'], [])
-    expect(model.mode === 'atom' ? model.chirality : null).toBe('R')
+    expect(model.mode === 'atom' ? model.chirality : null).toEqual({ specified: 'R', computed: null })
+  })
+
+  it('distinguishes inferred configuration from authored stereochemistry', () => {
+    const input: Molecule = {
+      atoms: [
+        { id: 'c', symbol: 'C', x: 0, y: 0, z: 0 },
+        { id: 'f', symbol: 'F', x: 1, y: 1, z: 1 },
+        { id: 'cl', symbol: 'Cl', x: -1, y: -1, z: 1 },
+        { id: 'br', symbol: 'Br', x: -1, y: 1, z: -1 },
+        { id: 'h', symbol: 'H', x: 1, y: -1, z: -1 },
+      ],
+      bonds: ['f', 'cl', 'br', 'h'].map(id => ({ id: `c-${id}`, atomId1: 'c', atomId2: id, order: 1 })),
+    }
+    const model = buildInspectorModel(input, ['c'], [])
+    expect(model.mode === 'atom' ? model.chirality : null).toEqual({ specified: null, computed: 'S' })
   })
 })

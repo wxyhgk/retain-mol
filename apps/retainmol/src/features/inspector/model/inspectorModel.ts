@@ -1,8 +1,10 @@
 import {
   calculateMolecularWeight,
   getMolecularFormula,
+  getAtomChiralityState,
   inferHybridization,
   type Atom,
+  type AtomChiralityState,
   type Bond,
   type Molecule,
 } from '@retainmol/mol-viewer/core'
@@ -68,8 +70,7 @@ export type InspectorModel =
       atom: IndexedAtom
       hybridization: ReturnType<typeof inferHybridization>
       neighbors: readonly NeighborBond[]
-      /** 手性标注：R/S 来自模型，其余为未指定（是否潜在中心由翻转可用性判定） */
-      chirality: 'R' | 'S' | 'unspecified'
+      chirality: AtomChiralityState
   }
   | {
       mode: 'bond'
@@ -141,7 +142,7 @@ export function buildInspectorModel(
       atom: selected,
       hybridization: inferHybridization(molecule.bonds, selected.atom.id),
       neighbors,
-      chirality: selected.atom.chirality ?? 'unspecified',
+      chirality: getAtomChiralityState(molecule, selected.atom.id),
     }
   }
 

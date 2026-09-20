@@ -4,6 +4,7 @@ import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
+import { getAtomChiralityState } from '../../lib/stereo/atomChiralityState'
 import { ATOM_LABEL as L } from '../../config/overlay.config'
 import { CAMERA } from '../../config/camera.config'
 import { resolveRenderProfile } from '../../styles'
@@ -101,9 +102,12 @@ export default function AtomLabelOverlay({ renderer }: Props) {
           ctx.fillStyle = '#fff'
           ctx.fillText(txt, bx, by)
         }
-        // ── 手性徽标：只显示已指定的 R/S；未指定的潜在中心不显示
-        // （没有手性中心就不显示，避免满屏问号干扰建模）
-        const chiralTxt = atom.chirality ?? ''
+        // 几何推断与指定状态分开；读数不写入模型，清除指定后仍可显示当前构型。
+        const { specified, computed } = getAtomChiralityState(molecule, atom.id)
+        const confirmed = specified !== null && specified === computed
+        const chiralTxt = computed
+          ? confirmed ? computed : `${computed}·${specified ? '不一致' : '未指定'}`
+          : specified ? `${specified}·待核验` : ''
         if (chiralTxt !== '') {
           const cx = p.x + 8 * badgeScale
           const cy = by + badgeFont * 1.15
@@ -111,7 +115,7 @@ export default function AtomLabelOverlay({ renderer }: Props) {
           const ctw = ctx.measureText(chiralTxt).width
           ctx.beginPath()
           ctx.roundRect(cx - 3, cy - badgeFont * 0.62, ctw + 6, badgeFont * 1.24, 4)
-          if (atom.chirality) {
+          if (confirmed) {
             ctx.fillStyle = 'rgba(124,58,237,0.92)'
             ctx.fill()
             ctx.fillStyle = '#fff'

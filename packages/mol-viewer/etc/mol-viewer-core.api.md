@@ -27,6 +27,13 @@ export interface Atom {
     readonly z: number;
 }
 
+// @public
+export interface AtomChiralityState {
+    readonly computed: 'R' | 'S' | null;
+    // (undocumented)
+    readonly specified: 'R' | 'S' | null;
+}
+
 // @public (undocumented)
 export interface Bond {
     // (undocumented)
@@ -175,6 +182,9 @@ export type ElementLike = Pick<Atom, 'symbol'>;
 
 // @public (undocumented)
 export function exportXYZ(mol: Molecule): string;
+
+// @public
+export function getAtomChiralityState(molecule: Molecule, atomId: string): AtomChiralityState;
 
 // @public (undocumented)
 export function getElementConfig(symbol: string): ElementConfig;

@@ -118,11 +118,19 @@ export function AtomInspector({ model }: { model: AtomModel }) {
         <PropertyControlRow label="自由基"><IntegerStepper value={atom.radical ?? 0} min={0} max={3} format={value => value === 0 ? '无' : String(value)} onChange={value => actions.setAtomRadical(atom.id, value)} /></PropertyControlRow>
       </PropertyList></InspectorSection>
       <InspectorSection title="手性">
+        <PropertyList>
+          <PropertyRow label="当前构型" value={model.chirality.computed ?? '无法判定 / 非手性'} />
+          <PropertyRow label="指定状态" value={model.chirality.specified ?? '未指定'} />
+        </PropertyList>
         <div className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-xs text-foreground">{model.chirality === 'unspecified' ? '未指定' : model.chirality}</span>
+          <span className="min-w-0 flex-1 text-[10px] leading-4 text-muted-foreground">
+            {model.chirality.specified === null
+              ? model.chirality.computed ? '当前 3D 展示一种可能构型，选择 R/S 后才指定。' : '选择 R/S 可指定可编辑的手性中心。'
+              : model.chirality.computed === model.chirality.specified ? '当前构型与指定状态一致。' : '当前构型无法确认指定状态，请检查结构。'}
+          </span>
           <ActionButton icon={<ArrowLeftRight />} label="翻转" disabled={!flipAvailability.ok} title={flipAvailability.ok ? '交换两取代基分支（R↔S）' : flipAvailability.reason} onClick={() => actions.flipChirality(atom.id)} />
         </div>
-        <SegmentedControl ariaLabel="指定手性" value={model.chirality === 'unspecified' ? 'none' : model.chirality} onSelect={value => { const result = actions.setChirality(atom.id, value); if (!result.ok) flashHint(result.reason ?? '无法指定手性') }} options={[{ value: 'R', label: 'R' }, { value: 'S', label: 'S' }, { value: 'none', label: '无' }] as const} />
+        <SegmentedControl ariaLabel="指定手性" value={model.chirality.specified ?? 'none'} onSelect={value => { const result = actions.setChirality(atom.id, value); if (!result.ok) flashHint(result.reason ?? '无法指定手性') }} options={[{ value: 'R', label: 'R' }, { value: 'S', label: 'S' }, { value: 'none', label: '未指定' }] as const} />
         {!flipAvailability.ok && flipAvailability.reason && (
           <div className="mt-1 text-[10px] leading-4 text-muted-foreground">{flipAvailability.reason}</div>
         )}
