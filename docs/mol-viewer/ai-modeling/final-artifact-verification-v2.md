@@ -52,7 +52,7 @@ flowchart LR
 `run_preparation.py`、`refinement_stage.py`、`verification_stage.py` 和 `run_recording.py`，后续扩展
 某一算法时不应重新把化学策略、文件发布和验证策略混回 orchestrator。
 
-## ExpectedEffect V1 范围
+## ExpectedEffect V2 范围
 
 | 状态 | 命令 |
 | --- | --- |
@@ -62,6 +62,18 @@ flowchart LR
 
 暂不推导不是失败，而是 `unsupported-effect-semantics`。它必须产生 `INDETERMINATE`，避免将尚未
 形式化的高阶语义伪装成 PASS。
+
+### 2026-09-20 手性快照修复
+
+`ExpectedEffect.schemaVersion` 已升为 2，规范摘要前缀改为 `canonical-v3-sha256-`。
+原子快照包含 `chirality`，键快照包含 `wedge` 与 `ez`；有楔形的键保留端点顺序，
+因为 `atomId1` 是窄端。普通无向键仍规范化端点顺序，原子/键数组重排不改变摘要。
+旧回执不得和 V2 混用；Python 可读取 V1 历史证据，但 V1 不提供新增的手性字段校验。
+Node 执行器从包导出的常量读取回执版本，避免两端各自硬编码。
+
+独立效果推导仍不调用生产 builder；两者共用无 UI 依赖的 CIP 感知策略来更新**已指定**的
+原子手性。此项比较能发现标记变化，并不扩展下述 Lean/最终产物 PASS 域到立体化学。
+实现与验证边界见 [手性正确性](../stereochemistry.md)。
 
 ## SDF bridge 规则
 

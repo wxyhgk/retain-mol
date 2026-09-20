@@ -1,4 +1,5 @@
 import type { Molecule } from '../../../molecule'
+import { reconcileAtomChirality } from '../../../stereo/perception'
 import type { MolClipboard } from '../../../types'
 import type { EditCommandResultWithMeta } from './commandResult'
 
@@ -34,7 +35,7 @@ export function editWithSelection(
     ok: true,
     moleculeChanged: options.moleculeChanged,
     selectionChanged: false,
-    molecule,
+    molecule: options.moleculeChanged ? reconcileAtomChirality(molecule) : molecule,
     selectedAtomIds: new Set(selection.selectedAtomIds),
     selectedBondIds: new Set(selection.selectedBondIds),
   }
@@ -57,7 +58,7 @@ export function editWithSelectionSets(
     selectionChanged:
       !selectionSetsEqual(previousSelection.selectedAtomIds, nextAtomIds) ||
       !selectionSetsEqual(previousSelection.selectedBondIds, nextBondIds),
-    molecule,
+    molecule: options.moleculeChanged ? reconcileAtomChirality(molecule) : molecule,
     selectedAtomIds: nextAtomIds,
     selectedBondIds: nextBondIds,
   }

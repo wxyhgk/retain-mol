@@ -12,6 +12,7 @@ import { maxValence, targetValence, valenceUsed } from '../valence'
 import { getHydrogenAdditionAvailability, isPotentialStereoCenter } from '../../chemistry/policies/atomPolicy'
 import { getConnectedFragment } from '../analysis/fragments'
 import { flipTetraBranches, parityFromCoords } from '../../stereo/geometry'
+import { perceiveAtomChirality, reconcileAtomChirality } from '../../stereo/perception'
 
 /** 原子的有效成键数（读取自身电荷/自由基） */
 function atomMaxBonds(a: Atom): number {
@@ -81,7 +82,7 @@ export function replaceAtomSymbol(
 ): Molecule {
   const atom = mol.atoms.find(a => a.id === atomId)
   if (!atom || atom.symbol === newSymbol) return mol
-  return {
+  return reconcileAtomChirality({
     ...mol,
     atoms: mol.atoms.map(a => {
       if (a.id !== atomId) return a
@@ -94,7 +95,7 @@ export function replaceAtomSymbol(
       } = a
       return { ...plainAtom, symbol: newSymbol }
     }),
-  }
+  })
 }
 
 /**
@@ -236,9 +237,10 @@ export function flipChirality(mol: Molecule, atomId: string): Molecule {
       const a = ligandIds[i]
       const b = ligandIds[j]
       if (a === undefined || b === undefined) continue
-      const size =
-        getConnectedFragment(mol.atoms, cut, a).size +
-        getConnectedFragment(mol.atoms, cut, b).size
+      const branchA = getConnectedFragment(mol.atoms, cut, a)
+      const branchB = getConnectedFragment(mol.atoms, cut, b)
+      if ([...branchA].some(id => branchB.has(id))) continue
+      const size = branchA.size + branchB.size
       if (size < bestSize) {
         bestSize = size
         best = [a, b]
@@ -273,11 +275,10 @@ export function flipChirality(mol: Molecule, atomId: string): Molecule {
     if (b.id === bondB.id) return withWedge(b, bondA.wedge)
     return b
   })
-  return { ...flipped.molecule, atoms, bonds }
+  return reconcileAtomChirality({ ...flipped.molecule, atoms, bonds })
 }
 /**
- * 存储配体序下的几何 parity（setChirality 的参考系：R↔+1、S↔−1）。
- * CIP 排名交给 OCL；编辑层只保证“奇置换必反转”，与 CIP 无关的内部约定。
+ * 存储配体序下的几何 parity，仅用于几何检查，不代表 CIP R/S。
  * 配体不足 4 个或有缺失返回 null。
  */
 export function chiralityParity(mol: Molecule, atomId: string): 1 | -1 | 0 | null {
@@ -310,7 +311,7 @@ export function clearChirality(mol: Molecule, atomId: string): Molecule {
   if (!center) return mol
   const needsAtom = center.chirality !== undefined
   const needsBonds = mol.bonds.some(
-    b => (b.atomId1 === atomId || b.atomId2 === atomId) && b.wedge !== undefined,
+    b => b.atomId1 === atomId && b.wedge !== undefined,
   )
   if (!needsAtom && !needsBonds) return mol
   return {
@@ -320,35 +321,21 @@ export function clearChirality(mol: Molecule, atomId: string): Molecule {
       : mol.atoms,
     bonds: needsBonds
       ? mol.bonds.map(b =>
-          (b.atomId1 === atomId || b.atomId2 === atomId) ? withoutWedge(b) : b)
+          b.atomId1 === atomId ? withoutWedge(b) : b)
       : mol.bonds,
   }
 }
 
-/**
- * 设定手性 R/S：parity 相符只改标记，不符走 flipChirality 分支交换（含 wedge 互换）。
- * 调用前须通过 flipChiralityAvailability；门控失败/退化返回同一引用。
- * 调用方包进 undo 事务。
- */
+/** Set absolute CIP configuration and confirm the resulting geometry before labeling it. */
 export function setChirality(mol: Molecule, atomId: string, target: 'R' | 'S'): Molecule {
   if (flipChiralityAvailability(mol, atomId).ok === false) return mol
-  const center = mol.atoms.find(a => a.id === atomId)
-  if (!center) return mol
-  const parity = chiralityParity(mol, atomId)
-  if (parity === null || parity === 0) return mol
-  const desired: 1 | -1 = target === 'R' ? 1 : -1
-  if (parity !== desired) {
-    const flipped = flipChirality(mol, atomId)
-    if (flipped === mol) return mol
-    if (flipped.atoms.some(a => a.id === atomId && a.chirality === target)) return flipped
-    return {
-      ...flipped,
-      atoms: flipped.atoms.map(a => (a.id === atomId ? { ...a, chirality: target } : a)),
-    }
-  }
-  if (center.chirality === target) return mol
+  const current = perceiveAtomChirality(mol).get(atomId)
+  if (current === undefined) return mol
+  const next = current === target ? mol : flipChirality(mol, atomId)
+  if (perceiveAtomChirality(next).get(atomId) !== target) return mol
+  if (next.atoms.some(atom => atom.id === atomId && atom.chirality === target)) return next
   return {
-    ...mol,
-    atoms: mol.atoms.map(a => (a.id === atomId ? { ...a, chirality: target } : a)),
+    ...next,
+    atoms: next.atoms.map(atom => atom.id === atomId ? { ...atom, chirality: target } : atom),
   }
 }

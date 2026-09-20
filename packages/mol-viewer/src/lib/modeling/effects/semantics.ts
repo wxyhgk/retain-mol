@@ -1,3 +1,4 @@
+import { reconcileAtomChirality } from '../../stereo/perception'
 import type { Atom, Molecule } from '../../molecule'
 import { validateAtomCreationInput, validateElementSymbol } from '../../chemistry/policies/atomPolicy'
 import {
@@ -212,7 +213,8 @@ export function applyExpectedEffectCommand(
   molecule: Molecule,
   command: ExpectedEffectSupportedCommand,
 ): ApplyExpectedEffectCommandResult {
-  return applyCommandWithBondPolicy(molecule, command, strictBondPolicy)
+  const result = applyCommandWithBondPolicy(molecule, command, strictBondPolicy)
+  return result.ok ? { ...result, molecule: reconcileAtomChirality(result.molecule) } : result
 }
 
 /** Plan-internal semantics that permit temporary valence excess within one transaction. */
@@ -220,5 +222,6 @@ export function applyExpectedEffectTransactionCommand(
   molecule: Molecule,
   command: ExpectedEffectSupportedCommand,
 ): ApplyExpectedEffectCommandResult {
-  return applyCommandWithBondPolicy(molecule, command, transactionBondPolicy)
+  const result = applyCommandWithBondPolicy(molecule, command, transactionBondPolicy)
+  return result.ok ? { ...result, molecule: reconcileAtomChirality(result.molecule) } : result
 }

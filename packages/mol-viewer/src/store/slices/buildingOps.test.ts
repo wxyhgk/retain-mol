@@ -7,6 +7,7 @@ import type { Molecule } from '../../lib/molecule'
 import { newAtom, newBond } from '../../lib/molecule'
 import { autoAddHydrogens } from '../../lib/builder/editing/atomOps'
 import { parityFromCoords } from '../../lib/stereo/geometry'
+import { perceiveAtomChirality } from '../../lib/stereo/perception'
 import { useMoleculeStore } from '../moleculeStore'
 
 const store = () => useMoleculeStore.getState()
@@ -181,10 +182,10 @@ describe('setBondWedge', () => {
 })
 
 describe('setChirality', () => {
-  it('parity 相符只改标记，再次设置不压历史', () => {
+  it('CIP 相符只改标记，再次设置不压历史', () => {
     const { mol, centerId } = chiralCenter()
     reset(mol)
-    const target = storedParity(activeMolecule(), centerId) === 1 ? 'R' : 'S'
+    const target = perceiveAtomChirality(mol).get(centerId)!
 
     const result = store().setChirality(centerId, target)
 
@@ -196,11 +197,11 @@ describe('setChirality', () => {
     expect(pastLength()).toBe(1)
   })
 
-  it('parity 不符翻转分支几何并同步标记', () => {
+  it('CIP 不符翻转分支几何并同步标记', () => {
     const { mol, centerId } = chiralCenter()
     reset(mol)
     const before = storedParity(activeMolecule(), centerId)
-    const target = before === 1 ? 'S' : 'R'
+    const target = perceiveAtomChirality(mol).get(centerId) === 'R' ? 'S' : 'R'
 
     const result = store().setChirality(centerId, target)
 
@@ -211,6 +212,21 @@ describe('setChirality', () => {
     expect(pastLength()).toBe(1)
 
     temporal().undo()
+    expect(activeMolecule().atoms.find(a => a.id === centerId)?.chirality).toBeUndefined()
+  })
+
+  it('替换配体后清除失效标签，单步 undo/redo 连同标签一起恢复', () => {
+    const { mol, centerId, ligandIds } = chiralCenter()
+    reset(mol)
+    store().setChirality(centerId, 'R')
+    const before = activeMolecule()
+    temporal().clear()
+    store().replaceAtom(ligandIds[2], 'F')
+    expect(activeMolecule().atoms.find(a => a.id === centerId)?.chirality).toBeUndefined()
+    expect(pastLength()).toBe(1)
+    temporal().undo()
+    expect(activeMolecule()).toEqual(before)
+    temporal().redo()
     expect(activeMolecule().atoms.find(a => a.id === centerId)?.chirality).toBeUndefined()
   })
 

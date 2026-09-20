@@ -5,6 +5,7 @@
  */
 
 import type { Molecule } from '../../lib/molecule'
+import { reconcileAtomChirality } from '../../lib/stereo/perception'
 import type { SceneObject } from '../../lib/sceneObject'
 import type {
   EditCommandResult,
@@ -69,6 +70,7 @@ export function getActiveMol(s: MoleculeState): Molecule | null {
 }
 
 export function patchActiveMol(s: MoleculeState, newMol: Molecule): Partial<MoleculeState> {
+  newMol = reconcileAtomChirality(newMol)
   const objectId = s.activeObjectId
   const obj = getEditableObject(s, objectId)
   if (!objectId || !obj) return {}
@@ -103,12 +105,27 @@ function clearSelectionPatch(
   }
 }
 
+function reconcileChangedObjects(
+  state: MoleculeState,
+  objects: Record<string, SceneObject>,
+): Record<string, SceneObject> {
+  let result = objects
+  for (const [id, object] of Object.entries(objects)) {
+    if (object.molecule === state.objectsById[id]?.molecule) continue
+    const molecule = reconcileAtomChirality(object.molecule)
+    if (molecule === object.molecule) continue
+    if (result === objects) result = { ...objects }
+    result[id] = { ...object, molecule }
+  }
+  return result
+}
+
 export function applyAddSceneObjectResult(
   s: MoleculeState,
   result: AddSceneObjectCommandResult,
 ): Partial<MoleculeState> {
   return {
-    objectsById: { ...s.objectsById, [result.object.id]: result.object },
+    objectsById: reconcileChangedObjects(s, { ...s.objectsById, [result.object.id]: result.object }),
     objectOrder: [...s.objectOrder, result.object.id],
     activeObjectId: result.object.id,
     ...clearSelectionPatch(s),
@@ -123,7 +140,7 @@ export function applySceneGraphResult(
 ): Partial<MoleculeState> {
   if (!result.changed) return {}
   return {
-    objectsById: result.objectsById,
+    objectsById: reconcileChangedObjects(s, result.objectsById),
     objectOrder: result.objectOrder,
     activeObjectId: result.activeObjectId,
     ...(result.clearSelection ? clearSelectionPatch(s) : {}),
@@ -150,7 +167,7 @@ export function applySetMoleculeInSceneResult(
   result: SetMoleculeInSceneCommandResult,
 ): Partial<MoleculeState> {
   return {
-    objectsById: result.objectsById,
+    objectsById: reconcileChangedObjects(s, result.objectsById),
     objectOrder: result.objectOrder,
     activeObjectId: result.activeObjectId,
     ...(result.clearSelection ? clearSelectionPatch(s) : {}),
@@ -168,7 +185,7 @@ export function applySceneObjectUpdatedResult(
 ): Partial<MoleculeState> {
   if (!result.changed) return {}
   return {
-    objectsById: result.objectsById,
+    objectsById: reconcileChangedObjects(s, result.objectsById),
     ...(options.bumpAtomPositionVersion ? { atomPositionVersion: s.atomPositionVersion + 1 } : {}),
   }
 }

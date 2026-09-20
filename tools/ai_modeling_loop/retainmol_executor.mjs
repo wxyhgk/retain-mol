@@ -8,6 +8,7 @@ import process from 'node:process'
 import { exportSdf, parseSdf } from '@retainmol/mol-viewer/io'
 import {
   MODELING_COMMAND_KINDS,
+  EXPECTED_EFFECT_SCHEMA_VERSION,
   compareExpectedEffect,
   compileExpectedEffect,
   computeCanonicalSnapshotDigest,
@@ -184,7 +185,7 @@ function createProductionEffectReceipt(initialMolecule, plan, objectId) {
   }
   const finalSnapshot = createCanonicalMoleculeSnapshot(previousMolecule)
   return {
-    schemaVersion: 1,
+    schemaVersion: EXPECTED_EFFECT_SCHEMA_VERSION,
     planId: plan.planId,
     baseDigest: computeCanonicalSnapshotDigest(baseSnapshot),
     finalDigest: computeCanonicalSnapshotDigest(finalSnapshot),

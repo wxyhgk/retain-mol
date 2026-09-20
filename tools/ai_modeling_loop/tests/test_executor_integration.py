@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import copy
 import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+
+from tools.ai_modeling_loop.execution_evidence import validate_execution_evidence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -101,6 +105,26 @@ class RetainMolExecutorIntegrationTests(unittest.TestCase):
             self.assertEqual(execution["status"], "completed")
             self.assertEqual(execution["effectComparison"], {"verdict": "pass", "mismatches": []})
             self.assertEqual(expected["status"], "compiled")
+            self.assertEqual(expected["schemaVersion"], 2)
+            frozen_plan = json.loads(enforced_plan.read_text())
+
+            def validate(actual):
+                return validate_execution_evidence(
+                    plan=frozen_plan,
+                    expected_effect=expected,
+                    receipt=actual,
+                    enforced_plan_sha256=execution["enforcedPlanSha256"],
+                    expected_effect_sha256=execution["expectedEffectSha256"],
+                    executor_output_sha256=execution["outputSha256"],
+                )
+
+            self.assertEqual(validate(execution).status, "pass")
+            tampered = copy.deepcopy(execution)
+            tampered["actualEffectReceipt"]["commands"][0]["changes"]["atoms"][0]["after"]["chirality"] = "R"
+            self.assertEqual(validate(tampered).code, "effect-comparison-reject")
+            legacy = copy.deepcopy(execution)
+            legacy["actualEffectReceipt"]["schemaVersion"] = 1
+            self.assertEqual(validate(legacy).code, "effect-comparison-reject")
             self.assertEqual(execution["actualEffectReceipt"]["finalDigest"], expected["finalDigest"])
             self.assertEqual(
                 [atom["atomId"] for atom in final_snapshot["molecule"]["atoms"]],

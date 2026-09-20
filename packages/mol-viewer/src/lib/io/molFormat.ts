@@ -19,13 +19,12 @@ interface OCLStereoAccess {
   getAtomParity?: (index: number) => number
   getAtomCIPParity?: (index: number) => number
   getBondCIPParity?: (index: number) => number
-  setAtomParity?: (index: number, parity: number) => void
 }
 
 /**
  * OCL parity+CIP 双读 → R/S。parity 非零且 CIP 明确才认，
  * 其余一切（双楔打架/unknown/either/非立体中心）归 undefined，绝不蒙。
- * R/S↔parity 位映射由 L-乳酸锚点单测锁死（S↔parity2）。
+ * CIP 枚举映射由 L-乳酸锚点单测锁死；相对 atom parity 不映射为 R/S。
  */
 function readAtomChirality(access: OCLStereoAccess, index: number): 'R' | 'S' | undefined {
   const parity = access.getAtomParity?.(index) ?? OCL.Molecule.cAtomParityNone
@@ -118,17 +117,14 @@ export function moleculeToOCL(mol: Molecule): OCLMol {
   const oclMol = new OCL.Molecule(mol.atoms.length || 16, mol.bonds.length || 16)
   const idxMap = new Map<string, number>()
   const getAtomicNo = (OCL.Molecule as unknown as { getAtomicNoFromLabel(s: string): number }).getAtomicNoFromLabel
-  const stereoAccess: OCLStereoAccess = oclMol as unknown as OCLStereoAccess
   for (const a of mol.atoms) {
     const atomicNo = getAtomicNo(a.symbol) || 6  // 未识别时退化为碳
     const idx = oclMol.addAtom(atomicNo)
     oclMol.setAtomX(idx, a.x)
     oclMol.setAtomY(idx, -a.y)   // OCL 导出时再次取反，补偿以写出正确值
     oclMol.setAtomZ(idx, -a.z)
-    if (a.chirality === 'R' || a.chirality === 'S') {
-      // R/S→parity 位与读端互逆（L-乳酸锚点单测锁死）；有 wedge 时 OCL 优先写存下的键向
-      stereoAccess.setAtomParity?.(idx, a.chirality === 'R' ? OCL.Molecule.cAtomParity1 : OCL.Molecule.cAtomParity2)
-    }
+    // Atom parity depends on indices and is NOT the absolute CIP R/S label.
+    // OCL derives it from the coordinates / authored wedges after all bonds exist.
     idxMap.set(a.id, idx)
   }
   const BOND_TYPE: Record<1 | 2 | 3, number> = {
@@ -242,7 +238,16 @@ export function parseSdf(text: string): Molecule[] {
 
 /** 导出为 MOL V2000 */
 export function exportMol(mol: Molecule): string {
-  return restoreV2000Coordinates(moleculeToOCL(mol).toMolfile(), mol)
+  const ocl = moleculeToOCL(mol)
+  for (let i = 0; i < mol.atoms.length; i += 1) ocl.setAtomMapNo(i, i + 1)
+  ocl.ensureHelperArrays(OCL.Molecule.cHelperCIP)
+  const atoms = Array.from({ length: ocl.getAllAtoms() }, (_, i) => {
+    const atom = mol.atoms[ocl.getAtomMapNo(i) - 1]
+    if (!atom) throw new Error('MOL 导出失败：原子映射缺失')
+    ocl.setAtomMapNo(i, 0)
+    return atom
+  })
+  return restoreV2000Coordinates(ocl.toMolfile(), { ...mol, atoms })
 }
 
 /** 导出为 SDF（末尾附 $$$$） */

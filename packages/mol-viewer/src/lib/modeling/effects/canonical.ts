@@ -8,7 +8,7 @@ import type {
 } from './contracts'
 import { sha256Hex } from './sha256'
 
-const CANONICAL_DIGEST_PREFIX = 'canonical-v2-sha256-'
+const CANONICAL_DIGEST_PREFIX = 'canonical-v3-sha256-'
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
@@ -38,6 +38,7 @@ function canonicalAtom(atom: Atom): CanonicalAtomSnapshot {
     z: canonicalNumber(atom.z),
     charge: atom.charge ?? null,
     radical: atom.radical ?? null,
+    chirality: atom.chirality ?? null,
     label: atom.label ?? null,
     coordinationGeometry: atom.coordinationGeometry ?? null,
     coordinationDirections: (atom.coordinationDirections ?? [])
@@ -57,20 +58,24 @@ function canonicalAtom(atom: Atom): CanonicalAtomSnapshot {
 }
 
 function canonicalBond(bond: Bond): CanonicalBondSnapshot {
-  const [atomId1, atomId2] = [bond.atomId1, bond.atomId2].sort(compareText)
+  // Wedges are directed: atomId1 is the narrow end. Plain bonds remain unordered.
+  const endpoints = [bond.atomId1, bond.atomId2]
+  const [atomId1, atomId2] = bond.wedge ? endpoints : endpoints.sort(compareText)
   return {
     id: bond.id,
     atomId1: atomId1!,
     atomId2: atomId2!,
     order: bond.order,
     aromatic: bond.aromatic === true,
+    wedge: bond.wedge ?? null,
+    ez: bond.ez ?? null,
     coordinationSites: (bond.coordinationSites ?? [])
       .map(site => ({ atomId: site.atomId, siteId: site.siteId }))
       .sort((left, right) => compareText(left.atomId, right.atomId) || compareText(left.siteId, right.siteId)),
   }
 }
 
-/** Stable, field-normalized projection used by ExpectedEffect V1. */
+/** Stable, field-normalized projection used by ExpectedEffect V2. */
 export function createCanonicalMoleculeSnapshot(molecule: Molecule): CanonicalMoleculeSnapshot {
   return {
     name: molecule.name ?? null,
@@ -83,7 +88,7 @@ export function createCanonicalMoleculeSnapshot(molecule: Molecule): CanonicalMo
   }
 }
 
-/** Cryptographic digest of the V1 canonical projection. */
+/** Cryptographic digest of the V2 canonical projection. */
 export function computeCanonicalSnapshotDigest(snapshot: CanonicalMoleculeSnapshot): string {
   return `${CANONICAL_DIGEST_PREFIX}${sha256Hex(JSON.stringify(snapshot))}`
 }

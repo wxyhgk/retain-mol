@@ -1,3 +1,4 @@
+import { reconcileAtomChirality } from '../stereo/perception'
 import { ELEMENT_CONFIGS } from '../../config/elements.config'
 import type { Molecule } from '../molecule'
 import {
@@ -653,9 +654,11 @@ export function dryRunEditPlan(
         },
       ])
     }
+    const nextMolecule = reconcileAtomChirality(result.state.molecule)
+    const commandChanged = result.changed || nextMolecule !== result.state.molecule
     const invariantIssues = validateModelingConstraintInvariants(
       target.molecule,
-      result.state.molecule,
+      nextMolecule,
       plan.constraints,
     )
     if (invariantIssues.length > 0) {
@@ -668,7 +671,7 @@ export function dryRunEditPlan(
         })),
       ])
     }
-    if (!result.changed) {
+    if (!commandChanged) {
       issues.push({
         severity: 'warning',
         code: 'command-noop',
@@ -677,8 +680,8 @@ export function dryRunEditPlan(
         commandId: command.commandId,
       })
     }
-    changed ||= result.changed
-    state = result.state
+    changed ||= commandChanged
+    state = { ...result.state, molecule: nextMolecule }
     for (const atom of state.molecule.atoms) {
       if (!previousAtomIds.has(atom.id)) scopedAtomIds?.add(atom.id)
     }

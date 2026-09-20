@@ -390,8 +390,10 @@ def _validate_effect_receipt(
     _exact_fields(effect, required=required, optional=optional, path=path)
     if path == "expectedEffect" and effect["status"] != "compiled":
         raise _SchemaError(f"{path}.status", "must equal compiled")
-    if effect["schemaVersion"] != 1 or isinstance(effect["schemaVersion"], bool):
-        raise _SchemaError(f"{path}.schemaVersion", "must equal 1")
+    # V1 remains readable for archived evidence. V2 adds stereo-sensitive snapshots;
+    # expected and actual versions must still match in the comparison below.
+    if effect["schemaVersion"] not in (1, 2) or isinstance(effect["schemaVersion"], bool):
+        raise _SchemaError(f"{path}.schemaVersion", "must equal 1 or 2")
     for field in ("planId", "baseDigest", "finalDigest"):
         if not isinstance(effect[field], str) or not effect[field]:
             raise _SchemaError(f"{path}.{field}", "must be a non-empty string")
@@ -415,7 +417,7 @@ def _validate_effect_receipt(
         ):
             raise _SchemaError(f"{path}.commands[{index}]", "does not match enforced command id/kind/order")
         if plan_command["kind"] not in _SUPPORTED_EFFECT_KINDS:
-            raise _SchemaError(f"{path}.commands[{index}].kind", "has no ExpectedEffect V1 semantics")
+            raise _SchemaError(f"{path}.commands[{index}].kind", "has no ExpectedEffect primitive semantics")
         if not _parameters_match(plan_command, effect_command):
             raise _SchemaError(f"{path}.commands[{index}].changes", "does not bind enforced command parameters")
     if previous_digest != effect["finalDigest"]:

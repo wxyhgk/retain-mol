@@ -64,6 +64,8 @@ export interface CanonicalAtomSnapshot {
     // (undocumented)
     readonly charge: number | null;
     // (undocumented)
+    readonly chirality: 'R' | 'S' | null;
+    // (undocumented)
     readonly coordinationDirections: readonly (readonly [number, number, number])[];
     // (undocumented)
     readonly coordinationGeometry: string | null;
@@ -98,9 +100,13 @@ export interface CanonicalBondSnapshot {
     // (undocumented)
     readonly coordinationSites: readonly CanonicalCoordinationSiteAssignment[];
     // (undocumented)
+    readonly ez: 'E' | 'Z' | null;
+    // (undocumented)
     readonly id: string;
     // (undocumented)
     readonly order: 1 | 2 | 3;
+    // (undocumented)
+    readonly wedge: 'up' | 'down' | null;
 }
 
 // @public (undocumented)
@@ -374,7 +380,7 @@ export const editPlanSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
-export const EXPECTED_EFFECT_SCHEMA_VERSION: 1;
+export const EXPECTED_EFFECT_SCHEMA_VERSION: 2;
 
 // @public (undocumented)
 export const EXPECTED_EFFECT_SEMANTICS: Readonly<Record<"atom.add" | "atom.replace" | "atom.remove" | "atom.move" | "atom.setCharge" | "atom.setRadical" | "atom.addHydrogen" | "bond.add" | "bond.remove" | "bond.setOrder" | "fragment.attach" | "fragment.bridge" | "fragment.fuse" | "geometry.setBondLength" | "geometry.setBondAngle" | "geometry.setDihedral" | "geometry.rotateGroup", ExpectedEffectSemanticsSupport>>;

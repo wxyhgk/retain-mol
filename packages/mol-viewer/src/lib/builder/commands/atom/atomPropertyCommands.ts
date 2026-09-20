@@ -1,3 +1,4 @@
+import { perceiveAtomChirality } from '../../../stereo/perception'
 import type { Molecule } from '../../../molecule'
 import { clearChirality, flipChirality, flipChiralityAvailability, resaturateAtom, setChirality, type FlipChiralityAvailability } from '../../editing/atomOps'
 import { editChanged, editFailed, editUnchanged, type EditCommandResult } from '../shared'
@@ -75,6 +76,9 @@ export function runSetChiralityCommand(
   const availability = flipChiralityAvailability(molecule, atomId)
   if (availability.ok === false) return editFailed(availability.reason)
   const next = setChirality(molecule, atomId, chirality)
+  if (perceiveAtomChirality(next).get(atomId) !== chirality) {
+    return editFailed('无法安全设置目标 CIP 构型：手性不明确或分支无法独立交换')
+  }
   return next === molecule ? editUnchanged() : editChanged(next)
 }
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Molecule } from '@retainmol/mol-viewer/core'
-import { canonicalizeMolecule } from '@/features/molecule-assets'
+import { canonicalizeMolecule } from '@retainmol/molecule-assets'
 
 /**
  * 浏览器本地持久化：编辑器唯一的保存位置（无后端保存）。

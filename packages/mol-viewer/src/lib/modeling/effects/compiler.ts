@@ -41,7 +41,7 @@ export function compileExpectedEffect(
     return {
       status: 'indeterminate',
       reason: 'unsupported-effect-semantics',
-      message: `ExpectedEffect V1 does not define semantics for: ${unsupportedCommandKinds.join(', ')}`,
+      message: `ExpectedEffect V2 does not define semantics for: ${unsupportedCommandKinds.join(', ')}`,
       commandIndex,
       ...(command ? { commandId: command.commandId, commandKind: command.kind } : {}),
       unsupportedCommandKinds,
@@ -58,7 +58,7 @@ export function compileExpectedEffect(
       return {
         status: 'indeterminate',
         reason: 'unsupported-effect-semantics',
-        message: `ExpectedEffect V1 does not define semantics for: ${command.kind}`,
+        message: `ExpectedEffect V2 does not define semantics for: ${command.kind}`,
         commandIndex,
         commandId: command.commandId,
         commandKind: command.kind,

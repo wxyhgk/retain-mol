@@ -1,6 +1,6 @@
 import type { ModelingCommand, ModelingCommandKind } from '../contracts'
 
-export const EXPECTED_EFFECT_SCHEMA_VERSION = 1 as const
+export const EXPECTED_EFFECT_SCHEMA_VERSION = 2 as const
 
 export const EXPECTED_EFFECT_SUPPORTED_COMMAND_KINDS = [
   'atom.add',
@@ -42,6 +42,7 @@ export interface CanonicalAtomSnapshot {
   readonly y: number
   readonly z: number
   readonly charge: number | null
+  readonly chirality: 'R' | 'S' | null
   readonly radical: number | null
   readonly label: string | null
   readonly coordinationGeometry: string | null
@@ -55,6 +56,8 @@ export interface CanonicalBondSnapshot {
   readonly atomId1: string
   readonly atomId2: string
   readonly order: 1 | 2 | 3
+  readonly wedge: 'up' | 'down' | null
+  readonly ez: 'E' | 'Z' | null
   readonly aromatic: boolean
   readonly coordinationSites: readonly CanonicalCoordinationSiteAssignment[]
 }

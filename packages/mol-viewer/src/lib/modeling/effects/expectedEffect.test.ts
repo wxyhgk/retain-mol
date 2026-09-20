@@ -167,7 +167,7 @@ describe('ExpectedEffect V1 canonical projection', () => {
 
     expect(createCanonicalMoleculeSnapshot(first)).toEqual(createCanonicalMoleculeSnapshot(second))
     expect(computeCanonicalMoleculeDigest(first)).toBe(computeCanonicalMoleculeDigest(second))
-    expect(computeCanonicalMoleculeDigest(first)).toMatch(/^canonical-v2-sha256-[0-9a-f]{64}$/)
+    expect(computeCanonicalMoleculeDigest(first)).toMatch(/^canonical-v3-sha256-[0-9a-f]{64}$/)
   })
 
   it('separates the concrete coordinate collision accepted by the legacy FNV-1a digest', () => {
@@ -179,8 +179,13 @@ describe('ExpectedEffect V1 canonical projection', () => {
       atoms: [{ id: 'a', symbol: 'C', x: 7.53845, y: 0, z: 0 }],
       bonds: [],
     }
-    const firstSnapshot = createCanonicalMoleculeSnapshot(first)
-    const secondSnapshot = createCanonicalMoleculeSnapshot(second)
+    // Freeze the legacy projection: new stereo fields change its serialized bytes.
+    const legacySnapshot = (molecule: Molecule) => {
+      const snapshot = createCanonicalMoleculeSnapshot(molecule)
+      return { ...snapshot, atoms: snapshot.atoms.map(({ chirality: _chirality, ...atom }) => atom) }
+    }
+    const firstSnapshot = legacySnapshot(first)
+    const secondSnapshot = legacySnapshot(second)
 
     expect(legacyFnv1a32(JSON.stringify(firstSnapshot))).toBe('909d5405')
     expect(legacyFnv1a32(JSON.stringify(secondSnapshot))).toBe('909d5405')
@@ -593,11 +598,11 @@ describe('compareExpectedEffect', () => {
     const changedAtom = first.changes.atoms[0]!
     const actual: ModelingEffectReceipt = {
       ...receipt,
-      finalDigest: 'canonical-v2-sha256-wrong',
+      finalDigest: 'canonical-v3-sha256-wrong',
       commands: [{
         ...first,
         kind: 'atom.replace',
-        postDigest: 'canonical-v2-sha256-wrong',
+        postDigest: 'canonical-v3-sha256-wrong',
         changes: {
           ...first.changes,
           atoms: [{
@@ -618,7 +623,7 @@ describe('compareExpectedEffect', () => {
 
   it('rejects a receipt from another schema version at runtime', () => {
     const effect = twoCommandEffect()
-    const actual = { ...asReceipt(effect), schemaVersion: 2 } as unknown as ModelingEffectReceipt
+    const actual = { ...asReceipt(effect), schemaVersion: 1 } as unknown as ModelingEffectReceipt
     expect(compareExpectedEffect(effect, actual).mismatches).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'schema-version-mismatch' }),
     ]))
