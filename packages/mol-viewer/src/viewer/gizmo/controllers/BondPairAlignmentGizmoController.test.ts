@@ -58,6 +58,7 @@ function stubCanvasDocument() {
     fillStyle: '',
   }
   vi.stubGlobal('document', {
+    querySelector: () => null,
     createElement: () => ({
       width: 0,
       height: 0,

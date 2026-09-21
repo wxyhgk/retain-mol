@@ -82,11 +82,10 @@ export function createAtomEditActions({
       const state = get()
       const mol = getActiveMol(state)
       if (!mol) return
-      // onlySelected 且有选中：只去选中原子上的 H；否则全部分子
+      // Explicit selected-only requests never fall back to the entire molecule.
       const selected = [...state.selectedAtomIds]
-      const targets = options?.onlySelected === true && selected.length > 0
-        ? selected
-        : undefined
+      if (options?.onlySelected === true && (selected.length === 0 || selected.some(id => !mol.atoms.some(atom => atom.id === id)))) return
+      const targets = options?.onlySelected === true ? selected : undefined
       set((s) =>
         applyActiveMoleculeEdit(s, (current) =>
           runRemoveHydrogensCommand(current, targets),

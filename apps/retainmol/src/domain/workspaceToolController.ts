@@ -1,3 +1,4 @@
+import { revealDrawInspector } from './inspectorStore'
 import { useEditorStore } from './viewer/editorState'
 import {
   activateWorkspaceTool,
@@ -33,6 +34,7 @@ export function getWorkspaceToolEffects(): WorkspaceToolEffects {
 
 export function activateAppWorkspaceTool(tool: WorkspaceTool) {
   activateWorkspaceTool(tool, getWorkspaceToolEffects())
+  if (tool === 'draw') revealDrawInspector()
 }
 
 export function closeAppWorkspacePanel() {

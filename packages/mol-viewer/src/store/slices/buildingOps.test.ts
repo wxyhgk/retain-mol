@@ -150,14 +150,16 @@ describe('removeHydrogens', () => {
     expect(activeMolecule().atoms).toHaveLength(8)
   })
 
-  it('onlySelected 但无选中时退化为全部分子', () => {
+  it('onlySelected 无选中时不修改分子或历史', () => {
     const { mol } = methane()
     reset(mol)
+    const before = activeMolecule()
 
     store().removeHydrogens({ onlySelected: true })
 
-    expect(activeMolecule().atoms).toHaveLength(1)
-    expect(pastLength()).toBe(1)
+    expect(activeMolecule()).toBe(before)
+    expect(activeMolecule().atoms).toHaveLength(5)
+    expect(pastLength()).toBe(0)
   })
 })
 

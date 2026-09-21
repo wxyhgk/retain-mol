@@ -128,3 +128,52 @@ describe('moleculeStore object editability', () => {
     expect(store().objectsById[objectId]).toBeUndefined()
   })
 })
+
+
+describe('selected-only hydrogen removal', () => {
+  const seed = () => {
+    store().setMolecule({ name: 'Two CH fragments', atoms: [
+      { id: 'c1', symbol: 'C', x: 0, y: 0, z: 0 },
+      { id: 'h1', symbol: 'H', x: 1, y: 0, z: 0 },
+      { id: 'c2', symbol: 'C', x: 4, y: 0, z: 0 },
+      { id: 'h2', symbol: 'H', x: 5, y: 0, z: 0 },
+    ], bonds: [
+      { id: 'b1', atomId1: 'c1', atomId2: 'h1', order: 1 },
+      { id: 'b2', atomId1: 'c2', atomId2: 'h2', order: 1 },
+    ] })
+    temporal().clear()
+  }
+
+  it.each([{ ids: [] }, { ids: ['expired-id'] }])('does not widen an empty or expired selection $ids', ({ ids }) => {
+    seed()
+    store().selectAtoms(ids)
+    const before = activeMolecule()
+    store().removeHydrogens({ onlySelected: true })
+    expect(activeMolecule()).toBe(before)
+    expect(temporal().pastStates).toHaveLength(0)
+  })
+
+  it('rejects stale targets alongside valid targets without partial edits', () => {
+    seed()
+    useMoleculeStore.setState({ selectedAtomIds: new Set(['c1', 'expired-id']) })
+    temporal().clear()
+    const before = activeMolecule()
+    store().removeHydrogens({ onlySelected: true })
+    expect(activeMolecule()).toBe(before)
+    expect(temporal().pastStates).toHaveLength(0)
+  })
+
+  it('removes only selected parents hydrogen, records one undo, and keeps whole-molecule mode explicit', () => {
+    seed()
+    store().selectAtoms(['c1'])
+    const before = activeMolecule()
+    store().removeHydrogens({ onlySelected: true })
+    expect(activeMolecule().atoms.map(atom => atom.id)).toEqual(['c1', 'c2', 'h2'])
+    expect(temporal().pastStates).toHaveLength(1)
+    temporal().undo()
+    expect(activeMolecule()).toEqual(before)
+    store().clearSelection()
+    store().removeHydrogens()
+    expect(activeMolecule().atoms.map(atom => atom.id)).toEqual(['c1', 'c2'])
+  })
+})

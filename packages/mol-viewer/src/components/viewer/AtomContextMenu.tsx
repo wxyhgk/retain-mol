@@ -65,7 +65,7 @@ export default function AtomContextMenu({ renderer }: Props) {
       setMenu(null); setShowPicker(false)
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setMenu(null); setShowPicker(false) }
+      if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); setMenu(null); setShowPicker(false) }
     }
     window.addEventListener('pointerdown', onDocDown)
     window.addEventListener('keydown', onKey)
@@ -119,6 +119,7 @@ export default function AtomContextMenu({ renderer }: Props) {
 
   return (
     <div
+      data-shortcut-overlay="true"
       data-atom-ctx
       className="fixed z-50 w-40 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden text-xs"
       style={{ left, top }}

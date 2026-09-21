@@ -28,7 +28,6 @@ import {
 export default function App() {
   const uiTheme = useUiThemeStore(state => state.theme)
   const palette = useUiPaletteStore(state => state.palette)
-  const [showInspector, setShowInspector] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [location, setLocation] = useState(() => ({
     pathname: window.location.pathname,
@@ -37,7 +36,6 @@ export default function App() {
   const [templateStudioOpen, setTemplateStudioOpen] = useState(false)
   const openSearch = useCallback(() => setSearchOpen(true), [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
-  const toggleInspector = useCallback(() => setShowInspector(value => !value), [])
   const navigate = useCallback((nextPath: string) => {
     window.history.pushState({}, '', nextPath)
     setLocation({ pathname: window.location.pathname, search: window.location.search })
@@ -66,7 +64,7 @@ export default function App() {
   }, [palette])
 
   useAppClipboardShortcuts()
-  useAppKeyboardShortcuts(openSearch)
+  useAppKeyboardShortcuts()
   useDirtyBeforeUnload()
   const crashRecovery = useCrashRecovery()
   const offerTime = new Date(crashRecovery.offer?.savedAt ?? '').getTime()
@@ -85,9 +83,7 @@ export default function App() {
         </div>
       )}
       <AppShell
-        showInspector={showInspector}
         searchOpen={searchOpen}
-        onToggleInspector={toggleInspector}
         onOpenTemplateStudio={() => setTemplateStudioOpen(true)}
         onOpenSearch={openSearch}
         onCloseSearch={closeSearch}
@@ -97,7 +93,7 @@ export default function App() {
         onCloseJobEdit={() => navigate('/')}
       />
       {templateStudioOpen && (
-        <div className="fixed inset-0 z-[100]">
+        <div data-shortcut-overlay="true" className="fixed inset-0 z-[100]">
           <TemplateStudioPage onClose={() => setTemplateStudioOpen(false)} />
         </div>
       )}

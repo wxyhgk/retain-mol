@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
+import { isWorkspaceShortcutBlocked } from '@/domain/shortcutScope'
+import { isMoleculeHistoryTracking } from '@/domain/viewer/history'
 import {
   copySelectionToEditorClipboard,
-  isTextEditingTarget,
   pasteEditorClipboard,
 } from '@/domain/editorCommands'
 import { pasteMoleculeText } from '@/features/molecule-placement'
@@ -9,7 +10,7 @@ import { pasteMoleculeText } from '@/features/molecule-placement'
 export function useAppClipboardShortcuts() {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (isTextEditingTarget(event.target)) return
+      if (isWorkspaceShortcutBlocked(event) || !isMoleculeHistoryTracking()) return
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'c') return
       if (!copySelectionToEditorClipboard()) return
       event.preventDefault()
@@ -20,7 +21,7 @@ export function useAppClipboardShortcuts() {
 
   useEffect(() => {
     const handler = (event: ClipboardEvent) => {
-      if (isTextEditingTarget(event.target)) return
+      if (isWorkspaceShortcutBlocked(event) || !isMoleculeHistoryTracking()) return
       if (pasteEditorClipboard()) {
         event.preventDefault()
         return

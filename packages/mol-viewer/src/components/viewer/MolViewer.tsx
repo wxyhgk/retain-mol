@@ -193,7 +193,7 @@ function MolViewerContent({
   })
 
   useViewerRuntimeBridge(renderer, gridVisibleProp)
-  useSketchPlaneShortcuts(rendererRef, !editingEnabled)
+  useSketchPlaneShortcuts(rendererRef, containerRef, !editingEnabled)
   useEffect(() => {
     if (!renderer) return
     renderer.setReactionHighlights(reactionHighlights)
@@ -219,7 +219,7 @@ function MolViewerContent({
       className={`relative w-full h-full${className ? ` ${className}` : ''}`}
       style={{ cursor: baseCursor, ...style }}
     >
-      <canvas ref={canvasRef} className="w-full h-full block" />
+      <canvas ref={canvasRef} aria-label="3D 分子视图" tabIndex={0} onPointerDownCapture={event => event.currentTarget.focus({ preventScroll: true })} className="w-full h-full block" />
       <MolViewerOverlays
         renderer={renderer}
         activeTool={activeTool}

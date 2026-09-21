@@ -1,3 +1,4 @@
+import { isViewerShortcutBlocked } from '../../keyboardScope'
 import * as THREE from 'three'
 import { BOND_PAIR_GIZMO } from '../../../config/bondPairGizmo.config'
 import { RENDER_ORDER } from '../../../config/render.config'
@@ -241,7 +242,7 @@ export class BondPairAlignmentGizmoController {
     renderer.canvas.addEventListener('click', this.onCaptureClick, { capture: true })
     window.addEventListener('pointermove', this.onPointerMoveDrag)
     window.addEventListener('pointerup', this.onPointerUp)
-    window.addEventListener('keydown', this.onKeyDown)
+    window.addEventListener('keydown', this.onKeyDown, true)
     window.addEventListener('blur', this.onWindowBlur)
   }
 
@@ -292,7 +293,7 @@ export class BondPairAlignmentGizmoController {
     canvas.removeEventListener('click', this.onCaptureClick, { capture: true } as AddEventListenerOptions)
     window.removeEventListener('pointermove', this.onPointerMoveDrag)
     window.removeEventListener('pointerup', this.onPointerUp)
-    window.removeEventListener('keydown', this.onKeyDown)
+    window.removeEventListener('keydown', this.onKeyDown, true)
     window.removeEventListener('blur', this.onWindowBlur)
     canvas.style.cursor = ''
     this.renderer.scene.remove(this.root)
@@ -574,7 +575,7 @@ export class BondPairAlignmentGizmoController {
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || !this.drag) return
+    if (event.key !== 'Escape' || !this.drag || isViewerShortcutBlocked(event)) return
     event.preventDefault()
     this.cancelDrag()
   }

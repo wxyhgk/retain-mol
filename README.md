@@ -46,6 +46,8 @@ npm run verify:viewer-consumer  # tarball 安装、公共 API 回归、消费者
 
 外部项目接入步骤、实例边界及浏览器验收状态见
 [mol-viewer 独立宿主接入](docs/mol-viewer/consumer-integration.md)。
+应用检查器布局、键盘作用域及本次验收边界见
+[检查器与快捷键](docs/UI/inspector-and-shortcuts.md)。
 
 几点约定：
 

@@ -99,7 +99,7 @@ export function LabeledNumberInput({
       <span className="mb-1 block truncate text-[10px] font-medium text-muted-foreground">{label}</span>
       <span className="flex h-8 min-w-0 items-center overflow-hidden rounded-md border border-border bg-background focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
         <input
-          type="text" inputMode="decimal" aria-label={label}
+          type="text" inputMode="decimal" aria-label={label} data-escape="cancel-edit"
           value={editing ? draft : formatValue(value)}
           onChange={event => setDraft(event.target.value)} onBlur={commit}
           onFocus={event => { setDraft(formatValue(value)); setEditing(true); event.currentTarget.select() }}

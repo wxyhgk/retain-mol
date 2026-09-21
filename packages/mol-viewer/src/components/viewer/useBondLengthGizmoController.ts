@@ -1,3 +1,4 @@
+import { isViewerShortcutBlocked } from '../../viewer/keyboardScope'
 import { useCallback, useEffect, useMemo, useRef, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { Phase } from '../../lib/animation'
@@ -93,12 +94,12 @@ export function useBondLengthGizmoController({ renderer, enabled, readOnly, atom
 
   useEffect(() => {
     const cancelOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !dragRef.current) return
+      if (event.key !== 'Escape' || !dragRef.current || isViewerShortcutBlocked(event)) return
       event.preventDefault()
       stopDrag(true)
     }
-    window.addEventListener('keydown', cancelOnEscape)
-    return () => window.removeEventListener('keydown', cancelOnEscape)
+    window.addEventListener('keydown', cancelOnEscape, true)
+    return () => window.removeEventListener('keydown', cancelOnEscape, true)
   }, [stopDrag])
 
   useEffect(() => () => stopDrag(true), [stopDrag])

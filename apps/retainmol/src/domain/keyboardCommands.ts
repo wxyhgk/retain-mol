@@ -1,25 +1,18 @@
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { activateAppWorkspaceTool } from './workspaceToolController'
-
-export function isTextEditingTarget(target: EventTarget | null) {
-  const isInput = typeof HTMLInputElement !== 'undefined' && target instanceof HTMLInputElement
-  const isTextArea = typeof HTMLTextAreaElement !== 'undefined' && target instanceof HTMLTextAreaElement
-  const isEditable = typeof HTMLElement !== 'undefined'
-    && target instanceof HTMLElement
-    && target.isContentEditable
-  return isInput || isTextArea || isEditable
-}
+import { isWorkspaceShortcutBlocked } from './shortcutScope'
+import { isMoleculeHistoryTracking } from './viewer/history'
+export { isTextEditingTarget } from './shortcutScope'
 
 export function handleEditorShortcut(
   e: KeyboardEvent,
   handlers: {
     undo: () => void
     redo: () => void
-    openSearch: () => void
   }
 ) {
-  if (isTextEditingTarget(e.target)) return false
+  if (isWorkspaceShortcutBlocked(e) || !isMoleculeHistoryTracking()) return false
 
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
     e.preventDefault()
@@ -39,52 +32,60 @@ export function handleEditorShortcut(
     return true
   }
 
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-    e.preventDefault()
-    handlers.openSearch()
-    return true
-  }
-
   const editor = useEditorStore.getState()
   const molecule = useMoleculeStore.getState()
   const plainShortcut = !e.metaKey && !e.ctrlKey && !e.altKey
 
   if (plainShortcut && e.key.toLowerCase() === 's') {
+    e.preventDefault()
     activateAppWorkspaceTool('select')
     return true
   }
 
   if (plainShortcut && e.key.toLowerCase() === 'd') {
+    e.preventDefault()
     activateAppWorkspaceTool('draw')
     return true
   }
 
   if (plainShortcut && e.key.toLowerCase() === 'v') {
+    e.preventDefault()
     activateAppWorkspaceTool('move')
     return true
   }
 
   if (plainShortcut && e.key.toLowerCase() === 'm') {
+    e.preventDefault()
     activateAppWorkspaceTool('measure')
     return true
   }
 
   if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+    if (typeof Element !== 'undefined' && e.target instanceof Element && e.target.closest('button, a, [role="button"]')) return false
     if (editor.activeTool === 'measure') {
+      e.preventDefault()
       editor.commitPendingMeasure()
       return true
     }
   }
 
   if (e.key === 'Escape') {
+    e.preventDefault()
+    if (editor.sketchPlane) {
+      editor.setSketchPlane(null)
+      editor.flashHint('已退出平面模式')
+      return true
+    }
     if (editor.activeTool === 'measure' && editor.pendingAtomIds.length > 0) {
       editor.cancelPendingMeasure()
+      return true
     }
     activateAppWorkspaceTool('select')
     return true
   }
 
-  if (e.key === 'Delete' || e.key === 'Backspace') {
+  if (plainShortcut && (e.key === 'Delete' || e.key === 'Backspace')) {
+    e.preventDefault()
     molecule.removeSelected()
     return true
   }

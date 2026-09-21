@@ -83,7 +83,7 @@ export interface EditSlice {
     | { ok: false; code: AlignBondPairFailureCode; reason: string }
   autoInferBonds:         () => void
   addHydrogens:           (atomId?: string) => void
-  /** 去显式 H（autoAddHydrogens 的逆操作）：默认全部分子；onlySelected 且有选中时只去选中原子上的 H */
+  /** 去显式 H（autoAddHydrogens 的逆操作）：默认全部分子；onlySelected 仅去选中原子上的 H，空选择或无效目标不修改分子 */
   removeHydrogens:        (options?: { onlySelected?: boolean }) => void
   /** 力场几何清理（MMFF94）：弛豫坐标到物理合理（一步 undo，不动拓扑）。返回是否成功 */
   cleanupGeometry:        () => { ok: boolean; reason?: string }

@@ -1,28 +1,20 @@
-import { useEffect, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@retainmol/ui-kit'
 import { MeasureSection, SelectionInspector } from '@/features/inspector'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { WorkspaceDisplayPanel, WorkspaceScenePanel } from '@/features/workspace-panels'
 import { DrawPanel } from '@/features/build-palette/components/workspace/DrawPanel'
 import { useBuildPaletteController } from '@/features/build-palette/model/useBuildPaletteController'
-import { cn } from '@/lib/utils'
+import { useInspectorStore, type InspectorTab } from '@/domain/inspectorStore'
 
 export default function RightPanel() {
   const buildController = useBuildPaletteController()
-  const isDraw = buildController.workspaceTool === 'draw'
-  const [activeTab, setActiveTab] = useState<string>(isDraw ? 'draw' : 'inspector')
-
-  useEffect(() => {
-    // eslint-disable-next-line
-    if (isDraw) setActiveTab('draw')
-  }, [isDraw])
-
-  const cols = isDraw ? 'grid-cols-4' : 'grid-cols-3'
+  const activeTab = useInspectorStore(state => state.tab)
+  const setActiveTab = (tab: string) => useInspectorStore.setState({ tab: tab as InspectorTab })
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
       <div className="shrink-0 border-b border-border px-2">
-        <TabsList className={cn('grid h-10 w-full rounded-none bg-transparent p-0', cols)}>
+        <TabsList className="grid h-10 w-full grid-cols-4 rounded-none bg-transparent p-0">
           <PanelTab value="draw" label="Draw" />
           <PanelTab value="inspector" label="Inspector" />
           <PanelTab value="scene" label="Scene" />

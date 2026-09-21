@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Atom, Command, PanelRight, Save, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,9 @@ import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import { useLocalSaveStore } from '@/domain/localMoleculeSave'
 import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { INSPECTOR_ID, INSPECTOR_TOGGLE_ID } from '@/domain/inspectorStore'
+import { isWorkspaceShortcutBlocked } from '@/domain/shortcutScope'
+import { isMoleculeHistoryTracking } from '@/domain/viewer/history'
 import { selectAppBusyMessage, useAppTaskStore } from '@/store/appTaskStore'
 
 export interface ToolbarProps {
@@ -32,10 +35,16 @@ export function ToolbarView({
   fileIO,
 }: ToolbarViewProps) {
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const paletteTriggerRef = useRef<HTMLButtonElement>(null)
+  const openPalette = () => {
+    if (!isMoleculeHistoryTracking()) return
+    setPaletteOpen(true)
+  }
 
   // Ctrl+K / Cmd+K 打开命令面板；Ctrl+S 保存到浏览器（编辑器唯一的保存位置）
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isWorkspaceShortcutBlocked(event) || !isMoleculeHistoryTracking()) return
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
         saveActiveMoleculeToBrowser()
@@ -43,7 +52,7 @@ export function ToolbarView({
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
-        setPaletteOpen(value => !value)
+        setPaletteOpen(true)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -83,7 +92,11 @@ export function ToolbarView({
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground"
-              onClick={() => setPaletteOpen(true)}
+              ref={paletteTriggerRef}
+              aria-label="命令面板"
+              aria-haspopup="dialog"
+              aria-expanded={paletteOpen}
+              onClick={openPalette}
             >
               <Search size={14} />
               <span className="hidden sm:inline">搜索</span>
@@ -100,8 +113,11 @@ export function ToolbarView({
                   ? 'bg-primary text-primary-foreground ring-1 ring-primary hover:bg-primary/90'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
               )}
+              id={INSPECTOR_TOGGLE_ID}
+              aria-label="检查器"
+              aria-controls={INSPECTOR_ID}
               aria-expanded={showInspector}
-              onClick={onToggleInspector}
+              onClick={() => { if (isMoleculeHistoryTracking()) onToggleInspector() }}
             >
               <PanelRight size={14} />
               <span className="hidden sm:inline">检查器</span>
@@ -111,6 +127,7 @@ export function ToolbarView({
       </header>
 
       <EditorCommandPalette
+        onRestoreFocus={() => paletteTriggerRef.current?.focus()}
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
         history={history}
@@ -133,13 +150,14 @@ function saveActiveMoleculeToBrowser(): void {
 }
 
 function EditorCommandPalette({
+  onRestoreFocus,
   open,
   onOpenChange,
   history,
   fileIO,
-  onOpenTemplateStudio,
   onSearchOpen,
 }: {
+  onRestoreFocus: () => void
   open: boolean
   onOpenChange: (open: boolean) => void
   history: ToolbarModel['history']
@@ -148,6 +166,9 @@ function EditorCommandPalette({
   onSearchOpen: () => void
 }) {
   const [query, setQuery] = useState('')
+  const commandListRef = useRef<HTMLDivElement>(null)
+  const queryRef = useRef<HTMLInputElement>(null)
+  const [nextCommandOpensSurface, setNextCommandOpensSurface] = useState(false)
   const palette = useUiPaletteStore(state => state.palette)
   const setPalette = useUiPaletteStore(state => state.setPalette)
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
@@ -155,12 +176,13 @@ function EditorCommandPalette({
   const busyMessage = useAppTaskStore(selectAppBusyMessage)
   const isBusy = Boolean(busyMessage)
 
-  const run = useCallback((fn: () => void) => {
+  const run = useCallback((item: CommandItem) => {
+    setNextCommandOpensSurface(item.opensSurface === true)
     onOpenChange(false)
     setQuery('')
-    fn()
+    item.onRun()
   }, [onOpenChange])
-  type CommandItem = { label: string; hint?: string; disabled?: boolean; onRun: () => void }
+  type CommandItem = { label: string; hint?: string; disabled?: boolean; opensSurface?: boolean; onRun: () => void }
   const groups = useMemo<Array<{ title: string; items: CommandItem[] }>>(() => {
     const q = query.trim().toLowerCase()
     const filter = (label: string) => !q || label.toLowerCase().includes(q)
@@ -189,8 +211,8 @@ function EditorCommandPalette({
       {
         title: '分子与搜索',
         items: [
-          { label: 'PubChem 搜索', hint: '⌘K', onRun: () => run(onSearchOpen) },
-          { label: '保存到浏览器 (Ctrl+S)', hint: 'Ctrl+S', disabled: isEmpty, onRun: () => run(() => saveActiveMoleculeToBrowser()) },
+          { label: 'PubChem 搜索', opensSurface: true, onRun: onSearchOpen },
+          { label: '保存到浏览器 (Ctrl+S)', hint: 'Ctrl+S', disabled: isEmpty, onRun: () => saveActiveMoleculeToBrowser() },
         ].filter(item => filter(item.label)),
       },
       {
@@ -200,11 +222,27 @@ function EditorCommandPalette({
         ].filter(item => filter(item.label)),
       },
     ].filter(group => group.items.length > 0)
-  }, [query, history, fileIO, onOpenTemplateStudio, onSearchOpen, palette, setPalette, run, isEmpty])
+  }, [query, history, fileIO, onSearchOpen, palette, setPalette, isEmpty])
 
   return (
     <Dialog open={open} onOpenChange={value => { onOpenChange(value); if (!value) setQuery('') }}>
-      <DialogContent aria-busy={isBusy || undefined} className="max-w-lg gap-0 overflow-hidden p-0">
+      <DialogContent
+        onCloseAutoFocus={event => {
+          event.preventDefault()
+          if (!nextCommandOpensSurface) onRestoreFocus()
+          setNextCommandOpensSurface(false)
+        }}
+        onKeyDown={event => {
+          if (event.defaultPrevented || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return
+          const buttons = Array.from(commandListRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
+          if (!buttons.length) return
+          event.preventDefault()
+          const current = buttons.indexOf(document.activeElement as HTMLButtonElement)
+          const next = current < 0 ? (event.key === 'ArrowDown' ? 0 : buttons.length - 1) : current + (event.key === 'ArrowDown' ? 1 : -1)
+          if (next < 0) queryRef.current?.focus()
+          else buttons[next % buttons.length]?.focus()
+        }}
+        aria-busy={isBusy || undefined} className="max-w-lg gap-0 overflow-hidden p-0">
         <DialogHeader className="sr-only">
           <DialogTitle>命令面板</DialogTitle>
           <DialogDescription>搜索并执行编辑器命令</DialogDescription>
@@ -212,15 +250,22 @@ function EditorCommandPalette({
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           <Command size={14} className="shrink-0 text-muted-foreground" />
           <Input
+            ref={queryRef}
+            aria-label="搜索命令"
             autoFocus
             placeholder="输入命令，如 导入、导出、撤销…"
             value={query}
             onChange={event => setQuery(event.target.value)}
+            onKeyDown={event => {
+              if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+              const first = groups.flatMap(group => group.items).find(item => !item.disabled)
+              if (first) { event.preventDefault(); run(first) }
+            }}
             className="h-8 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0"
           />
         </div>
         <ScrollArea className="max-h-[50vh]">
-          <div className="p-2">
+          <div ref={commandListRef} className="p-2">
             {groups.length === 0 ? (
               <div className="py-8 text-center text-xs text-muted-foreground">无匹配命令</div>
             ) : (
@@ -235,8 +280,8 @@ function EditorCommandPalette({
                         disabled={item.disabled}
                         aria-disabled={item.disabled || undefined}
                         aria-busy={isBusy || undefined}
-                        onClick={() => run(item.onRun)}
-                        className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => run(item)}
+                        className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:outline focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <span>{item.label}</span>
                         {item.hint && <span className="ml-2 shrink-0 font-mono text-xs text-muted-foreground">{item.hint}</span>}
@@ -250,7 +295,7 @@ function EditorCommandPalette({
           </div>
         </ScrollArea>
         <div className="flex items-center justify-between border-t border-border bg-background px-4 py-2 text-xs text-muted-foreground">
-          <span>↑↓ 选择 · 回车 执行 · Esc 关闭</span>
+          <span>↑↓ / Tab 选择 · 回车 执行 · Esc 关闭</span>
           <span>⌘K 快速打开</span>
         </div>
       </DialogContent>

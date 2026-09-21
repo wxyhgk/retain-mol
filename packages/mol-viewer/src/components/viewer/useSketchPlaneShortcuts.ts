@@ -1,5 +1,5 @@
+import { isViewerShortcutBlocked } from '../../viewer/keyboardScope'
 import { useEffect, type RefObject } from 'react'
-import { toolCan } from '../../config/toolCapabilities.config'
 import { fitPlane } from '../../lib/builder/geometry/plane'
 import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
@@ -8,32 +8,37 @@ import { selectActiveMoleculeOrEmpty } from '../../store/moleculeStore'
 /** Owns the keyboard-only sketch-plane workflow so MolViewer stays declarative. */
 export function useSketchPlaneShortcuts(
   rendererRef: RefObject<ThreeRendererPort | null>,
+  containerRef: RefObject<HTMLDivElement | null>,
   readOnly: boolean,
 ) {
   const { editorStore, moleculeStore } = useViewerRuntimeServices()
 
   useEffect(() => {
-    if (readOnly) return
+    const container = containerRef.current
+    if (readOnly || !container) return
     let lastP = 0
 
     const onKey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
+      if (isViewerShortcutBlocked(event) || !moleculeStore.temporal.getState().isTracking) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
 
       const editor = editorStore.getState()
       const { sketchPlane, setSketchPlane, flashHint } = editor
 
       if (event.key === 'Escape' && sketchPlane) {
+        event.preventDefault()
         setSketchPlane(null)
         flashHint('已退出平面模式')
         return
       }
 
-      if (event.key === 'Escape') {
-        if (toolCan(editor.activeTool, 'canEdit') && editor.brushArmed && editor.pendingAtomIds.length === 0) {
-          editor.disarmBrush()
-          flashHint('选择模式 · 点元素/片段恢复构建')
-        }
+      if (event.key === 'Escape' && editor.brushArmed && editor.pendingAtomIds.length === 0) {
+        // A host may own tool switching at window bubble. Fall back only if unclaimed.
+        queueMicrotask(() => {
+          if (!event.defaultPrevented && moleculeStore.temporal.getState().isTracking) {
+            editorStore.getState().disarmBrush()
+          }
+        })
         return
       }
 
@@ -44,6 +49,7 @@ export function useSketchPlaneShortcuts(
         return
       }
       lastP = 0
+      event.preventDefault()
 
       if (sketchPlane) {
         setSketchPlane(null)
@@ -74,7 +80,7 @@ export function useSketchPlaneShortcuts(
       )
     }
 
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [readOnly, editorStore, moleculeStore, rendererRef])
+    container.addEventListener('keydown', onKey)
+    return () => container.removeEventListener('keydown', onKey)
+  }, [readOnly, editorStore, moleculeStore, rendererRef, containerRef])
 }

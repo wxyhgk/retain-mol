@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { Search, Loader2, AlertCircle } from 'lucide-react'
 import { fetchCompoundSdf } from '@retainmol/mol-viewer/pubchem'
 import type { Molecule } from '@retainmol/mol-viewer/core'
 import { parseSdf, is2D } from '@retainmol/mol-viewer/io'
 import { placeMoleculeInViewer } from '@/features/molecule-placement'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@retainmol/ui-kit'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -19,14 +20,6 @@ export default function PubChemSearch({ onClose }: Props) {
   const [is2DWarning, setIs2DWarning] = useState(false)
   const [fetchedMol, setFetchedMol] = useState<Molecule | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [onClose])
 
   const handleSearch = async () => {
     if (!query.trim() || status === 'loading') return
@@ -59,15 +52,13 @@ export default function PubChemSearch({ onClose }: Props) {
   }
 
   return (
-    <>
-      {/* 遮罩 */}
-      <div
-        className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-[1px]"
-        onClick={onClose}
-      />
-
-      {/* 搜索框：居中偏上 */}
-      <div role="dialog" aria-modal="true" aria-label="搜索 PubChem 分子" className="fixed left-1/2 top-[20%] z-[61] w-[min(480px,calc(100vw-24px))] -translate-x-1/2">
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0 pt-7" onCloseAutoFocus={event => {
+        event.preventDefault()
+        document.querySelector<HTMLButtonElement>('button[aria-label="命令面板"]')?.focus()
+      }}>
+        <DialogTitle className="sr-only">搜索 PubChem 分子</DialogTitle>
+        <DialogDescription className="sr-only">输入名称或 CAS 号，预览搜索结果后导入。</DialogDescription>
         <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
 
           {/* 输入行 */}
@@ -78,6 +69,7 @@ export default function PubChemSearch({ onClose }: Props) {
             }
             <input
               ref={inputRef}
+              aria-label="分子名称或 CAS 号"
               autoFocus
               value={query}
               onChange={e => { setQuery(e.target.value); setStatus('idle'); setErrorMsg('') }}
@@ -147,7 +139,7 @@ export default function PubChemSearch({ onClose }: Props) {
             </div>
           </div>
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   )
 }
