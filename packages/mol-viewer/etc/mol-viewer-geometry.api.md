@@ -57,6 +57,9 @@ export function calcDihedral(a1: XYZ, a2: XYZ, a3: XYZ, a4: XYZ): number;
 // @public
 export function calcDistance(a1: XYZ, a2: XYZ): number;
 
+// @public
+export function compileRibbonGuideConstraints(molecule: Molecule, region: GeometryRibbonRegion, guide: GeometryRibbonGuide, options: GeometryRibbonGuideConstraintOptions): GeometryRibbonGuideConstraintsResult;
+
 // @public (undocumented)
 export interface ConstrainedGeometryRequest {
     readonly angleToleranceDegrees?: number;
@@ -65,6 +68,7 @@ export interface ConstrainedGeometryRequest {
     readonly constraints: readonly GeometryConstraint[];
     // (undocumented)
     readonly maxIterations?: number;
+    readonly motion?: GeometryMotionOptions;
     readonly movableAtomIds: readonly string[];
     readonly nonbondedMinimumDistance?: number;
 }
@@ -75,6 +79,7 @@ export interface ConstrainedGeometryResult {
     // (undocumented)
     readonly iterations: number;
     readonly molecule: Molecule;
+    readonly motionReport?: GeometryMotionReport;
     // (undocumented)
     readonly movedAtomIds: readonly string[];
     // (undocumented)
@@ -110,6 +115,9 @@ export interface CoordinationSiteAssignment {
     // (undocumented)
     readonly siteId: string;
 }
+
+// @public
+export function createRibbonGuide(request: GeometryRibbonGuideRequest): GeometryRibbonGuideResult;
 
 // @public (undocumented)
 export type GeometryConstraint = (GeometryConstraintBase & {
@@ -200,6 +208,156 @@ export interface GeometryConstraintReport {
     readonly validInput: boolean;
 }
 
+// @public (undocumented)
+export interface GeometryMotionIssue {
+    // (undocumented)
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly bondIds: readonly string[];
+    // (undocumented)
+    readonly distance?: number;
+    // (undocumented)
+    readonly kind: 'atom-atom' | 'atom-bond' | 'bond-bond' | 'invalid-input' | 'budget-exhausted';
+    // (undocumented)
+    readonly message: string;
+    // (undocumented)
+    readonly sampleTime?: number;
+    // (undocumented)
+    readonly timeInterval?: readonly [number, number];
+}
+
+// @public
+export interface GeometryMotionOptions {
+    readonly maxChecks?: number;
+    readonly maxDepth?: number;
+    readonly minAtomBondDistance?: number;
+    readonly minAtomDistance?: number;
+    readonly minBondDistance?: number;
+}
+
+// @public
+export interface GeometryMotionReport {
+    // (undocumented)
+    readonly checkedPairs: number;
+    // (undocumented)
+    readonly evaluations: number;
+    // (undocumented)
+    readonly issues: readonly GeometryMotionIssue[];
+    readonly pairVisits: number;
+    // (undocumented)
+    readonly safe: boolean;
+    // (undocumented)
+    readonly status: 'safe' | 'collision' | 'indeterminate' | 'invalid-input';
+    // (undocumented)
+    readonly trajectory: 'linear';
+    // (undocumented)
+    readonly unit: 'angstrom';
+}
+
+// @public
+export interface GeometryRibbonGuide extends GeometryRibbonGuideRequest {
+    // (undocumented)
+    readonly closure: 'parallel' | 'crossed';
+    // (undocumented)
+    readonly kind: 'circular-ribbon-guide';
+    readonly sections: readonly GeometryRibbonGuideSection[];
+    // (undocumented)
+    readonly unit: 'angstrom';
+}
+
+// @public (undocumented)
+export interface GeometryRibbonGuideConstraintOptions {
+    // (undocumented)
+    readonly tolerance: number;
+    // (undocumented)
+    readonly weight?: number;
+}
+
+// @public (undocumented)
+export type GeometryRibbonGuideConstraintsResult = {
+    readonly ok: true;
+    readonly atomIds: readonly string[];
+    readonly constraints: readonly GeometryConstraint[];
+} | {
+    readonly ok: false;
+    readonly issues: readonly GeometryRibbonIssue[];
+};
+
+// @public (undocumented)
+export interface GeometryRibbonGuideRequest {
+    readonly halfTwists: number;
+    // (undocumented)
+    readonly halfWidth: number;
+    // (undocumented)
+    readonly radius: number;
+    // (undocumented)
+    readonly sectionCount: number;
+}
+
+// @public (undocumented)
+export type GeometryRibbonGuideResult = {
+    readonly ok: true;
+    readonly guide: GeometryRibbonGuide;
+} | {
+    readonly ok: false;
+    readonly issues: readonly GeometryRibbonIssue[];
+};
+
+// @public (undocumented)
+export interface GeometryRibbonGuideSection {
+    // (undocumented)
+    readonly center: Vector3Data;
+    // (undocumented)
+    readonly left: Vector3Data;
+    // (undocumented)
+    readonly right: Vector3Data;
+}
+
+// @public (undocumented)
+export interface GeometryRibbonIssue {
+    // (undocumented)
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly code: 'invalid-input' | 'invalid-region' | 'missing-rail-bond' | 'invalid-guide' | 'degenerate-geometry';
+    // (undocumented)
+    readonly message: string;
+    // (undocumented)
+    readonly sectionIndex?: number;
+}
+
+// @public (undocumented)
+export interface GeometryRibbonMeasurements extends GeometryRibbonValidation {
+    readonly turnsDegrees: readonly (number | null)[];
+    // (undocumented)
+    readonly widthsAngstrom: readonly (number | null)[];
+}
+
+// @public (undocumented)
+export interface GeometryRibbonRegion {
+    readonly closure: 'open' | 'parallel' | 'crossed';
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly sections: readonly GeometryRibbonSection[];
+}
+
+// @public
+export interface GeometryRibbonSection {
+    // (undocumented)
+    readonly leftAtomId: string;
+    // (undocumented)
+    readonly rightAtomId: string;
+}
+
+// @public (undocumented)
+export interface GeometryRibbonValidation {
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly issues: readonly GeometryRibbonIssue[];
+    // (undocumented)
+    readonly ok: boolean;
+}
+
 // @public
 export function getConnectedFragment(atoms: readonly {
     id: string;
@@ -220,6 +378,9 @@ export interface HelicalPathAnalysis {
     readonly turnsDegrees: readonly (number | null)[];
 }
 
+// @public
+export function measureRibbonGeometry(molecule: Molecule, region: GeometryRibbonRegion): GeometryRibbonMeasurements;
+
 // @public (undocumented)
 export interface Molecule {
     // (undocumented)
@@ -238,6 +399,12 @@ export function splitConnectedComponents(mol: Molecule): Molecule[];
 
 // @public
 export function validateGeometryConstraints(molecule: Molecule, constraints: readonly GeometryConstraint[]): GeometryConstraintReport;
+
+// @public
+export function validateGeometryMotion(before: Molecule, after: Molecule, options?: GeometryMotionOptions): GeometryMotionReport;
+
+// @public
+export function validateRibbonRegion(molecule: Molecule, region: GeometryRibbonRegion): GeometryRibbonValidation;
 
 // @public
 export interface Vector3Data {

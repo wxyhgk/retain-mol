@@ -156,6 +156,9 @@ export function compareExpectedEffect(expected: ExpectedEffectCompileResult, act
 // @public
 export function compileExpectedEffect(molecule: Molecule, plan: Pick<EditPlan, 'planId' | 'commands'>): ExpectedEffectCompileResult;
 
+// @public
+export function compileRibbonGuideConstraints(molecule: Molecule, region: GeometryRibbonRegion, guide: GeometryRibbonGuide, options: GeometryRibbonGuideConstraintOptions): GeometryRibbonGuideConstraintsResult;
+
 // @public (undocumented)
 export function computeCanonicalMoleculeDigest(molecule: Molecule): string;
 
@@ -175,10 +178,12 @@ export type ConstrainedGeometryPreview = {
     readonly nextRevision: string;
     readonly iterations: number;
     readonly movedAtomIds: readonly string[];
+    readonly motionReport?: GeometryMotionReport;
 } | {
     readonly ok: false;
     readonly issues: readonly ModelingIssue[];
     readonly report?: GeometryConstraintReport;
+    readonly motionReport?: GeometryMotionReport;
 };
 
 // @public (undocumented)
@@ -197,6 +202,7 @@ export interface ConstrainedGeometryRequest {
     readonly constraints: readonly GeometryConstraint[];
     // (undocumented)
     readonly maxIterations?: number;
+    readonly motion?: GeometryMotionOptions;
     readonly movableAtomIds: readonly string[];
     readonly nonbondedMinimumDistance?: number;
 }
@@ -282,6 +288,13 @@ export const constrainedGeometryRequestSchema: z.ZodObject<{
     angleToleranceDegrees: z.ZodOptional<z.ZodNumber>;
     nonbondedMinimumDistance: z.ZodOptional<z.ZodNumber>;
     maxIterations: z.ZodOptional<z.ZodNumber>;
+    motion: z.ZodOptional<z.ZodObject<{
+        minAtomDistance: z.ZodOptional<z.ZodNumber>;
+        minAtomBondDistance: z.ZodOptional<z.ZodNumber>;
+        minBondDistance: z.ZodOptional<z.ZodNumber>;
+        maxDepth: z.ZodOptional<z.ZodNumber>;
+        maxChecks: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -290,6 +303,7 @@ export interface ConstrainedGeometryResult {
     // (undocumented)
     readonly iterations: number;
     readonly molecule: Molecule;
+    readonly motionReport?: GeometryMotionReport;
     // (undocumented)
     readonly movedAtomIds: readonly string[];
     // (undocumented)
@@ -334,6 +348,9 @@ export function createCanonicalMoleculeSnapshot(molecule: Molecule): CanonicalMo
 
 // @public
 export function createHeadlessModelingContext(input: Molecule, options?: HeadlessModelingOptions): ModelingContext;
+
+// @public
+export function createRibbonGuide(request: GeometryRibbonGuideRequest): GeometryRibbonGuideResult;
 
 // @public (undocumented)
 export function dryRunEditPlan(context: ModelingContext, input: EditPlan | unknown): ModelingDryRunResult;
@@ -493,6 +510,13 @@ export const editPlanSchema: z.ZodObject<{
             angleToleranceDegrees: z.ZodOptional<z.ZodNumber>;
             nonbondedMinimumDistance: z.ZodOptional<z.ZodNumber>;
             maxIterations: z.ZodOptional<z.ZodNumber>;
+            motion: z.ZodOptional<z.ZodObject<{
+                minAtomDistance: z.ZodOptional<z.ZodNumber>;
+                minAtomBondDistance: z.ZodOptional<z.ZodNumber>;
+                minBondDistance: z.ZodOptional<z.ZodNumber>;
+                maxDepth: z.ZodOptional<z.ZodNumber>;
+                maxChecks: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strict>>;
         }, z.core.$strict>;
     }, z.core.$strict>, z.ZodObject<{
         kind: z.ZodLiteral<"atom.add">;
@@ -872,6 +896,187 @@ export const geometryConstraintSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strict>], "kind">;
 
 // @public (undocumented)
+export interface GeometryMotionIssue {
+    // (undocumented)
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly bondIds: readonly string[];
+    // (undocumented)
+    readonly distance?: number;
+    // (undocumented)
+    readonly kind: 'atom-atom' | 'atom-bond' | 'bond-bond' | 'invalid-input' | 'budget-exhausted';
+    // (undocumented)
+    readonly message: string;
+    // (undocumented)
+    readonly sampleTime?: number;
+    // (undocumented)
+    readonly timeInterval?: readonly [number, number];
+}
+
+// @public
+export interface GeometryMotionOptions {
+    readonly maxChecks?: number;
+    readonly maxDepth?: number;
+    readonly minAtomBondDistance?: number;
+    readonly minAtomDistance?: number;
+    readonly minBondDistance?: number;
+}
+
+// @public
+export const geometryMotionOptionsSchema: z.ZodObject<{
+    minAtomDistance: z.ZodOptional<z.ZodNumber>;
+    minAtomBondDistance: z.ZodOptional<z.ZodNumber>;
+    minBondDistance: z.ZodOptional<z.ZodNumber>;
+    maxDepth: z.ZodOptional<z.ZodNumber>;
+    maxChecks: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strict>;
+
+// @public
+export interface GeometryMotionReport {
+    // (undocumented)
+    readonly checkedPairs: number;
+    // (undocumented)
+    readonly evaluations: number;
+    // (undocumented)
+    readonly issues: readonly GeometryMotionIssue[];
+    readonly pairVisits: number;
+    // (undocumented)
+    readonly safe: boolean;
+    // (undocumented)
+    readonly status: 'safe' | 'collision' | 'indeterminate' | 'invalid-input';
+    // (undocumented)
+    readonly trajectory: 'linear';
+    // (undocumented)
+    readonly unit: 'angstrom';
+}
+
+// @public
+export interface GeometryRibbonGuide extends GeometryRibbonGuideRequest {
+    // (undocumented)
+    readonly closure: 'parallel' | 'crossed';
+    // (undocumented)
+    readonly kind: 'circular-ribbon-guide';
+    readonly sections: readonly GeometryRibbonGuideSection[];
+    // (undocumented)
+    readonly unit: 'angstrom';
+}
+
+// @public (undocumented)
+export interface GeometryRibbonGuideConstraintOptions {
+    // (undocumented)
+    readonly tolerance: number;
+    // (undocumented)
+    readonly weight?: number;
+}
+
+// @public (undocumented)
+export type GeometryRibbonGuideConstraintsResult = {
+    readonly ok: true;
+    readonly atomIds: readonly string[];
+    readonly constraints: readonly GeometryConstraint[];
+} | {
+    readonly ok: false;
+    readonly issues: readonly GeometryRibbonIssue[];
+};
+
+// @public (undocumented)
+export interface GeometryRibbonGuideRequest {
+    readonly halfTwists: number;
+    // (undocumented)
+    readonly halfWidth: number;
+    // (undocumented)
+    readonly radius: number;
+    // (undocumented)
+    readonly sectionCount: number;
+}
+
+// @public
+export const geometryRibbonGuideRequestSchema: z.ZodObject<{
+    sectionCount: z.ZodNumber;
+    radius: z.ZodNumber;
+    halfWidth: z.ZodNumber;
+    halfTwists: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export type GeometryRibbonGuideResult = {
+    readonly ok: true;
+    readonly guide: GeometryRibbonGuide;
+} | {
+    readonly ok: false;
+    readonly issues: readonly GeometryRibbonIssue[];
+};
+
+// @public (undocumented)
+export interface GeometryRibbonGuideSection {
+    // (undocumented)
+    readonly center: Vector3Data;
+    // (undocumented)
+    readonly left: Vector3Data;
+    // (undocumented)
+    readonly right: Vector3Data;
+}
+
+// @public (undocumented)
+export interface GeometryRibbonIssue {
+    // (undocumented)
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly code: 'invalid-input' | 'invalid-region' | 'missing-rail-bond' | 'invalid-guide' | 'degenerate-geometry';
+    // (undocumented)
+    readonly message: string;
+    // (undocumented)
+    readonly sectionIndex?: number;
+}
+
+// @public (undocumented)
+export interface GeometryRibbonMeasurements extends GeometryRibbonValidation {
+    readonly turnsDegrees: readonly (number | null)[];
+    // (undocumented)
+    readonly widthsAngstrom: readonly (number | null)[];
+}
+
+// @public (undocumented)
+export interface GeometryRibbonRegion {
+    readonly closure: 'open' | 'parallel' | 'crossed';
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly sections: readonly GeometryRibbonSection[];
+}
+
+// @public
+export const geometryRibbonRegionSchema: z.ZodObject<{
+    id: z.ZodString;
+    sections: z.ZodArray<z.ZodObject<{
+        leftAtomId: z.ZodString;
+        rightAtomId: z.ZodString;
+    }, z.core.$strict>>;
+    closure: z.ZodEnum<{
+        open: "open";
+        parallel: "parallel";
+        crossed: "crossed";
+    }>;
+}, z.core.$strict>;
+
+// @public
+export interface GeometryRibbonSection {
+    // (undocumented)
+    readonly leftAtomId: string;
+    // (undocumented)
+    readonly rightAtomId: string;
+}
+
+// @public (undocumented)
+export interface GeometryRibbonValidation {
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly issues: readonly GeometryRibbonIssue[];
+    // (undocumented)
+    readonly ok: boolean;
+}
+
+// @public (undocumented)
 export const HEADLESS_MODELING_OBJECT_ID = "headless-modeling-object";
 
 // @public (undocumented)
@@ -903,6 +1108,9 @@ export interface HelicalPathAnalysis {
 
 // @public (undocumented)
 export function isExpectedEffectCommandSupported(kind: ModelingCommandKind): kind is ExpectedEffectSupportedCommand['kind'];
+
+// @public
+export function measureRibbonGeometry(molecule: Molecule, region: GeometryRibbonRegion): GeometryRibbonMeasurements;
 
 // @public (undocumented)
 export const MODELING_COMMAND_KINDS: readonly ["atom.add", "atom.replace", "atom.remove", "atom.move", "atom.setCharge", "atom.setRadical", "atom.addHydrogen", "bond.add", "bond.remove", "bond.setOrder", "fragment.attach", "fragment.bridge", "fragment.fuse", "geometry.setBondLength", "geometry.setBondAngle", "geometry.setDihedral", "geometry.rotateGroup", "geometry.solveConstraints"];
@@ -1133,6 +1341,13 @@ export const modelingCommandSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         angleToleranceDegrees: z.ZodOptional<z.ZodNumber>;
         nonbondedMinimumDistance: z.ZodOptional<z.ZodNumber>;
         maxIterations: z.ZodOptional<z.ZodNumber>;
+        motion: z.ZodOptional<z.ZodObject<{
+            minAtomDistance: z.ZodOptional<z.ZodNumber>;
+            minAtomBondDistance: z.ZodOptional<z.ZodNumber>;
+            minBondDistance: z.ZodOptional<z.ZodNumber>;
+            maxDepth: z.ZodOptional<z.ZodNumber>;
+            maxChecks: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>>;
     }, z.core.$strict>;
 }, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"atom.add">;
@@ -1530,6 +1745,9 @@ export interface TorsionMetrics {
 export function validateGeometryConstraints(molecule: Molecule, constraints: readonly GeometryConstraint[]): GeometryConstraintReport;
 
 // @public
+export function validateGeometryMotion(before: Molecule, after: Molecule, options?: GeometryMotionOptions): GeometryMotionReport;
+
+// @public
 export function validateModelingCommandConstraints(command: ModelingCommand, constraints: ModelingConstraints | undefined): ModelingIssue | null;
 
 // @public
@@ -1537,6 +1755,9 @@ export function validateModelingConstraintInvariants(before: Molecule, after: Mo
 
 // @public
 export function validateModelingConstraints(molecule: Molecule, constraints: ModelingConstraints | undefined): readonly ModelingIssue[];
+
+// @public
+export function validateRibbonRegion(molecule: Molecule, region: GeometryRibbonRegion): GeometryRibbonValidation;
 
 // @public
 export interface Vector3Data {

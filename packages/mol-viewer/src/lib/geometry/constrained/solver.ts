@@ -1,5 +1,6 @@
 import type { Atom, Molecule } from '../../model/types'
 import { calcAngle, calcDihedral, calcDistance } from '../measure'
+import { validateGeometryMotion } from '../motion/validation'
 import type {
   ConstrainedGeometryRequest, ConstrainedGeometryResult, GeometryConstraint,
   GeometryConstraintIssue, GeometryConstraintReport,
@@ -154,7 +155,8 @@ function termsFor(
 /**
  * Deterministic, bounded local coordinate deformation. Every original bond
  * (including ring closures) and adjacent angle is constrained. This is not a
- * force field, global conformer generator, or continuous collision guarantee.
+ * force field or global conformer generator. Optional motion validation checks
+ * linear input-to-candidate interpolation, not the numerical search trajectory.
  * Only explicitly movable atoms are variables. Hard feasibility gates success;
  * soft preferences are improved when possible but cannot authorize violations.
  */
@@ -206,6 +208,16 @@ export function solveConstrainedGeometry(
   if (!initialReport.validInput || initialReport.issues.length > 0) {
     const invalid = initialReport.issues.some(issue => issue.code !== 'stereochemistry-violation')
     return failed(molecule, initialReport, 0, 'Starting geometry contains invalid or degenerate measurements.', invalid)
+  }
+  // Validate motion options even when no iterations or movable atoms are
+  // available. A stationary proof is reused only for an unchanged candidate.
+  const initialMotionReport = request.motion === undefined ? undefined
+    : validateGeometryMotion(molecule, molecule, request.motion)
+  if (initialMotionReport?.status === 'invalid-input') {
+    return {
+      ...failed(molecule, initialReport, 0, 'Invalid linear motion validation request; input coordinates were preserved.', true),
+      motionReport: initialMotionReport,
+    }
   }
   const movable = new Set(request.movableAtomIds)
   const movingAtoms: MutableAtom[] = []
@@ -276,8 +288,21 @@ export function solveConstrainedGeometry(
     const current = atomMap.get(atom.id)!
     return atom.x !== current.x || atom.y !== current.y || atom.z !== current.z
   }).map(atom => atom.id)
+  const motionReport = request.motion === undefined ? undefined : movedAtomIds.length === 0
+    ? initialMotionReport : validateGeometryMotion(molecule, currentMolecule, request.motion)
+  if (motionReport && !motionReport.safe) {
+    const reason = motionReport.status === 'collision'
+      ? 'Linear input-to-candidate interpolation contains a collision; input coordinates were preserved.'
+      : motionReport.status === 'invalid-input'
+        ? 'Linear input-to-candidate trajectory is invalid or degenerate; input coordinates were preserved.'
+        : 'Linear input-to-candidate interpolation could not be certified within the motion validation limits; input coordinates were preserved.'
+    return {
+      ...failed(molecule, initialReport, iterations, reason, false, finalReport),
+      motionReport,
+    }
+  }
   return {
     ok: true, status: 'converged', molecule: movedAtomIds.length > 0 ? currentMolecule : molecule,
-    report: finalReport, iterations, movedAtomIds,
+    report: finalReport, ...(motionReport ? { motionReport } : {}), iterations, movedAtomIds,
   }
 }

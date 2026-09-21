@@ -13,3 +13,14 @@ export type {
   GeometryConstraintIssue, GeometryConstraintMeasurement, GeometryConstraintReport,
   ConstrainedGeometryRequest, ConstrainedGeometryResult,
 } from '../lib/geometry/constrained/contracts'
+export { validateGeometryMotion } from '../lib/geometry/motion/validation'
+export type { GeometryMotionOptions, GeometryMotionIssue, GeometryMotionReport } from '../lib/geometry/motion/contracts'
+export { validateRibbonRegion } from '../lib/geometry/ribbon/region'
+export { createRibbonGuide, compileRibbonGuideConstraints } from '../lib/geometry/ribbon/guide'
+export { measureRibbonGeometry } from '../lib/geometry/ribbon/measure'
+export type {
+  GeometryRibbonSection, GeometryRibbonRegion, GeometryRibbonIssue, GeometryRibbonValidation,
+  GeometryRibbonGuideRequest, GeometryRibbonGuideSection, GeometryRibbonGuide,
+  GeometryRibbonGuideResult, GeometryRibbonMeasurements,
+  GeometryRibbonGuideConstraintOptions, GeometryRibbonGuideConstraintsResult,
+} from '../lib/geometry/ribbon/contracts'

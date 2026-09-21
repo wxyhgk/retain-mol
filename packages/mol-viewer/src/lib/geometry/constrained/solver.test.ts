@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Molecule } from '../../model/types'
 import { calcAngle, calcDihedral, calcDistance } from '../measure'
 import { analyzeHelicalPath } from './helicity'
+import { validateGeometryMotion } from '../motion/validation'
 import { solveConstrainedGeometry } from './solver'
 import { validateGeometryConstraints } from './validation'
 import type { ConstrainedGeometryRequest, GeometryConstraint } from './contracts'
@@ -32,6 +33,28 @@ function zigzag(): Molecule {
   return { atoms: [[0, 0], [1, 0], [1, 1], [2, 1]].map(([x, y], index) => ({
     id: `a${index}`, symbol: 'C', x: x!, y: y!, z: 0,
   })), bonds: [0, 1, 2].map(index => ({ id: `b${index}`, atomId1: `a${index}`, atomId2: `a${index + 1}`, order: 1 as const })) }
+}
+
+function crossingBonds(): Molecule {
+  return {
+    atoms: [
+      { id: 'a', symbol: 'C', x: -1, y: 0, z: 0 },
+      { id: 'b', symbol: 'C', x: 1, y: 0, z: 0 },
+      { id: 'c', symbol: 'C', x: 0, y: -1, z: 1 },
+      { id: 'd', symbol: 'C', x: 0, y: 1, z: 1 },
+    ],
+    bonds: [
+      { id: 'ab', atomId1: 'a', atomId2: 'b', order: 1 },
+      { id: 'cd', atomId1: 'c', atomId2: 'd', order: 1 },
+    ],
+  }
+}
+
+function translateSecondBond(molecule: Molecule, z: number): ConstrainedGeometryRequest {
+  return { movableAtomIds: ['c', 'd'], constraints: molecule.atoms.slice(2).map(atom => ({
+    id: `move-${atom.id}`, kind: 'position', strength: 'hard', atomId: atom.id,
+    target: { x: atom.x, y: atom.y, z }, tolerance: 0.01,
+  })) }
 }
 
 describe('solveConstrainedGeometry', () => {
@@ -280,6 +303,94 @@ describe('solveConstrainedGeometry', () => {
     const molecule = ring()
     const result = solveConstrainedGeometry(molecule, request as unknown as ConstrainedGeometryRequest)
     expect(result.status).toBe('invalid-input')
+    expect(result.molecule).toBe(molecule)
+  })
+})
+
+describe('solveConstrainedGeometry with opt-in linear motion validation', () => {
+  it('rejects bonds crossing during the linear path despite feasible, separately clear endpoints', () => {
+    const molecule = crossingBonds()
+    const before = structuredClone(molecule)
+    const request = translateSecondBond(molecule, -1)
+    const endpointOnly = solveConstrainedGeometry(molecule, request)
+    expect(endpointOnly.ok).toBe(true)
+    expect(endpointOnly.motionReport).toBeUndefined()
+    expect(validateGeometryMotion(molecule, molecule, {}).safe).toBe(true)
+    expect(validateGeometryMotion(endpointOnly.molecule, endpointOnly.molecule, {}).safe).toBe(true)
+
+    const guarded = solveConstrainedGeometry(molecule, { ...request, motion: {} })
+    expect(guarded.ok).toBe(false)
+    expect(guarded.status).toBe('not-converged')
+    expect(guarded.reason).toContain('interpolation contains a collision')
+    expect(guarded.molecule).toBe(molecule)
+    expect(guarded.movedAtomIds).toEqual([])
+    expect(guarded.motionReport).toMatchObject({ status: 'collision', safe: false, trajectory: 'linear' })
+    expect(guarded.motionReport?.issues.some(issue => issue.kind === 'bond-bond')).toBe(true)
+    expect(guarded.attemptReport?.satisfied).toBe(true)
+    expect(guarded.report.measurements.find(item => item.constraintId === 'move-c')?.actual).toBeCloseTo(2)
+    expect(guarded.attemptReport?.measurements.find(item => item.constraintId === 'move-c')?.actual).toBeLessThanOrEqual(0.01 + 1e-10)
+    expect(molecule).toEqual(before)
+  })
+
+  it('returns a clear linear translation with its motion certificate and exact fixed atoms', () => {
+    const molecule = crossingBonds()
+    const result = solveConstrainedGeometry(molecule, { ...translateSecondBond(molecule, 2), motion: {} })
+    expect(result.ok, JSON.stringify(result.motionReport)).toBe(true)
+    expect(result.motionReport).toMatchObject({ status: 'safe', safe: true, trajectory: 'linear', unit: 'angstrom' })
+    expect(result.motionReport?.checkedPairs).toBeGreaterThan(0)
+    expect(result.molecule.atoms[0]).toBe(molecule.atoms[0])
+    expect(result.molecule.atoms[1]).toBe(molecule.atoms[1])
+    expect(result.movedAtomIds).toEqual(['c', 'd'])
+  })
+
+  it('checks motion on a successful stationary result even with a zero iteration budget', () => {
+    const molecule = crossingBonds()
+    const result = solveConstrainedGeometry(molecule, { constraints: [], movableAtomIds: [], maxIterations: 0, motion: {} })
+    expect(result.ok).toBe(true)
+    expect(result.molecule).toBe(molecule)
+    expect(result.motionReport).toMatchObject({ status: 'safe', safe: true })
+    expect(result.iterations).toBe(0)
+
+    const crossed = { ...molecule, atoms: molecule.atoms.map(atom => ({ ...atom, z: 0 })) }
+    const rejected = solveConstrainedGeometry(crossed, { constraints: [], movableAtomIds: [], maxIterations: 0, motion: {} })
+    expect(rejected.ok).toBe(false)
+    expect(rejected.status).toBe('not-converged')
+    expect(rejected.molecule).toBe(crossed)
+    expect(rejected.report.satisfied).toBe(true)
+    expect(rejected.motionReport?.status).toBe('collision')
+  })
+
+  it('refuses an uncertified candidate when the motion check budget is exhausted', () => {
+    const molecule = crossingBonds()
+    const result = solveConstrainedGeometry(molecule, { ...translateSecondBond(molecule, 2), motion: { maxChecks: 1 } })
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe('not-converged')
+    expect(result.reason).toContain('could not be certified')
+    expect(result.molecule).toBe(molecule)
+    expect(result.attemptReport?.satisfied).toBe(true)
+    expect(result.motionReport).toMatchObject({ status: 'indeterminate', safe: false })
+  })
+
+  it.each([null, false, [], { minAtomDistance: 0 }, { minBondDistance: NaN }, { maxChecks: 0 }, { maxDepth: 31 }])('rejects invalid motion options %j before solving', motion => {
+    const molecule = crossingBonds()
+    const request = { ...translateSecondBond(molecule, 2), motion } as ConstrainedGeometryRequest
+    const result = solveConstrainedGeometry(molecule, request)
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe('invalid-input')
+    expect(result.molecule).toBe(molecule)
+    expect(result.iterations).toBe(0)
+    expect(result.attemptReport).toBeUndefined()
+    expect(result.motionReport).toMatchObject({ status: 'invalid-input', safe: false })
+  })
+
+  it('does not allow malformed motion options to bypass a successful zero-iteration no-op', () => {
+    const molecule = crossingBonds()
+    const result = solveConstrainedGeometry(molecule, {
+      constraints: [], movableAtomIds: [], maxIterations: 0,
+      motion: { maxChecks: Infinity },
+    })
+    expect(result.status).toBe('invalid-input')
+    expect(result.motionReport?.safe).toBe(false)
     expect(result.molecule).toBe(molecule)
   })
 })

@@ -2,6 +2,7 @@ import type { Molecule } from '../model/types'
 import { genId } from '../model/identity'
 import { solveConstrainedGeometry } from '../geometry/constrained/solver'
 import type { ConstrainedGeometryRequest, GeometryConstraintReport } from '../geometry/constrained/contracts'
+import type { GeometryMotionReport } from '../geometry/motion/contracts'
 import type { EditPlan, ModelingContext, ModelingIssue } from './contracts'
 import { constrainedGeometryRequestSchema } from './geometryConstraintSchema'
 import { computeMoleculeRevision } from './revision'
@@ -22,8 +23,9 @@ export type ConstrainedGeometryPreview =
       readonly nextRevision: string
       readonly iterations: number
       readonly movedAtomIds: readonly string[]
+      readonly motionReport?: GeometryMotionReport
     }
-  | { readonly ok: false; readonly issues: readonly ModelingIssue[]; readonly report?: GeometryConstraintReport }
+  | { readonly ok: false; readonly issues: readonly ModelingIssue[]; readonly report?: GeometryConstraintReport; readonly motionReport?: GeometryMotionReport }
 
 /** Pure preview. The returned plan re-solves and revalidates against its exact baseline at commit. */
 export function previewConstrainedGeometry(context: ModelingContext, input: ConstrainedGeometryPreviewRequest): ConstrainedGeometryPreview {
@@ -38,7 +40,8 @@ export function previewConstrainedGeometry(context: ModelingContext, input: Cons
   if (!parsed.success) return fail('invalid-plan', '几何约束请求格式无效：' + parsed.error.issues.map(i => i.path.join('.') + ': ' + i.message).join('；'))
   const request = parsed.data as ConstrainedGeometryRequest
   const solution = solveConstrainedGeometry(target.molecule, request)
-  if (!solution.ok) return { ok: false, issues: [{ severity: 'error', code: 'constraint-violation', message: solution.reason ?? '未找到满足约束的几何结果' }], report: solution.report }
+  const motion = solution.motionReport ? { motionReport: solution.motionReport } : {}
+  if (!solution.ok) return { ok: false, issues: [{ severity: 'error', code: 'constraint-violation', message: solution.reason ?? '未找到满足约束的几何结果' }], report: solution.report, ...motion }
   const movable = new Set(request.movableAtomIds)
   const plan: EditPlan = {
     schemaVersion: 1, planId: genId(), source: 'human', targetObjectId: target.objectId,
@@ -50,8 +53,8 @@ export function previewConstrainedGeometry(context: ModelingContext, input: Cons
     commands: [{ commandId: 'solve-geometry', kind: 'geometry.solveConstraints', request }],
   }
   const checked = dryRunEditPlan(context, plan)
-  if (!checked.ok) return { ok: false, issues: checked.issues, report: solution.report }
+  if (!checked.ok) return { ok: false, issues: checked.issues, report: solution.report, ...motion }
   return { ok: true, plan, molecule: checked.molecule, report: solution.report,
     baseRevision: target.revision, nextRevision: checked.nextRevision,
-    iterations: solution.iterations, movedAtomIds: solution.movedAtomIds }
+    iterations: solution.iterations, movedAtomIds: solution.movedAtomIds, ...motion }
 }

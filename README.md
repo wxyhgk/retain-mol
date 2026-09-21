@@ -52,6 +52,10 @@ npm run verify:viewer-consumer  # tarball 安装、公共 API 回归、消费者
 
 闭环协同变形演示：`/?demo=constraints`，约束 API、路径方向与适用边界见
 [受约束几何编辑](docs/mol-viewer/constrained-geometry.md)。
+
+连续路径与扭曲环带演示：`/?demo=geometry-paths`，移动中途的碰撞检查和区域 API 见
+[路径与环带基础能力](docs/mol-viewer/geometry-paths.md)。
+
 应用检查器布局、键盘作用域及本次验收边界见
 [检查器与快捷键](docs/UI/inspector-and-shortcuts.md)。
 

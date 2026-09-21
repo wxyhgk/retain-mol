@@ -1,4 +1,5 @@
 import type { Molecule, Vector3Data } from '../../model/types'
+import type { GeometryMotionOptions, GeometryMotionReport } from '../motion/contracts'
 
 /** Geometric path handedness, not a CIP or automatic chemical P/M assignment. */
 export type HelicalHandedness = 'right' | 'left'
@@ -57,6 +58,8 @@ export interface ConstrainedGeometryRequest {
   /** Geometric lower bound for nonbonded pairs beyond two bonds; default 0.8 Å, zero disables. Not a van der Waals model. */
   readonly nonbondedMinimumDistance?: number
   readonly maxIterations?: number
+  /** Opt-in clearance check of linear interpolation from the input to the final candidate; not the solver's numerical trajectory. */
+  readonly motion?: GeometryMotionOptions
 }
 
 export interface ConstrainedGeometryResult {
@@ -68,6 +71,8 @@ export interface ConstrainedGeometryResult {
   readonly report: GeometryConstraintReport
   /** Diagnostic-only measurements of a rejected final iterate, when one was attempted. */
   readonly attemptReport?: GeometryConstraintReport
+  /** Linear input-to-candidate motion diagnosis, including a rejected candidate when motion is unsafe or indeterminate. */
+  readonly motionReport?: GeometryMotionReport
   readonly iterations: number
   readonly movedAtomIds: readonly string[]
   readonly reason?: string
