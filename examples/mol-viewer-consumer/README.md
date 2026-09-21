@@ -36,7 +36,8 @@ npm run dev
 - 输入 MOL → 注册本地 MMFF94 资源 → 生成 3D。
 - 修改单个四面体中心的 R/S 指定、清除指定；H 替换为 Cl。
 - 撤销/重做，导出 MOL，再直接载入导出坐标。
-- 默认编辑实例 + `createViewerRuntime()` 隔离的只读副本。
+- 两个 `createViewerRuntime()` 独立编辑器，通过 `getViewerApi(runtime)` 读写和订阅。
+- 手性、稠环、螺环及 101 原子（含 H）样例；每侧可切换只读交互。
 - 点击选中、独立相机适配、卸载/重新挂载视口。
 - 显示实际实例数据、回调次数和键长，辅助人工核对。
 
@@ -47,9 +48,11 @@ npm run dev
 
 | 文件 | 用途 |
 | --- | --- |
-| `src/main.tsx` | React 宿主、状态订阅、编辑按钮、runtime 生命周期 |
+| `src/main.tsx` | React 宿主、样例载入与共享 MOL 输入 |
+| `src/EditorPanel.tsx` | 实例生命周期、状态订阅、编辑/显示/相机控制与事件读数 |
 | `src/moleculeSummary.ts` | 只读手性和键长展示 |
 | `src/style.css` | 扫描已安装包的 Tailwind class，宿主布局 |
 | `scripts/copy-resources.mjs` | 从消费者安装的 OpenChemLib 复制力场资源 |
 | `scripts/consumer.test.mjs` | 通过打包产物执行公共 API 行为回归 |
 | `public/fixture.mol` | 无指定手性的 `CC(F)(Br)I` 测试分子 |
+| `public/{fused,spiro,chain101}.mol` | 萘、螺[5.5]十一烷、C33H68 样例；从 OCL 的 SMILES 解析生成二维 MOL |

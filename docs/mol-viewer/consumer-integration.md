@@ -1,105 +1,85 @@
 # mol-viewer 独立宿主接入
 
-入口：[可运行示例](../../examples/mol-viewer-consumer/README.md)。
-在根目录运行 `npm run example:viewer`，浏览器打开脚本输出的 `127.0.0.1:5273`。
-示例不依赖 RetainMol App、Ketcher、后端或 API 密钥。
+入口：[可运行示例](../../examples/mol-viewer-consumer/README.md)、[实例级 API](./instance-api.md)。
+根目录运行 `npm run example:viewer`，打开脚本输出的 `127.0.0.1:5273`。
+示例安装真实 tarball，不依赖 RetainMol App、Ketcher、后端或 API 密钥。
 
 ## 安装与渲染
 
-宿主需要 React、ReactDOM 和符合包 peer 范围的 Three.js。示例使用 React 19，
-Three.js 0.184，Vite 与 Tailwind 版本与本仓库技术栈一致。
+宿主需要 React、ReactDOM 和符合包 peer 范围的 Three.js。示例使用 React 19、
+Three.js 0.184、Vite、Tailwind。每个独立编辑器分别创建 runtime 和 API：
 
 ```tsx
 import { MolViewer } from '@retainmol/mol-viewer/viewer'
+import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
 
-<div style={{ height: 430 }}>
-  <MolViewer interactionMode="select" />
-</div>
+// 在宿主 effect 中创建，cleanup 中释放；完整代码见示例的 EditorPanel.tsx。
+const runtime = createViewerRuntime()
+const api = getViewerApi(runtime)
+// JSX：<div style={{ height: 430 }}><MolViewer runtime={runtime} interactionMode="select" /></div>
 ```
 
-viewer 的容器必须有确定高度。当前包没有独立 CSS 产物，overlay 使用 Tailwind 工具类；
-Tailwind 4 宿主需在 CSS 中显式扫描安装包，例如 CSS 位于 `src/` 时：
+viewer 容器必须有确定高度。包没有独立 CSS 产物，overlay 使用 Tailwind 工具类；
+Tailwind 4 宿主需显式扫描安装包，例如 CSS 位于 `src/` 时：
 
 ```css
 @import "tailwindcss";
 @source "../node_modules/@retainmol/mol-viewer/dist";
 ```
 
-宿主必须使用同一套 React/Three 实例，不要把源码目录 alias 到一个拥有另一份依赖的 checkout。
+宿主必须使用同一套 React/Three 实例，不要把源码 alias 到另一个拥有独立依赖的 checkout。
 
 ## 导入、构象与编辑
 
-浏览器生成 3D 前调用 `registerForceFieldFromUrl(resourceUrl)`；示例将消费者自己安装的
-OpenChemLib `resources.json` 复制到 `public/ocl/`，并按 Vite `BASE_URL` 构造资源路径。
-资源应与所用 OCL 版本匹配，不要从其他版本的 App 拷贝旧参数表。
+浏览器生成 3D 前调用 `registerForceFieldFromUrl(resourceUrl)`；示例将消费者安装的
+OpenChemLib `resources.json` 复制到 `public/ocl/`，使用 Vite `BASE_URL` 构造路径。
+资源必须匹配 OCL 版本。Node 使用 `Resources.registerFromNodejs()` 和 `markForceFieldReady()`。
 
-`parseMol` → `generate3D` 后检查 `result.ok`，成功才通过
-`useMoleculeStore.getState().setMolecule(result.molecule)` 提交。
-示例把“导入并生成 3D”定义为新会话，因此之后清空历史；“重载导出”保留为可撤销操作，
-直接 `parseMol` 已导出的坐标，不再次生成构象。
+`parseMol` → `generate3D` 后检查 `result.ok`，成功才通过 `api.setMolecule` 提交。
+示例将“载入此侧”定义为新会话，随后调用 `api.history.clear()`；“重载导出”保留为
+可撤销操作，直接解析已有坐标，不再次生成构象。
 
-宿主提供的手动编辑按钮调用 `/state` action，例如 `replaceAtom`、`setChirality`。
-读取 `getAtomChiralityState` 时要区分 `computed`（坐标读数）和 `specified`（明确指定）；
-两者的解释见[手性边界](./stereochemistry.md)。自动生成的构象不代表用户指定了某个对映体。
+`api.edit.setChirality/replaceAtom` 等与手动编辑使用同一命令层。
+读取 `getAtomChiralityState` 时区分 `computed`（坐标读数）和 `specified`（明确指定）；
+见[手性边界](./stereochemistry.md)。自动生成的构象不代表用户指定某个对映体。
 
-`useMoleculeStore.temporal` 提供 `undo`、`redo`、`clear` 与历史订阅。
-示例通过 React `useSyncExternalStore` 订阅历史长度，让按钮状态随撤销和重做更新。
-AI 提案仍应通过 `/modeling` 的 dry-run / commit 流程；不要把手动按钮示例当作 AI 直接改 store 的方案。
+通过 `useSyncExternalStore(api.subscribe, api.getSnapshot, api.getSnapshot)` 订阅
+分子、选择、历史和显示状态。相机与截图使用 `api.view`，不会误操作另一实例。
+示例保留 `onRendererChange` 仅用于显示渲染器是否就绪，不依赖 renderer 内部方法。
 
-## 多实例与生命周期边界
+## 多实例与生命周期
 
-| 能力 | 当前接入方式 |
+- 左右两个 runtime 都支持完整示例编辑、R/S、选择、撤销重做和导出。
+- 创建与 dispose 放在同一个 effect，StrictMode 重放时创建新 runtime。
+- 单独卸载视口保留该 runtime 的分子和历史；重新挂载恢复显示。
+- runtime 销毁后取消 API 订阅与待发回调，旧 API 句柄报错。
+- `/state` 和全局视口便捷函数只操作默认实例，不用于这两个编辑器。
+- 只读模式限制交互，宿主 API 仍可以更新数据；示例同步禁用编辑按钮。
+
+## 浏览器验收步骤
+
+1. 初始两个视口均显示 `CC(F)(Br)I`，历史为空、指定手性为未指定。
+2. 左侧指定 R，右侧指定 S；各侧标签/数据匹配，C–F / C–Br / C–I 长度不变。
+3. 左侧 H→Cl、撤销、重做；右侧结构、选择、历史、相机保持独立。
+4. 导出并重载 MOL，分子式与指定手性保持；未再次生成构象。
+5. 在视口实际点选原子，检查高亮、API 选择快照与回调；删除后撤销，结构恢复。
+6. 切换一侧显示模式、标签，适配/旋转视角并截图；另一侧不受影响。
+7. 开启只读，点击/右键/拖动不得编辑或改变选择，相机交互仍可用。
+8. 一侧连续卸载/挂载 10 次，结构和历史保留，另一侧持续可用；之后一次编辑只新增一次分子回调。
+9. 分别载入萘（18 原子）、螺[5.5]十一烷（31 原子）、C33H68（101 原子，含 H），检查模型、选择、修改、撤销和视口适配。
+10. 缩窄窗口，确认控件、canvas 尺寸和显示无异常；检查页面 console error。
+
+## 验证状态（2026-09-21）
+
+| 检查 | 结果 |
 | --- | --- |
-| 单个编辑器的完整 store action / history | `/state` 导出的默认实例 |
-| 第二个独立 viewer | 创建 runtime，传 `runtime` 和受控 `molecule` prop |
-| 实例实际状态核对 | `getModelingContext(runtime)` |
-| 每个实例适配相机 | 通过 `onRendererChange` 获取该实例 `RendererPort`，调用 `fitToMolecule` |
-| 受控变更 | `onMoleculeChange` / `onSelectionChange`，宿主保持不可变更新 |
-| 只读交互 | `interactionMode="read-only"`，只保留相机交互 |
+| 根 `npm run verify` | 通过：1151 项工作区 JS 测试 + 8 项独立消费者测试；Lean/Python、边界、类型、构建、API 报告、打包门禁全部通过 |
+| 新增实例 API 单测 | 7 项通过，覆盖双实例/默认实例隔离、UI 命令通知、拒绝编辑、选择清理、历史守卫、相机/截图路由和释放 |
+| 真实 tarball 消费者 | 8 项通过，包含双实例 R/S、键长、撤销重做、MOL 往返及三个新增样例 |
+| 消费者严格 TypeScript / Vite 生产构建 | 通过；仍有较大 chunk 提示 |
+| 浏览器初始化 | Edge 页面 DOM 确认两个实例就绪，均为 C2H3BrFI、8 原子/7 键、手性未指定、空历史；渲染器注册成功 |
+| 实际三维画面、鼠标交互、左右隔离、10 次挂卸载、窄屏 | 尚未完成：截图请求后浏览器连接连续超时，不能用 DOM 状态替代 WebGL 和交互证据 |
 
-`/state` 和 `fitViewport()` 等全局便捷命令仍绑定默认实例。
-不能把它们当作第二个 runtime 的编辑/相机命令。`RendererPort` 是窄公开接口，
-可用于实例相机控制；不要向内部 renderer 或 runtime services 深路径导入。
+全仓仍有 15 项既有 lint warning、无 lint error。跨浏览器兼容性、帧率和 GPU 内存泄漏未验收。
 
-`MolViewer` 卸载会释放自己的 renderer；由宿主创建的 runtime 由宿主释放。
-示例在 effect 内创建副本 runtime，并在同一 effect 的 cleanup 中 dispose，
-使 React StrictMode 的 effect 重放能获得新实例。不要在 `useState` 初始化中创建 runtime，
-却在会被 StrictMode 重放的 effect cleanup 中提前释放它。默认共享 runtime 不由单个 viewer 释放。
-
-当前示例只证明“一份默认可编辑实例 + 一份隔离只读实例”的接入方案；
-两份独立完整编辑器的 R/S action 与 undo/redo 公共门面仍是后续 API 工作。
-
-## 人工验收步骤
-
-测试分子仅为 `CC(F)(Br)I` 及其一次 H→Cl 修改，以下步骤需在真实浏览器执行。
-记录浏览器版本、包提交、实际结果和截图；不要仅根据 Node 测试或页面 HTTP 状态勾选。
-
-1. 填入测试 MOL，导入并生成 3D：两个视口均有可见球棍模型；点击“检查副本”，
-   初始分子式和构型读数与编辑实例相同，指定为“未指定”。
-2. 指定 R，再指定 S：标签与读数匹配，C–F / C–Br / C–I 长度保持不变；
-   “检查副本”仍为初始状态。只读副本的分子/选择回调保持 0。
-3. 执行 H→Cl、撤销、重做：分子式相应变化、恢复、再次变化。
-   单次操作只需一次撤销；重做按钮在新编辑后失效。
-4. 导出 MOL、重载导出：分子式与指定手性保持；坐标四位小数舍入允许键长误差
-   小于 0.0002 Å。文本能从页面复制。
-5. 真实点击左侧原子：已选原子计数更新。点击、右键、拖动只读副本：
-   可旋转相机，无编辑菜单、选择变化或分子回调。两侧“适配视口”各自生效。
-6. 连续卸载/重新挂载 10 次：卸载时视口消失；挂载后两个模型恢复且可交互，
-   编辑数据保留，副本恢复导入快照。一次编辑只新增一次回调，避免重复订阅。
-7. 窗口缩小/放大后两个 canvas 仍非零、无拉伸或空白；检查本次页面的 console error。
-
-## 本次验证状态（2026-09-20）
-
-以下自动检查在独立任务 worktree 完成。示例经 `npm pack` 安装到仓库外临时目录，
-通过本地生产预览服务提供页面；HTTP 200 仅确认可访问，不作为交互通过证据。
-
-| 项目 | 状态 |
-| --- | --- |
-| 安装真实 tarball，无 workspace 源码链接 | 通过，测试断言解析结果为消费者安装的实际文件 |
-| Node 公共 API：R/S、所有键长、undo/redo、MOL 往返、H→Cl | 通过，4 项消费者回归；其中 runtime 隔离检查仅覆盖空实例不受默认 store 编辑影响及 dispose |
-| 消费者严格 TypeScript 与 Vite 生产构建 | 通过，React 19.2.5 / Three.js 0.184.0；构建仍有大 chunk 提示 |
-| 根 `npm run verify` | 通过：原有 1144 项 JS 测试 + 4 项消费者测试、Lean/Python 几何检查、类型/构建/API/打包门禁；15 项既有 lint warning、无 lint error |
-| 实际 WebGL、选择、双实例、只读交互、10 次挂卸载 | 未完成：浏览器连接在实际操作时反复超时，尚无本示例的交互/截图证据 |
-| 浏览器兼容性、较大分子性能、GPU 内存泄漏 | 未覆盖 |
-
-这份示例是集成基线，不能据此扩大复杂手性、化学正确性或生产就绪承诺。
+样例检查不代表一般化学正确性、复杂环编辑或任意大分子的性能保证。

@@ -6,7 +6,7 @@ import { Resources } from 'openchemlib'
 import { generate3D, parseMol, exportMol, markForceFieldReady } from '@retainmol/mol-viewer/io'
 import { getAtomChiralityState, getMolecularFormula } from '@retainmol/mol-viewer/core'
 import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@retainmol/mol-viewer/state'
-import { createViewerRuntime } from '@retainmol/mol-viewer/runtime'
+import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
 import { getModelingContext } from '@retainmol/mol-viewer/modeling'
 
 Resources.registerFromNodejs()
@@ -90,3 +90,88 @@ test('isolated runtime is unaffected by default-store edits and dispose is idemp
   assert.throws(() => getModelingContext(isolated), /disposed/)
   assert.ok(read().atoms.length > 0)
 })
+
+test('two public instance APIs edit, notify, undo and serialize independently', async () => {
+  const leftRuntime = createViewerRuntime()
+  const rightRuntime = createViewerRuntime()
+  try {
+    const left = getViewerApi(leftRuntime)
+    const right = getViewerApi(rightRuntime)
+    const generated = generate3D(parseMol(fixture))
+    assert.equal(generated.ok, true, generated.reason)
+    for (const api of [left, right]) {
+      api.setMolecule(generated.molecule)
+      api.history.clear()
+    }
+    const defaultBefore = read()
+    const rightBefore = right.getSnapshot()
+    const originalLengths = lengths(generated.molecule)
+    let leftEvents = 0
+    let rightEvents = 0
+    const stopLeft = left.subscribe(() => { leftEvents++ })
+    right.subscribe(() => { rightEvents++ })
+    const leftCenter = center(left.getSnapshot().molecule).id
+    left.selection.set([leftCenter])
+    assert.equal(left.edit.setChirality(leftCenter, 'R').ok, true)
+    await Promise.resolve()
+    assert.equal(leftEvents, 1)
+    assert.equal(rightEvents, 0)
+    assert.equal(right.getSnapshot(), rightBefore)
+    assert.equal(read(), defaultBefore)
+    assert.equal(left.getSnapshot().history.undoCount, 1)
+    nearLengths(lengths(left.getSnapshot().molecule), originalLengths, 1e-10)
+    left.history.undo()
+    assert.deepEqual(left.getSnapshot().molecule, generated.molecule)
+    left.history.redo()
+    assert.equal(getAtomChiralityState(left.getSnapshot().molecule, leftCenter).specified, 'R')
+    assert.equal(right.edit.setChirality(center(rightBefore.molecule).id, 'S').ok, true)
+    const reloaded = parseMol(exportMol(right.getSnapshot().molecule))
+    assert.deepEqual(getAtomChiralityState(reloaded, center(reloaded).id), { specified: 'S', computed: 'S' })
+    assert.equal(getAtomChiralityState(left.getSnapshot().molecule, leftCenter).specified, 'R')
+    assert.deepEqual(right.getSnapshot().selectedAtomIds, [])
+    nearLengths(lengths(reloaded), originalLengths, 0.0002)
+    await Promise.resolve()
+    stopLeft()
+    const count = leftEvents
+    left.history.clear()
+    await Promise.resolve()
+    assert.equal(leftEvents, count)
+    leftRuntime.dispose()
+    assert.throws(() => left.getSnapshot(), /disposed/)
+    assert.equal(right.getSnapshot().molecule.atoms.length, generated.molecule.atoms.length)
+  } finally {
+    leftRuntime.dispose()
+    rightRuntime.dispose()
+  }
+})
+
+for (const [name, formula, atomCount] of [
+  ['fused', 'C10H8', 18], ['spiro', 'C11H20', 31], ['chain101', 'C33H68', 101],
+]) {
+  test(`${name}: import, conformer, instance editing and MOL round trip`, () => {
+    const runtime = createViewerRuntime()
+    try {
+      const api = getViewerApi(runtime)
+      const input = readFileSync(new URL(`../public/${name}.mol`, import.meta.url), 'utf8')
+      const generated = generate3D(parseMol(input))
+      assert.equal(generated.ok, true, generated.reason)
+      api.setMolecule(generated.molecule)
+      api.history.clear()
+      const original = api.getSnapshot().molecule
+      assert.equal(original.atoms.length, atomCount)
+      assert.equal(getMolecularFormula(original.atoms), formula)
+      assert.ok(original.atoms.every(atom => [atom.x, atom.y, atom.z].every(Number.isFinite)))
+      const hydrogen = original.atoms.find(atom => atom.symbol === 'H')
+      api.edit.replaceAtom(hydrogen.id, 'Cl')
+      const edited = api.getSnapshot().molecule
+      assert.equal(edited.atoms.find(atom => atom.id === hydrogen.id).symbol, 'Cl')
+      assert.equal(api.getSnapshot().history.undoCount, 1)
+      api.history.undo()
+      assert.deepEqual(api.getSnapshot().molecule, original)
+      api.history.redo()
+      const reloaded = parseMol(exportMol(api.getSnapshot().molecule))
+      assert.equal(getMolecularFormula(reloaded.atoms), getMolecularFormula(edited.atoms))
+      assert.equal(reloaded.bonds.length, edited.bonds.length)
+    } finally { runtime.dispose() }
+  })
+}

@@ -33,6 +33,8 @@ export interface ViewerRuntimeServices {
   readonly ticker: Ticker
   readonly capture: ViewportCaptureRegistry
   readonly viewport: ViewportRegistry
+  /** Internal cleanup registration for instance-bound public adapters. */
+  readonly onDispose: (cleanup: () => void) => () => void
 }
 
 interface ViewerRuntimeOptions {
@@ -51,6 +53,7 @@ function assembleViewerRuntime(options: ViewerRuntimeOptions = {}): ViewerRuntim
   const ticker = options.ticker ?? new Ticker()
   const capture = options.capture ?? createViewportCaptureRegistry()
   const viewport = options.viewport ?? createViewportRegistry()
+  const cleanups = new Set<() => void>()
 
   const services: ViewerRuntimeServices = {
     moleculeStore,
@@ -58,14 +61,20 @@ function assembleViewerRuntime(options: ViewerRuntimeOptions = {}): ViewerRuntim
     ticker,
     capture,
     viewport,
+    onDispose(cleanup) {
+      cleanups.add(cleanup)
+      return () => { cleanups.delete(cleanup) }
+    },
   }
   let disposed = false
   const runtime: ViewerRuntime = {
     dispose() {
       if (disposed) return
       disposed = true
-      ticker.dispose()
       runtimeServices.delete(runtime)
+      for (const cleanup of cleanups) cleanup()
+      cleanups.clear()
+      ticker.dispose()
     },
   }
   runtimeServices.set(runtime, services)

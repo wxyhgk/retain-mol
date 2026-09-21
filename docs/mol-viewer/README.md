@@ -34,6 +34,7 @@ App 层和外部集成优先使用这些子路径：
 
 ```ts
 import { MolViewer } from '@retainmol/mol-viewer/viewer'
+import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
 import { useMoleculeStore } from '@retainmol/mol-viewer/state'
 import { getModelingContext, commitEditPlan } from '@retainmol/mol-viewer/modeling'
 import { newAtom, centerMolecule } from '@retainmol/mol-viewer/core'
@@ -46,7 +47,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 
 - `src/public/core.ts`：分子类型、分子工具、scene object helper、元素配置。
 - `src/public/viewer.ts`：`MolViewer`、截图和窄视口命令，不导出 store 或 renderer 实现。
-- `src/public/runtime.ts`：不透明的 viewer 生命周期句柄和 provider；外部只能持有和释放，不能访问内部服务。
+- `src/public/runtime.ts`：viewer 生命周期句柄、provider 与[实例级基础 API](./instance-api.md)；支持快照、编辑、选择、历史、显示和视口命令，不暴露内部 store/services。
 - `src/public/state.ts`：显式的 molecule/editor mutable store 入口。
 - `src/public/editing.ts`：窄化的坐标写入事务，不导出 `useBuilder`。
 - `src/public/modeling.ts`：只读建模上下文、严格 `EditPlan` 协议、dry-run 和单事务提交入口。
@@ -67,6 +68,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 | 需求 | 使用入口 | 不要做 |
 | --- | --- | --- |
 | 展示分子、适配视口、截图 | `/viewer` | 从 `/viewer` 获取 mutable store 或 Three renderer |
+| 独立编辑器的编辑、选择、历史、订阅和相机 | `/runtime` 的 `getViewerApi(runtime)` | 用默认 `/state` 或全局相机命令操作第二个实例 |
 | 读取或修改全局 molecule/editor state | `/state` | 从其他子入口绕过显式可变边界 |
 | 执行动画或优化坐标写入 | `/editing` | 直接调用内部 transaction 或 `useBuilder` |
 | 让 AI 或协作客户端提出结构编辑 | `/modeling` | 模拟鼠标、直接改 Zustand、绕过 dry-run |

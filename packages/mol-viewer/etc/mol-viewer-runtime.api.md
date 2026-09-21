@@ -7,6 +7,71 @@
 import { JSX } from 'react';
 import { PropsWithChildren } from 'react';
 
+// @public (undocumented)
+export interface Atom {
+    readonly charge?: number;
+    readonly chirality?: 'R' | 'S';
+    readonly coordinationDirections?: readonly (readonly [number, number, number])[];
+    readonly coordinationGeometry?: string;
+    readonly coordinationNumber?: number;
+    readonly coordinationSites?: readonly CoordinationSite[];
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label?: string;
+    readonly radical?: number;
+    // (undocumented)
+    readonly symbol: string;
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+    // (undocumented)
+    readonly z: number;
+}
+
+// @public (undocumented)
+export interface Bond {
+    // (undocumented)
+    readonly aromatic?: boolean;
+    // (undocumented)
+    readonly atomId1: string;
+    // (undocumented)
+    readonly atomId2: string;
+    readonly coordinationSites?: readonly CoordinationSiteAssignment[];
+    readonly ez?: 'E' | 'Z';
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly order: 1 | 2 | 3;
+    readonly wedge?: 'up' | 'down';
+}
+
+// @public (undocumented)
+export type CoordinationBondOrder = 1 | 2 | 3;
+
+// @public (undocumented)
+export interface CoordinationSite {
+    // (undocumented)
+    readonly bondOrder: CoordinationBondOrder;
+    // (undocumented)
+    readonly direction: readonly [number, number, number];
+    // (undocumented)
+    readonly equivalenceGroup: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string;
+}
+
+// @public (undocumented)
+export interface CoordinationSiteAssignment {
+    // (undocumented)
+    readonly atomId: string;
+    // (undocumented)
+    readonly siteId: string;
+}
+
 // @public
 export function createViewerRuntime(): ViewerRuntime;
 
@@ -14,7 +79,107 @@ export function createViewerRuntime(): ViewerRuntime;
 export const defaultViewerRuntime: ViewerRuntime;
 
 // @public (undocumented)
+export type DisplayMode = 'ball-stick' | 'spacefill' | 'stick' | 'wireframe' | 'tube' | 'mtube';
+
+// @public
+export function getViewerApi(runtime: ViewerRuntime): ViewerApi;
+
+// @public (undocumented)
+export interface Molecule {
+    // (undocumented)
+    readonly atoms: readonly Atom[];
+    // (undocumented)
+    readonly bonds: readonly Bond[];
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public (undocumented)
 export function useViewerRuntime(): ViewerRuntime;
+
+// @public (undocumented)
+export interface ViewerApi {
+    // (undocumented)
+    readonly edit: ViewerEditApi;
+    getSnapshot(): ViewerSnapshot;
+    // (undocumented)
+    readonly history: ViewerHistoryApi;
+    // (undocumented)
+    readonly selection: ViewerSelectionApi;
+    setMolecule(molecule: Molecule): void;
+    subscribe(listener: () => void): () => void;
+    // (undocumented)
+    readonly view: ViewerViewApi;
+}
+
+// @public
+export interface ViewerEditApi {
+    // (undocumented)
+    addAtom(symbol: string, x: number, y: number, z: number): string;
+    // (undocumented)
+    addBond(atomId1: string, atomId2: string, order?: 1 | 2 | 3): void;
+    // (undocumented)
+    addHydrogens(atomId?: string): void;
+    // (undocumented)
+    moveAtom(atomId: string, x: number, y: number, z: number): void;
+    // (undocumented)
+    removeAtoms(atomIds: readonly string[]): void;
+    // (undocumented)
+    removeBond(bondId: string): void;
+    // (undocumented)
+    removeHydrogens(options?: {
+        onlySelected?: boolean;
+    }): void;
+    // (undocumented)
+    removeSelected(): void;
+    // (undocumented)
+    replaceAtom(atomId: string, symbol: string): void;
+    // (undocumented)
+    setAtomCharge(atomId: string, charge: number): void;
+    // (undocumented)
+    setAtomRadical(atomId: string, radical: number): void;
+    // (undocumented)
+    setBondAngle(atomId1: string, atomId2: string, atomId3: string, degrees: number): ViewerEditResult;
+    // (undocumented)
+    setBondLength(atomId1: string, atomId2: string, length: number): ViewerEditResult;
+    // (undocumented)
+    setBondOrder(bondId: string, order: 1 | 2 | 3): void;
+    // (undocumented)
+    setChirality(atomId: string, chirality: 'R' | 'S' | 'none'): ViewerEditResult;
+    // (undocumented)
+    setDihedralAngle(atomId1: string, atomId2: string, atomId3: string, atomId4: string, degrees: number): ViewerEditResult;
+    // (undocumented)
+    setEZ(bondId: string, ez: 'E' | 'Z' | 'none'): ViewerEditResult;
+}
+
+// @public (undocumented)
+export interface ViewerEditResult {
+    // (undocumented)
+    readonly ok: boolean;
+    // (undocumented)
+    readonly reason?: string;
+}
+
+// @public (undocumented)
+export interface ViewerHistoryApi {
+    // (undocumented)
+    clear(): void;
+    // (undocumented)
+    redo(): void;
+    undo(): void;
+}
+
+// @public (undocumented)
+export interface ViewerHistorySnapshot {
+    // (undocumented)
+    readonly canRedo: boolean;
+    // (undocumented)
+    readonly canUndo: boolean;
+    // (undocumented)
+    readonly redoCount: number;
+    // (undocumented)
+    readonly undoCount: number;
+}
 
 // @public (undocumented)
 export interface ViewerRuntime {
@@ -25,6 +190,53 @@ export interface ViewerRuntime {
 export function ViewerRuntimeProvider(input: PropsWithChildren<{
     runtime: ViewerRuntime;
 }>): JSX.Element;
+
+// @public (undocumented)
+export interface ViewerSelectionApi {
+    // (undocumented)
+    clear(): void;
+    set(atomIds: Iterable<string>, bondIds?: Iterable<string>): void;
+}
+
+// @public
+export interface ViewerSnapshot {
+    // (undocumented)
+    readonly activeObjectId: string | null;
+    // (undocumented)
+    readonly displayMode: DisplayMode;
+    // (undocumented)
+    readonly history: ViewerHistorySnapshot;
+    // (undocumented)
+    readonly molecule: Molecule;
+    // (undocumented)
+    readonly selectedAtomIds: readonly string[];
+    // (undocumented)
+    readonly selectedBondIds: readonly string[];
+    // (undocumented)
+    readonly showAtomLabels: boolean;
+    // (undocumented)
+    readonly themeId: string;
+}
+
+// @public (undocumented)
+export interface ViewerViewApi {
+    captureImage(scale?: number): string | null;
+    fit(): boolean;
+    // (undocumented)
+    focusSelection(): boolean;
+    // (undocumented)
+    reset(): boolean;
+    // (undocumented)
+    setAxesVisible(visible: boolean): boolean;
+    // (undocumented)
+    setDisplayMode(mode: DisplayMode): void;
+    // (undocumented)
+    setGridVisible(visible: boolean): boolean;
+    // (undocumented)
+    setShowAtomLabels(visible: boolean): void;
+    // (undocumented)
+    setTheme(themeId: string): void;
+}
 
 // (No @packageDocumentation comment for this package)
 
