@@ -2,7 +2,7 @@ import {
   createBondPairAlignmentEditSession as createInternalBondPairAlignmentSession,
   createObjectPositionWriteEditSession as createInternalSession,
   runBondPairAlignmentEdit,
-} from '../hooks/editSessionFactory'
+} from '../runtime/editingSessions'
 import {
   defaultViewerRuntime,
   getViewerRuntimeServices,

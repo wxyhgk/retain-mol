@@ -6,6 +6,7 @@ App 层应该把它当成一个独立的分子引擎使用。App 代码应优先
 
 基础字段支持、复制与保存规则见[基础字段与保真边界](./field-fidelity.md)。
 基础模型、图查询、显示契约的归属及自动检查见[包内基础边界](../architecture/mol-viewer-internal-boundaries.md)。
+Node、后端与浏览器共用的纯编辑入口见[无界面的分子编辑 API](./headless-api.md)。
 
 外部项目可从[独立宿主接入](./consumer-integration.md)与
 [可运行示例](../../examples/mol-viewer-consumer/README.md)开始；示例安装实际 tarball，
@@ -17,6 +18,7 @@ App 层应该把它当成一个独立的分子引擎使用。App 代码应优先
 
 ```text
 packages/mol-viewer/src
+├── application/    无 UI/store 依赖的编辑会话编排
 ├── components/     包内 viewer 使用的 React 组件
 ├── config/         camera、render、bonding、geometry、tool 等共享配置
 ├── hooks/          把 React 事件连接到 builder command 和 store action 的 hooks
@@ -28,6 +30,7 @@ packages/mol-viewer/src
 │   └── modeling/   AI/协作客户端使用的建模协议、校验与 dry-run 执行器
 ├── presets/        theme schema、内置主题、运行时主题注册表
 ├── public/         推荐给外部使用的窄 API 子入口
+├── runtime/        实例生命周期、store 适配、viewer 提交与 React provider
 ├── store/          molecule scene state 和 editor state
 ├── styles/         style preset 和 render profile 注册体系
 ├── capture.ts      视口截图桥接
@@ -58,6 +61,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 - `src/public/state.ts`：显式的 molecule/editor mutable store 入口。
 - `src/public/editing.ts`：窄化的坐标写入事务，不导出 `useBuilder`。
 - `src/public/modeling.ts`：只读建模上下文、严格 `EditPlan` 协议、dry-run 和单事务提交入口。
+- `src/public/headless.ts`：纯上下文、计划校验与回放，Node 使用时不加载 React/store；旧 `/modeling` 的纯函数出口仍兼容。
 - `src/public/geometry.ts`：测量几何与当前兼容的图拓扑查询。
 - `src/public/graph.ts`：分子图连通片段和连通分量查询。
 - `src/public/io.ts`：MOL/SDF/XYZ/GJF 解析导出、几何松弛 API。
@@ -79,6 +83,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 | 读取或修改全局 molecule/editor state | `/state` | 从其他子入口绕过显式可变边界 |
 | 执行动画或优化坐标写入 | `/editing` | 直接调用内部 transaction 或 `useBuilder` |
 | 让 AI 或协作客户端提出结构编辑 | `/modeling` | 模拟鼠标、直接改 Zustand、绕过 dry-run |
+| 在 Node/后端执行分子构建与修改 | `/headless` | 为纯计划执行初始化 viewer/runtime |
 | 开发纯化学和图算法 | `/core`、`/geometry`、`/graph` | 引入 React、Zustand 或 Three.js |
 | 添加主题、样式和 profile | `/styles` | 在 preset 中直接操作材质对象 |
 | 扩展 Three.js 材质 | `/three` | 把 Three.js 类型泄漏回 `/styles` 或 `/core` |

@@ -39,6 +39,10 @@
       "types": "./dist/public/modeling.d.ts",
       "import": "./dist/public/modeling.js"
     },
+    "./headless": {
+      "types": "./dist/public/headless.d.ts",
+      "import": "./dist/public/headless.js"
+    },
     "./geometry": {
       "types": "./dist/public/geometry.d.ts",
       "import": "./dist/public/geometry.js"

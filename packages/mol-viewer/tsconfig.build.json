@@ -24,6 +24,7 @@
     "src/public/state.ts",
     "src/public/editing.ts",
     "src/public/modeling.ts",
+    "src/public/headless.ts",
     "src/public/geometry.ts",
     "src/public/graph.ts"
   ],

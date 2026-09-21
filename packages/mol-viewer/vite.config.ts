@@ -40,6 +40,7 @@ export default defineConfig(({ command }) => {
             'public/state': path.resolve(__dirname, './src/public/state.ts'),
             'public/editing': path.resolve(__dirname, './src/public/editing.ts'),
             'public/modeling': path.resolve(__dirname, './src/public/modeling.ts'),
+            'public/headless': path.resolve(__dirname, './src/public/headless.ts'),
             'public/geometry': path.resolve(__dirname, './src/public/geometry.ts'),
             'public/graph': path.resolve(__dirname, './src/public/graph.ts'),
             'public/styles': path.resolve(__dirname, './src/public/styles.ts'),

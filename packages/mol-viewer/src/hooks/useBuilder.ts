@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import type { BuilderInteractionHandlers } from '../lib/interaction/contracts'
 import { useViewerRuntimeServices, type ViewerRuntime } from '../runtime/ViewerRuntime'
-import { createAtomDragEditSession } from './editSessionFactory'
+import { createAtomDragEditSession } from '../runtime/editingSessions'
 import {
   getBuilderGrowGuide,
   getBuilderGrowPreview,

@@ -52,13 +52,15 @@ V4 严格意图桥、证据链以及下一代局部端口/刚性关节方法见
 ```ts
 import {
   commitEditPlan,
+  getModelingContext,
+} from '@retainmol/mol-viewer/modeling'
+import {
   createHeadlessModelingContext,
   dryRunEditPlan,
-  getModelingContext,
   parseEditPlan,
   replayEditPlan,
   type EditPlan,
-} from '@retainmol/mol-viewer/modeling'
+} from '@retainmol/mol-viewer/headless'
 ```
 
 不要从 App 深路径导入 `lib/modeling`、`lib/builder` 或 store slice。
@@ -66,7 +68,7 @@ import {
 无界面任务与浏览器共享同一执行器：
 
 ```ts
-import { replayEditPlan } from '@retainmol/mol-viewer/modeling'
+import { replayEditPlan } from '@retainmol/mol-viewer/headless'
 import { exportSdf } from '@retainmol/mol-viewer/io'
 
 const result = replayEditPlan(initialMolecule, plan, {
@@ -75,6 +77,9 @@ const result = replayEditPlan(initialMolecule, plan, {
 if (!result.ok) throw new Error(result.issues.map(issue => issue.message).join('；'))
 const sdf = exportSdf(result.molecule)
 ```
+
+旧 `/modeling` 的纯函数出口仍兼容，但会加载 runtime/store；无界面新接入使用 `/headless`。
+基础构建与修改示例、加载边界见[无界面的分子编辑 API](../headless-api.md)。
 
 `createHeadlessModelingContext` 和 `replayEditPlan` 不创建 Zustand store、Three.js renderer
 或 DOM。它们用于 AI loop、批处理与后端 worker，但执行的仍是生产 builder command。
@@ -238,7 +243,8 @@ ID；同一中心的双锚点模板还必须声明 `bridgeAttachment`，不能�
 | 区域 | 负责内容 | 不应修改 |
 | --- | --- | --- |
 | `lib/modeling` | 协议、schema、纯执行器、差异计算 | React、Three.js、provider SDK |
-| `public/modeling.ts` | runtime 快照和事务提交 | 化学算法、模型提示词 |
+| `public/headless.ts` | 纯能力出口 | runtime、store、React |
+| `runtime/modelingApi.ts` | runtime 快照和事务提交（`public/modeling.ts` 转发） | 化学算法、模型提示词 |
 | `lib/builder/commands` | 化学编辑语义与合法性 | AI provider、App 面板 |
 | App AI feature | 图片上传、模型调用、候选预览、用户确认 | store slice、内部 builder 文件 |
 | 后端 | 模型代理、审计记录、计算任务 | 浏览器 viewer 状态 |

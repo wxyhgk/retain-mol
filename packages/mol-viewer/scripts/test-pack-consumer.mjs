@@ -68,10 +68,39 @@ if (name === 'core') {
   assert.equal(api.calcDistance({ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: 0 }), 5)
 } else if (name === 'graph') {
   assert.deepEqual(api.splitConnectedComponents(molecule), [molecule])
+} else if (name === 'headless') {
+  const empty = { atoms: [], bonds: [] }
+  const objectId = api.HEADLESS_MODELING_OBJECT_ID
+  const built = api.replayEditPlan(empty, {
+    schemaVersion: 1, planId: 'node-build', source: 'human', targetObjectId: objectId,
+    commands: [
+      { commandId: 'add-c', kind: 'atom.add', atomId: 'c', symbol: 'C', position: { x: 0, y: 0, z: 0 } },
+      { commandId: 'add-o', kind: 'atom.add', atomId: 'o', symbol: 'O', position: { x: 1.4, y: 0, z: 0 } },
+      { commandId: 'add-co', kind: 'bond.add', bondId: 'co', atomId1: 'c', atomId2: 'o', order: 1 },
+    ],
+  })
+  assert.equal(built.ok, true)
+  assert.equal(built.molecule.atoms.length, 2)
+  assert.equal(built.molecule.bonds.length, 1)
+  assert.deepEqual(empty, { atoms: [], bonds: [] })
+  const revision = api.createHeadlessModelingContext(built.molecule).objects[0].revision
+  const edit = {
+    schemaVersion: 1, planId: 'node-edit', source: 'human', targetObjectId: objectId,
+    expectedRevision: revision,
+    commands: [{ commandId: 'replace-o', kind: 'atom.replace', atomId: 'o', symbol: 'N' }],
+  }
+  assert.equal(api.parseEditPlan(edit).ok, true)
+  const changed = api.replayEditPlan(built.molecule, edit)
+  assert.equal(changed.ok, true)
+  assert.equal(changed.molecule.atoms.find(atom => atom.id === 'o').symbol, 'N')
+  assert.equal(built.molecule.atoms.find(atom => atom.id === 'o').symbol, 'O')
+  const stale = api.replayEditPlan(changed.molecule, edit)
+  assert.equal(stale.ok, false)
+  assert.ok(stale.issues.some(issue => issue.code === 'stale-context'))
 } else throw new Error('Unknown pure entry ' + name)
 console.log('Packed pure entry passed: ' + name)
 `)
-  for (const entry of ['core', 'io', 'geometry', 'graph']) run('node', ['pure-consumer.mjs', entry])
+  for (const entry of ['core', 'io', 'geometry', 'graph', 'headless']) run('node', ['pure-consumer.mjs', entry])
 
   writeFileSync(join(consumerDir, 'consumer.mjs'), `
 import { newAtom } from '@retainmol/mol-viewer/core'
@@ -112,6 +141,8 @@ import type { ViewerRuntime } from '@retainmol/mol-viewer/runtime'
 import type { RendererPort } from '@retainmol/mol-viewer/viewer'
 import type { ObjectPositionWriteEditSession } from '@retainmol/mol-viewer/editing'
 import type { EditPlan, HeadlessModelingOptions, ModelingConstraints } from '@retainmol/mol-viewer/modeling'
+import { replayEditPlan as replayHeadless } from '@retainmol/mol-viewer/headless'
+import type { EditPlan as HeadlessPlan, Molecule as HeadlessMolecule } from '@retainmol/mol-viewer/headless'
 
 declare const molecule: Molecule
 declare const fragment: PublicFragmentDef
@@ -124,6 +155,9 @@ declare const editPlan: EditPlan
 declare const modelingConstraints: ModelingConstraints
 declare const headlessOptions: HeadlessModelingOptions
 void [molecule, fragment, style, template, runtime, renderer, editSession, editPlan, modelingConstraints, headlessOptions]
+const compatiblePlan: HeadlessPlan = editPlan
+const compatibleMolecule: HeadlessMolecule = molecule
+void replayHeadless(compatibleMolecule, compatiblePlan, headlessOptions)
 `)
 
   run('node', ['consumer.mjs'])

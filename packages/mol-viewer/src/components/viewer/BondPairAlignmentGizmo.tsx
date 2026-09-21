@@ -8,7 +8,7 @@ import type {
 import { inspectBondPairGeometry } from '../../lib/builder/geometry/bondPairAlignment'
 import type { ThreeRendererPort } from '../../lib/molRenderer'
 import { BondPairAlignmentGizmoController } from '../../viewer/gizmo/controllers/BondPairAlignmentGizmoController'
-import { createBondPairAlignmentEditSession } from '../../hooks/editSessionFactory'
+import { createBondPairAlignmentEditSession } from '../../runtime/editingSessions'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
 import { useGizmoRegistry, type GizmoScheduler } from '../../viewer/gizmo/useGizmoRegistry'
 

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
-import { buildModuleGraph, checkFoundations, checkPureEntries, runtimeCycles } from './module-graph.mjs'
+import { buildModuleGraph, checkEditingBoundaries, checkFoundations, checkPureEntries, runtimeCycles } from './module-graph.mjs'
 
 const srcDir = resolve(import.meta.dirname, '../src')
 
@@ -9,7 +9,11 @@ function rel(path) {
 }
 
 const graph = buildModuleGraph(srcDir)
-const violations = [...checkFoundations(graph, srcDir), ...checkPureEntries(graph, srcDir)]
+const violations = [
+  ...checkFoundations(graph, srcDir),
+  ...checkPureEntries(graph, srcDir),
+  ...checkEditingBoundaries(graph, srcDir),
+]
 
 for (const cycle of runtimeCycles(graph)) {
   violations.push(`Runtime import cycle: ${cycle.map(rel).join(', ')}`)
@@ -43,6 +47,7 @@ for (const [file, edges] of graph) {
         || targetRel.startsWith('components/')
         || targetRel.startsWith('store/')
         || targetRel.startsWith('runtime/')
+        || targetRel.startsWith('application/')
       ) {
         violations.push(`${fileRel}: Builder must not depend on upper layer "${targetRel}"`)
       }

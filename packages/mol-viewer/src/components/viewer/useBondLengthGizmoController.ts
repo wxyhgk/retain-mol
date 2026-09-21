@@ -9,7 +9,7 @@ import {
   type BondLengthHandle,
 } from '../../lib/builder/geometry/bondLengthHandle'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
-import { createBondLengthEditSession } from '../../hooks/editSessionFactory'
+import { createBondLengthEditSession } from '../../runtime/editingSessions'
 import type { BondLengthGizmoViewHandle } from './BondLengthGizmoView'
 
 interface Options {

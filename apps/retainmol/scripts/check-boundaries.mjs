@@ -22,6 +22,7 @@ const allowedMolViewerImports = new Set([
   '@retainmol/mol-viewer/geometry',
   '@retainmol/mol-viewer/graph',
   '@retainmol/mol-viewer/modeling',
+  '@retainmol/mol-viewer/headless',
   '@retainmol/mol-viewer/picking',
 ])
 
@@ -789,7 +790,7 @@ if (/useMoleculeStore\.getState\(\)\.setAtomPositions\s*\(/.test(rotateGizmoSour
 
 const directTransactionAllowed = new Set([
   'packages/mol-viewer/src/store/slices/editSlice.ts',
-  'packages/mol-viewer/src/hooks/editSessionFactory.ts',
+  'packages/mol-viewer/src/runtime/editingSessions.ts',
 ])
 
 for (const [rootName, rootDir] of [

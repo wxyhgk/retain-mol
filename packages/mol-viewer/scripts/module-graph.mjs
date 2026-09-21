@@ -132,6 +132,7 @@ export const PURE_ENTRY_DEPENDENCIES = {
   io: ['openchemlib'],
   geometry: [],
   graph: [],
+  headless: ['openchemlib', 'zod'],
 }
 
 /** Foundation ownership includes type edges: a store type is still an upward dependency. */
@@ -139,7 +140,7 @@ export function checkFoundations(graph, root) {
   const violations = []
   const rel = file => relative(root, file).replaceAll('\\', '/')
   const legacy = new Set(['lib/types.ts', 'lib/builder/graph.ts',
-    'lib/builder/analysis/fragments.ts', 'lib/moleculeValidation.ts'])
+    'lib/builder/analysis/fragments.ts', 'lib/moleculeValidation.ts', 'hooks/editSessionFactory.ts'])
   const rules = [
     ['lib/model/', ['lib/model/']],
     ['lib/graph/', ['lib/model/', 'lib/graph/']],
@@ -158,6 +159,38 @@ export function checkFoundations(graph, root) {
       }
     }
   }
+  return violations
+}
+
+/** Detached editing modules cannot reach state or React adapters, even through types. */
+export function checkEditingBoundaries(graph, root) {
+  const violations = []
+  const rel = file => relative(root, file).replaceAll('\\', '/')
+  const upperLayer = file => /^(store|runtime|hooks|components|public|lib\/molRenderer)\//.test(rel(file))
+  const uiDependency = specifier => ['react', 'react-dom', 'three', 'zustand', 'zundo', 'clsx', 'tailwind-merge']
+    .some(dep => specifier === dep || specifier?.startsWith(`${dep}/`))
+  for (const [file, edges] of graph) {
+    if (!/^(application\/editing|lib\/modeling)\//.test(rel(file))) continue
+    for (const edge of edges) {
+      if (edge.target ? upperLayer(edge.target) : edge.specifier === null || uiDependency(edge.specifier)) {
+        violations.push(`${rel(file)}:${edge.line}: detached editing must not depend on ${edge.specifier ?? '<non-literal import>'} (including type imports)`)
+      }
+    }
+  }
+
+  // Also follow type-only edges from the new public entry: emitted .d.ts must stay detached.
+  const seen = new Set()
+  const visit = file => {
+    if (seen.has(file)) return
+    seen.add(file)
+    for (const edge of graph.get(file) ?? []) {
+      if (edge.target) {
+        if (upperLayer(edge.target)) violations.push(`headless: contract dependency on ${rel(edge.target)}`)
+        visit(edge.target)
+      } else if (uiDependency(edge.specifier)) violations.push(`headless: contract dependency on ${edge.specifier}`)
+    }
+  }
+  visit(resolve(root, 'public/headless.ts'))
   return violations
 }
 

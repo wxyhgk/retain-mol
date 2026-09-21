@@ -8,6 +8,32 @@ import {
 } from './editing'
 
 describe('public editing sessions', () => {
+  it('cancels position writes without losing a pre-existing redo branch', () => {
+    const runtime = createViewerRuntime()
+    try {
+      const store = getViewerRuntimeServices(runtime).moleculeStore
+      store.getState().setMolecule({ atoms: [{ id: 'a', symbol: 'C', x: 0, y: 0, z: 0 }], bonds: [] })
+      store.temporal.getState().clear()
+      store.getState().moveAtom('a', 1, 0, 0)
+      store.temporal.getState().undo()
+      const objectId = store.getState().activeObjectId!
+      const before = store.getState().objectsById
+      const past = [...store.temporal.getState().pastStates]
+      const future = [...store.temporal.getState().futureStates]
+      const session = createObjectPositionWriteEditSession(objectId, runtime)
+      session.start()
+      session.write(new Map([['a', { x: 5, y: 2, z: 1 }]]))
+      session.write(new Map([['a', { x: 8, y: 3, z: 2 }]]))
+      session.cancel()
+      expect(session.isActive).toBe(false)
+      expect(store.getState().objectsById).toBe(before)
+      expect(store.temporal.getState().pastStates).toEqual(past)
+      expect(store.temporal.getState().futureStates).toEqual(future)
+      store.temporal.getState().redo()
+      expect(store.getState().objectsById[objectId].molecule.atoms[0].x).toBe(1)
+    } finally { runtime.dispose() }
+  })
+
   it('writes through the supplied isolated viewer runtime', () => {
     const first = createViewerRuntime()
     const second = createViewerRuntime()

@@ -9,7 +9,8 @@
 * 改 `src/` 后必须 `npm run build --workspace @retainmol/mol-viewer`，否则消费方用旧 dist。
 * ID 一律 `genId()`（`lib/model/identity.ts`），保留非安全上下文的兼容行为；`lib/utils.ts` 仅为旧路径转发与 UI 工具，新分子代码不得从那里引入 ID。
 * 基础模型在 `lib/model/`，共享图查询在 `lib/graph/`，显示/工具/预览契约在 `lib/presentation/`。类型依赖也必须遵守边界；内部代码不得继续引用旧 `lib/types.ts` 混合入口。
-* `/core`、`/io` 的运行时外部依赖仅允许 OpenChemLib，`/graph`、`/geometry` 不允许外部依赖。源码和 dist 都检查完整导入链；这不代表当前 `/modeling` 已是纯入口。
+* `/core`、`/io` 的运行时外部依赖仅允许 OpenChemLib，`/graph`、`/geometry` 不允许外部依赖；`/headless` 只允许 OpenChemLib/Zod。源码和 dist 都检查完整导入链；旧 `/modeling` 保留 runtime 兼容，不能当作纯入口。
+* 编辑会话逻辑放 `application/editing/`，store 回调绑定放 `runtime/editingSessions.ts`；hooks/public 不从旧 `hooks/editSessionFactory.ts` 取实现。`lib/modeling` 与会话逻辑不得依赖 store/runtime/hooks/React 类型或值。
 * OCL 坐标 y/z 取反：导入 `-getAtomY/Z`，导出 `-a.y/-a.z` 补偿（详见根 docs）。
 
 ## 渲染层公共出口现状

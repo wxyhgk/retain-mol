@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createViewerRuntime, getViewerRuntimeServices } from '../runtime/ViewerRuntime'
+import { replayEditPlan, type EditPlan } from './headless'
 import {
   commitEditPlan,
   getModelingContext,
@@ -7,6 +8,70 @@ import {
 } from './modeling'
 
 describe('public modeling runtime adapter', () => {
+  it('matches headless execution and records one undo step without affecting another runtime', () => {
+    const first = createViewerRuntime()
+    const second = createViewerRuntime()
+    try {
+      const store = getViewerRuntimeServices(first).moleculeStore
+      const target = getModelingContext(first).objects[0]!
+      const untouched = getModelingContext(second)
+      const plan: EditPlan = {
+        schemaVersion: 1, planId: 'parity', source: 'human',
+        targetObjectId: target.objectId, expectedRevision: target.revision,
+        commands: [
+          { commandId: 'c', kind: 'atom.add', atomId: 'c', symbol: 'C', position: { x: 0, y: 0, z: 0 } },
+          { commandId: 'o', kind: 'atom.add', atomId: 'o', symbol: 'O', position: { x: 1.4, y: 0, z: 0 } },
+          { commandId: 'co', kind: 'bond.add', bondId: 'co', atomId1: 'c', atomId2: 'o', order: 1 },
+          { commandId: 'replace', kind: 'atom.replace', atomId: 'o', symbol: 'N' },
+        ],
+      }
+      const headless = replayEditPlan(target.molecule, plan, { objectId: target.objectId })
+      expect(headless.ok).toBe(true)
+      if (!headless.ok) return
+      store.temporal.getState().clear()
+      expect(commitEditPlan(plan, first)).toMatchObject({ ok: true, committed: true })
+      expect(getModelingContext(first).objects[0]!.molecule).toEqual(headless.molecule)
+      expect(store.temporal.getState().pastStates).toHaveLength(1)
+      expect(getModelingContext(second)).toEqual(untouched)
+      store.temporal.getState().undo()
+      expect(getModelingContext(first).objects[0]!.molecule).toEqual(target.molecule)
+      store.temporal.getState().redo()
+      expect(getModelingContext(first).objects[0]!.molecule).toEqual(headless.molecule)
+      expect(commitEditPlan(plan, first)).toMatchObject({ ok: false, committed: false })
+      expect(store.temporal.getState().pastStates).toHaveLength(1)
+    } finally {
+      first.dispose()
+      second.dispose()
+    }
+  })
+
+  it('keeps failed batches and competing transactions out of state and history', () => {
+    const runtime = createViewerRuntime()
+    try {
+      const store = getViewerRuntimeServices(runtime).moleculeStore
+      const target = getModelingContext(runtime).objects[0]!
+      const plan: EditPlan = {
+        schemaVersion: 1, planId: 'atomic', source: 'human', targetObjectId: target.objectId,
+        commands: [{ commandId: 'add', kind: 'atom.add', atomId: 'c', symbol: 'C', position: { x: 0, y: 0, z: 0 } }],
+      }
+      store.temporal.getState().clear()
+      const before = store.getState().objectsById
+      expect(commitEditPlan({ ...plan, commands: [...plan.commands,
+        { commandId: 'bad', kind: 'atom.move', atomId: 'missing', position: { x: 1, y: 0, z: 0 } },
+      ] }, runtime)).toMatchObject({ ok: false, committed: false })
+      expect(store.getState().objectsById).toBe(before)
+      expect(store.temporal.getState().pastStates).toHaveLength(0)
+
+      const transaction = store.getState().beginTransaction('pointer-owner')
+      try {
+        expect(commitEditPlan(plan, runtime)).toMatchObject({ ok: false, committed: false })
+        expect(transaction.active).toBe(true)
+        expect(store.getState().objectsById).toBe(before)
+      } finally { transaction.cancel() }
+      expect(store.temporal.getState().pastStates).toHaveLength(0)
+    } finally { runtime.dispose() }
+  })
+
   it('commits one complete plan as one undo transaction', () => {
     const runtime = createViewerRuntime()
     const services = getViewerRuntimeServices(runtime)

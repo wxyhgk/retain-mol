@@ -3,12 +3,12 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
-import { buildModuleGraph, checkFoundations, checkPureEntries, readImports, runtimeCycles } from './module-graph.mjs'
+import { buildModuleGraph, checkEditingBoundaries, checkFoundations, checkPureEntries, readImports, runtimeCycles } from './module-graph.mjs'
 
 function fixture(t, files, built = false) {
   const root = mkdtempSync(join(tmpdir(), 'mol-module-graph-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
-  for (const name of ['core', 'io', 'geometry', 'graph']) {
+  for (const name of ['core', 'io', 'geometry', 'graph', 'headless']) {
     files[`public/${name}.${built ? 'js' : 'ts'}`] ??= 'export {}'
   }
   for (const [name, source] of Object.entries(files)) {
@@ -107,4 +107,34 @@ test('new consumers cannot silently use compatibility barrels', t => {
     'lib/query.ts': "import type { Atom } from './types'",
   })
   assert.match(checkFoundations(graph, root).join('\n'), /compatibility facade "lib\/types.ts"/)
+})
+
+test('headless entry rejects indirect store types as well as runtime imports', t => {
+  const { root, graph } = fixture(t, {
+    'public/headless.ts': "export type { Snapshot } from '../lib/modeling/context'",
+    'lib/modeling/context.ts': "export type { Snapshot } from '../../store/state'",
+    'store/state.ts': 'export interface Snapshot {}',
+  })
+  assert.deepEqual(checkPureEntries(graph, root), [])
+  const errors = checkEditingBoundaries(graph, root).join('\n')
+  assert.match(errors, /detached editing.*including type imports/)
+  assert.match(errors, /headless: contract dependency on store\/state.ts/)
+})
+
+test('editing sessions cannot import their runtime adapter', t => {
+  const { root, graph } = fixture(t, {
+    'application/editing/sessions.ts': "import '../../runtime/editingSessions'",
+    'runtime/editingSessions.ts': 'export {}',
+  })
+  assert.match(checkEditingBoundaries(graph, root).join('\n'), /detached editing.*runtime\/editingSessions/)
+})
+
+test('headless allows chemistry/schema dependencies but rejects runtime shared chunks', t => {
+  const { root, graph } = fixture(t, {
+    'public/headless.js': "import 'zod'; import 'openchemlib'; export * from '../shared.js'",
+    'shared.js': "import 'zustand'",
+  }, true)
+  const errors = checkPureEntries(graph, root, { built: true })
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /headless: shared.js:1.*zustand/)
 })

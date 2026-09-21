@@ -122,6 +122,7 @@ Compatibility policy:
 | `/state` | Explicit mutable Zustand access | Opt-in boundary; do not re-export from unrelated entries |
 | `/editing` | Narrow position-write transaction | Does not expose `useBuilder` or internal edit-session factories |
 | `/modeling` | Serializable context, strict edit plans, dry-run and atomic commit | AI/providers must not mutate stores or simulate pointer input |
+| `/headless` | Pure context, plan validation and replay | No viewer runtime/store creation; OpenChemLib and Zod are the only allowed runtime externals |
 | `/geometry`, `/graph` | Pure geometry and topology queries | No store mutation or rendering concerns |
 | `/styles` | Theme, preset, and render-profile schemas/registries | Renderer-neutral; no Three.js material objects |
 | `/three` | Explicit Three.js material extension point | Three.js-dependent consumers must opt in here |
@@ -175,7 +176,15 @@ Current policy:
 - 直接持有或修改 Zustand store。
 - 让模型输出任意 JavaScript、内部 action 名称或鼠标事件。
 
-运行时提交只允许通过 `public/modeling.ts`，并必须执行 revision 二次检查和单事务提交。模型 provider、图片识别和提示词编排属于 App/服务层，不进入核心协议层。
+运行时提交通过 `public/modeling.ts` 转发到 `runtime/modelingApi.ts`，并必须执行 revision 二次检查和单事务提交。
+`public/headless.ts` 直接公开纯执行模块。上下文转换接收普通 snapshot/intent DTO，不依赖 store 类型。
+模型 provider、图片识别和提示词编排属于 App/服务层，不进入核心协议层。
+
+### `packages/mol-viewer/src/application/editing`
+
+会话只消费所需的分子读取、坐标写入、对齐和事务回调，不持有 store 或 React hook。
+`runtime/editingSessions.ts` 负责把实例 store 适配到这些端口，hooks 和公开 editing API 调用同一适配层。
+旧 `hooks/editSessionFactory.ts` 只保留兼容转发，不再承载实现。
 
 ### `packages/mol-viewer/src/store`
 
@@ -334,7 +343,7 @@ The app checker also owns the existing command-domain matrix, facade and transac
 running only the mol-viewer checker does not replace the root gate.
 
 The mol-viewer checker additionally enforces foundation ownership (including type imports),
-explicit runtime import cycles, and transitive `/core`, `/io`, `/geometry`, `/graph` dependencies.
+explicit runtime import cycles, and transitive `/core`, `/io`, `/geometry`, `/graph`, `/headless` dependencies.
 `check-dist` applies the same external dependency allowlist to generated JavaScript chunks.
 
 Together the scripts currently enforce these rules:
@@ -353,7 +362,7 @@ Together the scripts currently enforce these rules:
 - Hook files other than `builderEditCommandEffects.ts` must use `runEditCommand` instead of calling `applyEditCommandResult` directly.
 - `hooks/useCanvasPointerRouter.ts` must commit object transforms through `commitObjectPointerTransform` and box selection through `commitBoxSelect`; it should not call `runObjectPointerTransformCommand`, `applyObjectTransformResult`, or `resolveBoxSelectResult` directly.
 - Package code and tests must use builder commands or focused builder modules，不存在 `BuilderEngine` 聚合入口。
-- Direct `beginTransaction/endTransaction` calls are limited to `store/slices/editSlice.ts` and `hooks/editSessionFactory.ts`; other code must use edit sessions.
+- Direct `beginTransaction/endTransaction` calls are limited to `store/slices/editSlice.ts` and `runtime/editingSessions.ts`; other code must use edit sessions or the existing atomic `runTransaction` adapter.
 - Builder and Renderer may not import each other; Builder also may not import Three.js.
 - Declarative `styles/` may not import renderer implementation.
 - Three.js material extensions live in `/three`; `/styles` stays renderer-neutral.

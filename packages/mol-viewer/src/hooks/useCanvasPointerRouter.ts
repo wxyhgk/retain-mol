@@ -18,7 +18,7 @@ import { selectActiveMoleculeOrEmpty, type MoleculeStoreApi } from '../store/mol
 import type { ThreeRendererPort } from '../lib/molRenderer'
 import { toolCan } from '../config/toolCapabilities.config'
 import { INTERACTION } from '../config/interaction.config'
-import { createObjectTransformEditSession } from './editSessionFactory'
+import { createObjectTransformEditSession } from '../runtime/editingSessions'
 import {
   cancelObjectTransform,
   finishObjectTransform,
