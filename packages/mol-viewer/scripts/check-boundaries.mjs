@@ -1,49 +1,25 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, normalize, relative, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { relative, resolve } from 'node:path'
+import { buildModuleGraph, checkFoundations, checkPureEntries, runtimeCycles } from './module-graph.mjs'
 
 const srcDir = resolve(import.meta.dirname, '../src')
-
-function walk(dir) {
-  const files = []
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry)
-    if (statSync(path).isDirectory()) files.push(...walk(path))
-    else if (/\.(ts|tsx)$/.test(entry) && !/\.test\.(ts|tsx)$/.test(entry)) files.push(path)
-  }
-  return files
-}
-
-function moduleSpecifiers(source) {
-  const specifiers = []
-  const patterns = [
-    /\bimport(?:\s+type)?[\s\S]*?\bfrom\s+['"]([^'"]+)['"]/g,
-    /\bimport\s*['"]([^'"]+)['"]/g,
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    /\bexport(?:\s+type)?[\s\S]*?\bfrom\s+['"]([^'"]+)['"]/g,
-  ]
-  for (const pattern of patterns) {
-    let match
-    while ((match = pattern.exec(source))) specifiers.push(match[1])
-  }
-  return specifiers
-}
 
 function rel(path) {
   return relative(srcDir, path).replaceAll('\\', '/')
 }
 
-function resolveLocal(file, specifier) {
-  if (specifier.startsWith('@/')) return normalize(resolve(srcDir, specifier.slice(2)))
-  if (!specifier.startsWith('.')) return null
-  return normalize(resolve(dirname(file), specifier))
+const graph = buildModuleGraph(srcDir)
+const violations = [...checkFoundations(graph, srcDir), ...checkPureEntries(graph, srcDir)]
+
+for (const cycle of runtimeCycles(graph)) {
+  violations.push(`Runtime import cycle: ${cycle.map(rel).join(', ')}`)
 }
 
-const violations = []
-
-for (const file of walk(srcDir)) {
+for (const [file, edges] of graph) {
   const fileRel = rel(file)
   const source = readFileSync(file, 'utf8')
-  const imports = moduleSpecifiers(source)
+  const imports = edges.flatMap(edge => edge.specifier === null ? [] : [edge.specifier])
+  const resolveLocal = (_file, specifier) => edges.find(edge => edge.specifier === specifier)?.target
 
   if (/\bimport\.meta\.env(?:\.|\[)/.test(source)) {
     violations.push(`${fileRel}: mol-viewer must receive runtime configuration from its host`)
@@ -54,6 +30,9 @@ for (const file of walk(srcDir)) {
       if (specifier === 'three' || specifier.startsWith('three/')) {
         violations.push(`${fileRel}: Builder must use pure vector/transform DTOs, not Three.js`)
       }
+      if (['react', 'react-dom', 'zustand', 'zundo', 'clsx', 'tailwind-merge'].some(dep => specifier === dep || specifier.startsWith(`${dep}/`))) {
+        violations.push(`${fileRel}: Builder must not depend on UI/state dependency "${specifier}"`)
+      }
 
       const target = resolveLocal(file, specifier)
       if (!target) continue
@@ -63,6 +42,7 @@ for (const file of walk(srcDir)) {
         || targetRel.startsWith('hooks/')
         || targetRel.startsWith('components/')
         || targetRel.startsWith('store/')
+        || targetRel.startsWith('runtime/')
       ) {
         violations.push(`${fileRel}: Builder must not depend on upper layer "${targetRel}"`)
       }
@@ -72,7 +52,7 @@ for (const file of walk(srcDir)) {
   if (!fileRel.startsWith('lib/molRenderer/')) {
     for (const specifier of imports) {
       const target = resolveLocal(file, specifier)
-      if (target && rel(target) === 'lib/molRenderer/MolRenderer') {
+      if (target && rel(target) === 'lib/molRenderer/MolRenderer.ts') {
         violations.push(`${fileRel}: depend on RendererPort capabilities instead of concrete MolRenderer`)
       }
     }
@@ -120,7 +100,7 @@ for (const file of walk(srcDir)) {
 
   if (fileRel === 'lib/builder/fragment/model.ts') {
     for (const specifier of imports) {
-      if (specifier !== '../../types') {
+      if (specifier !== '../../model/types') {
         violations.push(`${fileRel}: fragment model may only depend on the pure core type leaf, not "${specifier}"`)
       }
     }
@@ -133,4 +113,4 @@ if (violations.length > 0) {
   process.exit(1)
 }
 
-console.log('mol-viewer boundaries passed (Builder, Renderer, and declarative Style directions enforced).')
+console.log('mol-viewer boundaries passed (foundation ownership, pure entry closures, runtime cycles, Builder/Renderer/Style directions).')

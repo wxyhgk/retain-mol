@@ -1,6 +1,6 @@
 import type { Molecule } from '../../../molecule'
 import { reconcileAtomChirality } from '../../../stereo/perception'
-import type { MolClipboard } from '../../../types'
+import type { MolClipboard } from '../../../clipboard'
 import type { EditCommandResultWithMeta } from './commandResult'
 
 export interface CommandSelectionState {

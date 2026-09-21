@@ -7,7 +7,9 @@
 * 新公共出口的传递类型也必须同入口导出（API-Extractor 同入口规则），报什么补什么，勿预加。
 * `three` 是 peerDependency 且构建时 external——**不许**改成普通依赖（会产生双实例破坏 instanceof）。
 * 改 `src/` 后必须 `npm run build --workspace @retainmol/mol-viewer`，否则消费方用旧 dist。
-* ID 一律 `genId()`（`lib/utils.ts`），`crypto.randomUUID` 在非安全上下文会炸。
+* ID 一律 `genId()`（`lib/model/identity.ts`），保留非安全上下文的兼容行为；`lib/utils.ts` 仅为旧路径转发与 UI 工具，新分子代码不得从那里引入 ID。
+* 基础模型在 `lib/model/`，共享图查询在 `lib/graph/`，显示/工具/预览契约在 `lib/presentation/`。类型依赖也必须遵守边界；内部代码不得继续引用旧 `lib/types.ts` 混合入口。
+* `/core`、`/io` 的运行时外部依赖仅允许 OpenChemLib，`/graph`、`/geometry` 不允许外部依赖。源码和 dist 都检查完整导入链；这不代表当前 `/modeling` 已是纯入口。
 * OCL 坐标 y/z 取反：导入 `-getAtomY/Z`，导出 `-a.y/-a.z` 补偿（详见根 docs）。
 
 ## 渲染层公共出口现状

@@ -10,8 +10,8 @@
  */
 
 import type { Molecule } from '../molecule'
-import { degree } from './graph'
-import { getConnectedFragment } from './analysis/fragments'
+import { degree } from '../graph/queries'
+import { getConnectedFragment } from '../graph/components'
 import { maxValence } from './valence'
 
 /**

@@ -11,7 +11,7 @@
  */
 
 import type { Atom, Bond, Molecule } from '../../molecule'
-import { bondsOf, otherEnd } from '../graph'
+import { bondsOf, otherEnd } from '../../graph/queries'
 import { inferHybridization } from './hybridization'
 
 // ── 类型 ──────────────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@
  */
 
 import type { Molecule, Atom } from '../../molecule'
-import { findBond } from '../graph'
+import { findBond } from '../../graph/queries'
 import { reachableWithout } from './bondOps'
 import { calcAngle, calcDihedral } from '../geometry/measure'
 

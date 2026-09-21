@@ -1,7 +1,7 @@
-import { genId } from './utils'
-// 核心类型定义在叶子层 types.ts（config 也要用，避免 lib⇄config 循环）；
+import { genId } from './model/identity'
+// 核心类型定义在叶子层 model/types.ts（config 也要用，避免 lib⇄config 循环）；
 // 这里 re-export 保持既有 import 路径兼容
-import type { Atom, Bond, Molecule } from './types'
+import type { Atom, Bond, Molecule } from './model/types'
 export type { Atom, Bond, Molecule }
 
 export function parseXYZ(text: string): Molecule {

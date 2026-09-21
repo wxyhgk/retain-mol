@@ -6,7 +6,7 @@
 
 import type { StateCreator } from 'zustand'
 import { createSceneObject } from '../../lib/sceneObject'
-import { genId } from '../../lib/utils'
+import { genId } from '../../lib/model/identity'
 import type { MoleculeState, SceneSlice } from './types'
 import type { GetTemporal } from './transactionController'
 import {

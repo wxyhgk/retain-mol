@@ -24,12 +24,8 @@ export type {
   RendererViewportPort,
 } from '../lib/molRenderer/rendererPorts'
 export type { Atom, Bond, Molecule } from '../lib/molecule'
-export type {
-  CoordinationSite,
-  CoordinationSiteAssignment,
-  CoordinationBondOrder,
-  DisplayMode,
-} from '../lib/types'
+export type { CoordinationSite, CoordinationSiteAssignment, CoordinationBondOrder } from '../lib/model/types'
+export type { DisplayMode } from '../lib/presentation/types'
 
 export { captureViewportImage } from '../capture'
 export {

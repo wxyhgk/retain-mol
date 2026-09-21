@@ -1,4 +1,4 @@
-import type { FragmentTorsionPreview } from '../lib/types'
+import type { FragmentTorsionPreview } from '../lib/presentation/types'
 import {
   applyFragmentTorsion,
   canStartFragmentTorsion,

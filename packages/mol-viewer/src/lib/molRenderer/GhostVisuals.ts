@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { FragmentTorsionPreview, GrowGuideSpec } from '../types'
+import type { FragmentTorsionPreview, GrowGuideSpec } from '../presentation/types'
 import { GHOST_LINE, GROW_GUIDE, RENDER } from '../../config/render.config'
 import { ticker as defaultTicker } from '../animation'
 import { buildDepthCuedRing } from './ghostGeometry'

@@ -15,13 +15,8 @@ export type {
 
 // ── 分子数据类型 & 工具函数 ────────────────────────────────────────────────────
 export type { Molecule, Atom, Bond } from './lib/molecule'
-export type {
-  ClipboardAtom,
-  ClipboardBond,
-  CoordinationBondOrder,
-  CoordinationSite,
-  CoordinationSiteAssignment,
-} from './lib/types'
+export type { ClipboardAtom, ClipboardBond } from './lib/clipboard'
+export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from './lib/model/types'
 export {
   newAtom, newBond, centerMolecule, shiftMolecule,
   parseXYZ, exportXYZ, inferBonds,
@@ -57,8 +52,9 @@ export type {
   AlignBondPairResult,
   BondPairAlignmentEditSession,
 } from './public/editing'
-export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement, MolClipboard } from './lib/types'
-export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from './lib/types'
+export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement } from './lib/presentation/types'
+export type { MolClipboard } from './lib/clipboard'
+export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from './lib/presentation/types'
 
 // ── IO ────────────────────────────────────────────────────────────────────────
 export { parseMol, parseSdf, exportMol, exportSdf, is2D,

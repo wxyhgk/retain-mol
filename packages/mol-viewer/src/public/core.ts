@@ -1,5 +1,5 @@
 export type { Molecule, Atom, Bond } from '../lib/molecule'
-export { parseMolecule } from '../lib/moleculeValidation'
+export { parseMolecule } from '../lib/model/validation'
 export type { EditorHostPort, EditorHostSnapshot } from '../lib/editorHostPort'
 export {
   newAtom,
@@ -14,20 +14,10 @@ export {
 export type { SceneObject } from '../lib/sceneObject'
 export { createSceneObject } from '../lib/sceneObject'
 
-export type {
-  ClipboardAtom,
-  ClipboardBond,
-  CoordinationBondOrder,
-  CoordinationSite,
-  CoordinationSiteAssignment,
-  DisplayMode,
-  Tool,
-  MeasureType,
-  MeasureStyle,
-  Measurement,
-  MolClipboard,
-} from '../lib/types'
-export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '../lib/types'
+export type { ClipboardAtom, ClipboardBond, MolClipboard } from '../lib/clipboard'
+export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from '../lib/model/types'
+export type { DisplayMode, Tool, MeasureType, MeasureStyle, Measurement } from '../lib/presentation/types'
+export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '../lib/presentation/types'
 
 export { getElementConfig, findElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from '../config/elements.config'
 export type { ElementConfig, Hybridization } from '../config/elements.config'

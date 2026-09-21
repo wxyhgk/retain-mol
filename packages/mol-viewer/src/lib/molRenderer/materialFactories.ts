@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { DisplayMode } from '../types'
+import type { DisplayMode } from '../presentation/types'
 import { RENDER } from '../../config/render.config'
 import type { MaterialModel, ResolvedRenderProfile } from '../../styles/renderProfiles'
 import {

@@ -16,19 +16,9 @@ export type { ViewportUiState } from '../store/viewportStore'
 export type { Molecule } from '../lib/molecule'
 export type { Atom, Bond } from '../lib/molecule'
 export type { SceneObject } from '../lib/sceneObject'
-export type {
-  CoordinationSite,
-  CoordinationSiteAssignment,
-  CoordinationBondOrder,
-  ClipboardAtom,
-  ClipboardBond,
-  DisplayMode,
-  MeasureStyle,
-  MeasureType,
-  Measurement,
-  MolClipboard,
-  Tool,
-} from '../lib/types'
+export type { CoordinationSite, CoordinationSiteAssignment, CoordinationBondOrder } from '../lib/model/types'
+export type { ClipboardAtom, ClipboardBond, MolClipboard } from '../lib/clipboard'
+export type { DisplayMode, MeasureStyle, MeasureType, Measurement, Tool } from '../lib/presentation/types'
 export type { RenderStyle } from '../styles/schema'
 export type { ElementStyle, ResolvedTheme, Theme } from '../presets'
 export type { EditCommandResult } from '../lib/builder/commands/shared'

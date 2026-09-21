@@ -1,6 +1,6 @@
-import { parseMolecule } from '../lib/moleculeValidation'
+import { parseMolecule } from '../lib/model/validation'
 import type { Molecule } from '../lib/molecule'
-import type { DisplayMode } from '../lib/types'
+import type { DisplayMode } from '../lib/presentation/types'
 import { selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
 import { getViewerRuntimeServices, type ViewerRuntime } from './ViewerRuntime'
 

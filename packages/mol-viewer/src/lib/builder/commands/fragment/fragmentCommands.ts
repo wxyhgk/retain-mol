@@ -6,7 +6,7 @@ import {
   fuseFragmentOnBond,
 } from '../../editing/fragment'
 import { editChanged, editFailed, type EditCommandResult } from '../shared'
-import type { FragmentTorsionPreview } from '../../../types'
+import type { FragmentTorsionPreview } from '../../../presentation/types'
 
 export interface AttachFragmentToAtomCommandInput {
   readonly atomId: string

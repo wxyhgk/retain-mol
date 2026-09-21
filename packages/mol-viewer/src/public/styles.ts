@@ -36,7 +36,7 @@ export type {
   MaterialModel,
   ResolvedRenderProfile,
 } from '../styles/renderProfiles'
-export type { DisplayMode } from '../lib/types'
+export type { DisplayMode } from '../lib/presentation/types'
 export {
   registerRenderProfile,
   resolveRenderProfile,

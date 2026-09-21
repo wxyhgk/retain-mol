@@ -7,9 +7,5 @@ export {
   generate3D, minimizeGeometry, registerForceFieldFromUrl, markForceFieldReady,
 } from './lib/io/molFormat'
 export type { OptimizeResult } from './lib/io/molFormat'
-export type { Molecule, Atom, Bond } from './lib/types'
-export type {
-  CoordinationBondOrder,
-  CoordinationSite,
-  CoordinationSiteAssignment,
-} from './lib/types'
+export type { Molecule, Atom, Bond } from './lib/model/types'
+export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from './lib/model/types'

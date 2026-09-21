@@ -86,11 +86,7 @@ export type {
   ModelingScope,
 } from '../lib/modeling'
 export type { Atom, Bond, Molecule } from '../lib/molecule'
-export type {
-  CoordinationBondOrder,
-  CoordinationSite,
-  CoordinationSiteAssignment,
-} from '../lib/types'
+export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from '../lib/model/types'
 export type { ViewerRuntime } from '../runtime/ViewerRuntime'
 
 /** Read-only, serializable snapshot intended for AI planners and collaboration clients. */

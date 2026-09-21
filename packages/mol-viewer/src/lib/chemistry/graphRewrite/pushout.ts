@@ -1,4 +1,4 @@
-import type { Atom, Bond, Molecule } from '../../types'
+import type { Atom, Bond, Molecule } from '../../model/types'
 import { maxValence, valenceUsed } from '../valence'
 import type {
   AtomInterfaceMapping,

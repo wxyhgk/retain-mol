@@ -1,6 +1,7 @@
 import { getElementConfig } from '../../../../config/elements.config'
 import { RENDER } from '../../../../config/render.config'
-import type { GrowGuideSpec, Vector3Data } from '../../../types'
+import type { GrowGuideSpec } from '../../../presentation/types'
+import type { Vector3Data } from '../../../model/types'
 import type { Molecule } from '../../../molecule'
 import { resolveHSlotGrowth } from '../../editing/atomOps'
 import { ringPlaneIntersection } from '../../geometry/plane'

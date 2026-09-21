@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { MeasureStyle, MeasureType } from '../types'
+import type { MeasureStyle, MeasureType } from '../presentation/types'
 import { calcAngle, calcDihedral } from '../geometry/measure'
 import { angleArcGeometry, dihedralGeometry } from './measureGeometry'
 import type { MeasurePrimitiveFactory } from './MeasurePrimitiveFactory'

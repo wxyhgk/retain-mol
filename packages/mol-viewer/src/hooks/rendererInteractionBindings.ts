@@ -5,7 +5,7 @@ import {
   canSelectInInteractionMode,
   type InteractionMode,
 } from '../lib/interaction/interactionMode'
-import type { Tool } from '../lib/types'
+import type { Tool } from '../lib/presentation/types'
 import type { BuilderHandlers } from './useBuilder'
 
 export interface RendererInteractionBindingTarget extends InteractionBindingsPort {

@@ -1,4 +1,4 @@
-import type { Molecule } from '../../types'
+import type { Molecule } from '../../model/types'
 
 export interface AtomInterfaceMapping {
   readonly hostAtomId: string

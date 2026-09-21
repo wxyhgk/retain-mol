@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Atom, Bond, Molecule } from '../../types'
+import type { Atom, Bond, Molecule } from '../../model/types'
 import {
   commitFragmentFusionCommand,
   prepareFragmentFusionCommand,

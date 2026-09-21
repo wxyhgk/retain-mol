@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useMemo, useState } from 'react'
 import type { RendererPort, ThreeRendererPort } from '../../lib/molRenderer'
-import type { DisplayMode } from '../../lib/types'
+import type { DisplayMode } from '../../lib/presentation/types'
 import { toolCan } from '../../config/toolCapabilities.config'
 import { useBuilder } from '../../hooks/useBuilder'
 import { useMolViewerSync } from '../../hooks/useMolViewerSync'

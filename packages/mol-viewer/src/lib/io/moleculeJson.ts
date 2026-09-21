@@ -1,5 +1,5 @@
-import type { Molecule } from '../types'
-import { parseMolecule } from '../moleculeValidation'
+import type { Molecule } from '../model/types'
+import { parseMolecule } from '../model/validation'
 
 /** Lossless native JSON for the current Molecule shape, including stable IDs. */
 export function exportMoleculeJson(molecule: Molecule): string {

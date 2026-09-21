@@ -1,8 +1,5 @@
-import type {
-  FragmentTorsionPreview,
-  GrowGuideSpec,
-  Vector3Data,
-} from '../types'
+import type { FragmentTorsionPreview, GrowGuideSpec } from '../presentation/types'
+import type { Vector3Data } from '../model/types'
 
 export interface GrowPreviewSpec {
   readonly pos: Vector3Data

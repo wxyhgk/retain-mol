@@ -12,9 +12,9 @@
  * 都应调用这里，不再各自实现。
  */
 
-import type { Bond } from '../../types'
+import type { Bond } from '../../model/types'
 import type { AtomHybridization } from '../../../config/geometry.config'
-import { bondsOf } from '../graph'
+import { bondsOf } from '../../graph/queries'
 
 /** 从原子的现有键推断杂化（唯一真理来源） */
 export function inferHybridization(bonds: readonly Bond[], atomId: string): AtomHybridization {

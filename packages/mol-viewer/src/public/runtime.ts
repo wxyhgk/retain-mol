@@ -16,9 +16,6 @@ export type {
   ViewerSnapshot,
   ViewerViewApi,
 } from '../runtime/viewerApi'
-export type { Atom, Bond, Molecule, DisplayMode } from '../lib/types'
-export type {
-  CoordinationBondOrder,
-  CoordinationSite,
-  CoordinationSiteAssignment,
-} from '../lib/types'
+export type { Atom, Bond, Molecule } from '../lib/model/types'
+export type { DisplayMode } from '../lib/presentation/types'
+export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from '../lib/model/types'

@@ -1,6 +1,6 @@
 import { effectiveMaxBonds, getElementConfig } from '../../config/elements.config'
 import type { Atom, Bond, Molecule } from '../molecule'
-import { otherEnd } from '../builder/graph'
+import { otherEnd } from '../graph/queries'
 
 export function bondValence(bond: Bond): number {
   return bond.aromatic ? 1.5 : bond.order

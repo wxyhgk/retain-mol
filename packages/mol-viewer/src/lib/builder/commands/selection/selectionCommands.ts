@@ -1,5 +1,5 @@
 import type { Molecule } from '../../../molecule'
-import { getConnectedFragment } from '../../analysis/fragments'
+import { getConnectedFragment } from '../../../graph/components'
 import {
   selectionSetsEqual,
 } from '../shared'

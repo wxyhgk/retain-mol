@@ -1,5 +1,5 @@
 import type { Molecule } from '../../molecule'
-import { findBond } from '../graph'
+import { findBond } from '../../graph/queries'
 import { reachableWithout } from '../editing/bondOps'
 
 export type BondLengthHandle = 'left' | 'center' | 'right'

@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { toolCan } from '../config/toolCapabilities.config'
 import type { ThreeRendererPort } from '../lib/molRenderer'
-import type { Tool } from '../lib/types'
+import type { Tool } from '../lib/presentation/types'
 import type { MoleculeStoreApi } from '../store/moleculeStore'
 import type { BuilderHandlers } from './useBuilder'
 import { canEditInInteractionMode, type InteractionMode } from '../lib/interaction/interactionMode'

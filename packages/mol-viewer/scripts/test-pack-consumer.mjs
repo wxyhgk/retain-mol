@@ -38,6 +38,41 @@ try {
   }, null, 2))
   run('npm', ['install', '--ignore-scripts', '--no-package-lock', '--no-audit', '--no-fund'])
 
+  // Separate processes prevent the complete viewer consumer from preloading a forbidden dependency.
+  writeFileSync(join(consumerDir, 'pure-import-guard.mjs'), `
+const blocked = ['react', 'react-dom', 'three', 'zustand', 'zundo', 'clsx', 'tailwind-merge']
+export function resolve(specifier, context, nextResolve) {
+  if (blocked.some(dep => specifier === dep || specifier.startsWith(dep + '/'))) {
+    throw new Error('Pure entry loaded ' + specifier + ' from ' + context.parentURL)
+  }
+  return nextResolve(specifier, context)
+}
+`)
+  writeFileSync(join(consumerDir, 'pure-consumer.mjs'), `
+import assert from 'node:assert/strict'
+import * as nodeModule from 'node:module'
+import { resolve } from './pure-import-guard.mjs'
+
+if (nodeModule.registerHooks) nodeModule.registerHooks({ resolve })
+else nodeModule.register('./pure-import-guard.mjs', import.meta.url)
+
+const name = process.argv[2]
+const api = await import('@retainmol/mol-viewer/' + name)
+const molecule = { atoms: [{ id: 'a', symbol: 'C', x: 0, y: 0, z: 0 }], bonds: [] }
+if (name === 'core') {
+  assert.deepEqual(api.parseMolecule(molecule), molecule)
+  assert.equal(api.newAtom('N', 1, 2, 3).symbol, 'N')
+} else if (name === 'io') {
+  assert.deepEqual(api.parseMoleculeJson(api.exportMoleculeJson(molecule)), molecule)
+} else if (name === 'geometry') {
+  assert.equal(api.calcDistance({ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: 0 }), 5)
+} else if (name === 'graph') {
+  assert.deepEqual(api.splitConnectedComponents(molecule), [molecule])
+} else throw new Error('Unknown pure entry ' + name)
+console.log('Packed pure entry passed: ' + name)
+`)
+  for (const entry of ['core', 'io', 'geometry', 'graph']) run('node', ['pure-consumer.mjs', entry])
+
   writeFileSync(join(consumerDir, 'consumer.mjs'), `
 import { newAtom } from '@retainmol/mol-viewer/core'
 import { listFragments } from '@retainmol/mol-viewer/fragments'

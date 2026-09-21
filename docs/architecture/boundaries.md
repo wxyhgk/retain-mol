@@ -5,6 +5,9 @@
 
 This document defines ownership boundaries for multi-person work. The goal is to keep UI, chemistry editing logic, state, and rendering from becoming coupled through ad hoc imports.
 
+分子基础层的当前目录、兼容路径和验证范围见
+[`mol-viewer-internal-boundaries.md`](./mol-viewer-internal-boundaries.md)。
+
 ## Current State vs Target State
 
 Current state:
@@ -64,7 +67,7 @@ Owns:
 - 资产/版本类型、canonicalize、保存与加载、React Query hooks、`MoleculeDocumentControls`。
 
 Allowed dependency direction:
-- `@retainmol/mol-viewer` 仅限 `/core`、`/state` 子入口;`@retainmol/ui-kit` 根导入。
+- `@retainmol/mol-viewer` 仅限 `/core`、`/io`、`/three`、`/styles` 子入口;`@retainmol/ui-kit` 根导入。
 - 不得依赖 `@retainmol/jobs` 或 app 代码。
 
 Rule:
@@ -80,7 +83,7 @@ Owns:
 - `JobsApi` 接口与其 HTTP 实现之间的 wire 投影。
 
 Allowed dependency direction:
-- `@retainmol/mol-viewer` 仅限 `/core`、`/samples`、`/state`、`/styles`、`/three`、`/viewer` 子入口。
+- `@retainmol/mol-viewer` 仅限 `/core`、`/samples`、`/styles`、`/three`、`/viewer` 子入口。
 - `@retainmol/molecule-assets`、`@retainmol/ui-kit` 根导入。
 - 不得依赖 app 代码;app 的 workflows 编辑器通过 `SimulationWorkspace` 的 `workflowEditor` prop 注入。
 
@@ -104,7 +107,7 @@ Rule:
 
 Compatibility policy:
 - Existing root imports such as `import { MolViewer } from '@retainmol/mol-viewer'` stay valid for the compatibility period.
-- New app code should use explicit sub-entries, and app viewer runtime state should go through `apps/retainmol/src/domain/viewerAdapter.ts`.
+- New app code should use explicit sub-entries, and app viewer runtime state should go through focused adapters in `apps/retainmol/src/domain/viewer/`.
 - Do not remove root exports in the same change that introduces a sub-entry. Deprecation should be documented first, then removed in a later breaking-change window.
 - Public sub-entries should never require consumers to deep import from `packages/mol-viewer/src/...`.
 
@@ -114,8 +117,8 @@ Compatibility policy:
 | --- | --- | --- |
 | `/core` | Molecule data and pure molecule helpers | Must not expose React, Zustand, or Three.js |
 | `/io` | File parsing, export, and geometry preparation | Keep format-specific logic out of App components |
-| `/viewer` | `MolViewer`, capture, and narrow viewport commands | Must not expose stores or renderer implementation types |
-| `/runtime` | Opaque viewer lifecycle handle | Consumers may only dispose the runtime; runtime services stay internal |
+| `/viewer` | `MolViewer`, capture, and narrow viewport commands | Existing `useViewportStore` export is legacy; prefer `/state`. No new stores or renderer implementation types |
+| `/runtime` | Opaque viewer lifecycle handle and instance `getViewerApi` | Runtime services and mutable stores stay internal; host edits use the instance API |
 | `/state` | Explicit mutable Zustand access | Opt-in boundary; do not re-export from unrelated entries |
 | `/editing` | Narrow position-write transaction | Does not expose `useBuilder` or internal edit-session factories |
 | `/modeling` | Serializable context, strict edit plans, dry-run and atomic commit | AI/providers must not mutate stores or simulate pointer input |
@@ -326,10 +329,18 @@ Run this before merging boundary-sensitive changes:
 npm run verify
 ```
 
-The script currently enforces these rules:
+Root `check:boundaries` runs both the mol-viewer package checker and the app checker.
+The app checker also owns the existing command-domain matrix, facade and transaction-routing rules below;
+running only the mol-viewer checker does not replace the root gate.
+
+The mol-viewer checker additionally enforces foundation ownership (including type imports),
+explicit runtime import cycles, and transitive `/core`, `/io`, `/geometry`, `/graph` dependencies.
+`check-dist` applies the same external dependency allowlist to generated JavaScript chunks.
+
+Together the scripts currently enforce these rules:
 
 - App code must import mol-viewer through explicit public subpaths, not the root barrel.
-- App code must import viewer runtime state through `apps/retainmol/src/domain/viewerAdapter.ts`.
+- App code must import viewer runtime state through focused adapters in `apps/retainmol/src/domain/viewer/`.
 - Shared app UI primitives must not depend on mol-viewer.
 - `packages/mol-viewer/src/lib/builder/commands` must not import React, app aliases, store, hooks, components, or renderer internals.
 - hooks、store、components、public API 和包根入口只能从 `lib/builder/commands/<domain>` 领域 facade 导入，不能深度导入领域实现文件。
@@ -337,7 +348,7 @@ The script currently enforces these rules:
 - 已删除 `BuilderEngine.ts`、`fragmentOps.ts`、根命令 barrels 和旧混合命令文件；边界检查禁止恢复或引用这些路径。
 - App code and mol-viewer hooks/store/components/public entries must not import `lib/builder/editing`; user-facing edits go through builder commands.
 - The root `packages/mol-viewer/src/index.ts` barrel must not import `lib/builder/editing` directly; legacy root APIs should be bridged through command, public, or focused non-editing helper modules.
-- `store/slices` must not import low-level builder rules such as `lib/builder/graph`, `lib/builder/valence`, `lib/builder/kernel`, or `lib/builder/editing`; store slices consume command results and shared store helpers only.
+- `store/slices` must not import low-level builder rules such as `lib/builder/valence`, `lib/builder/kernel`, or `lib/builder/editing`; store slices consume command results and shared store helpers. Shared graph queries now belong to `lib/graph/`; old graph paths are compatibility-only.
 - `hooks/builder*Handlers.ts` files must route through `builder*Effects.ts` rather than importing builder commands directly.
 - Hook files other than `builderEditCommandEffects.ts` must use `runEditCommand` instead of calling `applyEditCommandResult` directly.
 - `hooks/useCanvasPointerRouter.ts` must commit object transforms through `commitObjectPointerTransform` and box selection through `commitBoxSelect`; it should not call `runObjectPointerTransformCommand`, `applyObjectTransformResult`, or `resolveBoxSelectResult` directly.

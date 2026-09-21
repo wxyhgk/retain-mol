@@ -18,7 +18,7 @@ import {
   type InteractionGestureState,
 } from './interactionGestureState'
 
-import type { GrowGuideSpec } from '../types'
+import type { GrowGuideSpec } from '../presentation/types'
 import type {
   AtomClickHandler,
   AtomDragEligibility,

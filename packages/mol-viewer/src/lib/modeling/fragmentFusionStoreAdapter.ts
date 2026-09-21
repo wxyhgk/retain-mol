@@ -9,7 +9,7 @@ import type {
   FragmentFusionEffect,
   PreparedFragmentFusionCommand,
 } from '../chemistry/graphRewrite'
-import type { Molecule } from '../types'
+import type { Molecule } from '../model/types'
 
 export interface MoleculeTransaction {
   readonly label: string

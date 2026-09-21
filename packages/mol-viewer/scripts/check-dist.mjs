@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { buildModuleGraph, checkPureEntries } from './module-graph.mjs'
 
 const packageDir = resolve(import.meta.dirname, '..')
 const distDir = join(packageDir, 'dist')
@@ -15,7 +16,7 @@ function walk(dir) {
   return files
 }
 
-const errors = []
+const errors = checkPureEntries(buildModuleGraph(distDir, { built: true }), distDir, { built: true })
 for (const [subpath, entry] of Object.entries(pkg.exports)) {
   for (const field of ['types', 'import']) {
     if (!existsSync(resolve(packageDir, entry[field]))) {

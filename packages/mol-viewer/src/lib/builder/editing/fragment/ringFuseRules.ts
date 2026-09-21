@@ -1,6 +1,6 @@
 import type { Atom, Bond, Molecule } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
-import { hNeighborsOf } from '../../graph'
+import { hNeighborsOf } from '../../../graph/queries'
 import { maxValence, valenceUsed } from '../../valence'
 
 export type RingFuseTargetResult =

@@ -1,6 +1,6 @@
 import type { Molecule } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
-import { degree } from '../../graph'
+import { degree } from '../../../graph/queries'
 
 export interface AtomClickDecisionInput {
   readonly atomId: string

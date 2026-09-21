@@ -5,7 +5,7 @@
 
 import type { Atom, Molecule } from '../molecule'
 import { parseXYZ, inferBonds } from '../molecule'
-import { genId } from '../utils'
+import { genId } from '../model/identity'
 import { parseMol } from './molFormat'
 
 export type PasteFormat = 'mol' | 'gjf' | 'xyz' | 'raw' | 'unknown'

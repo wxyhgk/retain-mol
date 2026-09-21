@@ -8,7 +8,7 @@ export type {
   MaterialFactory,
   MaterialFactoryContext,
 } from '../lib/molRenderer/materialFactories'
-export type { DisplayMode } from '../lib/types'
+export type { DisplayMode } from '../lib/presentation/types'
 export type {
   AmbientLightProfile,
   AromaticBondStyle,
@@ -35,4 +35,4 @@ export type { ObjectVisualState } from '../lib/molRenderer/moleculeObjectVisualS
 // Re-exported for API-Extractor's same-entry rule; canonical homes are `/core` and `/styles`.
 export type { ResolvedTheme, ElementStyle, Theme } from '../presets'
 export type { Atom, Bond, Molecule } from '../lib/molecule'
-export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from '../lib/types'
+export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from '../lib/model/types'

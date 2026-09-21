@@ -1,4 +1,4 @@
-import type { Vector3Data } from '../lib/types'
+import type { Vector3Data } from '../lib/model/types'
 import {
   applyBackgroundClickForIntent,
   applyBackgroundPlacement,

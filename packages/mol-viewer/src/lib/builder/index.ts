@@ -1,4 +1,4 @@
-export * from './graph'
+export * from '../graph/queries'
 export * from './valence'
 export * from './kernel'
 export * from './geometry'

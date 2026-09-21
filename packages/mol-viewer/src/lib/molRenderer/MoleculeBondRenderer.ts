@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Atom, Bond } from '../molecule'
-import type { DisplayMode } from '../types'
+import type { DisplayMode } from '../presentation/types'
 import type { ResolvedTheme } from '../../presets'
 import type { ResolvedRenderProfile } from '../../styles'
 import { RENDER } from '../../config/render.config'

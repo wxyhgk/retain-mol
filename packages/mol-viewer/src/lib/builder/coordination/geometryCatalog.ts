@@ -1,5 +1,5 @@
 import type { CoordinationGeometryId, CoordinationGeometryTemplate } from './types'
-import type { CoordinationSite } from '../../types'
+import type { CoordinationSite } from '../../model/types'
 
 type V3 = readonly [number, number, number]
 

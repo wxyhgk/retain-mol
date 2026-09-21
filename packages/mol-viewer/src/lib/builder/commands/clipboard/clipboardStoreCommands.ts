@@ -1,6 +1,6 @@
 import type { Atom, Bond, Molecule } from '../../../molecule'
 import { newAtom, newBond } from '../../../molecule'
-import type { ClipboardAtom, ClipboardBond, MolClipboard } from '../../../types'
+import type { ClipboardAtom, ClipboardBond, MolClipboard } from '../../../clipboard'
 import type { ClipboardCommandResult, PasteAtomsCommandResult } from '../shared'
 
 function copyAtomToClipboard(atom: Atom): ClipboardAtom {

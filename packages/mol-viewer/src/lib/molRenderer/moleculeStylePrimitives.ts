@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { DisplayMode } from '../types'
+import type { DisplayMode } from '../presentation/types'
 import type { ResolvedTheme } from '../../presets'
 import { hexToInt } from '../../presets'
 import { getElementConfig as getElement } from '../../config/elements.config'

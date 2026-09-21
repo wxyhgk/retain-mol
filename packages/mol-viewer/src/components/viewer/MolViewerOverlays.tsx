@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { toolCan } from '../../config/toolCapabilities.config'
 import type { ThreeRendererPort } from '../../lib/molRenderer'
-import type { Tool } from '../../lib/types'
+import type { Tool } from '../../lib/presentation/types'
 import BuilderHint from '../builder/BuilderHint'
 import AtomContextMenu from './AtomContextMenu'
 import AtomLabelOverlay from './AtomLabelOverlay'

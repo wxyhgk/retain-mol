@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import type { ThreeRendererPort } from '../lib/molRenderer'
 import type { SceneObject } from '../lib/sceneObject'
-import type { DisplayMode, Measurement, MeasureStyle, Tool } from '../lib/types'
+import type { DisplayMode, Measurement, MeasureStyle, Tool } from '../lib/presentation/types'
 import type { ResolvedTheme } from '../presets'
 import type { RenderStyle } from '../styles'
 import type { BuilderHandlers } from './useBuilder'

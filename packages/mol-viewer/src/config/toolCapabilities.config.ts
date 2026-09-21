@@ -7,7 +7,7 @@
  * 纯数据 + 纯查表函数，禁止 import store / hooks / three.js。
  */
 
-import type { Tool } from '../lib/types'
+import type { Tool } from '../lib/presentation/types'
 
 export interface ToolCapabilities {
   /** 可编辑分子（加/删原子、成键、生长、片段笔刷） */

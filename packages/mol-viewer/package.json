@@ -97,7 +97,7 @@
     "test:pack": "npm run build && node scripts/test-pack-consumer.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:strict": "tsc -p tsconfig.strict.json",
-    "test": "vitest run",
+    "test": "node --test scripts/module-graph.test.mjs && vitest run",
     "bench:picking": "vitest bench src/lib/molRenderer/picking/PickingAcceleration.bench.ts"
   },
   "peerDependencies": {

@@ -16,7 +16,7 @@
  */
 
 import type { MoleculeStoreApi } from './moleculeStore'
-import type { Measurement } from '../lib/types'
+import type { Measurement } from '../lib/presentation/types'
 
 interface EditorRefState {
   measurements: Measurement[]

@@ -24,7 +24,9 @@ commands/
 - 新行为先选择所属领域；跨多个领域的用户手势由 `interaction` 或上层 effect 编排。
 - command 保持纯函数，不导入 React、Zustand、renderer 或 App 代码。
 - atom/bond/fragment/geometry 等领域只暴露原语；跨领域流程归 interaction。
-- 领域间只能依赖对方 `index.ts` facade；boundary check 会校验依赖矩阵和 SCC。
+- 领域间只能依赖对方 `index.ts` facade。根 `check:boundaries` 中的 app 脚本检查命令领域依赖矩阵、facade 和领域 SCC；mol-viewer 包级脚本另检查基础模块归属、全包运行时 SCC 和纯入口导入链。
+
+共享图查询已移到 `lib/graph/queries.ts` 和 `lib/graph/components.ts`，分子类型与 ID 位于 `lib/model/`。新代码直接依赖所属模块，不再经过 `builder/graph.ts`、`builder/analysis/fragments.ts` 或混合 `lib/types.ts` 兼容入口。
 
 领域内部继续按行为拆分，例如：
 

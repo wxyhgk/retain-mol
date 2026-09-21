@@ -3,7 +3,7 @@ import { newAtom, newBond } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { BONDING } from '../../../../config/bonding.config'
 import { getElementConfig } from '../../../../config/elements.config'
-import { degree, findBond, hNeighborsOf } from '../../graph'
+import { degree, findBond, hNeighborsOf } from '../../../graph/queries'
 import { dot, sub, type Vec3 } from '../../math'
 import { availableMaxValenceByBonds } from '../../valence'
 

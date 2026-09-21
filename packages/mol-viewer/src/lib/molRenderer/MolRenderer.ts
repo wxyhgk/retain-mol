@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { MolControls } from '../controls/MolControls'
 import type { Atom, Molecule } from '../molecule'
-import type { DisplayMode, MeasureStyle, MeasureType } from '../types'
+import type { DisplayMode, MeasureStyle, MeasureType } from '../presentation/types'
 import { CAMERA, CONTROLS } from '../../config/camera.config'
 import { resolveTheme, hexToInt, type ResolvedTheme } from '../../presets'
 import { resolveRenderProfile, type RenderStyle } from '../../styles'

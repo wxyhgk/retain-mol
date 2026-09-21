@@ -1,6 +1,6 @@
 import type { Atom, Molecule } from '../../../molecule'
 import { inferHybridization } from '../../analysis/hybridization'
-import { bondsOf, otherEnd } from '../../graph'
+import { bondsOf, otherEnd } from '../../../graph/queries'
 import { findNextBondDir, getNeighborDirs } from '../../geometry/vsepr'
 import { maxValence, valenceUsed } from '../../valence'
 import { length, normalize, type Vec3 } from '../../math'

@@ -11,7 +11,7 @@ import { useEffect, useRef } from 'react'
 import { selectActiveMolecule } from '../store/moleculeStore'
 import { useViewerRuntimeServices, type ViewerRuntime } from '../runtime/ViewerRuntime'
 import { resolveTheme, type ResolvedTheme } from '../presets'
-import type { DisplayMode } from '../lib/types'
+import type { DisplayMode } from '../lib/presentation/types'
 import type { Molecule } from '../lib/molecule'
 import {
   commitControlledMoleculePropToStore,

@@ -1,4 +1,4 @@
-import { genId } from './utils'
+import { genId } from './model/identity'
 import type { Atom, Bond, Molecule } from './molecule'
 import { inferBonds, newBond } from './molecule'
 

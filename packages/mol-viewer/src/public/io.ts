@@ -12,11 +12,7 @@ export {
 export type { OptimizeResult } from '../lib/io/molFormat'
 export { parseMoleculeJson, exportMoleculeJson } from '../lib/io/moleculeJson'
 export type { Atom, Bond, Molecule } from '../lib/molecule'
-export type {
-  CoordinationBondOrder,
-  CoordinationSite,
-  CoordinationSiteAssignment,
-} from '../lib/types'
+export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from '../lib/model/types'
 
 export { GeometryRelaxer } from '../lib/geometry/relax'
 export type { RelaxOptions } from '../lib/geometry/relax'

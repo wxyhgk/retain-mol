@@ -1,5 +1,5 @@
 import type { FragmentDef } from '../fragment/model'
-import type { CoordinationSite } from '../../types'
+import type { CoordinationSite } from '../../model/types'
 
 export type CoordinationGeometryId =
   | 'linear'

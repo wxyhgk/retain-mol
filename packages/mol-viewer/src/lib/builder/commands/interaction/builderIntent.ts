@@ -1,4 +1,4 @@
-import type { Tool } from '../../../types'
+import type { Tool } from '../../../presentation/types'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { getFragment } from '../../fragmentLibrary'
 import { toolCan } from '../../../../config/toolCapabilities.config'

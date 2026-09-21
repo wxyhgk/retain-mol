@@ -1,4 +1,4 @@
-import type { FragmentTorsionPreview } from '../lib/types'
+import type { FragmentTorsionPreview } from '../lib/presentation/types'
 import type { BuilderIntent } from '../lib/builder/commands/interaction'
 import type { Molecule } from '../lib/molecule'
 import {

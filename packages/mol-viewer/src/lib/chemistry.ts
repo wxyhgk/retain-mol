@@ -1,5 +1,5 @@
 import { findElementConfig } from '../config/elements.config'
-import type { Atom } from './types'
+import type { Atom } from './model/types'
 
 export type ElementLike = Pick<Atom, 'symbol' | 'isotope'>
 

@@ -1,5 +1,5 @@
 import type { Molecule } from './molecule'
-import { genId } from './utils'
+import { genId } from './model/identity'
 
 export interface SceneObject {
   readonly id: string

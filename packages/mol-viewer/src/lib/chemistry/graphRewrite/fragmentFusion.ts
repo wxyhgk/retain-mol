@@ -1,4 +1,4 @@
-import type { Atom, Bond, Molecule } from '../../types'
+import type { Atom, Bond, Molecule } from '../../model/types'
 import { bondValence, targetValence, valenceUsed } from '../valence'
 import { applyExplicitChemicalRewrite } from './pushout'
 import type {

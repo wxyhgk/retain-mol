@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { DisplayMode } from '../lib/types'
+import type { DisplayMode } from '../lib/presentation/types'
 
 const Metadata = z.object({
   id: z.string().min(1),

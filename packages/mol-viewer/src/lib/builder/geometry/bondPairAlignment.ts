@@ -13,7 +13,7 @@ import {
   sub,
   type Vec3,
 } from '../../math/vec3'
-import { getConnectedFragment } from '../analysis/fragments'
+import { getConnectedFragment } from '../../graph/components'
 import type {
   BondPairGizmoGeometry,
   BondPairGizmoValue,

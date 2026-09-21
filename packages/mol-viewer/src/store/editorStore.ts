@@ -9,8 +9,9 @@
 
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
-import type { Tool, DisplayMode, MeasureType, MeasureStyle, Measurement, MolClipboard } from '../lib/types'
-import { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '../lib/types'
+import type { Tool, DisplayMode, MeasureType, MeasureStyle, Measurement } from '../lib/presentation/types'
+import type { MolClipboard } from '../lib/clipboard'
+import { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '../lib/presentation/types'
 import { resolveTheme, type ResolvedTheme } from '../presets'
 import { resolveStylePreset, type RenderStyle } from '../styles'
 import { registerEditorIntegrity } from './integrity'

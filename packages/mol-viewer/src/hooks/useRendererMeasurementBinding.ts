@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { Atom } from '../lib/molecule'
-import type { Measurement } from '../lib/types'
+import type { Measurement } from '../lib/presentation/types'
 import type { SceneObject } from '../lib/sceneObject'
 import type { RendererMeasurementBindingOptions } from './rendererSceneBindingTypes'
 

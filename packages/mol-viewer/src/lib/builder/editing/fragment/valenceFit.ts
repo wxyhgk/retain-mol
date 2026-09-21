@@ -1,5 +1,5 @@
 import type { Atom, Molecule } from '../../../molecule'
-import { hNeighborsOf, otherEnd } from '../../graph'
+import { hNeighborsOf, otherEnd } from '../../../graph/queries'
 import { bondValence, maxValence } from '../../valence'
 
 export function valenceAfterRemovingHydrogens(

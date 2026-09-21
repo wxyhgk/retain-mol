@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { DisplayMode } from '../types'
+import type { DisplayMode } from '../presentation/types'
 import type { SceneObject } from '../sceneObject'
 import type { ResolvedTheme } from '../../presets'
 import type { RenderStyle } from '../../styles'

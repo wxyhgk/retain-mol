@@ -6,11 +6,11 @@
 import * as OCL from 'openchemlib'
 import type { Atom, Bond, Molecule } from '../molecule'
 import { newAtom, newBond } from '../molecule'
-import { splitConnectedComponents } from '../builder/analysis/fragments'
+import { splitConnectedComponents } from '../graph/components'
 import { autoAddHydrogens } from '../builder/editing/atomOps'
 import { kekulizeAromaticBonds } from './kekulize'
 import { RELAX } from '../../config/relax.config'
-import { parseMolecule } from '../moleculeValidation'
+import { parseMolecule } from '../model/validation'
 
 // OCL 返回的 Molecule 对象类型
 type OCLMol = ReturnType<typeof OCL.Molecule.fromMolfile>

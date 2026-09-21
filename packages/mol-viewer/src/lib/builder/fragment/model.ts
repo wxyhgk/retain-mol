@@ -1,4 +1,4 @@
-import type { CoordinationSite } from '../../types'
+import type { CoordinationSite } from '../../model/types'
 
 export interface FragmentAtom {
   symbol: string

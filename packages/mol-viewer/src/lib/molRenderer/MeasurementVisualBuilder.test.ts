@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { DEFAULT_MEASURE_STYLE } from '../types'
+import { DEFAULT_MEASURE_STYLE } from '../presentation/types'
 import { MeasurePrimitiveFactory } from './MeasurePrimitiveFactory'
 import { MeasurementVisualBuilder } from './MeasurementVisualBuilder'
 

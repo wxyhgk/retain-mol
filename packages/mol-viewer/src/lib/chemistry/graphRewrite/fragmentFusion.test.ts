@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Atom, Bond, Molecule } from '../../types'
+import type { Atom, Bond, Molecule } from '../../model/types'
 import { applyExplicitChemicalRewrite, planFragmentFusionAcrossBonds } from './index'
 
 const atom = (id: string, symbol = 'C'): Atom => ({ id, symbol, x: 0, y: 0, z: 0 })

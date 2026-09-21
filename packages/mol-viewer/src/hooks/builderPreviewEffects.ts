@@ -1,5 +1,5 @@
 import type { Molecule } from '../lib/molecule'
-import type { GrowGuideSpec } from '../lib/types'
+import type { GrowGuideSpec } from '../lib/presentation/types'
 import {
   getGrowGuideCommand,
   getGrowPreviewCommand,

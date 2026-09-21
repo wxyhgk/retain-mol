@@ -6,11 +6,11 @@
 import type { Molecule, Atom, Bond } from '../../molecule'
 import { newAtom, newBond } from '../../molecule'
 import { getElementConfig } from '../../../config/elements.config'
-import { degree, hParentOf, hNeighborsOf } from '../graph'
+import { degree, hParentOf, hNeighborsOf } from '../../graph/queries'
 import { calcAddAtomOnExisting, calcBondLength } from '../geometry/vsepr'
 import { maxValence, targetValence, valenceUsed } from '../valence'
 import { getHydrogenAdditionAvailability, isPotentialStereoCenter } from '../../chemistry/policies/atomPolicy'
-import { getConnectedFragment } from '../analysis/fragments'
+import { getConnectedFragment } from '../../graph/components'
 import { flipTetraBranches, parityFromCoords } from '../../stereo/geometry'
 import { perceiveAtomChirality, reconcileAtomChirality } from '../../stereo/perception'
 

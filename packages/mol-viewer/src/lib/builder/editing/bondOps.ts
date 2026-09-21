@@ -5,7 +5,7 @@
 import { lookupBondLengthByOrder } from '../../../config/geometry.config'
 import type { Atom, Bond, Molecule } from '../../molecule'
 import { newBond } from '../../molecule'
-import { bondsOf, findBond, otherEnd } from '../graph'
+import { bondsOf, findBond, otherEnd } from '../../graph/queries'
 import { availableMaxValenceByBonds } from '../valence'
 import {
   planBondOrderChange,

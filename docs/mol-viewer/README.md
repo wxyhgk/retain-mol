@@ -5,6 +5,7 @@
 App 层应该把它当成一个独立的分子引擎使用。App 代码应优先通过 `@retainmol/mol-viewer/*` 公开子路径导入，不要直接深挖包内部实现。
 
 基础字段支持、复制与保存规则见[基础字段与保真边界](./field-fidelity.md)。
+基础模型、图查询、显示契约的归属及自动检查见[包内基础边界](../architecture/mol-viewer-internal-boundaries.md)。
 
 外部项目可从[独立宿主接入](./consumer-integration.md)与
 [可运行示例](../../examples/mol-viewer-consumer/README.md)开始；示例安装实际 tarball，
@@ -20,6 +21,10 @@ packages/mol-viewer/src
 ├── config/         camera、render、bonding、geometry、tool 等共享配置
 ├── hooks/          把 React 事件连接到 builder command 和 store action 的 hooks
 ├── lib/            核心算法、分子工具、IO、renderer 内部实现
+│   ├── model/      分子类型、ID、结构校验；不依赖编辑器或显示
+│   ├── graph/      邻居、键、连通片段查询；Builder 与 IO 共用
+│   ├── presentation/ 显示、工具、测量和预览契约
+│   ├── clipboard.ts 可序列化片段剪贴板数据
 │   └── modeling/   AI/协作客户端使用的建模协议、校验与 dry-run 执行器
 ├── presets/        theme schema、内置主题、运行时主题注册表
 ├── public/         推荐给外部使用的窄 API 子入口
@@ -48,7 +53,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 当前公开入口：
 
 - `src/public/core.ts`：分子类型、分子工具、scene object helper、元素配置。
-- `src/public/viewer.ts`：`MolViewer`、截图和窄视口命令，不导出 store 或 renderer 实现。
+- `src/public/viewer.ts`：`MolViewer`、截图和窄视口命令；现存 `useViewportStore` 属于待迁移的兼容出口，新代码从 `/state` 获取可变状态。
 - `src/public/runtime.ts`：viewer 生命周期句柄、provider 与[实例级基础 API](./instance-api.md)；支持快照、编辑、选择、历史、显示和视口命令，不暴露内部 store/services。
 - `src/public/state.ts`：显式的 molecule/editor mutable store 入口。
 - `src/public/editing.ts`：窄化的坐标写入事务，不导出 `useBuilder`。

@@ -1,4 +1,5 @@
-import type { GrowGuideSpec, Vector3Data } from '../lib/types'
+import type { GrowGuideSpec } from '../lib/presentation/types'
+import type { Vector3Data } from '../lib/model/types'
 import {
   getGrowGuideForIntent,
   getGrowPreviewForIntent,

@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import { resolveMeasurementAtoms } from './useRendererMeasurementBinding'
 import type { SceneObject } from '../lib/sceneObject'
-import type { Measurement } from '../lib/types'
+import type { Measurement } from '../lib/presentation/types'
 import type { Molecule } from '../lib/molecule'
 
 function makeObject(idPrefix: string, visible: boolean): SceneObject {
