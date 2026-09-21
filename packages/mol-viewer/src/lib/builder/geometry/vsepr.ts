@@ -4,7 +4,8 @@
  */
 
 import { BONDING } from '../../../config/bonding.config'
-import { getElementConfig } from '../../../config/elements.config'
+import { getElementEditingDefaults } from '../../chemistry/policies/elementDefaults'
+import { getElementData } from '../../model/elements'
 import { inferGeometry, GEOMETRY_RULES, STANDARD_BOND_LENGTHS } from '../../../config/geometry.config'
 import type { AtomHybridization, GeometryRule } from '../../../config/geometry.config'
 import { inferHybridization } from '../analysis/hybridization'
@@ -39,8 +40,8 @@ function directionAt(directions: readonly Vec3[], index: number): Vec3 {
 export function calcBondLength(sym1: string, sym2: string): number {
   const key = [sym1, sym2].sort().join('-')
   if (STANDARD_BOND_LENGTHS[key]) return STANDARD_BOND_LENGTHS[key]
-  const r1 = getElementConfig(sym1).covalentRadius
-  const r2 = getElementConfig(sym2).covalentRadius
+  const r1 = getElementData(sym1).covalentRadius
+  const r2 = getElementData(sym2).covalentRadius
   return (r1 + r2) * BONDING.singleBondRadiusFactor
 }
 
@@ -516,7 +517,7 @@ export function calcAddAtomOnExisting(
       ? coordinationCandidates
       : candidateDirsForGrow(centerAtom.symbol, neighborDirs, hybridization, defaultDirection),
   )
-  const maxBonds = centerAtom.coordinationNumber ?? getElementConfig(centerAtom.symbol).maxBonds
+  const maxBonds = centerAtom.coordinationNumber ?? getElementEditingDefaults(centerAtom.symbol).maxBonds
   const geometry = centerAtom.coordinationGeometry ?? inferGeometry(centerAtom.symbol, neighborDirs.length, hybridization)
 
   return {

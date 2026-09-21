@@ -1,5 +1,5 @@
 import { BONDING } from '../../../config/bonding.config'
-import { getElementConfig } from '../../../config/elements.config'
+import { getElementData } from '../../model/elements'
 import type { Atom } from '../../molecule'
 
 export interface ClashPosition {
@@ -15,7 +15,7 @@ export interface ClashScore {
 }
 
 export function clashAtomRadius(symbol: string): number {
-  return getElementConfig(symbol).covalentRadius
+  return getElementData(symbol).covalentRadius
 }
 
 export function clashDistanceThreshold(symbolA: string, symbolB: string): number {

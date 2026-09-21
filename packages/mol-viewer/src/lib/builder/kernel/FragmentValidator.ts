@@ -1,5 +1,5 @@
 import type { FragmentDef } from '../fragment/model'
-import { getElementConfig } from '../../../config/elements.config'
+import { getElementEditingDefaults } from '../../chemistry/policies/elementDefaults'
 
 export interface FragmentValidationIssue {
   readonly fragmentId: string
@@ -31,7 +31,7 @@ function templateBondCapacity(
   atomIndex: number,
 ): TemplateBondCapacity {
   const atom = fragment.atoms[atomIndex]
-  const elementCapacity = getElementConfig(atom?.symbol ?? '').maxBonds
+  const elementCapacity = getElementEditingDefaults(atom?.symbol ?? '').maxBonds
   if (atomIndex !== fragment.attachIndex) {
     return { count: elementCapacity, order: elementCapacity }
   }

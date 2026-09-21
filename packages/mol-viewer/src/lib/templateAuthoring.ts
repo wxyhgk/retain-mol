@@ -1,6 +1,6 @@
 import type { Molecule } from './molecule'
 import { getMolecularFormula } from './chemistry'
-import { getElementConfig } from '../config/elements.config'
+import { getElementData } from './model/elements'
 import { maxValence, valenceUsed } from './builder/valence'
 
 export type TemplateDraftCategory = 'fragment' | 'ring' | 'functional-group' | 'molecule'
@@ -152,7 +152,7 @@ export function validateTemplateDraft(draft: MolecularTemplateDraft): TemplateVa
     if (!atom.id.trim()) issues.push({ code: 'missing-atom-id', path: `${path}.id`, message: '原子 ID 不能为空' })
     if (atomIds.has(atom.id)) issues.push({ code: 'duplicate-atom-id', path: `${path}.id`, message: `原子 ID 重复：${atom.id}` })
     atomIds.add(atom.id)
-    if (getElementConfig(atom.symbol).atomicNumber === 0) {
+    if (getElementData(atom.symbol).atomicNumber === 0) {
       issues.push({ code: 'unknown-element', path: `${path}.symbol`, message: `未知元素：${atom.symbol}` })
     }
     if (![atom.x, atom.y, atom.z].every(Number.isFinite)) {

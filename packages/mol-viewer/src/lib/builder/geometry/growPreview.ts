@@ -1,33 +1,27 @@
-import { getElementConfig } from '../../../../config/elements.config'
-import { RENDER } from '../../../../config/render.config'
-import type { GrowGuideSpec } from '../../../presentation/types'
-import type { Vector3Data } from '../../../model/types'
-import type { Molecule } from '../../../molecule'
-import { resolveHSlotGrowth } from '../../editing/atomOps'
-import { ringPlaneIntersection } from '../../geometry/plane'
-import { calcGrowPosition, getGrowGuide as calcGrowGuide } from '../../geometry/vsepr'
-import { isSlotH } from '../../queries'
+import type { Molecule, Vector3Data } from '../../model/types'
+import { resolveHSlotGrowth } from '../editing/atomOps'
+import { ringPlaneIntersection } from './plane'
+import { calcGrowPosition, getGrowGuide as calcGrowGuide } from './vsepr'
+import { isSlotH } from '../queries'
 
-export interface GrowPreviewCommandInput {
+export interface GrowPreviewGeometryInput {
   readonly sourceId: string
   readonly cursorLocal: { readonly x: number; readonly y: number; readonly z: number }
   readonly activeElement: string
   readonly freeDirection: boolean
 }
 
-export interface GrowPreviewResult {
+export interface GrowPreviewGeometry {
   readonly pos: Vector3Data
-  readonly radius: number
-  readonly color: number
+  readonly symbol: string
 }
 
-export function getGrowPreviewCommand(
+export function getGrowPreviewGeometry(
   molecule: Molecule,
-  input: GrowPreviewCommandInput,
-): GrowPreviewResult | null {
+  input: GrowPreviewGeometryInput,
+): GrowPreviewGeometry | null {
   const center = molecule.atoms.find(atom => atom.id === input.sourceId)
   if (!center) return null
-  const cfg = getElementConfig(input.activeElement)
 
   if (isSlotH(molecule, input.sourceId)) {
     if (input.activeElement === 'H') return null
@@ -35,8 +29,7 @@ export function getGrowPreviewCommand(
     if (!position) return null
     return {
       pos: { x: position.x, y: position.y, z: position.z },
-      radius: cfg.covalentRadius * RENDER.growGhostRadiusFactor,
-      color: cfg.color,
+      symbol: input.activeElement,
     }
   }
 
@@ -50,12 +43,17 @@ export function getGrowPreviewCommand(
   )
   return {
     pos: { x: position[0], y: position[1], z: position[2] },
-    radius: cfg.covalentRadius * RENDER.growGhostRadiusFactor,
-    color: cfg.color,
+    symbol: input.activeElement,
   }
 }
 
-export interface GrowGuideCommandInput {
+/** Spatial guide geometry. Ring radius is a chemical placement distance, not line thickness. */
+export type GrowGuideGeometry =
+  | { kind: 'ring'; center: Vector3Data; axis: Vector3Data; radius: number }
+  | { kind: 'points'; positions: readonly Vector3Data[] }
+  | null
+
+export interface GrowGuideGeometryInput {
   readonly sourceId: string
   readonly activeElement: string
   readonly sketchPlane?: {
@@ -64,20 +62,16 @@ export interface GrowGuideCommandInput {
   } | null
 }
 
-export function getGrowGuideCommand(
+export function getGrowGuideGeometry(
   molecule: Molecule,
-  input: GrowGuideCommandInput,
-): GrowGuideSpec {
+  input: GrowGuideGeometryInput,
+): GrowGuideGeometry {
   const center = molecule.atoms.find(atom => atom.id === input.sourceId)
   if (!center) return null
   if (isSlotH(molecule, input.sourceId)) return null
 
   const guide = calcGrowGuide(center, molecule.bonds, molecule.atoms, input.activeElement)
   if (guide.kind === 'free') return null
-
-  const cfg = getElementConfig(input.activeElement)
-  const ghostRadius = cfg.covalentRadius * RENDER.growGhostRadiusFactor
-  const ghostColor = cfg.color
 
   if (input.sketchPlane && guide.kind === 'ring') {
     const points = ringPlaneIntersection(guide.center, guide.axis, guide.radius, {
@@ -88,8 +82,6 @@ export function getGrowGuideCommand(
       return {
         kind: 'points',
         positions: points.map(point => ({ x: point[0], y: point[1], z: point[2] })),
-        ghostRadius,
-        ghostColor,
       }
     }
   }
@@ -100,15 +92,11 @@ export function getGrowGuideCommand(
       center: { x: guide.center[0], y: guide.center[1], z: guide.center[2] },
       axis: { x: guide.axis[0], y: guide.axis[1], z: guide.axis[2] },
       radius: guide.radius,
-      ghostRadius,
-      ghostColor,
     }
   }
 
   return {
     kind: 'points',
     positions: guide.positions.map(position => ({ x: position[0], y: position[1], z: position[2] })),
-    ghostRadius,
-    ghostColor,
   }
 }

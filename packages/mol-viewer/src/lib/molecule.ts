@@ -38,7 +38,7 @@ export function exportXYZ(mol: Molecule): string {
 }
 
 import { BONDING } from '../config/bonding.config'
-import { getElementConfig } from '../config/elements.config'
+import { getElementData } from './model/elements'
 import { lookupBondLengthByOrder } from '../config/geometry.config'
 
 function inferBondOrder(sym1: string, sym2: string, dist: number): 1 | 2 | 3 {
@@ -60,8 +60,8 @@ export function inferBonds(atoms: readonly Atom[]): Bond[] {
       if (a === undefined || b === undefined) continue
       const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-      const r1 = getElementConfig(a.symbol).covalentRadius
-      const r2 = getElementConfig(b.symbol).covalentRadius
+      const r1 = getElementData(a.symbol).covalentRadius
+      const r2 = getElementData(b.symbol).covalentRadius
       const maxBond = (r1 + r2) * BONDING.tolerance
       if (dist < maxBond && dist > BONDING.minBondLength) {
         const order = inferBondOrder(a.symbol, b.symbol, dist)

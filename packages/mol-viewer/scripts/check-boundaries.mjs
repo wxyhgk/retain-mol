@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
-import { buildModuleGraph, checkEditingBoundaries, checkFoundations, checkPureEntries, runtimeCycles } from './module-graph.mjs'
+import { buildModuleGraph, checkEditingBoundaries, checkElementBoundaries, checkFoundations, checkPureEntries, runtimeCycles } from './module-graph.mjs'
 
 const srcDir = resolve(import.meta.dirname, '../src')
 
@@ -13,6 +13,7 @@ const violations = [
   ...checkFoundations(graph, srcDir),
   ...checkPureEntries(graph, srcDir),
   ...checkEditingBoundaries(graph, srcDir),
+  ...checkElementBoundaries(graph, srcDir),
 ]
 
 for (const cycle of runtimeCycles(graph)) {
@@ -118,4 +119,4 @@ if (violations.length > 0) {
   process.exit(1)
 }
 
-console.log('mol-viewer boundaries passed (foundation ownership, pure entry closures, runtime cycles, Builder/Renderer/Style directions).')
+console.log('mol-viewer boundaries passed (foundation and element ownership, pure entry closures, runtime cycles, Builder/Renderer/Style directions).')

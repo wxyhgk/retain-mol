@@ -1,4 +1,4 @@
-import { ELEMENT_CONFIGS } from '../../../config/elements.config'
+import { ELEMENT_DATA } from '../../model/elements'
 import type { Atom, Molecule } from '../../molecule'
 import { maxValence, valenceUsed } from '../valence'
 
@@ -7,7 +7,7 @@ export type AtomRuleResult =
   | { readonly ok: false; readonly reason: string }
 
 export function validateElementSymbol(symbol: string): AtomRuleResult {
-  return Object.hasOwn(ELEMENT_CONFIGS, symbol)
+  return Object.hasOwn(ELEMENT_DATA, symbol)
     ? { ok: true }
     : { ok: false, reason: `未知元素：${symbol}` }
 }

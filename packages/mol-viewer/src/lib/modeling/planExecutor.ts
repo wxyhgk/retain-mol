@@ -1,5 +1,5 @@
 import { moleculesEqual } from '../model/equality'
-import { ELEMENT_CONFIGS } from '../../config/elements.config'
+import { ELEMENT_DATA } from '../model/elements'
 import type { Molecule } from '../molecule'
 import {
   getAddOneHydrogenAvailabilityCommand,
@@ -257,7 +257,7 @@ function executeCommand(state: WorkingState, command: ModelingCommand): CommandE
       if (hasAtom(state.molecule, command.atomId)) {
         return { ok: false, reason: `原子 id 已存在：${command.atomId}` }
       }
-      if (!Object.hasOwn(ELEMENT_CONFIGS, command.symbol)) {
+      if (!Object.hasOwn(ELEMENT_DATA, command.symbol)) {
         return { ok: false, reason: `未知元素：${command.symbol}` }
       }
       const result = runAddAtomCommand(
@@ -274,7 +274,7 @@ function executeCommand(state: WorkingState, command: ModelingCommand): CommandE
         : { ok: false, reason: '添加原子后无法确定新原子' }
     }
     case 'atom.replace':
-      if (!Object.hasOwn(ELEMENT_CONFIGS, command.symbol)) {
+      if (!Object.hasOwn(ELEMENT_DATA, command.symbol)) {
         return { ok: false, reason: `未知元素：${command.symbol}` }
       }
       return fromEditResult(

@@ -1,7 +1,9 @@
 /**
- * @deprecated 请直接使用 ../config/elements.config
+ * @deprecated 包内请按用途读取 model/elements、chemistry/policies/elementDefaults 或 presentation/elementColors。
  * 此文件仅作为过渡适配层，保持旧接口可用。
  */
+import { getElementData } from './model/elements'
+
 export type { ElementConfig as ElementData } from '../config/elements.config'
 export {
   getElementConfig as getElement,
@@ -11,7 +13,7 @@ export {
 } from '../config/elements.config'
 
 export const CPK_RADII: Record<string, number> = {
-  H: 1.20, C: 1.70, N: 1.55, O: 1.52, F: 1.47,
-  P: 1.80, S: 1.80, Cl: 1.75, Br: 1.85, I: 1.98,
-  default: 1.50,
+  ...Object.fromEntries(['H', 'C', 'N', 'O', 'F', 'P', 'S', 'Cl', 'Br', 'I']
+    .map(symbol => [symbol, getElementData(symbol).cpkRadius])),
+  default: getElementData('').cpkRadius,
 }

@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { useViewerRuntimeServices } from '../../runtime/ViewerRuntime'
-import { getElementConfig } from '../../config/elements.config'
+import { getElementData } from '../../lib/model/elements'
 import { getFragment } from '../../lib/builder/fragmentLibrary'
 import { toolCan } from '../../config/toolCapabilities.config'
 
@@ -24,7 +24,7 @@ export default function BuilderHint() {
   const brushArmed       = editorStore(s => s.brushArmed)
   const sketchPlane      = editorStore(s => s.sketchPlane)
   const hint             = editorStore(s => s.hint)
-  const el = getElementConfig(activeElement)
+  const el = getElementData(activeElement)
   const fragment = activeFragmentId ? getFragment(activeFragmentId) : undefined
 
   // flashHint 气泡：显示 2.5s 后淡出

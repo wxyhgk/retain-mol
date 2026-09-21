@@ -3,7 +3,7 @@ import type { Atom } from '../molecule'
 import type { MeasureStyle, MeasureType } from '../presentation/types'
 import { DEFAULT_MEASURE_STYLE } from '../presentation/types'
 import type { ResolvedTheme } from '../../presets'
-import { getElementConfig } from '../../config/elements.config'
+import { getElementData } from '../model/elements'
 import { RENDER } from '../../config/render.config'
 import { disposeObject3D } from './disposeObject3D'
 import { MeasurePrimitiveFactory } from './MeasurePrimitiveFactory'
@@ -35,7 +35,7 @@ export class MeasureVisuals {
     }
 
     for (const atom of pending) {
-      const atomRadius = getElementConfig(atom.symbol).covalentRadius * this.getTheme().render.ballScale
+      const atomRadius = getElementData(atom.symbol).covalentRadius * this.getTheme().render.ballScale
       this.primitives.addPendingHalo(
         new THREE.Vector3(atom.x, atom.y, atom.z),
         atomRadius + RENDER.pendingHaloOffset,

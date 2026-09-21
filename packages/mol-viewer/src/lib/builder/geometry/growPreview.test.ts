@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { newAtom, newBond } from '../../../molecule'
+import { newAtom, newBond } from '../../molecule'
 import {
-  getGrowGuideCommand,
-  getGrowPreviewCommand,
-} from './growPreviewCommands'
+  getGrowGuideGeometry,
+  getGrowPreviewGeometry,
+} from './growPreview'
 
-describe('getGrowPreviewCommand', () => {
+describe('getGrowPreviewGeometry', () => {
   it('returns a preview for an unsaturated atom', () => {
     const c = newAtom('C', 0, 0, 0)
 
-    const preview = getGrowPreviewCommand({ atoms: [c], bonds: [] }, {
+    const preview = getGrowPreviewGeometry({ atoms: [c], bonds: [] }, {
       sourceId: c.id,
       activeElement: 'C',
       cursorLocal: { x: 1, y: 0, z: 0 },
@@ -17,7 +17,9 @@ describe('getGrowPreviewCommand', () => {
     })
 
     expect(preview).not.toBeNull()
-    expect(preview?.radius).toBeGreaterThan(0)
+    expect(preview?.symbol).toBe('C')
+    expect(preview).not.toHaveProperty('color')
+    expect(preview).not.toHaveProperty('radius')
   })
 
   it('uses bonded H slots as fixed growth previews and ignores H-on-H growth', () => {
@@ -25,7 +27,7 @@ describe('getGrowPreviewCommand', () => {
     const h = newAtom('H', 1.09, 0, 0)
     const mol = { atoms: [c, h], bonds: [newBond(c.id, h.id)] }
 
-    const preview = getGrowPreviewCommand(mol, {
+    const preview = getGrowPreviewGeometry(mol, {
       sourceId: h.id,
       activeElement: 'C',
       cursorLocal: { x: 9, y: 9, z: 9 },
@@ -34,7 +36,7 @@ describe('getGrowPreviewCommand', () => {
 
     expect(preview).not.toBeNull()
     expect(preview?.pos.x).not.toBe(9)
-    expect(getGrowPreviewCommand(mol, {
+    expect(getGrowPreviewGeometry(mol, {
       sourceId: h.id,
       activeElement: 'H',
       cursorLocal: { x: 9, y: 9, z: 9 },
@@ -43,12 +45,12 @@ describe('getGrowPreviewCommand', () => {
   })
 })
 
-describe('getGrowGuideCommand', () => {
+describe('getGrowGuideGeometry', () => {
   it('returns guide geometry for an unsaturated atom', () => {
     const c = newAtom('C', 0, 0, 0)
     const h = newAtom('H', 1.09, 0, 0)
 
-    const guide = getGrowGuideCommand({ atoms: [c, h], bonds: [newBond(c.id, h.id)] }, {
+    const guide = getGrowGuideGeometry({ atoms: [c, h], bonds: [newBond(c.id, h.id)] }, {
       sourceId: c.id,
       activeElement: 'C',
     })
@@ -60,7 +62,7 @@ describe('getGrowGuideCommand', () => {
     const c = newAtom('C', 0, 0, 0)
     const h = newAtom('H', 1.09, 0, 0)
 
-    expect(getGrowGuideCommand({ atoms: [c, h], bonds: [newBond(c.id, h.id)] }, {
+    expect(getGrowGuideGeometry({ atoms: [c, h], bonds: [newBond(c.id, h.id)] }, {
       sourceId: h.id,
       activeElement: 'C',
     })).toBeNull()

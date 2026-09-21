@@ -1,4 +1,4 @@
-import { effectiveMaxBonds, getElementConfig } from '../../config/elements.config'
+import { effectiveMaxBonds, getElementEditingDefaults } from './policies/elementDefaults'
 import type { Atom, Bond, Molecule } from '../molecule'
 import { otherEnd } from '../graph/queries'
 
@@ -42,7 +42,7 @@ export function maxValence(atom: Atom): number {
 
 export function targetValence(atom: Atom): number {
   if ((atom.charge ?? 0) !== 0 || (atom.radical ?? 0) !== 0) return maxValence(atom)
-  return getElementConfig(atom.symbol).defaultValence ?? maxValence(atom)
+  return getElementEditingDefaults(atom.symbol).defaultValence ?? maxValence(atom)
 }
 
 export function targetValenceForSymbol(

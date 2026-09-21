@@ -7,6 +7,7 @@ App 层应该把它当成一个独立的分子引擎使用。App 代码应优先
 基础字段支持、复制与保存规则见[基础字段与保真边界](./field-fidelity.md)。
 基础模型、图查询、显示契约的归属及自动检查见[包内基础边界](../architecture/mol-viewer-internal-boundaries.md)。
 命令的无变化、手性、稳定 ID 与历史规则见[编辑命令的一致性](./edit-command-semantics.md)。
+元素数据、价态策略与预览外观的归属见[元素与预览边界](./element-boundaries.md)。
 Node、后端与浏览器共用的纯编辑入口见[无界面的分子编辑 API](./headless-api.md)。
 
 外部项目可从[独立宿主接入](./consumer-integration.md)与
@@ -24,9 +25,10 @@ packages/mol-viewer/src
 ├── config/         camera、render、bonding、geometry、tool 等共享配置
 ├── hooks/          把 React 事件连接到 builder command 和 store action 的 hooks
 ├── lib/            核心算法、分子工具、IO、renderer 内部实现
-│   ├── model/      分子类型、ID、结构校验；不依赖编辑器或显示
+│   ├── model/      分子类型、ID、结构校验、元素参考数据；不依赖编辑器或显示
+│   ├── chemistry/  元素编辑默认策略和原子/键规则
 │   ├── graph/      邻居、键、连通片段查询；Builder 与 IO 共用
-│   ├── presentation/ 显示、工具、测量和预览契约
+│   ├── presentation/ 显示、工具、测量和预览契约，默认元素色与周期表排列
 │   ├── clipboard.ts 可序列化片段剪贴板数据
 │   └── modeling/   AI/协作客户端使用的建模协议、校验与 dry-run 执行器
 ├── presets/        theme schema、内置主题、运行时主题注册表
@@ -174,6 +176,7 @@ lib/builder/
 - command 返回 `EditCommandResult`、`EditCommandWithSelectionResult`、scene result 或 selection result，状态落地由 `store/slices/helpers.ts` 统一处理。
 - builder 不提供 `BuilderEngine` 聚合入口；编辑能力必须从所属 command 领域或专用纯算法模块取得。
 - Builder 生产代码禁止导入 Three.js；预览和 guide 只返回纯 tuple/DTO。
+- 生长预览是 `geometry/growPreview.ts` 的只读查询，不属于修改分子的 command；只返回元素与空间位置，颜色和球大小由 `builderPreviewEffects.ts` 组合样式后交给 renderer。
 
 `hooks/useBuilder.ts` 是 React hook 外壳；具体 pointer/click/drag 分发已经下沉到 builder adapter 文件。后续如果要改构建交互，优先看：
 

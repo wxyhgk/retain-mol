@@ -1,10 +1,10 @@
+import { getGrowPreviewAppearance } from '../styles/growPreviewAppearance'
 import type { Molecule } from '../lib/molecule'
-import type { GrowGuideSpec } from '../lib/presentation/types'
+import type { GrowGuideSpec, GrowPreviewResult } from '../lib/presentation/types'
 import {
-  getGrowGuideCommand,
-  getGrowPreviewCommand,
-  type GrowPreviewResult,
-} from '../lib/builder/commands/atom'
+  getGrowGuideGeometry,
+  getGrowPreviewGeometry,
+} from '../lib/builder/geometry/growPreview'
 import {
   shouldShowGrowGuideForIntent,
   shouldShowGrowPreviewForIntent,
@@ -22,12 +22,13 @@ export function getGrowPreviewForIntent(
   },
 ): GrowPreviewResult | null {
   if (!shouldShowGrowPreviewForIntent(intent)) return null
-  return getGrowPreviewCommand(molecule, {
+  const preview = getGrowPreviewGeometry(molecule, {
     sourceId: input.sourceId,
     cursorLocal: input.cursorLocal,
     activeElement: intent.activeElement,
     freeDirection: input.freeDirection,
   })
+  return preview ? { pos: preview.pos, ...getGrowPreviewAppearance(preview.symbol) } : null
 }
 
 export function getGrowGuideForIntent(
@@ -36,9 +37,12 @@ export function getGrowGuideForIntent(
   sourceId: string,
 ): GrowGuideSpec {
   if (!shouldShowGrowGuideForIntent(intent)) return null
-  return getGrowGuideCommand(molecule, {
+  const guide = getGrowGuideGeometry(molecule, {
     sourceId,
     activeElement: intent.activeElement,
     ...(intent.sketchPlane !== undefined ? { sketchPlane: intent.sketchPlane } : {}),
   })
+  if (!guide) return null
+  const appearance = getGrowPreviewAppearance(intent.activeElement)
+  return { ...guide, ghostRadius: appearance.radius, ghostColor: appearance.color }
 }

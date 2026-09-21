@@ -1,5 +1,5 @@
 import type { FragmentDef } from '../fragment/model'
-import { getElementConfig } from '../../../config/elements.config'
+import { getElementData } from '../../model/elements'
 import { COORDINATION_GEOMETRY_CATALOG } from './geometryCatalog'
 import type { TransitionMetalCoordinationSpec, TransitionMetalCoordinationSet } from './types'
 
@@ -25,7 +25,7 @@ export function defineTransitionMetalCoordinationSet(
     const pointGroup = spec.pointGroup ?? base.pointGroup
     const short = spec.short ?? `${base.short}${pointGroup ? ` (${pointGroup})` : ''}`
     const slotBondLength = spec.slotBondLength
-      ?? getElementConfig(symbol).covalentRadius + getElementConfig('H').covalentRadius
+      ?? getElementData(symbol).covalentRadius + getElementData('H').covalentRadius
     const atoms = [
       { symbol, x: 0, y: 0, z: 0 },
       ...directions.map(direction => ({

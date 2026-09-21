@@ -166,7 +166,7 @@ export const STANDARD_BOND_LENGTHS: Record<string, number> = {
 
 const ORDER_SEP = { 1: '-', 2: '=', 3: '#' } as const
 
-import { getElementConfig } from './elements.config'
+import { getElementData } from '../lib/model/elements'
 import { BONDING } from './bonding.config'
 
 /**
@@ -179,8 +179,8 @@ export function lookupBondLengthByOrder(sym1: string, sym2: string, order: 1 | 2
   const exact = STANDARD_BOND_LENGTHS[`${a}${ORDER_SEP[order]}${b}`]
   if (exact !== undefined) return exact
   if (order > 1) return null
-  const r1 = getElementConfig(sym1).covalentRadius
-  const r2 = getElementConfig(sym2).covalentRadius
+  const r1 = getElementData(sym1).covalentRadius
+  const r2 = getElementData(sym2).covalentRadius
   return (r1 + r2) * BONDING.singleBondRadiusFactor
 }
 

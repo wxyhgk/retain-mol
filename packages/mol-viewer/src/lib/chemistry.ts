@@ -1,4 +1,4 @@
-import { findElementConfig } from '../config/elements.config'
+import { findElementData } from './model/elements'
 import type { Atom } from './model/types'
 
 export type ElementLike = Pick<Atom, 'symbol' | 'isotope'>
@@ -25,7 +25,7 @@ export function getMolecularFormula(atoms: readonly ElementLike[]): string {
 export function calculateMolecularWeight(atoms: readonly ElementLike[]): number | null {
   let total = 0
   for (const atom of atoms) {
-    const element = findElementConfig(atom.symbol)
+    const element = findElementData(atom.symbol)
     if (atom.isotope !== undefined || !element || element.atomicMass === null || element.atomicMass <= 0) return null
     total += element.atomicMass
   }

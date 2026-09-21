@@ -2,7 +2,7 @@ import type { Atom, Bond, Molecule } from '../../../molecule'
 import { newAtom, newBond } from '../../../molecule'
 import type { FragmentDef } from '../../fragmentLibrary'
 import { BONDING } from '../../../../config/bonding.config'
-import { getElementConfig } from '../../../../config/elements.config'
+import { getElementEditingDefaults } from '../../../chemistry/policies/elementDefaults'
 import { degree, findBond, hNeighborsOf } from '../../../graph/queries'
 import { dot, sub, type Vec3 } from '../../math'
 import { availableMaxValenceByBonds } from '../../valence'
@@ -183,7 +183,7 @@ export function remapAndMergeBonds(
 
   const atomById = new Map(finalAtoms.map(atom => [atom.id, atom]))
   for (const atom of atomById.values()) {
-    if (degree(repairedBonds, atom.id) > getElementConfig(atom.symbol).maxBonds) return null
+    if (degree(repairedBonds, atom.id) > getElementEditingDefaults(atom.symbol).maxBonds) return null
     // 按键级和校验（数条数拦不住“两双键+一单键”的五价碳）
     if (availableMaxValenceByBonds(atom, repairedBonds) < -1e-8) return null
   }

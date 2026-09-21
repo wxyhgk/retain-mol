@@ -194,6 +194,64 @@ export function checkEditingBoundaries(graph, root) {
   return violations
 }
 
+const isElementFacade = file => ['config/elements.config.ts', 'lib/elements.ts'].includes(file)
+const isAppearance = file => /^(styles|presets)\//.test(file)
+  || ['config/render.config.ts', 'lib/presentation/elementColors.ts', 'lib/presentation/periodicTable.ts'].includes(file)
+
+/** Element facts, editing defaults and appearance have distinct owners, including type edges. */
+export function checkElementBoundaries(graph, root) {
+  const violations = []
+  const rel = file => relative(root, file).replaceAll('\\', '/')
+  const compatibilityConsumers = new Set(['index.ts', 'public/core.ts', 'lib/elements.ts'])
+  for (const [file, edges] of graph) {
+    const from = rel(file)
+    for (const edge of edges) {
+      const target = edge.target && rel(edge.target)
+      if (target && isElementFacade(target) && !compatibilityConsumers.has(from)) {
+        violations.push(`${from}:${edge.line}: import the element owner instead of compatibility facade "${target}"`)
+      }
+      if (/^lib\/(builder\/|chemistry(?:\/|\.ts$)|modeling\/)/.test(from)
+        && target && isAppearance(target)) {
+        violations.push(`${from}:${edge.line}: chemistry and editing must not depend on appearance "${target}" (including type imports)`)
+      }
+      if (from === 'lib/chemistry/policies/elementDefaults.ts' && (!target || !target.startsWith('lib/model/'))) {
+        violations.push(`${from}:${edge.line}: element editing defaults may only depend on model data`)
+      }
+    }
+  }
+  for (const file of runtimeClosure(graph, resolve(root, 'public/headless.ts')).files) {
+    if (isElementFacade(rel(file)) || isAppearance(rel(file))) {
+      violations.push(`headless: runtime dependency on element appearance or compatibility facade "${rel(file)}"`)
+    }
+  }
+  return violations
+}
+
+/** Inspect actual chunk provenance: shared chunks can reintroduce tree-shaken source dependencies. */
+export function checkHeadlessAppearanceChunks(bundle, srcRoot) {
+  const violations = [], seen = new Set()
+  const entry = Object.values(bundle).find(chunk => chunk.type === 'chunk'
+    && chunk.isEntry && chunk.facadeModuleId === resolve(srcRoot, 'public/headless.ts'))
+  if (!entry) return ['Missing built headless entry for element appearance check']
+  const visit = chunk => {
+    if (seen.has(chunk.fileName)) return
+    seen.add(chunk.fileName)
+    for (const [id, module] of Object.entries(chunk.modules)) {
+      if (module.renderedLength === 0) continue
+      const source = relative(srcRoot, id.split('?')[0]).replaceAll('\\', '/')
+      if (isElementFacade(source) || isAppearance(source)) {
+        violations.push(`headless: built chunk ${chunk.fileName} contains element appearance or compatibility facade "${source}"`)
+      }
+    }
+    for (const name of [...chunk.imports, ...chunk.dynamicImports]) {
+      const dependency = bundle[name]
+      if (dependency?.type === 'chunk') visit(dependency)
+    }
+  }
+  visit(entry)
+  return violations
+}
+
 export function checkPureEntries(graph, root, { built = false } = {}) {
   const violations = []
   for (const [name, allowed] of Object.entries(PURE_ENTRY_DEPENDENCIES)) {

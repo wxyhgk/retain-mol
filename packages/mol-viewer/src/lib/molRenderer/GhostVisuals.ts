@@ -3,7 +3,7 @@ import type { FragmentTorsionPreview, GrowGuideSpec } from '../presentation/type
 import { GHOST_LINE, GROW_GUIDE, RENDER } from '../../config/render.config'
 import { ticker as defaultTicker } from '../animation'
 import { buildDepthCuedRing } from './ghostGeometry'
-import { getElementConfig } from '../../config/elements.config'
+import { getDefaultElementColor } from '../presentation/elementColors'
 
 /**
  * 拖出生长手势的全部预览视觉（与 MeasureVisuals 对称）：
@@ -117,7 +117,7 @@ export class GhostVisuals {
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(radius, 16, 12),
         new THREE.MeshBasicMaterial({
-          color: getElementConfig(atom.symbol).color,
+          color: getDefaultElementColor(atom.symbol),
           transparent: true,
           opacity: 0.58,
           depthWrite: false,

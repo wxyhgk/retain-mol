@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import path from 'path'
+import { checkHeadlessAppearanceChunks } from './scripts/module-graph.mjs'
 
 const externals = [
   'react',
@@ -29,6 +30,13 @@ export default defineConfig(({ command }) => {
   if (command === 'build') {
     return {
       ...base,
+      plugins: [{
+        name: 'headless-element-boundary',
+        generateBundle(_options, bundle) {
+          const violations = checkHeadlessAppearanceChunks(bundle, path.resolve(__dirname, 'src'))
+          if (violations.length) this.error(violations.join('\n'))
+        },
+      }],
       build: {
         lib: {
           entry: {

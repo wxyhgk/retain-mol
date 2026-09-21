@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
-import { buildModuleGraph, checkEditingBoundaries, checkFoundations, checkPureEntries, readImports, runtimeCycles } from './module-graph.mjs'
+import { buildModuleGraph, checkEditingBoundaries, checkElementBoundaries, checkFoundations, checkHeadlessAppearanceChunks, checkPureEntries, readImports, runtimeCycles } from './module-graph.mjs'
 
 function fixture(t, files, built = false) {
   const root = mkdtempSync(join(tmpdir(), 'mol-module-graph-'))
@@ -137,4 +137,64 @@ test('headless allows chemistry/schema dependencies but rejects runtime shared c
   const errors = checkPureEntries(graph, root, { built: true })
   assert.equal(errors.length, 1)
   assert.match(errors[0], /headless: shared.js:1.*zustand/)
+})
+
+test('element facade remains public compatibility but rejects new internal consumers', t => {
+  const { root, graph } = fixture(t, {
+    'public/core.ts': "export * from '../config/elements.config'",
+    'index.ts': "export * from './config/elements.config'",
+    'lib/elements.ts': "export * from '../config/elements.config'",
+    'config/elements.config.ts': 'export interface ElementConfig {}',
+    'lib/chemistry/query.ts': "import type { ElementConfig } from '../../config/elements.config'",
+  })
+  const errors = checkElementBoundaries(graph, root)
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /lib\/chemistry\/query.ts:1.*compatibility facade/)
+})
+
+test('chemistry cannot read appearance or its types and defaults only read model data', t => {
+  const { root, graph } = fixture(t, {
+    'lib/builder/geometry/preview.ts': "export type { Style } from '../../../styles/ghost'",
+    'styles/ghost.ts': 'export interface Style {}',
+    'lib/chemistry/policies/elementDefaults.ts': "import '../../../config/bonding.config'",
+    'config/bonding.config.ts': 'export {}',
+  })
+  const errors = checkElementBoundaries(graph, root).join('\n')
+  assert.match(errors, /appearance "styles\/ghost.ts" \(including type imports\)/)
+  assert.match(errors, /element editing defaults may only depend on model data/)
+})
+
+test('headless forbids indirect element appearance while core compatibility is allowed', t => {
+  const { root, graph } = fixture(t, {
+    'public/core.ts': "export * from '../config/elements.config'",
+    'config/elements.config.ts': "export * from '../lib/presentation/elementColors'",
+    'lib/presentation/elementColors.ts': 'export const color = 0',
+    'public/headless.ts': "export * from '../lib/bridge'",
+    'lib/bridge.ts': "export * from './presentation/elementColors'",
+  })
+  const errors = checkElementBoundaries(graph, root)
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /headless: runtime dependency.*elementColors.ts/)
+})
+
+test('built headless checks static and lazy shared chunks by source provenance', () => {
+  const root = join(tmpdir(), 'mol-bundle-test')
+  const chunk = (fileName, modules = {}, imports = [], dynamicImports = []) => ({
+    type: 'chunk', fileName, modules, imports, dynamicImports,
+  })
+  const entry = {
+    ...chunk('public/headless.js', {}, ['shared.js']),
+    isEntry: true, facadeModuleId: join(root, 'public/headless.ts'),
+  }
+  const bundle = {
+    'public/headless.js': entry,
+    'shared.js': chunk('shared.js', { [join(root, 'config/elements.config.ts')]: { renderedLength: 0 } }, [], ['colors.js']),
+    'colors.js': chunk('colors.js', { [join(root, 'lib/presentation/elementColors.ts')]: { renderedLength: 20 } }),
+  }
+  const errors = checkHeadlessAppearanceChunks(bundle, root)
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /built chunk colors.js.*elementColors.ts/)
+  bundle['shared.js'].dynamicImports = []
+  assert.deepEqual(checkHeadlessAppearanceChunks(bundle, root), [])
+  assert.match(checkHeadlessAppearanceChunks({}, root)[0], /Missing built headless entry/)
 })

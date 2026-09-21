@@ -1,7 +1,14 @@
 /** Renderer-neutral display, tool and preview contracts. */
 import type { Vector3Data } from '../model/types'
 
-/** 拖出生长时的候选槽位参考几何（化学层计算，渲染层消费），含幽灵原子外观 */
+/** Ready-to-render preview; appearance is attached outside the geometry command. */
+export interface GrowPreviewResult {
+  readonly pos: Vector3Data
+  readonly radius: number
+  readonly color: number
+}
+
+/** 拖出生长的候选槽位：hooks 将几何与幽灵原子外观组合后交给渲染层。 */
 export type GrowGuideSpec =
   | { kind: 'ring'; center: Vector3Data; axis: Vector3Data; radius: number; ghostRadius: number; ghostColor: number }
   | { kind: 'points'; positions: readonly Vector3Data[]; ghostRadius: number; ghostColor: number }

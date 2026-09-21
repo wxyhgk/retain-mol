@@ -5,7 +5,7 @@
 
 import type { Molecule, Atom, Bond } from '../../molecule'
 import { newAtom, newBond } from '../../molecule'
-import { getElementConfig } from '../../../config/elements.config'
+import { getElementEditingDefaults } from '../../chemistry/policies/elementDefaults'
 import { degree, hParentOf, hNeighborsOf } from '../../graph/queries'
 import { calcAddAtomOnExisting, calcBondLength } from '../geometry/vsepr'
 import { maxValence, targetValence, valenceUsed } from '../valence'
@@ -61,7 +61,7 @@ export function growByReplacingH(
   } else {
     // He 等 maxBonds=0 的元素承接不了父键：替换会产生带键的稀有气体，
     // 打破价态不变式 → 按本函数的失败约定原样返回
-    if (getElementConfig(newSymbol).maxBonds < 1) return mol
+    if (getElementEditingDefaults(newSymbol).maxBonds < 1) return mol
     const pos = resolveHSlotGrowth(mol, hAtomId, newSymbol)
     if (!pos) return mol   // 宿主原子缺失（悬空键）
     next = {
