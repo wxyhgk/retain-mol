@@ -7,6 +7,9 @@
 import { z } from 'zod';
 
 // @public
+export function analyzeStericContacts(molecule: Molecule): StericReport;
+
+// @public
 export function applyExpectedEffectCommand(molecule: Molecule, command: ExpectedEffectSupportedCommand): ApplyExpectedEffectCommandResult;
 
 // @public (undocumented)
@@ -477,6 +480,9 @@ export type ExpectedEffectSupportedCommand = Extract<ModelingCommand, {
 // @public (undocumented)
 export type ExpectedEffectSupportedCommandKind = typeof EXPECTED_EFFECT_SUPPORTED_COMMAND_KINDS[number];
 
+// @public
+export function generateTorsionCandidates(context: ModelingContext, request: TorsionCandidateRequest): TorsionCandidateResult;
+
 // @public (undocumented)
 export const HEADLESS_MODELING_OBJECT_ID = "headless-modeling-object";
 
@@ -927,6 +933,105 @@ export function parseEditPlan(input: unknown): EditPlanParseResult;
 
 // @public
 export function replayEditPlan(molecule: Molecule, input: EditPlan | unknown, options?: HeadlessModelingOptions): ModelingDryRunResult;
+
+// @public
+export const STERIC_POLICY_VERSION: "ch-contact-v1";
+
+// @public (undocumented)
+export interface StericContact {
+    // (undocumented)
+    readonly atomId1: string;
+    // (undocumented)
+    readonly atomId2: string;
+    // (undocumented)
+    readonly contactThreshold: number;
+    // (undocumented)
+    readonly distance: number;
+    // (undocumented)
+    readonly hardThreshold: number;
+    // (undocumented)
+    readonly overlap: number;
+    // (undocumented)
+    readonly separation: 'three-bonds' | 'nonlocal';
+    // (undocumented)
+    readonly severity: 'warning' | 'error';
+}
+
+// @public (undocumented)
+export interface StericReport {
+    // (undocumented)
+    readonly contacts: readonly StericContact[];
+    // (undocumented)
+    readonly crowdingScore: number;
+    // (undocumented)
+    readonly hardClashCount: number;
+    // (undocumented)
+    readonly hydrogenCoverage: 'complete' | 'incomplete';
+    // (undocumented)
+    readonly issues: readonly string[];
+    // (undocumented)
+    readonly policyVersion: typeof STERIC_POLICY_VERSION;
+    // (undocumented)
+    readonly scope: 'all-nonbonded-pairs';
+    // (undocumented)
+    readonly supported: boolean;
+    // (undocumented)
+    readonly unit: 'angstrom';
+}
+
+// @public (undocumented)
+export interface TorsionCandidate {
+    // (undocumented)
+    readonly angleDegrees: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly metrics: TorsionMetrics;
+    // (undocumented)
+    readonly molecule: Molecule;
+    // (undocumented)
+    readonly plan: EditPlan;
+    // (undocumented)
+    readonly report: StericReport;
+    // (undocumented)
+    readonly revision: string;
+}
+
+// @public (undocumented)
+export interface TorsionCandidateRequest {
+    // (undocumented)
+    readonly bondId: string;
+    // (undocumented)
+    readonly fixedAtomIds: readonly string[];
+    readonly movingAtomId: string;
+    // (undocumented)
+    readonly targetObjectId: string;
+}
+
+// @public (undocumented)
+export interface TorsionCandidateResult {
+    // (undocumented)
+    readonly acceptedCount: number;
+    // (undocumented)
+    readonly baseRevision: string | null;
+    // (undocumented)
+    readonly candidates: readonly TorsionCandidate[];
+    // (undocumented)
+    readonly issues: readonly string[];
+    // (undocumented)
+    readonly ok: boolean;
+    // (undocumented)
+    readonly sampledCount: number;
+}
+
+// @public (undocumented)
+export interface TorsionMetrics {
+    // (undocumented)
+    readonly crowdingScore: number;
+    // (undocumented)
+    readonly displacementRms: number;
+    readonly spreadRadius: number;
+}
 
 // @public
 export function validateModelingCommandConstraints(command: ModelingCommand, constraints: ModelingConstraints | undefined): ModelingIssue | null;

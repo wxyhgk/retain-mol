@@ -211,6 +211,7 @@ function EditorCommandPalette({
       {
         title: '分子与搜索',
         items: [
+          { label: '螺芴碰撞避让 Demo', opensSurface: true, onRun: () => { window.open('/?demo=steric', '_blank', 'noopener,noreferrer') } },
           { label: 'PubChem 搜索', opensSurface: true, onRun: onSearchOpen },
           { label: '保存到浏览器 (Ctrl+S)', hint: 'Ctrl+S', disabled: isEmpty, onRun: () => saveActiveMoleculeToBrowser() },
         ].filter(item => filter(item.label)),

@@ -76,6 +76,21 @@ export class ClashSpatialIndex {
     }
   }
 
+  /** Broad phase only: callers apply their own pair/contact policy. */
+  nearby(point: ClashPosition, radius: number): readonly Atom[] {
+    const range = Math.ceil(radius / this.cellSize)
+    const cx = this.cellCoordinate(point.x), cy = this.cellCoordinate(point.y), cz = this.cellCoordinate(point.z)
+    const result: Atom[] = []
+    for (let x = cx - range; x <= cx + range; x++) {
+      for (let y = cy - range; y <= cy + range; y++) {
+        for (let z = cz - range; z <= cz + range; z++) {
+          result.push(...(this.cells.get(`${x}:${y}:${z}`) ?? []))
+        }
+      }
+    }
+    return result
+  }
+
   private cellCoordinate(value: number): number {
     return Math.floor(value / this.cellSize)
   }

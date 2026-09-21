@@ -88,3 +88,7 @@ export type {
 } from '../lib/modeling/headless'
 export type { Atom, Bond, Molecule } from '../lib/molecule'
 export type { CoordinationBondOrder, CoordinationSite, CoordinationSiteAssignment } from '../lib/model/types'
+export { STERIC_POLICY_VERSION, analyzeStericContacts } from '../lib/builder/geometry/stericContacts'
+export type { StericContact, StericReport } from '../lib/builder/geometry/stericContacts'
+export { generateTorsionCandidates } from '../lib/modeling/stericCandidates'
+export type { TorsionCandidateRequest, TorsionMetrics, TorsionCandidate, TorsionCandidateResult } from '../lib/modeling/stericCandidates'

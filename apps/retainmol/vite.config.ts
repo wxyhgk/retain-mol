@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { stericDemoPlugin } from './build/steric-demo-plugin'
 import { sitesMetadata } from './build/sites-vite-plugin'
 
 /** ketcher-core ships mixed ESM + require('raphael'); Vite ESM has no require. */
@@ -27,7 +28,7 @@ function rewriteKetcherRaphaelRequire(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [rewriteKetcherRaphaelRequire(), react(), tailwindcss(), sitesMetadata()],
+  plugins: [rewriteKetcherRaphaelRequire(), react(), tailwindcss(), sitesMetadata(), stericDemoPlugin()],
   resolve: {
     alias: [
       { find: '@', replacement: path.resolve(__dirname, './src') },
