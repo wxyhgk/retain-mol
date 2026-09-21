@@ -1,4 +1,5 @@
 import type { Molecule } from '../molecule'
+import type { ConstrainedGeometryRequest } from '../geometry/constrained/contracts'
 
 export const MODELING_SCHEMA_VERSION = 1 as const
 
@@ -20,6 +21,7 @@ export const MODELING_COMMAND_KINDS = [
   'geometry.setBondAngle',
   'geometry.setDihedral',
   'geometry.rotateGroup',
+  'geometry.solveConstraints',
 ] as const
 
 export type ModelingCommandKind = typeof MODELING_COMMAND_KINDS[number]
@@ -159,6 +161,11 @@ export type ModelingCommand =
       readonly atomId3: string
       readonly atomId4: string
       readonly angleDegrees: number
+    })
+  | (ModelingCommandBase & {
+      readonly kind: 'geometry.solveConstraints'
+      /** Bounded coordinate-only solve; all original ring bonds are preserved. */
+      readonly request: ConstrainedGeometryRequest
     })
   | (ModelingCommandBase & {
       readonly kind: 'geometry.rotateGroup'

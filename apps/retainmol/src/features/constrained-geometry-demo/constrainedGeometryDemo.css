@@ -1,0 +1,49 @@
+.constraint-demo { --constraint-accent: #257366; min-height: 100dvh; background: #f5f7f6; color: #253d36; padding: 30px clamp(16px, 4vw, 64px); font-family: ui-sans-serif, system-ui, sans-serif; }
+.constraint-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 24px; }
+.constraint-back { display: inline-flex; gap: 6px; align-items: center; color: #61796d; font-size: 12px; margin-bottom: 22px; }
+.constraint-eyebrow { color: var(--constraint-accent); font-size: 10px; letter-spacing: .16em; font-weight: 650; }
+.constraint-header h1 { font-size: clamp(26px, 3vw, 38px); letter-spacing: -.04em; font-weight: 650; margin: 7px 0 10px; }
+.constraint-header p:last-child { font-size: 13px; color: #62776d; }
+.constraint-tag { background: white; border: 1px solid #d8e3dc; border-radius: 20px; font-size: 11px; padding: 9px 13px; white-space: nowrap; }
+.constraint-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; padding: 18px; border: 1px solid #dce6df; background: white; border-radius: 12px; }
+.constraint-controls label { display: flex; flex-direction: column; gap: 7px; font-size: 11px; color: #62776d; }
+.constraint-controls select { height: 36px; border: 1px solid #d8e3dc; border-radius: 6px; background: #f9fbfa; color: #253d36; padding: 0 10px; font-size: 12px; }
+.constraint-demo button:focus-visible,.constraint-demo select:focus-visible,.constraint-demo summary:focus-visible { outline: 2px solid var(--constraint-accent); outline-offset: 3px; }
+.constraint-settings-summary { flex: 1; display: flex; flex-direction: column; gap: 5px; color: #71867b; font-size: 11px; align-self: center; min-width: 135px; }
+.constraint-status { min-height: 46px; padding: 14px 3px; font-size: 12px; color: #446c5c; }
+.constraint-viewports { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.constraint-view-card { min-width: 0; border: 1px solid #dce6df; border-radius: 12px; overflow: hidden; background: white; }
+.constraint-view-heading { display: flex; gap: 8px; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #edf2ef; }
+.constraint-view-heading div>span { color: #7f9388; font-size: 9px; letter-spacing: .14em; }
+.constraint-view-heading h2 { font-size: 15px; font-weight: 600; margin-top: 4px; }
+.constraint-pass,.constraint-pending,.constraint-fail { font-size: 11px; padding: 4px 8px; border-radius: 5px; }
+.constraint-pass { background: #ecf5ef; color: #2f7654; }
+.constraint-pending { background: #f8f4e9; color: #896b2d; }
+.constraint-fail { background: #fcefea; color: #a74b36; }
+.constraint-canvas { position: relative; height: clamp(290px, 36vh, 440px); }
+.constraint-view-footer { display: flex; gap: 8px; justify-content: space-between; align-items: center; border-top: 1px solid #edf2ef; padding: 8px 15px; color: #657c6f; font-size: 11px; }
+.constraint-results { margin-top: 24px; }
+.constraint-result-heading { display: flex; gap: 16px; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+.constraint-result-heading h2 { font-size: 16px; font-weight: 600; }
+.constraint-result-heading p { font-size: 11px; color: #71867b; margin-top: 5px; }
+.constraint-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.constraint-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.constraint-metrics>div { display: flex; flex-direction: column; padding: 16px 20px; border: 1px solid #dce6df; background: white; border-radius: 10px; }
+.constraint-metrics span,.constraint-metrics small { font-size: 11px; color: #768c7f; }
+.constraint-metrics strong { font-size: 28px; font-weight: 550; margin: 6px 0; font-variant-numeric: tabular-nums; }
+.constraint-metrics em { font-style: normal; font-size: 13px; font-weight: 400; }
+.constraint-locate { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-top: 12px; }
+.constraint-locate>span { font-size: 10px; color: #7d9084; margin-left: 8px; }
+.constraint-diagnostics { display: grid; grid-template-columns: 3fr 2fr; gap: 24px; margin-top: 18px; }
+.constraint-diagnostics details { min-width: 0; color: #60796b; font-size: 11px; }
+.constraint-diagnostics summary { padding: 12px 0; cursor: pointer; font-weight: 550; }
+.constraint-diagnostics p { font-size: 10px; margin-bottom: 12px; }
+.constraint-diagnostic-list { max-height: 270px; overflow: auto; display: flex; flex-direction: column; gap: 5px; }
+.constraint-diagnostic { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center; border: 1px solid #e2eae5; border-radius: 6px; background: white; padding: 8px 10px; text-align: left; cursor: pointer; }
+.constraint-diagnostic:hover { border-color: #6d9c83; }
+.constraint-issues { color: #a74b36; margin-bottom: 12px; }
+.constraint-issues button { padding: 5px 0; text-align: left; cursor: pointer; }
+.constraint-diagnostics pre { padding: 15px; background: white; border: 1px solid #e2eae5; border-radius: 8px; max-height: 290px; overflow: auto; font-size: 10px; }
+.constraint-footnote { margin-top: 24px; border-top: 1px solid #dce6df; padding-top: 16px; color: #7a8f81; font-size: 10px; line-height: 1.8; }
+@media (max-width: 900px) { .constraint-diagnostics { grid-template-columns: 1fr; }.constraint-result-heading { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 650px) { .constraint-header { align-items: flex-start; flex-direction: column; }.constraint-viewports { grid-template-columns: 1fr; }.constraint-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }.constraint-diagnostic { grid-template-columns: auto 1fr; }.constraint-controls label { flex: 1; min-width: 180px; }.constraint-settings-summary { min-width: 100%; }.constraint-view-heading { padding: 15px; }.constraint-view-footer { padding: 8px 10px; } }

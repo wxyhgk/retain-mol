@@ -8,6 +8,7 @@ import './index.css'
 import App from './App.tsx'
 import ApiTestPage from './dev/ApiTestPage.tsx'
 import StericDemoEntry from './app/StericDemoEntry'
+import ConstrainedGeometryDemoEntry from './app/ConstrainedGeometryDemoEntry'
 import { AppProviders } from './app/AppProviders.tsx'
 
 // 包内不读 import.meta.env,由 app 在启动时统一注入后端地址
@@ -21,12 +22,13 @@ registerForceFieldFromUrl(`${import.meta.env.BASE_URL}ocl/resources.json`).catch
 
 // 在 URL 后加 ?test 可切到 API 测试页，如：http://localhost:5173/?test
 const isStericDemo = new URLSearchParams(location.search).get('demo') === 'steric'
+const isConstraintsDemo = new URLSearchParams(location.search).get('demo') === 'constraints'
 const isTest = new URLSearchParams(location.search).has('test')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppProviders>
-      {isStericDemo ? <StericDemoEntry /> : isTest ? <ApiTestPage /> : <App />}
+      {isConstraintsDemo ? <ConstrainedGeometryDemoEntry /> : isStericDemo ? <StericDemoEntry /> : isTest ? <ApiTestPage /> : <App />}
     </AppProviders>
   </StrictMode>,
 )

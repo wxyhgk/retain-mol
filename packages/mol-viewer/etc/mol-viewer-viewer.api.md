@@ -228,6 +228,7 @@ export interface RendererPort extends RendererCapturePort, RendererViewportPort 
 
 // @public (undocumented)
 export interface RendererViewportPort {
+    alignViewToPlane?(normal: [number, number, number]): void;
     clearReactionHighlights(): void;
     // (undocumented)
     fitToMolecule(atoms: Atom[]): void;

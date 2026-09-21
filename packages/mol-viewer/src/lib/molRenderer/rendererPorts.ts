@@ -30,10 +30,15 @@ export interface RendererScenePort {
     selectedBonds: Set<string>,
   ): void
   setSketchPlane(plane: SketchPlane | null): void
-  alignViewToPlane(normal: [number, number, number]): void
 }
 
 export interface RendererViewportPort {
+  /**
+   * Optional orientation command: face a plane's model-local normal toward
+   * the camera. Changes only the view, without molecular edits or undo history.
+   * Adapters that cannot control orientation may omit this capability.
+   */
+  alignViewToPlane?(normal: [number, number, number]): void
   resetCamera(): void
   fitToMolecule(atoms: Atom[]): void
   updateOrbitTarget(atoms: readonly Atom[]): void
@@ -94,7 +99,9 @@ export interface ThreeRendererPort
     RendererReactionHighlightPort,
     RendererMeasurementPort,
     RendererInteractionPort,
-    ThreeRendererOverlayPort {}
+    ThreeRendererOverlayPort {
+  alignViewToPlane(normal: [number, number, number]): void
+}
 
 export type RotateGizmoRendererPort = Pick<
   ThreeRendererPort,

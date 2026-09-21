@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { EditPlanParseResult } from './contracts'
+import { constrainedGeometryRequestSchema } from './geometryConstraintSchema'
 
 const idSchema = z.string().trim().min(1).max(128)
 const finiteNumberSchema = z.number().finite()
@@ -49,6 +50,11 @@ const commandBase = {
 }
 
 export const modelingCommandSchema = z.discriminatedUnion('kind', [
+  z.object({
+    commandId: idSchema,
+    kind: z.literal('geometry.solveConstraints'),
+    request: constrainedGeometryRequestSchema,
+  }).strict(),
   z.object({
     ...commandBase,
     kind: z.literal('atom.add'),

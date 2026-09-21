@@ -65,7 +65,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 - `src/public/editing.ts`：窄化的坐标写入事务，不导出 `useBuilder`。
 - `src/public/modeling.ts`：只读建模上下文、严格 `EditPlan` 协议、dry-run 和单事务提交入口。
 - `src/public/headless.ts`：纯上下文、计划校验与回放，Node 使用时不加载 React/store；旧 `/modeling` 的纯函数出口仍兼容。
-- `src/public/geometry.ts`：测量几何与当前兼容的图拓扑查询。
+- `src/public/geometry.ts`：测量、几何约束校验/局部求解、路径方向分析与当前兼容的图拓扑查询；见[受约束几何编辑](constrained-geometry.md)。
 - `src/public/graph.ts`：分子图连通片段和连通分量查询。
 - `src/public/io.ts`：MOL/SDF/XYZ/GJF 解析导出、几何松弛 API。
 - `src/public/fragments.ts`：片段列表和查询。

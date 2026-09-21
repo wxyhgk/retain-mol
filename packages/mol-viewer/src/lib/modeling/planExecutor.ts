@@ -49,6 +49,8 @@ import {
 } from './contracts'
 import { parseEditPlan } from './planSchema'
 import { computeMoleculeRevision } from './revision'
+import { solveConstrainedGeometry } from '../geometry/constrained/solver'
+import { perceiveAtomChirality } from '../stereo/perception'
 
 interface WorkingState {
   readonly molecule: Molecule
@@ -209,6 +211,10 @@ function atomMissing(command: ModelingCommand, molecule: Molecule): string | nul
       case 'geometry.setBondLength': return [command.atomId1, command.atomId2]
       case 'geometry.setBondAngle': return [command.atomId1, command.atomId2, command.atomId3]
       case 'geometry.setDihedral': return [command.atomId1, command.atomId2, command.atomId3, command.atomId4]
+      case 'geometry.solveConstraints': return [
+        ...command.request.movableAtomIds,
+        ...command.request.constraints.flatMap(c => c.kind === 'position' ? [c.atomId] : c.atomIds),
+      ]
     }
   })()
   return atomIds.find(atomId => !hasAtom(molecule, atomId)) ?? null
@@ -243,6 +249,10 @@ function existingTargets(command: ModelingCommand): {
     }
     case 'geometry.rotateGroup': return {
       atomIds: [command.axisAtomId1, command.axisAtomId2, ...command.atomIds],
+      bondIds: [],
+    }
+    case 'geometry.solveConstraints': return {
+      atomIds: [...command.request.movableAtomIds, ...command.request.constraints.flatMap(c => c.kind === 'position' ? [c.atomId] : c.atomIds)],
       bondIds: [],
     }
   }
@@ -465,6 +475,19 @@ function executeCommand(state: WorkingState, command: ModelingCommand): CommandE
       )
       if (!result.changed) return { ok: true, changed: false, state }
       return fromEditResult(state, runSetAtomPositionsCommand(state.molecule, result.positions))
+    }
+    case 'geometry.solveConstraints': {
+      const result = solveConstrainedGeometry(state.molecule, command.request)
+      if (!result.ok) return { ok: false, reason: result.reason ?? '几何约束未收敛' }
+      // Coordinate-only conformational edits must not silently change authored stereochemistry.
+      if (state.molecule.atoms.some(a => a.chirality)) {
+        const perceived = perceiveAtomChirality(result.molecule)
+        if (state.molecule.atoms.some(a => a.chirality && perceived.get(a.id) !== a.chirality)) {
+          return { ok: false, reason: '几何结果不满足已指定的原子手性' }
+        }
+      }
+      const positions = new Map(result.molecule.atoms.map(a => [a.id, { x: a.x, y: a.y, z: a.z }]))
+      return fromEditResult(state, runSetAtomPositionsCommand(state.molecule, positions))
     }
   }
 }

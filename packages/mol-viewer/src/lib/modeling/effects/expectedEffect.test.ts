@@ -438,7 +438,7 @@ describe('compileExpectedEffect', () => {
     expect(effect.finalSnapshot.bonds).toEqual([])
   })
 
-  it('registers all 17 command kinds and returns explicit unsupported semantics for ten', () => {
+  it('registers all 18 command kinds and returns explicit unsupported semantics for eleven', () => {
     expect(Object.keys(EXPECTED_EFFECT_SEMANTICS)).toEqual(MODELING_COMMAND_KINDS)
     const supported = MODELING_COMMAND_KINDS.filter(isExpectedEffectCommandSupported)
     const unsupported = MODELING_COMMAND_KINDS.filter(kind => !isExpectedEffectCommandSupported(kind))
@@ -451,7 +451,8 @@ describe('compileExpectedEffect', () => {
       'bond.remove',
       'bond.setOrder',
     ])
-    expect(unsupported).toHaveLength(10)
+    expect(unsupported).toHaveLength(11)
+    expect(unsupported).toContain('geometry.solveConstraints')
 
     unsupported.forEach(kind => {
       const result = compileExpectedEffect(baseMolecule(), plan([

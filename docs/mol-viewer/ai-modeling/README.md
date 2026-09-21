@@ -45,6 +45,10 @@
 V4 严格意图桥、证据链以及下一代局部端口/刚性关节方法见
 [GeometryIntent：让 AI 用关系构造三维分子](./lean-geometry-intent.md)。
 
+已有三维骨架的闭环协同变形使用 `geometry.solveConstraints` 和
+`previewConstrainedGeometry`；可序列化约束、独立几何诊断、路径方向及边界见
+[受约束几何编辑](../constrained-geometry.md)。这是局部坐标求解，不代表任意图片或 SMILES 的完整构象生成。
+
 ## 公共入口
 
 只从以下子路径接入：

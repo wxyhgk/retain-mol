@@ -49,6 +49,9 @@ npm run verify:viewer-consumer  # tarball 安装、公共 API 回归、消费者
 
 螺芴碰撞避让演示：`/?demo=steric`，操作、Jev 配置和几何策略见
 [Demo 文档](docs/mol-viewer/steric-demo.md)。
+
+闭环协同变形演示：`/?demo=constraints`，约束 API、路径方向与适用边界见
+[受约束几何编辑](docs/mol-viewer/constrained-geometry.md)。
 应用检查器布局、键盘作用域及本次验收边界见
 [检查器与快捷键](docs/UI/inspector-and-shortcuts.md)。
 

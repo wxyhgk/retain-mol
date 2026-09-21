@@ -7,6 +7,9 @@
 import { z } from 'zod';
 
 // @public
+export function analyzeHelicalPath(molecule: Molecule, atomIds: readonly string[], minTwistDegrees: number): HelicalPathAnalysis;
+
+// @public
 export function analyzeStericContacts(molecule: Molecule): StericReport;
 
 // @public
@@ -163,6 +166,142 @@ export function computeCanonicalSnapshotDigest(snapshot: CanonicalMoleculeSnapsh
 export function computeMoleculeRevision(molecule: Molecule): string;
 
 // @public (undocumented)
+export type ConstrainedGeometryPreview = {
+    readonly ok: true;
+    readonly plan: EditPlan;
+    readonly molecule: Molecule;
+    readonly report: GeometryConstraintReport;
+    readonly baseRevision: string;
+    readonly nextRevision: string;
+    readonly iterations: number;
+    readonly movedAtomIds: readonly string[];
+} | {
+    readonly ok: false;
+    readonly issues: readonly ModelingIssue[];
+    readonly report?: GeometryConstraintReport;
+};
+
+// @public (undocumented)
+export interface ConstrainedGeometryPreviewRequest {
+    // (undocumented)
+    readonly request: ConstrainedGeometryRequest;
+    // (undocumented)
+    readonly targetObjectId: string;
+}
+
+// @public (undocumented)
+export interface ConstrainedGeometryRequest {
+    readonly angleToleranceDegrees?: number;
+    readonly bondLengthTolerance?: number;
+    // (undocumented)
+    readonly constraints: readonly GeometryConstraint[];
+    // (undocumented)
+    readonly maxIterations?: number;
+    readonly movableAtomIds: readonly string[];
+    readonly nonbondedMinimumDistance?: number;
+}
+
+// @public (undocumented)
+export const constrainedGeometryRequestSchema: z.ZodObject<{
+    constraints: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
+        kind: z.ZodLiteral<"distance">;
+        atomIds: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+        target: z.ZodNumber;
+        tolerance: z.ZodNumber;
+        id: z.ZodString;
+        strength: z.ZodEnum<{
+            hard: "hard";
+            soft: "soft";
+        }>;
+        weight: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>, z.ZodObject<{
+        kind: z.ZodLiteral<"minimum-distance">;
+        atomIds: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+        minimum: z.ZodNumber;
+        tolerance: z.ZodNumber;
+        id: z.ZodString;
+        strength: z.ZodEnum<{
+            hard: "hard";
+            soft: "soft";
+        }>;
+        weight: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>, z.ZodObject<{
+        kind: z.ZodLiteral<"angle">;
+        atomIds: z.ZodTuple<[z.ZodString, z.ZodString, z.ZodString], null>;
+        targetDegrees: z.ZodNumber;
+        toleranceDegrees: z.ZodNumber;
+        id: z.ZodString;
+        strength: z.ZodEnum<{
+            hard: "hard";
+            soft: "soft";
+        }>;
+        weight: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>, z.ZodObject<{
+        kind: z.ZodLiteral<"dihedral">;
+        atomIds: z.ZodTuple<[z.ZodString, z.ZodString, z.ZodString, z.ZodString], null>;
+        targetDegrees: z.ZodNumber;
+        toleranceDegrees: z.ZodNumber;
+        id: z.ZodString;
+        strength: z.ZodEnum<{
+            hard: "hard";
+            soft: "soft";
+        }>;
+        weight: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>, z.ZodObject<{
+        kind: z.ZodLiteral<"position">;
+        atomId: z.ZodString;
+        target: z.ZodObject<{
+            x: z.ZodNumber;
+            y: z.ZodNumber;
+            z: z.ZodNumber;
+        }, z.core.$strict>;
+        tolerance: z.ZodNumber;
+        id: z.ZodString;
+        strength: z.ZodEnum<{
+            hard: "hard";
+            soft: "soft";
+        }>;
+        weight: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>, z.ZodObject<{
+        kind: z.ZodLiteral<"helicity">;
+        atomIds: z.ZodArray<z.ZodString>;
+        handedness: z.ZodEnum<{
+            left: "left";
+            right: "right";
+        }>;
+        minTwistDegrees: z.ZodNumber;
+        id: z.ZodString;
+        strength: z.ZodEnum<{
+            hard: "hard";
+            soft: "soft";
+        }>;
+        weight: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>], "kind">>;
+    movableAtomIds: z.ZodArray<z.ZodString>;
+    bondLengthTolerance: z.ZodOptional<z.ZodNumber>;
+    angleToleranceDegrees: z.ZodOptional<z.ZodNumber>;
+    nonbondedMinimumDistance: z.ZodOptional<z.ZodNumber>;
+    maxIterations: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export interface ConstrainedGeometryResult {
+    readonly attemptReport?: GeometryConstraintReport;
+    // (undocumented)
+    readonly iterations: number;
+    readonly molecule: Molecule;
+    // (undocumented)
+    readonly movedAtomIds: readonly string[];
+    // (undocumented)
+    readonly ok: boolean;
+    // (undocumented)
+    readonly reason?: string;
+    readonly report: GeometryConstraintReport;
+    // (undocumented)
+    readonly status: 'converged' | 'invalid-input' | 'not-converged';
+}
+
+// @public (undocumented)
 export type CoordinationBondOrder = 1 | 2 | 3;
 
 // @public (undocumented)
@@ -272,6 +411,90 @@ export const editPlanSchema: z.ZodObject<{
         protectedAtomIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
     commands: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
+        commandId: z.ZodString;
+        kind: z.ZodLiteral<"geometry.solveConstraints">;
+        request: z.ZodObject<{
+            constraints: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
+                kind: z.ZodLiteral<"distance">;
+                atomIds: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+                target: z.ZodNumber;
+                tolerance: z.ZodNumber;
+                id: z.ZodString;
+                strength: z.ZodEnum<{
+                    hard: "hard";
+                    soft: "soft";
+                }>;
+                weight: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strict>, z.ZodObject<{
+                kind: z.ZodLiteral<"minimum-distance">;
+                atomIds: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+                minimum: z.ZodNumber;
+                tolerance: z.ZodNumber;
+                id: z.ZodString;
+                strength: z.ZodEnum<{
+                    hard: "hard";
+                    soft: "soft";
+                }>;
+                weight: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strict>, z.ZodObject<{
+                kind: z.ZodLiteral<"angle">;
+                atomIds: z.ZodTuple<[z.ZodString, z.ZodString, z.ZodString], null>;
+                targetDegrees: z.ZodNumber;
+                toleranceDegrees: z.ZodNumber;
+                id: z.ZodString;
+                strength: z.ZodEnum<{
+                    hard: "hard";
+                    soft: "soft";
+                }>;
+                weight: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strict>, z.ZodObject<{
+                kind: z.ZodLiteral<"dihedral">;
+                atomIds: z.ZodTuple<[z.ZodString, z.ZodString, z.ZodString, z.ZodString], null>;
+                targetDegrees: z.ZodNumber;
+                toleranceDegrees: z.ZodNumber;
+                id: z.ZodString;
+                strength: z.ZodEnum<{
+                    hard: "hard";
+                    soft: "soft";
+                }>;
+                weight: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strict>, z.ZodObject<{
+                kind: z.ZodLiteral<"position">;
+                atomId: z.ZodString;
+                target: z.ZodObject<{
+                    x: z.ZodNumber;
+                    y: z.ZodNumber;
+                    z: z.ZodNumber;
+                }, z.core.$strict>;
+                tolerance: z.ZodNumber;
+                id: z.ZodString;
+                strength: z.ZodEnum<{
+                    hard: "hard";
+                    soft: "soft";
+                }>;
+                weight: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strict>, z.ZodObject<{
+                kind: z.ZodLiteral<"helicity">;
+                atomIds: z.ZodArray<z.ZodString>;
+                handedness: z.ZodEnum<{
+                    left: "left";
+                    right: "right";
+                }>;
+                minTwistDegrees: z.ZodNumber;
+                id: z.ZodString;
+                strength: z.ZodEnum<{
+                    hard: "hard";
+                    soft: "soft";
+                }>;
+                weight: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strict>], "kind">>;
+            movableAtomIds: z.ZodArray<z.ZodString>;
+            bondLengthTolerance: z.ZodOptional<z.ZodNumber>;
+            angleToleranceDegrees: z.ZodOptional<z.ZodNumber>;
+            nonbondedMinimumDistance: z.ZodOptional<z.ZodNumber>;
+            maxIterations: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>;
+    }, z.core.$strict>, z.ZodObject<{
         kind: z.ZodLiteral<"atom.add">;
         atomId: z.ZodString;
         symbol: z.ZodString;
@@ -383,7 +606,7 @@ export const editPlanSchema: z.ZodObject<{
 export const EXPECTED_EFFECT_SCHEMA_VERSION: 2;
 
 // @public (undocumented)
-export const EXPECTED_EFFECT_SEMANTICS: Readonly<Record<"atom.add" | "atom.replace" | "atom.remove" | "atom.move" | "atom.setCharge" | "atom.setRadical" | "atom.addHydrogen" | "bond.add" | "bond.remove" | "bond.setOrder" | "fragment.attach" | "fragment.bridge" | "fragment.fuse" | "geometry.setBondLength" | "geometry.setBondAngle" | "geometry.setDihedral" | "geometry.rotateGroup", ExpectedEffectSemanticsSupport>>;
+export const EXPECTED_EFFECT_SEMANTICS: Readonly<Record<"atom.add" | "atom.replace" | "atom.remove" | "atom.move" | "atom.setCharge" | "atom.setRadical" | "atom.addHydrogen" | "bond.add" | "bond.remove" | "bond.setOrder" | "fragment.attach" | "fragment.bridge" | "fragment.fuse" | "geometry.setBondLength" | "geometry.setBondAngle" | "geometry.setDihedral" | "geometry.rotateGroup" | "geometry.solveConstraints", ExpectedEffectSemanticsSupport>>;
 
 // @public (undocumented)
 export const EXPECTED_EFFECT_SUPPORTED_COMMAND_KINDS: readonly ["atom.add", "atom.replace", "atom.remove", "atom.move", "bond.add", "bond.remove", "bond.setOrder"];
@@ -484,6 +707,171 @@ export type ExpectedEffectSupportedCommandKind = typeof EXPECTED_EFFECT_SUPPORTE
 export function generateTorsionCandidates(context: ModelingContext, request: TorsionCandidateRequest): TorsionCandidateResult;
 
 // @public (undocumented)
+export type GeometryConstraint = (GeometryConstraintBase & {
+    readonly kind: 'distance';
+    readonly atomIds: readonly [string, string];
+    readonly target: number;
+    readonly tolerance: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'minimum-distance';
+    readonly atomIds: readonly [string, string];
+    readonly minimum: number;
+    readonly tolerance: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'angle';
+    readonly atomIds: readonly [string, string, string];
+    readonly targetDegrees: number;
+    readonly toleranceDegrees: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'dihedral';
+    readonly atomIds: readonly [string, string, string, string];
+    readonly targetDegrees: number;
+    readonly toleranceDegrees: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'position';
+    readonly atomId: string;
+    readonly target: Vector3Data;
+    readonly tolerance: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'helicity';
+    readonly atomIds: readonly string[];
+    readonly handedness: HelicalHandedness;
+    readonly minTwistDegrees: number;
+});
+
+// @public (undocumented)
+export interface GeometryConstraintBase {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly strength: 'hard' | 'soft';
+    readonly weight?: number;
+}
+
+// @public (undocumented)
+export interface GeometryConstraintIssue {
+    // (undocumented)
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly code: 'invalid-input' | 'invalid-constraint' | 'degenerate-geometry' | 'stereochemistry-violation';
+    // (undocumented)
+    readonly constraintId?: string;
+    // (undocumented)
+    readonly message: string;
+}
+
+// @public (undocumented)
+export interface GeometryConstraintMeasurement {
+    // (undocumented)
+    readonly actual: number | null;
+    // (undocumented)
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly constraintId: string;
+    // (undocumented)
+    readonly kind: GeometryConstraint['kind'];
+    // (undocumented)
+    readonly satisfied: boolean;
+    // (undocumented)
+    readonly strength: 'hard' | 'soft';
+    // (undocumented)
+    readonly unit: 'angstrom' | 'degree';
+    readonly violation: number | null;
+}
+
+// @public (undocumented)
+export interface GeometryConstraintReport {
+    // (undocumented)
+    readonly hardViolationCount: number;
+    // (undocumented)
+    readonly issues: readonly GeometryConstraintIssue[];
+    // (undocumented)
+    readonly measurements: readonly GeometryConstraintMeasurement[];
+    // (undocumented)
+    readonly satisfied: boolean;
+    // (undocumented)
+    readonly softPenalty: number;
+    // (undocumented)
+    readonly validInput: boolean;
+}
+
+// @public
+export const geometryConstraintSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"distance">;
+    atomIds: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+    target: z.ZodNumber;
+    tolerance: z.ZodNumber;
+    id: z.ZodString;
+    strength: z.ZodEnum<{
+        hard: "hard";
+        soft: "soft";
+    }>;
+    weight: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strict>, z.ZodObject<{
+    kind: z.ZodLiteral<"minimum-distance">;
+    atomIds: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+    minimum: z.ZodNumber;
+    tolerance: z.ZodNumber;
+    id: z.ZodString;
+    strength: z.ZodEnum<{
+        hard: "hard";
+        soft: "soft";
+    }>;
+    weight: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strict>, z.ZodObject<{
+    kind: z.ZodLiteral<"angle">;
+    atomIds: z.ZodTuple<[z.ZodString, z.ZodString, z.ZodString], null>;
+    targetDegrees: z.ZodNumber;
+    toleranceDegrees: z.ZodNumber;
+    id: z.ZodString;
+    strength: z.ZodEnum<{
+        hard: "hard";
+        soft: "soft";
+    }>;
+    weight: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strict>, z.ZodObject<{
+    kind: z.ZodLiteral<"dihedral">;
+    atomIds: z.ZodTuple<[z.ZodString, z.ZodString, z.ZodString, z.ZodString], null>;
+    targetDegrees: z.ZodNumber;
+    toleranceDegrees: z.ZodNumber;
+    id: z.ZodString;
+    strength: z.ZodEnum<{
+        hard: "hard";
+        soft: "soft";
+    }>;
+    weight: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strict>, z.ZodObject<{
+    kind: z.ZodLiteral<"position">;
+    atomId: z.ZodString;
+    target: z.ZodObject<{
+        x: z.ZodNumber;
+        y: z.ZodNumber;
+        z: z.ZodNumber;
+    }, z.core.$strict>;
+    tolerance: z.ZodNumber;
+    id: z.ZodString;
+    strength: z.ZodEnum<{
+        hard: "hard";
+        soft: "soft";
+    }>;
+    weight: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strict>, z.ZodObject<{
+    kind: z.ZodLiteral<"helicity">;
+    atomIds: z.ZodArray<z.ZodString>;
+    handedness: z.ZodEnum<{
+        left: "left";
+        right: "right";
+    }>;
+    minTwistDegrees: z.ZodNumber;
+    id: z.ZodString;
+    strength: z.ZodEnum<{
+        hard: "hard";
+        soft: "soft";
+    }>;
+    weight: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strict>], "kind">;
+
+// @public (undocumented)
 export const HEADLESS_MODELING_OBJECT_ID = "headless-modeling-object";
 
 // @public (undocumented)
@@ -501,11 +889,23 @@ export interface HeadlessModelingOptions {
     };
 }
 
+// @public
+export type HelicalHandedness = 'right' | 'left';
+
+// @public
+export interface HelicalPathAnalysis {
+    // (undocumented)
+    readonly issues: readonly GeometryConstraintIssue[];
+    // (undocumented)
+    readonly status: 'right' | 'left' | 'mixed' | 'indeterminate' | 'invalid';
+    readonly turnsDegrees: readonly (number | null)[];
+}
+
 // @public (undocumented)
 export function isExpectedEffectCommandSupported(kind: ModelingCommandKind): kind is ExpectedEffectSupportedCommand['kind'];
 
 // @public (undocumented)
-export const MODELING_COMMAND_KINDS: readonly ["atom.add", "atom.replace", "atom.remove", "atom.move", "atom.setCharge", "atom.setRadical", "atom.addHydrogen", "bond.add", "bond.remove", "bond.setOrder", "fragment.attach", "fragment.bridge", "fragment.fuse", "geometry.setBondLength", "geometry.setBondAngle", "geometry.setDihedral", "geometry.rotateGroup"];
+export const MODELING_COMMAND_KINDS: readonly ["atom.add", "atom.replace", "atom.remove", "atom.move", "atom.setCharge", "atom.setRadical", "atom.addHydrogen", "bond.add", "bond.remove", "bond.setOrder", "fragment.attach", "fragment.bridge", "fragment.fuse", "geometry.setBondLength", "geometry.setBondAngle", "geometry.setDihedral", "geometry.rotateGroup", "geometry.solveConstraints"];
 
 // @public (undocumented)
 export const MODELING_SCHEMA_VERSION: 1;
@@ -615,6 +1015,9 @@ export type ModelingCommand = (ModelingCommandBase & {
     readonly atomId4: string;
     readonly angleDegrees: number;
 }) | (ModelingCommandBase & {
+    readonly kind: 'geometry.solveConstraints';
+    readonly request: ConstrainedGeometryRequest;
+}) | (ModelingCommandBase & {
     readonly kind: 'geometry.rotateGroup';
     readonly atomIds: readonly string[];
     readonly axisAtomId1: string;
@@ -648,6 +1051,90 @@ export type ModelingCommandKind = typeof MODELING_COMMAND_KINDS[number];
 
 // @public (undocumented)
 export const modelingCommandSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    commandId: z.ZodString;
+    kind: z.ZodLiteral<"geometry.solveConstraints">;
+    request: z.ZodObject<{
+        constraints: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
+            kind: z.ZodLiteral<"distance">;
+            atomIds: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+            target: z.ZodNumber;
+            tolerance: z.ZodNumber;
+            id: z.ZodString;
+            strength: z.ZodEnum<{
+                hard: "hard";
+                soft: "soft";
+            }>;
+            weight: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"minimum-distance">;
+            atomIds: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+            minimum: z.ZodNumber;
+            tolerance: z.ZodNumber;
+            id: z.ZodString;
+            strength: z.ZodEnum<{
+                hard: "hard";
+                soft: "soft";
+            }>;
+            weight: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"angle">;
+            atomIds: z.ZodTuple<[z.ZodString, z.ZodString, z.ZodString], null>;
+            targetDegrees: z.ZodNumber;
+            toleranceDegrees: z.ZodNumber;
+            id: z.ZodString;
+            strength: z.ZodEnum<{
+                hard: "hard";
+                soft: "soft";
+            }>;
+            weight: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"dihedral">;
+            atomIds: z.ZodTuple<[z.ZodString, z.ZodString, z.ZodString, z.ZodString], null>;
+            targetDegrees: z.ZodNumber;
+            toleranceDegrees: z.ZodNumber;
+            id: z.ZodString;
+            strength: z.ZodEnum<{
+                hard: "hard";
+                soft: "soft";
+            }>;
+            weight: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"position">;
+            atomId: z.ZodString;
+            target: z.ZodObject<{
+                x: z.ZodNumber;
+                y: z.ZodNumber;
+                z: z.ZodNumber;
+            }, z.core.$strict>;
+            tolerance: z.ZodNumber;
+            id: z.ZodString;
+            strength: z.ZodEnum<{
+                hard: "hard";
+                soft: "soft";
+            }>;
+            weight: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"helicity">;
+            atomIds: z.ZodArray<z.ZodString>;
+            handedness: z.ZodEnum<{
+                left: "left";
+                right: "right";
+            }>;
+            minTwistDegrees: z.ZodNumber;
+            id: z.ZodString;
+            strength: z.ZodEnum<{
+                hard: "hard";
+                soft: "soft";
+            }>;
+            weight: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>], "kind">>;
+        movableAtomIds: z.ZodArray<z.ZodString>;
+        bondLengthTolerance: z.ZodOptional<z.ZodNumber>;
+        angleToleranceDegrees: z.ZodOptional<z.ZodNumber>;
+        nonbondedMinimumDistance: z.ZodOptional<z.ZodNumber>;
+        maxIterations: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strict>;
+}, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"atom.add">;
     atomId: z.ZodString;
     symbol: z.ZodString;
@@ -932,7 +1419,13 @@ export interface Molecule {
 export function parseEditPlan(input: unknown): EditPlanParseResult;
 
 // @public
+export function previewConstrainedGeometry(context: ModelingContext, input: ConstrainedGeometryPreviewRequest): ConstrainedGeometryPreview;
+
+// @public
 export function replayEditPlan(molecule: Molecule, input: EditPlan | unknown, options?: HeadlessModelingOptions): ModelingDryRunResult;
+
+// @public
+export function solveConstrainedGeometry(molecule: Molecule, request: ConstrainedGeometryRequest): ConstrainedGeometryResult;
 
 // @public
 export const STERIC_POLICY_VERSION: "ch-contact-v1";
@@ -1034,6 +1527,9 @@ export interface TorsionMetrics {
 }
 
 // @public
+export function validateGeometryConstraints(molecule: Molecule, constraints: readonly GeometryConstraint[]): GeometryConstraintReport;
+
+// @public
 export function validateModelingCommandConstraints(command: ModelingCommand, constraints: ModelingConstraints | undefined): ModelingIssue | null;
 
 // @public
@@ -1041,6 +1537,16 @@ export function validateModelingConstraintInvariants(before: Molecule, after: Mo
 
 // @public
 export function validateModelingConstraints(molecule: Molecule, constraints: ModelingConstraints | undefined): readonly ModelingIssue[];
+
+// @public
+export interface Vector3Data {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+    // (undocumented)
+    readonly z: number;
+}
 
 // (No @packageDocumentation comment for this package)
 

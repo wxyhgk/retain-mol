@@ -92,3 +92,16 @@ export { STERIC_POLICY_VERSION, analyzeStericContacts } from '../lib/builder/geo
 export type { StericContact, StericReport } from '../lib/builder/geometry/stericContacts'
 export { generateTorsionCandidates } from '../lib/modeling/stericCandidates'
 export type { TorsionCandidateRequest, TorsionMetrics, TorsionCandidate, TorsionCandidateResult } from '../lib/modeling/stericCandidates'
+export { solveConstrainedGeometry } from '../lib/geometry/constrained/solver'
+export { validateGeometryConstraints } from '../lib/geometry/constrained/validation'
+export { analyzeHelicalPath } from '../lib/geometry/constrained/helicity'
+export type { HelicalPathAnalysis } from '../lib/geometry/constrained/helicity'
+export type { Vector3Data } from '../lib/model/types'
+export type {
+  HelicalHandedness, GeometryConstraintBase, GeometryConstraint,
+  GeometryConstraintIssue, GeometryConstraintMeasurement, GeometryConstraintReport,
+  ConstrainedGeometryRequest, ConstrainedGeometryResult,
+} from '../lib/geometry/constrained/contracts'
+export { geometryConstraintSchema, constrainedGeometryRequestSchema } from '../lib/modeling/geometryConstraintSchema'
+export { previewConstrainedGeometry } from '../lib/modeling/constrainedGeometry'
+export type { ConstrainedGeometryPreviewRequest, ConstrainedGeometryPreview } from '../lib/modeling/constrainedGeometry'

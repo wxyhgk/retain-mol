@@ -4,6 +4,9 @@
 
 ```ts
 
+// @public
+export function analyzeHelicalPath(molecule: Molecule, atomIds: readonly string[], minTwistDegrees: number): HelicalPathAnalysis;
+
 // @public (undocumented)
 export interface Atom {
     readonly charge?: number;
@@ -55,6 +58,35 @@ export function calcDihedral(a1: XYZ, a2: XYZ, a3: XYZ, a4: XYZ): number;
 export function calcDistance(a1: XYZ, a2: XYZ): number;
 
 // @public (undocumented)
+export interface ConstrainedGeometryRequest {
+    readonly angleToleranceDegrees?: number;
+    readonly bondLengthTolerance?: number;
+    // (undocumented)
+    readonly constraints: readonly GeometryConstraint[];
+    // (undocumented)
+    readonly maxIterations?: number;
+    readonly movableAtomIds: readonly string[];
+    readonly nonbondedMinimumDistance?: number;
+}
+
+// @public (undocumented)
+export interface ConstrainedGeometryResult {
+    readonly attemptReport?: GeometryConstraintReport;
+    // (undocumented)
+    readonly iterations: number;
+    readonly molecule: Molecule;
+    // (undocumented)
+    readonly movedAtomIds: readonly string[];
+    // (undocumented)
+    readonly ok: boolean;
+    // (undocumented)
+    readonly reason?: string;
+    readonly report: GeometryConstraintReport;
+    // (undocumented)
+    readonly status: 'converged' | 'invalid-input' | 'not-converged';
+}
+
+// @public (undocumented)
 export type CoordinationBondOrder = 1 | 2 | 3;
 
 // @public (undocumented)
@@ -79,6 +111,95 @@ export interface CoordinationSiteAssignment {
     readonly siteId: string;
 }
 
+// @public (undocumented)
+export type GeometryConstraint = (GeometryConstraintBase & {
+    readonly kind: 'distance';
+    readonly atomIds: readonly [string, string];
+    readonly target: number;
+    readonly tolerance: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'minimum-distance';
+    readonly atomIds: readonly [string, string];
+    readonly minimum: number;
+    readonly tolerance: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'angle';
+    readonly atomIds: readonly [string, string, string];
+    readonly targetDegrees: number;
+    readonly toleranceDegrees: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'dihedral';
+    readonly atomIds: readonly [string, string, string, string];
+    readonly targetDegrees: number;
+    readonly toleranceDegrees: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'position';
+    readonly atomId: string;
+    readonly target: Vector3Data;
+    readonly tolerance: number;
+}) | (GeometryConstraintBase & {
+    readonly kind: 'helicity';
+    readonly atomIds: readonly string[];
+    readonly handedness: HelicalHandedness;
+    readonly minTwistDegrees: number;
+});
+
+// @public (undocumented)
+export interface GeometryConstraintBase {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly strength: 'hard' | 'soft';
+    readonly weight?: number;
+}
+
+// @public (undocumented)
+export interface GeometryConstraintIssue {
+    // (undocumented)
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly code: 'invalid-input' | 'invalid-constraint' | 'degenerate-geometry' | 'stereochemistry-violation';
+    // (undocumented)
+    readonly constraintId?: string;
+    // (undocumented)
+    readonly message: string;
+}
+
+// @public (undocumented)
+export interface GeometryConstraintMeasurement {
+    // (undocumented)
+    readonly actual: number | null;
+    // (undocumented)
+    readonly atomIds: readonly string[];
+    // (undocumented)
+    readonly constraintId: string;
+    // (undocumented)
+    readonly kind: GeometryConstraint['kind'];
+    // (undocumented)
+    readonly satisfied: boolean;
+    // (undocumented)
+    readonly strength: 'hard' | 'soft';
+    // (undocumented)
+    readonly unit: 'angstrom' | 'degree';
+    readonly violation: number | null;
+}
+
+// @public (undocumented)
+export interface GeometryConstraintReport {
+    // (undocumented)
+    readonly hardViolationCount: number;
+    // (undocumented)
+    readonly issues: readonly GeometryConstraintIssue[];
+    // (undocumented)
+    readonly measurements: readonly GeometryConstraintMeasurement[];
+    // (undocumented)
+    readonly satisfied: boolean;
+    // (undocumented)
+    readonly softPenalty: number;
+    // (undocumented)
+    readonly validInput: boolean;
+}
+
 // @public
 export function getConnectedFragment(atoms: readonly {
     id: string;
@@ -86,6 +207,18 @@ export function getConnectedFragment(atoms: readonly {
     atomId1: string;
     atomId2: string;
 }[], startId: string): Set<string>;
+
+// @public
+export type HelicalHandedness = 'right' | 'left';
+
+// @public
+export interface HelicalPathAnalysis {
+    // (undocumented)
+    readonly issues: readonly GeometryConstraintIssue[];
+    // (undocumented)
+    readonly status: 'right' | 'left' | 'mixed' | 'indeterminate' | 'invalid';
+    readonly turnsDegrees: readonly (number | null)[];
+}
 
 // @public (undocumented)
 export interface Molecule {
@@ -98,7 +231,23 @@ export interface Molecule {
 }
 
 // @public
+export function solveConstrainedGeometry(molecule: Molecule, request: ConstrainedGeometryRequest): ConstrainedGeometryResult;
+
+// @public
 export function splitConnectedComponents(mol: Molecule): Molecule[];
+
+// @public
+export function validateGeometryConstraints(molecule: Molecule, constraints: readonly GeometryConstraint[]): GeometryConstraintReport;
+
+// @public
+export interface Vector3Data {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+    // (undocumented)
+    readonly z: number;
+}
 
 // @public
 export interface XYZ {
