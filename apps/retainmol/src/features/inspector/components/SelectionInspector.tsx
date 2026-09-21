@@ -1,6 +1,5 @@
-import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
-import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { useMemo, useRef } from 'react'
+import { useInspectorContext } from '../model/useInspectorContext'
 import { buildInspectorModel } from '../model/inspectorModel'
 import {
   AtomInspector,
@@ -10,20 +9,23 @@ import {
 } from './SelectionInspectorViews'
 
 export function SelectionInspector() {
-  const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)
-  const { selectedAtomIds, selectedBondIds } = useMoleculeStore(useShallow(state => ({
-    selectedAtomIds: state.selectedAtomIds,
-    selectedBondIds: state.selectedBondIds,
-  })))
+  const detailsRef = useRef<HTMLElement>(null)
+  const { molecule, object, revision, selectedAtomIds, selectedBondIds, editReason } = useInspectorContext()
   const model = useMemo(
     () => buildInspectorModel(molecule, selectedAtomIds, selectedBondIds),
     [molecule, selectedAtomIds, selectedBondIds],
   )
 
-  switch (model.mode) {
-    case 'molecule': return <MoleculeInspector model={model} />
-    case 'atom': return <AtomInspector key={model.atom.atom.id} model={model} />
-    case 'bond': return <BondInspector key={model.bond.id} model={model} />
-    case 'multi': return <MultiSelectionInspector model={model} />
-  }
+  const content = (() => {
+    switch (model.mode) {
+      case 'molecule': return <MoleculeInspector model={model} />
+      case 'atom': return object && <AtomInspector key={`${object.id}:${model.atom.atom.id}`} model={model} onNavigate={() => detailsRef.current?.focus()} target={{ objectId: object.id, kind: 'atom', id: model.atom.atom.id, revision, label: `${model.atom.atom.symbol} #${model.atom.number}` }} />
+      case 'bond': return object && <BondInspector key={`${object.id}:${model.bond.id}`} model={model} target={{ objectId: object.id, kind: 'bond', id: model.bond.id, revision, label: `${model.first.atom.symbol} #${model.first.number}—${model.second.atom.symbol} #${model.second.number}` }} />
+      case 'multi': return <MultiSelectionInspector model={model} />
+    }
+  })()
+  return <section ref={detailsRef} tabIndex={-1} aria-label="选中对象详情" className="focus-visible:outline-2 focus-visible:outline-ring">
+    {editReason && <p className="px-3 pt-3 text-xs text-muted-foreground">编辑不可用：{editReason}</p>}
+    <fieldset disabled={!!editReason} className="min-w-0">{content}</fieldset>
+  </section>
 }

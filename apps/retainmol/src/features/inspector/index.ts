@@ -6,3 +6,6 @@ export { selectScenePanelRows, selectActiveMoleculeName } from './model/inspecto
 export type { ScenePanelRow } from './model/inspectorModel'
 export * from './model/inspectorFormatters'
 export * from './components/primitives'
+
+export { EntityBrowser } from './components/EntityBrowser'
+export { InspectorStatus, InspectorOperationResult } from './components/InspectorStatus'

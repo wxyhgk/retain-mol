@@ -5,6 +5,8 @@ import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { OptimizationControls } from '@/features/geometry-optimization'
 import { cn } from '@/lib/utils'
+import { replaceInspectorAtom, selectInspectorTarget, setInspectorBondOrder, type InspectorTarget } from '@/domain/viewer/inspectorActions'
+import { reportInspectorResult } from '../model/inspectorResultStore'
 import type { EditableLiveGeometry, InspectorModel } from '../model/inspectorModel'
 import { bondOrderLabel, formatCharge } from '../model/inspectorFormatters'
 import {
@@ -82,7 +84,7 @@ export function MoleculeInspector({ model }: {
   )
 }
 
-export function AtomInspector({ model }: { model: AtomModel }) {
+export function AtomInspector({ model, target, onNavigate }: { model: AtomModel; target: InspectorTarget; onNavigate: () => void }) {
   const { atom, number } = model.atom
   const element = getElementConfig(atom.symbol)
   const actions = useMoleculeStore(useShallow(state => ({
@@ -92,7 +94,6 @@ export function AtomInspector({ model }: { model: AtomModel }) {
     flipChirality: state.flipChirality,
     moveAtom: state.moveAtom,
     removeAtom: state.removeAtom,
-    replaceAtom: state.replaceAtom,
     setAtomCharge: state.setAtomCharge,
     setAtomRadical: state.setAtomRadical,
     setChirality: state.setChirality,
@@ -106,13 +107,14 @@ export function AtomInspector({ model }: { model: AtomModel }) {
       <div className="flex min-w-0 items-center gap-2.5">
         <ElementSwatch symbol={atom.symbol} size="lg" />
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-foreground">{element.name}</div><div className="truncate text-[11px] text-muted-foreground">原子 #{number}</div></div>
-        <select aria-label="替换元素" title="替换元素" value={atom.symbol} onChange={event => actions.replaceAtom(atom.id, event.target.value)} className="h-8 min-w-0 max-w-24 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring">
+        <select aria-label="替换元素" title="替换元素" value={atom.symbol} onChange={event => reportInspectorResult(replaceInspectorAtom(target, event.target.value))} className="h-8 min-w-0 max-w-24 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring">
           {elementOptions.map(symbol => <option key={symbol} value={symbol}>{symbol}</option>)}
         </select>
       </div>
       <InspectorSection title="属性"><PropertyList>
         <PropertyRow label="元素" value={`${atom.symbol} · Z=${element.atomicNumber || '—'}`} />
         <PropertyRow label="编号" value={`#${number}`} />
+        <PropertyRow label="稳定 ID" value={atom.id} />
         <PropertyRow label="推断杂化" value={model.hybridization} />
         <PropertyControlRow label="形式电荷"><IntegerStepper value={atom.charge ?? 0} min={-4} max={4} format={formatCharge} onChange={value => actions.setAtomCharge(atom.id, value)} /></PropertyControlRow>
         <PropertyControlRow label="自由基"><IntegerStepper value={atom.radical ?? 0} min={0} max={3} format={value => value === 0 ? '无' : String(value)} onChange={value => actions.setAtomRadical(atom.id, value)} /></PropertyControlRow>
@@ -143,7 +145,11 @@ export function AtomInspector({ model }: { model: AtomModel }) {
       <InspectorSection title={`邻接键 · ${model.neighbors.length}`}>
         {model.neighbors.length === 0 ? <div className="rounded-md border border-dashed border-border px-2.5 py-3 text-center text-xs text-muted-foreground">无邻接键</div> : (
           <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">{model.neighbors.map(neighbor => (
-            <div key={neighbor.bond.id} className="flex min-w-0 items-center gap-2 px-2.5 py-2"><ElementSwatch symbol={neighbor.atom.symbol} /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{neighbor.atom.symbol} #{neighbor.atomNumber}</span><span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{neighbor.length.toFixed(3)} Å</span></div>
+            <button type="button" key={neighbor.bond.id} aria-label={`选择邻接原子 ${neighbor.atom.symbol} #${neighbor.atomNumber}`} onClick={() => {
+              const result = selectInspectorTarget({ ...target, id: neighbor.atom.id, label: `${neighbor.atom.symbol} #${neighbor.atomNumber}` })
+              reportInspectorResult(result)
+              if (result.status === 'success') onNavigate()
+            }} className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left hover:bg-accent"><ElementSwatch symbol={neighbor.atom.symbol} /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{neighbor.atom.symbol} #{neighbor.atomNumber}</span><span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{neighbor.length.toFixed(3)} Å</span></button>
           ))}</div>
         )}
       </InspectorSection>
@@ -155,18 +161,19 @@ export function AtomInspector({ model }: { model: AtomModel }) {
   )
 }
 
-export function BondInspector({ model }: { model: BondModel }) {
-  const { removeBond, setBondLength, setBondOrder, setBondWedge, setEZ } = useMoleculeStore(useShallow(state => ({ removeBond: state.removeBond, setBondLength: state.setBondLength, setBondOrder: state.setBondOrder, setBondWedge: state.setBondWedge, setEZ: state.setEZ })))
+export function BondInspector({ model, target }: { model: BondModel; target: InspectorTarget }) {
+  const { removeBond, setBondLength, setBondWedge, setEZ } = useMoleculeStore(useShallow(state => ({ removeBond: state.removeBond, setBondLength: state.setBondLength, setBondWedge: state.setBondWedge, setEZ: state.setEZ })))
   const flashHint = useEditorStore(state => state.flashHint)
   return (
     <InspectorLayout>
       <div className="flex min-w-0 items-center gap-2"><EndpointBadge atom={model.first.atom} number={model.first.number} /><span className="shrink-0 text-muted-foreground">—</span><EndpointBadge atom={model.second.atom} number={model.second.number} /></div>
       <InspectorSection title="键属性"><PropertyList>
+        <PropertyRow label="稳定 ID" value={model.bond.id} />
         <PropertyRow label="两端" value={`${model.first.atom.symbol} #${model.first.number} · ${model.second.atom.symbol} #${model.second.number}`} />
         <PropertyRow label="键级" value={bondOrderLabel(model.bond.order)} /><PropertyRow label="芳香" value={model.bond.aromatic ? '是' : '否'} />
       </PropertyList></InspectorSection>
       <InspectorSection title="键级"><div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-background p-1">{([1, 2, 3] as const).map(order => (
-        <button key={order} type="button" aria-pressed={model.bond.order === order} onClick={() => setBondOrder(model.bond.id, order)} className={cn('h-8 rounded text-xs font-medium transition-colors', model.bond.order === order ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>{bondOrderLabel(order)}</button>
+        <button key={order} type="button" aria-pressed={model.bond.order === order} onClick={() => reportInspectorResult(setInspectorBondOrder(target, order))} className={cn('h-8 rounded text-xs font-medium transition-colors', model.bond.order === order ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>{bondOrderLabel(order)}</button>
       ))}</div></InspectorSection>
       <InspectorSection title="楔形"><SegmentedControl ariaLabel="楔形" value={model.bond.wedge ?? 'none'} onSelect={value => setBondWedge(model.bond.id, value)} options={[{ value: 'up', label: '楔形上' }, { value: 'down', label: '楔形下' }, { value: 'none', label: '无' }] as const} /></InspectorSection>
       <InspectorSection title="E/Z"><SegmentedControl ariaLabel="双键顺反" value={model.bond.ez ?? 'none'} onSelect={value => { const result = setEZ(model.bond.id, value); if (!result.ok) flashHint(result.reason ?? '无法指定顺反') }} options={[{ value: 'E', label: 'E' }, { value: 'Z', label: 'Z' }, { value: 'none', label: '无' }] as const} /></InspectorSection>

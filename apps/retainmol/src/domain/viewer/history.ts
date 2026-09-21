@@ -12,3 +12,7 @@ export function useMoleculeHistory() {
 export function isMoleculeHistoryTracking(): boolean {
   return moleculeTemporal.getState().isTracking
 }
+
+export function useMoleculeHistoryTracking(): boolean {
+  return useStore(moleculeTemporal, state => state.isTracking)
+}

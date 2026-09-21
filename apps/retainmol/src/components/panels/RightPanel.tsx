@@ -1,5 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@retainmol/ui-kit'
-import { MeasureSection, SelectionInspector } from '@/features/inspector'
+import { EntityBrowser, InspectorStatus, InspectorOperationResult, MeasureSection, SelectionInspector } from '@/features/inspector'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { WorkspaceDisplayPanel, WorkspaceScenePanel } from '@/features/workspace-panels'
 import { DrawPanel } from '@/features/build-palette/components/workspace/DrawPanel'
@@ -13,6 +13,7 @@ export default function RightPanel() {
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full min-h-0 min-w-0 flex-col bg-transparent text-foreground">
+      <InspectorStatus />
       <div className="shrink-0 border-b border-border px-2">
         <TabsList className="grid h-10 w-full grid-cols-4 rounded-none bg-transparent p-0">
           <PanelTab value="draw" label="Draw" />
@@ -23,6 +24,7 @@ export default function RightPanel() {
       </div>
 
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-color:currentColor_transparent] [scrollbar-width:thin]">
+        <InspectorOperationResult />
         <TabsContent value="draw" className="mt-0 min-w-0 p-3">
           <DrawPanel controller={buildController} />
         </TabsContent>
@@ -46,6 +48,7 @@ function InspectorContent() {
   return (
     <div className="min-w-0">
       {isMeasureActive && <MeasureSection />}
+      <EntityBrowser />
       <SelectionInspector />
     </div>
   )
