@@ -93,8 +93,13 @@ const E: Record<string, ElementConfig> = {
 
 export const ELEMENT_CONFIGS = E
 
+/** Strict lookup: undefined means no element definition is configured. */
+export function findElementConfig(symbol: string): Readonly<ElementConfig> | undefined {
+  return Object.hasOwn(E, symbol) ? E[symbol] : undefined
+}
+
 export function getElementConfig(symbol: string): ElementConfig {
-  return E[symbol] ?? {
+  return (Object.hasOwn(E, symbol) ? E[symbol] : undefined) ?? {
     symbol, name: symbol, atomicNumber: 0, atomicMass: null,
     covalentRadius: 0.9, cpkRadius: 1.5,
     valenceElectrons: 4, maxBonds: 4,

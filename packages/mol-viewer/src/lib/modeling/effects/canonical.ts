@@ -8,7 +8,7 @@ import type {
 } from './contracts'
 import { sha256Hex } from './sha256'
 
-const CANONICAL_DIGEST_PREFIX = 'canonical-v3-sha256-'
+const CANONICAL_DIGEST_PREFIX = 'canonical-v4-sha256-'
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
@@ -33,6 +33,7 @@ function canonicalAtom(atom: Atom): CanonicalAtomSnapshot {
   return {
     id: atom.id,
     symbol: atom.symbol,
+    isotope: atom.isotope ?? null,
     x: canonicalNumber(atom.x),
     y: canonicalNumber(atom.y),
     z: canonicalNumber(atom.z),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getElementConfig } from '../config/elements.config'
+import { getElementConfig, findElementConfig } from '../config/elements.config'
 import { calculateMolecularWeight, getMolecularFormula } from './chemistry'
 
 const atoms = (...symbols: string[]) => symbols.map(symbol => ({ symbol }))
@@ -22,6 +22,13 @@ describe('getMolecularFormula', () => {
 })
 
 describe('calculateMolecularWeight', () => {
+  it('distinguishes strict lookup from display fallbacks and isotope mass from standard weight', () => {
+    expect(findElementConfig('C')?.atomicNumber).toBe(6)
+    expect(findElementConfig('Xx')).toBeUndefined()
+    expect(findElementConfig('constructor')).toBeUndefined()
+    expect(getElementConfig('constructor').atomicNumber).toBe(0)
+    expect(calculateMolecularWeight([{ symbol: 'C', isotope: 13 }])).toBeNull()
+  })
   it('sums configured standard atomic weights', () => {
     expect(calculateMolecularWeight(atoms('O', 'H', 'H'))).toBeCloseTo(18.015, 2)
     expect(calculateMolecularWeight([])).toBe(0)

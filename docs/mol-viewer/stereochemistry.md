@@ -31,7 +31,7 @@
 - 楔形归属窄端 `atomId1`。清除一个中心时保留邻居拥有的入向楔形。
 - MOL 导出从实际坐标/2D 楔形计算立体构型。用临时原子映射处理 OCL 显式氢重排，
   避免把原始坐标写给另一原子；临时映射不写入产物。单独改 `chirality` 字段不能替代几何编辑。
-- ExpectedEffect V2 / `canonical-v3-sha256-` 包含 R/S、楔形方向及窄端、E/Z。
+- ExpectedEffect V2 / `canonical-v4-sha256-` 包含 R/S、楔形方向及窄端、E/Z 和同位素质量数。
   历史 V1 回执与 V2 不可混用。此变更不宣称新的 E/Z 设置算法或完整 CIP/形式化证明覆盖。
 
 ## 只读 API

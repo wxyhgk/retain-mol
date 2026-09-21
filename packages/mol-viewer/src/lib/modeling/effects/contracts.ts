@@ -38,6 +38,7 @@ export interface CanonicalCoordinationSiteAssignment {
 export interface CanonicalAtomSnapshot {
   readonly id: string
   readonly symbol: string
+  readonly isotope: number | null
   readonly x: number
   readonly y: number
   readonly z: number

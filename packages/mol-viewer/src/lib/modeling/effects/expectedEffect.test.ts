@@ -31,6 +31,7 @@ function baseMolecule(): Molecule {
       {
         id: 'metal',
         symbol: 'Fe',
+        isotope: 56,
         x: -0,
         y: 0,
         z: 0,
@@ -167,7 +168,7 @@ describe('ExpectedEffect V1 canonical projection', () => {
 
     expect(createCanonicalMoleculeSnapshot(first)).toEqual(createCanonicalMoleculeSnapshot(second))
     expect(computeCanonicalMoleculeDigest(first)).toBe(computeCanonicalMoleculeDigest(second))
-    expect(computeCanonicalMoleculeDigest(first)).toMatch(/^canonical-v3-sha256-[0-9a-f]{64}$/)
+    expect(computeCanonicalMoleculeDigest(first)).toMatch(/^canonical-v4-sha256-[0-9a-f]{64}$/)
   })
 
   it('separates the concrete coordinate collision accepted by the legacy FNV-1a digest', () => {
@@ -179,10 +180,10 @@ describe('ExpectedEffect V1 canonical projection', () => {
       atoms: [{ id: 'a', symbol: 'C', x: 7.53845, y: 0, z: 0 }],
       bonds: [],
     }
-    // Freeze the legacy projection: new stereo fields change its serialized bytes.
+    // Freeze the legacy projection: new stereo/isotope fields change its serialized bytes.
     const legacySnapshot = (molecule: Molecule) => {
       const snapshot = createCanonicalMoleculeSnapshot(molecule)
-      return { ...snapshot, atoms: snapshot.atoms.map(({ chirality: _chirality, ...atom }) => atom) }
+      return { ...snapshot, atoms: snapshot.atoms.map(({ chirality: _chirality, isotope: _isotope, ...atom }) => atom) }
     }
     const firstSnapshot = legacySnapshot(first)
     const secondSnapshot = legacySnapshot(second)
@@ -245,6 +246,7 @@ describe('compileExpectedEffect', () => {
       id: 'metal',
       symbol: 'N',
       charge: 2,
+      isotope: null,
       label: 'center',
       coordinationGeometry: null,
       coordinationDirections: [],

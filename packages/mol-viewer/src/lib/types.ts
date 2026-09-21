@@ -30,12 +30,14 @@ export interface CoordinationSiteAssignment {
 export interface Atom {
   readonly id: string
   readonly symbol: string
+  /** Explicit isotope mass number (e.g. 13 for carbon-13), not an atomic weight. */
+  readonly isotope?: number
   readonly x: number
   readonly y: number
   readonly z: number
   /** 形式电荷（价态完整模型下会改变该原子的有效成键数） */
   readonly charge?: number
-  /** 未配对电子数（自由基）；每个占一个价位，并计入分子多重度 */
+  /** 未配对电子数（自由基）；每个占一个价位，不代表整个体系的自旋多重度。 */
   readonly radical?: number
   /**
    * 四面体手性（R/S，由取代基 CIP 排名确定）。缺席 = 未指定，绝不默认为某一种。
@@ -64,7 +66,7 @@ export interface Bond {
    * 缺席 = 无楔形标注。SDF/V2000 往返的保真载体。
    */
   readonly wedge?: 'up' | 'down'
-  /** 双键顺反（E/Z）。缺席 = 未指定；本期只读 */
+  /** 双键顺反（E/Z）。缺席 = 未指定。 */
   readonly ez?: 'E' | 'Z'
   /** Coordination sites consumed at either endpoint of this bond. */
   readonly coordinationSites?: readonly CoordinationSiteAssignment[]
@@ -128,9 +130,12 @@ export interface MeasureStyle {
 
 export interface ClipboardAtom {
   symbol: string
+  isotope?: number
   x: number; y: number; z: number
   charge?: number
   radical?: number
+  chirality?: 'R' | 'S'
+  label?: string
   coordinationGeometry?: string
   coordinationDirections?: readonly (readonly [number, number, number])[]
   coordinationSites?: readonly CoordinationSite[]
@@ -142,6 +147,8 @@ export interface ClipboardBond {
   b: number
   order: 1 | 2 | 3
   aromatic?: boolean
+  wedge?: 'up' | 'down'
+  ez?: 'E' | 'Z'
   coordinationSites?: readonly { atom: number; siteId: string }[]
 }
 

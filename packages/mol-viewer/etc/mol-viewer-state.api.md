@@ -48,6 +48,7 @@ export interface Atom {
     readonly coordinationSites?: readonly CoordinationSite[];
     // (undocumented)
     readonly id: string;
+    readonly isotope?: number;
     // (undocumented)
     readonly label?: string;
     readonly radical?: number;
@@ -83,6 +84,8 @@ export interface ClipboardAtom {
     // (undocumented)
     charge?: number;
     // (undocumented)
+    chirality?: 'R' | 'S';
+    // (undocumented)
     coordinationDirections?: readonly (readonly [number, number, number])[];
     // (undocumented)
     coordinationGeometry?: string;
@@ -90,6 +93,10 @@ export interface ClipboardAtom {
     coordinationNumber?: number;
     // (undocumented)
     coordinationSites?: readonly CoordinationSite[];
+    // (undocumented)
+    isotope?: number;
+    // (undocumented)
+    label?: string;
     // (undocumented)
     radical?: number;
     // (undocumented)
@@ -116,7 +123,11 @@ export interface ClipboardBond {
         siteId: string;
     }[];
     // (undocumented)
+    ez?: 'E' | 'Z';
+    // (undocumented)
     order: 1 | 2 | 3;
+    // (undocumented)
+    wedge?: 'up' | 'down';
 }
 
 // @public (undocumented)

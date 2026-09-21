@@ -1,4 +1,5 @@
 export type { Molecule, Atom, Bond } from '../lib/molecule'
+export { parseMolecule } from '../lib/moleculeValidation'
 export type { EditorHostPort, EditorHostSnapshot } from '../lib/editorHostPort'
 export {
   newAtom,
@@ -28,7 +29,7 @@ export type {
 } from '../lib/types'
 export { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT } from '../lib/types'
 
-export { getElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from '../config/elements.config'
+export { getElementConfig, findElementConfig, COMMON_ELEMENT_SYMBOLS, PERIODIC_TABLE_LAYOUT } from '../config/elements.config'
 export type { ElementConfig, Hybridization } from '../config/elements.config'
 export { calculateMolecularWeight, getMolecularFormula } from '../lib/chemistry'
 export type { ElementLike } from '../lib/chemistry'

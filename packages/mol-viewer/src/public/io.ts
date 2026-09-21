@@ -10,6 +10,7 @@ export {
   markForceFieldReady,
 } from '../lib/io/molFormat'
 export type { OptimizeResult } from '../lib/io/molFormat'
+export { parseMoleculeJson, exportMoleculeJson } from '../lib/io/moleculeJson'
 export type { Atom, Bond, Molecule } from '../lib/molecule'
 export type {
   CoordinationBondOrder,

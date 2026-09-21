@@ -3,8 +3,8 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { Resources } from 'openchemlib'
-import { generate3D, parseMol, exportMol, markForceFieldReady } from '@retainmol/mol-viewer/io'
-import { getAtomChiralityState, getMolecularFormula } from '@retainmol/mol-viewer/core'
+import { generate3D, parseMol, exportMol, markForceFieldReady, parseMoleculeJson, exportMoleculeJson } from '@retainmol/mol-viewer/io'
+import { getAtomChiralityState, getMolecularFormula, parseMolecule, findElementConfig } from '@retainmol/mol-viewer/core'
 import { useMoleculeStore, selectActiveMoleculeOrEmpty } from '@retainmol/mol-viewer/state'
 import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
 import { getModelingContext } from '@retainmol/mol-viewer/modeling'
@@ -38,6 +38,28 @@ test('consumer resolves a real installed package, with no workspace symlink', ()
   const entry = fileURLToPath(import.meta.resolve('@retainmol/mol-viewer/core'))
   assert.equal(realpathSync(entry), entry)
   assert.ok(entry.includes('/node_modules/@retainmol/mol-viewer/dist/'))
+})
+
+test('installed public APIs retain isotope, label and charge through JSON, editing and MOL', () => {
+  const molecule = parseMolecule({ name: 'labelled isotope', atoms: [
+    { id: 'n', symbol: 'N', isotope: 15, charge: 1, label: 'site', x: 0, y: 1, z: -2 },
+  ], bonds: [] })
+  assert.deepEqual(parseMoleculeJson(exportMoleculeJson(molecule)), molecule)
+  assert.equal(findElementConfig('Xx'), undefined)
+  const runtime = createViewerRuntime()
+  try {
+    const api = getViewerApi(runtime)
+    api.setMolecule(molecule)
+    api.history.clear()
+    api.edit.moveAtom('n', 1, 2, 3)
+    assert.equal(api.getSnapshot().molecule.atoms[0].isotope, 15)
+    api.history.undo()
+    assert.deepEqual(api.getSnapshot().molecule, molecule)
+    const roundtrip = parseMol(exportMol(api.getSnapshot().molecule))
+    const { id: _id, ...actual } = roundtrip.atoms[0]
+    const { id: _originalId, ...expected } = molecule.atoms[0]
+    assert.deepEqual(actual, expected)
+  } finally { runtime.dispose() }
 })
 
 test('import → 3D → R/S → undo/redo → MOL reload preserves stereochemistry and every bond length', () => {

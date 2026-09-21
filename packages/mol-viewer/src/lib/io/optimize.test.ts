@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, vi } from 'vitest'
 import * as OCL from 'openchemlib'
 import { minimizeGeometry, generate3D, markForceFieldReady, parseMol } from './molFormat'
 import { newAtom, newBond } from '../molecule'
@@ -254,13 +254,28 @@ M  END`
     expect(r.molecule.atoms.filter(a => a.symbol === 'H')).toHaveLength(12)
   })
 
+  it('preserves charged atom fields and hydrogen counts when generation fails', () => {
+    const input = parseMol(OCL.Molecule.fromSmiles('[N+](C)(C)(C)C').toMolfile())
+    const unavailable = vi.spyOn(OCL.ConformerGenerator.prototype, 'getOneConformerAsMolecule')
+      .mockImplementation(() => { throw new Error('generator unavailable') })
+    try {
+      const result = generate3D(input)
+      expect(result.ok).toBe(false)
+      const nitrogen = result.molecule.atoms.find(a => a.symbol === 'N')!
+      expect(nitrogen.charge).toBe(1)
+      expect(result.molecule.atoms.filter(a => a.symbol === 'H')).toHaveLength(12)
+      expect(result.molecule.bonds.filter(b => b.atomId1 === nitrogen.id || b.atomId2 === nitrogen.id)).toHaveLength(4)
+    } finally { unavailable.mockRestore() }
+  })
+
   it('带电中心按价态补氢（[NMe4]+ → N 上 0H、甲基 12H）', () => {
     const r = generate3D(parseMol(OCL.Molecule.fromSmiles('[N+](C)(C)(C)C').toMolfile()))
-    // OCL ConformerGenerator 在季铵 N 上失败走 ok:false：失败结果同样必须含氢
-    expect(r.ok).toBe(false)
+    // Charge now survives both OCL conversion boundaries, allowing this structure to generate.
+    expect(r.ok).toBe(true)
     const byId = new Map(r.molecule.atoms.map(a => [a.id, a]))
     const nAtoms = r.molecule.atoms.filter(a => a.symbol === 'N')
     expect(nAtoms).toHaveLength(1)
+    expect(nAtoms[0]?.charge).toBe(1)
     const hOnN = r.molecule.bonds.filter(b => {
       const other = b.atomId1 === nAtoms[0]!.id
         ? byId.get(b.atomId2)

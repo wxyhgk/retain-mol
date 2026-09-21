@@ -56,6 +56,7 @@ const validateValence = (molecule: Molecule): ChemicalRewriteFailure | undefined
 const atomLabelsCompatible = (host: Atom, right: Atom): boolean =>
   JSON.stringify([
     host.symbol,
+    host.isotope ?? null,
     host.charge ?? 0,
     host.radical ?? 0,
     host.coordinationGeometry ?? null,
@@ -63,6 +64,7 @@ const atomLabelsCompatible = (host: Atom, right: Atom): boolean =>
     host.coordinationSites ?? null,
   ]) === JSON.stringify([
     right.symbol,
+    right.isotope ?? null,
     right.charge ?? 0,
     right.radical ?? 0,
     right.coordinationGeometry ?? null,
@@ -104,6 +106,7 @@ export const chemicalTopologyKey = (molecule: Molecule): string => {
     .map((atom) => [
       atom.id,
       atom.symbol,
+      atom.isotope ?? null,
       atom.charge ?? 0,
       atom.radical ?? 0,
       atom.coordinationGeometry ?? null,

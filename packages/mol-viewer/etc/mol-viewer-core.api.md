@@ -14,6 +14,7 @@ export interface Atom {
     readonly coordinationSites?: readonly CoordinationSite[];
     // (undocumented)
     readonly id: string;
+    readonly isotope?: number;
     // (undocumented)
     readonly label?: string;
     readonly radical?: number;
@@ -62,6 +63,8 @@ export interface ClipboardAtom {
     // (undocumented)
     charge?: number;
     // (undocumented)
+    chirality?: 'R' | 'S';
+    // (undocumented)
     coordinationDirections?: readonly (readonly [number, number, number])[];
     // (undocumented)
     coordinationGeometry?: string;
@@ -69,6 +72,10 @@ export interface ClipboardAtom {
     coordinationNumber?: number;
     // (undocumented)
     coordinationSites?: readonly CoordinationSite[];
+    // (undocumented)
+    isotope?: number;
+    // (undocumented)
+    label?: string;
     // (undocumented)
     radical?: number;
     // (undocumented)
@@ -95,7 +102,11 @@ export interface ClipboardBond {
         siteId: string;
     }[];
     // (undocumented)
+    ez?: 'E' | 'Z';
+    // (undocumented)
     order: 1 | 2 | 3;
+    // (undocumented)
+    wedge?: 'up' | 'down';
 }
 
 // @public (undocumented)
@@ -178,10 +189,13 @@ export interface ElementConfig {
 }
 
 // @public (undocumented)
-export type ElementLike = Pick<Atom, 'symbol'>;
+export type ElementLike = Pick<Atom, 'symbol' | 'isotope'>;
 
 // @public (undocumented)
 export function exportXYZ(mol: Molecule): string;
+
+// @public
+export function findElementConfig(symbol: string): Readonly<ElementConfig> | undefined;
 
 // @public
 export function getAtomChiralityState(molecule: Molecule, atomId: string): AtomChiralityState;
@@ -256,6 +270,9 @@ export function newAtom(symbol: string, x?: number, y?: number, z?: number): Ato
 
 // @public (undocumented)
 export function newBond(atomId1: string, atomId2: string, order?: 1 | 2 | 3, init?: Pick<Bond, 'wedge' | 'ez' | 'aromatic'>): Bond;
+
+// @public
+export function parseMolecule(value: unknown): Molecule;
 
 // @public (undocumented)
 export function parseXYZ(text: string): Molecule;

@@ -14,6 +14,7 @@ export interface Atom {
     readonly coordinationSites?: readonly CoordinationSite[];
     // (undocumented)
     readonly id: string;
+    readonly isotope?: number;
     // (undocumented)
     readonly label?: string;
     readonly radical?: number;
@@ -90,6 +91,9 @@ export function exportGJF(mol: Molecule, opts?: GJFOptions): string;
 export function exportMol(mol: Molecule): string;
 
 // @public
+export function exportMoleculeJson(molecule: Molecule): string;
+
+// @public
 export function exportSdf(mol: Molecule): string;
 
 // @public
@@ -162,6 +166,9 @@ export function parseClipboard(text: string): {
 
 // @public
 export function parseMol(text: string): Molecule;
+
+// @public
+export function parseMoleculeJson(text: string): Molecule;
 
 // @public
 export function parseSdf(text: string): Molecule[];

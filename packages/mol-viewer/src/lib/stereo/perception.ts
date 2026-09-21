@@ -16,6 +16,7 @@ export function perceiveAtomChirality(molecule: Molecule): ReadonlyMap<string, '
       ocl.setAtomY(i, -atom.y)
       ocl.setAtomZ(i, -atom.z)
       ocl.setAtomCharge(i, atom.charge ?? 0)
+      if (atom.isotope !== undefined) ocl.setAtomMass(i, atom.isotope)
       if (atom.radical) ocl.setAtomRadical(i, atom.radical === 1
         ? OCLMolecule.cAtomRadicalStateD : OCLMolecule.cAtomRadicalStateT)
       // ensureHelperArrays moves explicit H atoms; map numbers survive that permutation.

@@ -77,6 +77,9 @@ Node 执行器从包导出的常量读取回执版本，避免两端各自硬编
 
 ## SDF bridge 规则
 
+2026-09-21 基础字段修复进一步把同位素纳入规范快照，摘要前缀升级为
+`canonical-v4-sha256-`。旧摘要需从对应原始分子重新生成；回执 schemaVersion 仍为 2。
+
 - `builder-snapshot.json` 是图和电子属性的权威来源；
 - `identity-map.json` 固定 SDF 的 1-based 行号与稳定 atomId/bondId；
 - SDF 必须只有一个完整记录，原子行数、元素顺序、端点和键级必须逐项一致；

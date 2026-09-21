@@ -3,6 +3,8 @@ import { createViewerRuntime, getViewerApi, type ViewerRuntime, type Molecule } 
 import { newAtom } from './core'
 import { getViewerRuntimeServices } from '../runtime/ViewerRuntime'
 import { useMoleculeStore } from './state'
+import { Molecule as OCLMolecule } from 'openchemlib'
+import { parseMol } from './io'
 
 const runtimes: ViewerRuntime[] = []
 function instance() {
@@ -18,6 +20,46 @@ function molecule(): Molecule {
 afterEach(() => { runtimes.splice(0).forEach(runtime => runtime.dispose()) })
 
 describe('instance-bound public viewer API', () => {
+  it('owns imported data and rejects invalid replacement without changing history', () => {
+    const { api } = instance()
+    const original = { atoms: [{ id: 'c', symbol: 'C', isotope: 13, label: 'site', x: 0, y: 0, z: 0 }], bonds: [] }
+    api.setMolecule(original)
+    api.history.clear()
+    const before = api.getSnapshot()
+    original.atoms[0].label = 'external mutation'
+    expect(before.molecule.atoms[0].label).toBe('site')
+    expect(() => api.setMolecule({ ...original, atoms: [...original.atoms, original.atoms[0]] })).toThrow(/duplicate/)
+    expect(api.getSnapshot()).toBe(before)
+    api.edit.moveAtom('c', 2, 3, 4)
+    expect(api.getSnapshot().molecule.atoms[0]).toMatchObject({ isotope: 13, label: 'site', x: 2 })
+    api.history.undo()
+    expect(api.getSnapshot().molecule).toEqual(before.molecule)
+    api.history.redo()
+    expect(api.getSnapshot().molecule.atoms[0].isotope).toBe(13)
+  })
+
+  it('preserves specified stereo during real store copy/paste and undo/redo', () => {
+    const { api, runtime } = instance()
+    const input = parseMol(OCLMolecule.fromSmiles('C[C@](F)(Cl)Br').toMolfile())
+    const source = { ...input, atoms: input.atoms.map(a => ({ ...a, label: a.symbol })) }
+    api.setMolecule(source)
+    api.history.clear()
+    api.selection.set(source.atoms.map(a => a.id))
+    const store = getViewerRuntimeServices(runtime).moleculeStore
+    const clipboard = store.getState().copySelection()!
+    const newIds = store.getState().pasteAtoms(clipboard)
+    expect(newIds).toHaveLength(source.atoms.length)
+    const pasted = api.getSnapshot().molecule
+    source.atoms.forEach((a, i) => {
+      expect(pasted.atoms.find(atom => atom.id === newIds[i])).toMatchObject({ symbol: a.symbol, label: a.label })
+      expect(pasted.atoms.find(atom => atom.id === newIds[i])?.chirality).toBe(a.chirality)
+    })
+    expect(api.getSnapshot().history.undoCount).toBe(1)
+    api.history.undo()
+    expect(api.getSnapshot().molecule).toEqual(source)
+    api.history.redo()
+    expect(api.getSnapshot().molecule).toEqual(pasted)
+  })
   it('isolates two editable instances and the default store, including selection and history', () => {
     const left = instance()
     const right = instance()

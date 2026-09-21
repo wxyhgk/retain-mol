@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import { parseMolecule } from '@retainmol/mol-viewer/core'
 import {
   MOLECULE_ASSET_SCHEMA_VERSION,
   MOLECULE_REVISION_SCHEMA_VERSION,
@@ -61,8 +61,12 @@ export function projectMoleculeRevisionWire(
   path = 'molecule revision',
 ): MoleculeRevision {
   if (!isObject(value)) throw wireError(path)
-  const molecule = readValue(value, 'molecule', 'structure')
-  if (!isMoleculeWire(molecule)) throw wireError(`${path}.molecule`)
+  let molecule
+  try {
+    molecule = parseMolecule(readValue(value, 'molecule', 'structure'))
+  } catch {
+    throw wireError(`${path}.molecule`)
+  }
   return {
     schemaVersion: schemaVersionAt(
       value,
@@ -95,59 +99,6 @@ export function projectMoleculeRevisionWire(
     metadata: optionalObject(value, 'metadata'),
     createdAt: requiredString(value, `${path}.createdAt`, 'createdAt', 'created_at'),
   }
-}
-
-function isMoleculeWire(value: unknown): value is Molecule {
-  if (!isObject(value) || !Array.isArray(value.atoms) || !Array.isArray(value.bonds)) return false
-  if (value.name !== undefined && typeof value.name !== 'string') return false
-  return value.atoms.every(isAtomWire) && value.bonds.every(isBondWire)
-}
-
-function isAtomWire(value: unknown): boolean {
-  if (!isObject(value)) return false
-  if (!hasNonEmptyString(value.id) || !hasNonEmptyString(value.symbol)) return false
-  if (![value.x, value.y, value.z].every(isFiniteNumber)) return false
-  if (!optionalFiniteNumber(value.charge) || !optionalFiniteNumber(value.radical)) return false
-  if (!optionalString(value.label) || !optionalString(value.coordinationGeometry)) return false
-  if (!optionalFiniteNumber(value.coordinationNumber)) return false
-  if (value.coordinationDirections !== undefined && !isDirectionList(value.coordinationDirections)) return false
-  if (value.coordinationSites !== undefined && !isCoordinationSiteList(value.coordinationSites)) return false
-  return true
-}
-
-function isBondWire(value: unknown): boolean {
-  if (!isObject(value)) return false
-  if (![value.id, value.atomId1, value.atomId2].every(hasNonEmptyString)) return false
-  if (value.order !== 1 && value.order !== 2 && value.order !== 3) return false
-  if (value.aromatic !== undefined && typeof value.aromatic !== 'boolean') return false
-  if (value.coordinationSites !== undefined) {
-    if (!Array.isArray(value.coordinationSites)) return false
-    if (!value.coordinationSites.every(assignment => (
-      isObject(assignment)
-      && hasNonEmptyString(assignment.atomId)
-      && hasNonEmptyString(assignment.siteId)
-    ))) return false
-  }
-  return true
-}
-
-function isDirectionList(value: unknown): boolean {
-  return Array.isArray(value) && value.every(isDirection)
-}
-
-function isDirection(value: unknown): boolean {
-  return Array.isArray(value) && value.length === 3 && value.every(isFiniteNumber)
-}
-
-function isCoordinationSiteList(value: unknown): boolean {
-  return Array.isArray(value) && value.every(site => (
-    isObject(site)
-    && hasNonEmptyString(site.id)
-    && hasNonEmptyString(site.label)
-    && isDirection(site.direction)
-    && (site.bondOrder === 1 || site.bondOrder === 2 || site.bondOrder === 3)
-    && hasNonEmptyString(site.equivalenceGroup)
-  ))
 }
 
 function schemaVersionAt<T extends number>(value: JsonObject, path: string, supported: T): T {
@@ -213,22 +164,6 @@ function readValueIncludingNull(value: JsonObject, ...keys: string[]): unknown {
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function hasNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
-
-function optionalFiniteNumber(value: unknown): boolean {
-  return value === undefined || isFiniteNumber(value)
-}
-
-function optionalString(value: unknown): boolean {
-  return value === undefined || typeof value === 'string'
 }
 
 function wireError(path: string): TypeError {

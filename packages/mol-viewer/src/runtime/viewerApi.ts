@@ -1,3 +1,4 @@
+import { parseMolecule } from '../lib/moleculeValidation'
 import type { Molecule } from '../lib/molecule'
 import type { DisplayMode } from '../lib/types'
 import { selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
@@ -186,7 +187,7 @@ export function getViewerApi(runtime: ViewerRuntime): ViewerApi {
       subscriptions.add(stop)
       return stop
     },
-    setMolecule: molecule => state().setMolecule(molecule),
+    setMolecule: molecule => state().setMolecule(parseMolecule(molecule)),
     edit: {
       addAtom: (...args) => state().addAtom(...args),
       replaceAtom: (...args) => state().replaceAtom(...args),

@@ -66,9 +66,11 @@ export function growByReplacingH(
     if (!pos) return mol   // 宿主原子缺失（悬空键）
     next = {
       ...mol,
-      atoms: mol.atoms.map(a => a.id === hAtomId
-        ? { ...a, symbol: newSymbol, x: pos.x, y: pos.y, z: pos.z }
-        : a),
+      atoms: mol.atoms.map(a => {
+        if (a.id !== hAtomId) return a
+        const { isotope: _isotope, ...rest } = a
+        return { ...rest, symbol: newSymbol, x: pos.x, y: pos.y, z: pos.z }
+      }),
     }
   }
   return autoAddHydrogens(next, hAtomId)
@@ -87,6 +89,7 @@ export function replaceAtomSymbol(
     atoms: mol.atoms.map(a => {
       if (a.id !== atomId) return a
       const {
+        isotope: _isotope,
         coordinationGeometry: _coordinationGeometry,
         coordinationDirections: _coordinationDirections,
         coordinationSites: _coordinationSites,

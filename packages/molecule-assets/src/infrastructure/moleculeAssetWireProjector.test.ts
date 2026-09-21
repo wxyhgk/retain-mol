@@ -17,6 +17,15 @@ const molecule = {
 }
 
 describe('moleculeAssetWireProjector', () => {
+  it('uses shared reference validation and preserves isotope and label fields', () => {
+    const source = { ...molecule, atoms: molecule.atoms.map(a => ({ ...a, isotope: a.symbol === 'H' ? 2 : 18, label: a.symbol })) }
+    const wire = { id: 'rev', assetId: 'asset', parentRevisionId: null, molecule: source, contentHash, topologyFingerprint, createdAt: 'now' }
+    const projected = projectMoleculeRevisionWire(wire)
+    expect(projected.molecule).toEqual(source)
+    expect(projected.molecule.atoms[0]).not.toBe(source.atoms[0])
+    expect(() => projectMoleculeRevisionWire({ ...wire, molecule: { ...source, atoms: [source.atoms[0], source.atoms[0]] } })).toThrow(/molecule/)
+    expect(() => projectMoleculeRevisionWire({ ...wire, molecule: { ...source, bonds: [{ ...source.bonds[0], atomId2: 'missing' }] } })).toThrow(/molecule/)
+  })
   it('projects snake_case persisted assets and revisions', () => {
     expect(projectMoleculeAssetWire({
       schema_version: 1,

@@ -19,6 +19,7 @@ export interface Atom {
     readonly coordinationSites?: readonly CoordinationSite[];
     // (undocumented)
     readonly id: string;
+    readonly isotope?: number;
     // (undocumented)
     readonly label?: string;
     readonly radical?: number;

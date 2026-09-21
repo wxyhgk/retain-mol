@@ -12,6 +12,13 @@ const bond = (id: string, atomId1: string, atomId2: string, order: Bond['order']
 const molecule = (atoms: Atom[], bonds: Bond[]): Molecule => ({ atoms, bonds })
 
 describe('explicit chemical graph pushout', () => {
+  it('rejects merging different isotope identities at an atom interface', () => {
+    const result = applyExplicitChemicalRewrite(
+      molecule([{ ...atom('h1'), isotope: 13 }], []),
+      { right: molecule([{ ...atom('r1'), isotope: 12 }], []), atomInterface: [{ hostAtomId: 'h1', rightAtomId: 'r1' }] },
+    )
+    expect(result).toMatchObject({ ok: false, code: 'atom-label-conflict' })
+  })
   it('glues a fragment along one shared edge without duplicating that edge', () => {
     const host = molecule([atom('h1'), atom('h2')], [bond('hb', 'h1', 'h2')])
     const right = molecule(

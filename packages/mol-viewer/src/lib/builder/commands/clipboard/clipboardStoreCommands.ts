@@ -9,6 +9,9 @@ function copyAtomToClipboard(atom: Atom): ClipboardAtom {
     x: atom.x,
     y: atom.y,
     z: atom.z,
+    ...(atom.isotope === undefined ? {} : { isotope: atom.isotope }),
+    ...(atom.label === undefined ? {} : { label: atom.label }),
+    ...(atom.chirality === undefined ? {} : { chirality: atom.chirality }),
     ...(atom.charge === undefined ? {} : { charge: atom.charge }),
     ...(atom.radical === undefined ? {} : { radical: atom.radical }),
     ...(atom.coordinationGeometry === undefined
@@ -34,6 +37,9 @@ function copyAtomToClipboard(atom: Atom): ClipboardAtom {
 function pasteClipboardAtom(clipAtom: ClipboardAtom, offsetX: number): Atom {
   return {
     ...newAtom(clipAtom.symbol, clipAtom.x + offsetX, clipAtom.y, clipAtom.z),
+    ...(clipAtom.isotope === undefined ? {} : { isotope: clipAtom.isotope }),
+    ...(clipAtom.label === undefined ? {} : { label: clipAtom.label }),
+    ...(clipAtom.chirality === undefined ? {} : { chirality: clipAtom.chirality }),
     ...(clipAtom.charge === undefined ? {} : { charge: clipAtom.charge }),
     ...(clipAtom.radical === undefined ? {} : { radical: clipAtom.radical }),
     ...(clipAtom.coordinationGeometry === undefined
@@ -71,6 +77,8 @@ function copyBondToClipboard(
     a,
     b,
     order: bond.order,
+    ...(bond.wedge === undefined ? {} : { wedge: bond.wedge }),
+    ...(bond.ez === undefined ? {} : { ez: bond.ez }),
     ...(bond.aromatic === undefined ? {} : { aromatic: bond.aromatic }),
     ...(coordinationSites?.length ? { coordinationSites } : {}),
   }
@@ -123,6 +131,8 @@ export function runPasteAtomsCommand(
     })
     return [{
       ...baseBond,
+      ...(clipBond.wedge === undefined ? {} : { wedge: clipBond.wedge }),
+      ...(clipBond.ez === undefined ? {} : { ez: clipBond.ez }),
       ...(clipBond.aromatic === undefined ? {} : { aromatic: clipBond.aromatic }),
       ...(coordinationSites?.length ? { coordinationSites } : {}),
     }]

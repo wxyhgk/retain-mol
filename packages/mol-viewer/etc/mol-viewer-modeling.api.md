@@ -29,6 +29,7 @@ export interface Atom {
     readonly coordinationSites?: readonly CoordinationSite[];
     // (undocumented)
     readonly id: string;
+    readonly isotope?: number;
     // (undocumented)
     readonly label?: string;
     readonly radical?: number;
@@ -75,6 +76,8 @@ export interface CanonicalAtomSnapshot {
     readonly coordinationSites: readonly CanonicalCoordinationSite[];
     // (undocumented)
     readonly id: string;
+    // (undocumented)
+    readonly isotope: number | null;
     // (undocumented)
     readonly label: string | null;
     // (undocumented)

@@ -10,6 +10,7 @@ import { splitConnectedComponents } from '../builder/analysis/fragments'
 import { autoAddHydrogens } from '../builder/editing/atomOps'
 import { kekulizeAromaticBonds } from './kekulize'
 import { RELAX } from '../../config/relax.config'
+import { parseMolecule } from '../moleculeValidation'
 
 // OCL 返回的 Molecule 对象类型
 type OCLMol = ReturnType<typeof OCL.Molecule.fromMolfile>
@@ -37,7 +38,7 @@ function readAtomChirality(access: OCLStereoAccess, index: number): 'R' | 'S' | 
   return undefined
 }
 
-/** 双键 CIP 读 E/Z；读不到或非 E/Z 归 undefined。本期只读不写。 */
+/** 双键 CIP 读 E/Z；读不到或非 E/Z 归 undefined。 */
 function readBondEz(access: OCLStereoAccess, index: number): 'E' | 'Z' | undefined {
   const cip = access.getBondCIPParity?.(index) ?? OCL.Molecule.cBondCIPParityNone
   if (cip === OCL.Molecule.cBondCIPParityEorP) return 'E'
@@ -81,7 +82,23 @@ function oclToMolecule(oclMol: OCLMol, fallbackName = 'Imported'): Molecule {
     const parity = stereoAccess.getAtomParity?.(i) ?? OCL.Molecule.cAtomParityNone
     hasParity.push(parity === OCL.Molecule.cAtomParity1 || parity === OCL.Molecule.cAtomParity2)
     const chirality = readAtomChirality(stereoAccess, i)
-    atoms.push(chirality === undefined ? base : { ...base, chirality })
+    const charge = oclMol.getAtomCharge(i)
+    const isotope = oclMol.getAtomMass(i)
+    const label = oclMol.getAtomCustomLabel(i)
+    const radicalState = oclMol.getAtomRadical(i)
+    if (radicalState === OCL.Molecule.cAtomRadicalStateS) {
+      throw new Error('当前原子模型不支持 MOL singlet radical 标记，不能无损导入')
+    }
+    const radical = radicalState === OCL.Molecule.cAtomRadicalStateD ? 1
+      : radicalState === OCL.Molecule.cAtomRadicalStateT ? 2 : 0
+    atoms.push({
+      ...base,
+      ...(charge ? { charge } : {}),
+      ...(radical ? { radical } : {}),
+      ...(isotope ? { isotope } : {}),
+      ...(label === null ? {} : { label }),
+      ...(chirality === undefined ? {} : { chirality }),
+    })
   }
   const bonds: Bond[] = []
   const nb = oclMol.getAllBonds()
@@ -118,11 +135,22 @@ export function moleculeToOCL(mol: Molecule): OCLMol {
   const idxMap = new Map<string, number>()
   const getAtomicNo = (OCL.Molecule as unknown as { getAtomicNoFromLabel(s: string): number }).getAtomicNoFromLabel
   for (const a of mol.atoms) {
-    const atomicNo = getAtomicNo(a.symbol) || 6  // 未识别时退化为碳
+    const atomicNo = getAtomicNo(a.symbol)
+    if (!atomicNo) throw new Error(`不支持的元素：${a.symbol}`)
     const idx = oclMol.addAtom(atomicNo)
     oclMol.setAtomX(idx, a.x)
     oclMol.setAtomY(idx, -a.y)   // OCL 导出时再次取反，补偿以写出正确值
     oclMol.setAtomZ(idx, -a.z)
+    oclMol.setAtomCharge(idx, a.charge ?? 0)
+    if (a.isotope !== undefined) oclMol.setAtomMass(idx, a.isotope)
+    const radical = a.radical ?? 0
+    if (![0, 1, 2].includes(radical)) throw new Error(`MOL 不支持该自由基电子数：${radical}`)
+    if (radical) oclMol.setAtomRadical(idx, radical === 1
+      ? OCL.Molecule.cAtomRadicalStateD : OCL.Molecule.cAtomRadicalStateT)
+    if (a.label !== undefined) {
+      if (/[\r\n]/.test(a.label)) throw new Error('MOL 原子标签必须为单行文本')
+      oclMol.setAtomCustomLabel(idx, a.label)
+    }
     // Atom parity depends on indices and is NOT the absolute CIP R/S label.
     // OCL derives it from the coordinates / authored wedges after all bonds exist.
     idxMap.set(a.id, idx)
@@ -238,7 +266,13 @@ export function parseSdf(text: string): Molecule[] {
 
 /** 导出为 MOL V2000 */
 export function exportMol(mol: Molecule): string {
+  mol = parseMolecule(mol)
   const ocl = moleculeToOCL(mol)
+  // Preserve authored aromatic bonds in exchange files. Conformer generation
+  // keeps its separate Kekule input path in moleculeToOCL/generate3D.
+  mol.bonds.forEach((bond, index) => {
+    if (bond.aromatic) ocl.setBondType(index, OCL.Molecule.cBondTypeDelocalized)
+  })
   for (let i = 0; i < mol.atoms.length; i += 1) ocl.setAtomMapNo(i, i + 1)
   ocl.ensureHelperArrays(OCL.Molecule.cHelperCIP)
   const atoms = Array.from({ length: ocl.getAllAtoms() }, (_, i) => {

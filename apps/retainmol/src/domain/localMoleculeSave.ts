@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import { parseMolecule, type Molecule } from '@retainmol/mol-viewer/core'
 import { canonicalizeMolecule } from '@retainmol/molecule-assets'
 
 /**
@@ -34,9 +34,11 @@ function readRecord(key: string): LocalMoleculeRecord | null {
     if (!parsed || typeof parsed !== 'object') return null
     if (!('version' in parsed) || parsed.version !== 1) return null
     if (!('canonical' in parsed) || typeof parsed.canonical !== 'string') return null
-    if (!('molecule' in parsed) || !parsed.molecule || typeof parsed.molecule !== 'object') return null
-    if (!('atoms' in parsed.molecule) || !Array.isArray(parsed.molecule.atoms)) return null
-    return parsed as LocalMoleculeRecord
+    if (!('savedAt' in parsed) || typeof parsed.savedAt !== 'string') return null
+    if (!('molecule' in parsed)) return null
+    const molecule = parseMolecule(parsed.molecule)
+    // Never trust the stored dirty baseline independently of the saved molecule.
+    return { version: 1, savedAt: parsed.savedAt, canonical: canonicalizeMolecule(molecule), molecule }
   } catch {
     return null
   }
@@ -52,6 +54,7 @@ export function readCrashSnapshot(): LocalMoleculeRecord | null {
 
 export function writeCrashSnapshot(molecule: Molecule): boolean {
   try {
+    molecule = parseMolecule(molecule)
     if (!molecule || molecule.atoms.length === 0) return false
     const store = storage()
     if (!store) return false
@@ -101,6 +104,7 @@ export const useLocalSaveStore = create<LocalSaveState>()((set) => {
     savedAt: initial?.savedAt ?? null,
     recordSave: (molecule) => {
       try {
+        molecule = parseMolecule(molecule)
         if (!molecule || molecule.atoms.length === 0) return false
         const canonical = canonicalizeMolecule(molecule)
         const savedAt = new Date().toISOString()

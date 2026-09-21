@@ -79,7 +79,8 @@ React StrictMode 重放时必须创建新的 runtime，不得重复使用已经�
 此次收拢接口保持已有编辑语义：返回 `ViewerEditResult` 的操作会给出失败原因；
 返回 `void` 的基础操作在门控拒绝时保持原状态，不代表化学验证一定成功。
 统一错误码、通用批处理、完整场景管理和测量编辑门面未包含在本次接口中。
-`setMolecule` 接收已构造的 `Molecule`，不承担不可信 JSON 的完整化学验证。
+`setMolecule` 使用公共 `parseMolecule` 校验基础字段与引用并复制输入；无效输入在提交前抛错。
+这不代表完整化学可行性验证。原生 JSON、同位素和文件往返边界见[基础字段保真](./field-fidelity.md)。
 
 复杂环系样例验证导入、显示、H→Cl 修改和往返；它们不证明所有并环/桥连操作正确。
 验证记录见[独立宿主接入](./consumer-integration.md)。

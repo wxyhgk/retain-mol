@@ -2,8 +2,11 @@ import type { Molecule } from '@retainmol/mol-viewer/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   LOCAL_SAVE_KEY,
+  CRASH_SNAPSHOT_KEY,
   isDirtyVsSave,
   readLocalSave,
+  readCrashSnapshot,
+  writeCrashSnapshot,
   useLocalSaveStore,
 } from './localMoleculeSave'
 
@@ -37,6 +40,34 @@ const mol = (extra = {}): Molecule => ({
 } as Molecule)
 
 describe('localMoleculeSave', () => {
+  it('preserves authored fields in save and crash recovery and repairs a stale dirty baseline', () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('window', { localStorage: storage })
+    const molecule = mol({ atoms: [{ id: 'c1', symbol: 'C', isotope: 13, charge: -1, radical: 1, label: '连接位点', x: 0, y: 2, z: -1 }] })
+    expect(useLocalSaveStore.getState().recordSave(molecule)).toBe(true)
+    expect(readLocalSave()?.molecule).toEqual(molecule)
+    expect(writeCrashSnapshot(molecule)).toBe(true)
+    expect(readCrashSnapshot()?.molecule).toEqual(molecule)
+    const record = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)!)
+    storage.setItem(LOCAL_SAVE_KEY, JSON.stringify({ ...record, canonical: 'wrong baseline' }))
+    expect(isDirtyVsSave(molecule, readLocalSave()!.canonical)).toBe(false)
+  })
+
+  it('rejects malformed saved graphs without overwriting the last valid record', () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('window', { localStorage: storage })
+    expect(useLocalSaveStore.getState().recordSave(mol())).toBe(true)
+    const previous = storage.getItem(LOCAL_SAVE_KEY)
+    const invalid = mol({ bonds: [{ id: 'b', atomId1: 'c1', atomId2: 'missing', order: 1 }] })
+    expect(useLocalSaveStore.getState().recordSave(invalid)).toBe(false)
+    expect(writeCrashSnapshot(invalid)).toBe(false)
+    expect(storage.getItem(LOCAL_SAVE_KEY)).toBe(previous)
+    const record = { version: 1, savedAt: 'now', canonical: '', molecule: invalid }
+    storage.setItem(LOCAL_SAVE_KEY, JSON.stringify(record))
+    storage.setItem(CRASH_SNAPSHOT_KEY, JSON.stringify(record))
+    expect(readLocalSave()).toBeNull()
+    expect(readCrashSnapshot()).toBeNull()
+  })
   afterEach(() => {
     vi.unstubAllGlobals()
   })

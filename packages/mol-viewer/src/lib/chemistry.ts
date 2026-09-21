@@ -1,7 +1,7 @@
-import { getElementConfig } from '../config/elements.config'
+import { findElementConfig } from '../config/elements.config'
 import type { Atom } from './types'
 
-export type ElementLike = Pick<Atom, 'symbol'>
+export type ElementLike = Pick<Atom, 'symbol' | 'isotope'>
 
 /** Hill system：含碳体系 C、H 优先；无碳体系全部元素按字母排序。 */
 export function getMolecularFormula(atoms: readonly ElementLike[]): string {
@@ -21,12 +21,12 @@ export function getMolecularFormula(atoms: readonly ElementLike[]): string {
     .join('')
 }
 
-/** 标准原子量之和（g/mol）；任一元素未配置时返回 null，禁止静默按 0 计算。 */
+/** 标准原子量之和（g/mol）；未配置元素或显式同位素返回 null（尚无同位素质量表）。 */
 export function calculateMolecularWeight(atoms: readonly ElementLike[]): number | null {
   let total = 0
   for (const atom of atoms) {
-    const element = getElementConfig(atom.symbol)
-    if (element.atomicNumber === 0 || element.atomicMass === null || element.atomicMass <= 0) return null
+    const element = findElementConfig(atom.symbol)
+    if (atom.isotope !== undefined || !element || element.atomicMass === null || element.atomicMass <= 0) return null
     total += element.atomicMass
   }
   return total

@@ -51,6 +51,7 @@ function unsupportedSemantics(reason: string): ApplyExpectedEffectCommandResult 
 
 function replaceAtom(atom: Atom, symbol: string): Atom {
   const {
+    isotope: _isotope,
     coordinationGeometry: _coordinationGeometry,
     coordinationDirections: _coordinationDirections,
     coordinationSites: _coordinationSites,
