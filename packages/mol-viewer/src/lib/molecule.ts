@@ -90,6 +90,7 @@ export function centerMolecule(mol: Molecule): Molecule {
   const cx = mol.atoms.reduce((s, a) => s + a.x, 0) / mol.atoms.length
   const cy = mol.atoms.reduce((s, a) => s + a.y, 0) / mol.atoms.length
   const cz = mol.atoms.reduce((s, a) => s + a.z, 0) / mol.atoms.length
+  if (Math.max(Math.abs(cx), Math.abs(cy), Math.abs(cz)) <= 1e-10) return mol
   return {
     ...mol,
     atoms: mol.atoms.map(a => ({ ...a, x: a.x - cx, y: a.y - cy, z: a.z - cz })),

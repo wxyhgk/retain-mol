@@ -5,7 +5,7 @@ import {
   bridgeFragmentBetweenAtoms,
   fuseFragmentOnBond,
 } from '../../editing/fragment'
-import { editChanged, editFailed, type EditCommandResult } from '../shared'
+import { editMolecule, editFailed, type EditCommandResult } from '../shared'
 import type { FragmentTorsionPreview } from '../../../presentation/types'
 
 export interface AttachFragmentToAtomCommandInput {
@@ -25,7 +25,7 @@ export function runAttachFragmentToAtomCommand(
   })
   return result.ok === false
     ? editFailed(result.reason)
-    : editChanged(result.molecule)
+    : editMolecule(molecule, result.molecule)
 }
 
 export function canPrepareFragmentTorsion(
@@ -78,7 +78,7 @@ export function runFuseFragmentOnBondCommand(
   const result = fuseFragmentOnBond(molecule, input.fragment, input.bondId)
   return result.ok === false
     ? editFailed(result.reason)
-    : editChanged(result.molecule)
+    : editMolecule(molecule, result.molecule)
 }
 
 export interface BridgeFragmentBetweenAtomsCommandInput {
@@ -103,5 +103,5 @@ export function runBridgeFragmentBetweenAtomsCommand(
   )
   return result.ok === false
     ? editFailed(result.reason)
-    : editChanged(result.molecule)
+    : editMolecule(molecule, result.molecule)
 }

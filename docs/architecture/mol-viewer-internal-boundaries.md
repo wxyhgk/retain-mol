@@ -63,5 +63,11 @@ tarball 消费测试在五个独立 Node 进程中拒绝解析 React、Three、Z
 第二批验收与剩余范围：
 
 - 第二批已经接入纯 `/headless`、窄会话端口、runtime 提交适配与共享快照复制。验证状态见[无界面的分子编辑 API](../mol-viewer/headless-api.md)。
-- 元素事实/价态策略/外观配置、预览命令的颜色计算、命令 no-op/CIP 收尾与窄 Three 门面仍待后续整理。
+- 元素事实/价态策略/外观配置、预览命令的颜色计算、窄 Three 门面仍待后续整理；命令 no-op/CIP 收尾见下方第三批。
 - topology/geometry/properties 分块 JSON 与新 `mol-core` 包尚未引入；编辑状态继续以现有 Molecule 为唯一来源。
+
+第三批：编辑行为一致性
+
+- 结果包装与分子收尾分开；无变化操作、计划净变化、连续会话历史共用数据比较规则。
+- 几何命令补齐手性协调，纯推断键命令保留存续 ID，移除 store 中的补偿性拓扑比较。
+- 没有新增或删除公开入口；行为与验证范围见[编辑命令的一致性](../mol-viewer/edit-command-semantics.md)。

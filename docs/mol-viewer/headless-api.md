@@ -71,7 +71,7 @@ viewer 提交继续执行 revision 二次检查、事务冲突保护与整批写
 - `hooks/editSessionFactory.ts`：旧内部路径转发，生产调用方已迁移到 runtime adapter。
 
 目前仍使用同一个 Molecule 状态、命令内核和历史系统。
-本轮不调整 no-op、ID 保留、手性收尾策略，也不扩展属性或 JSON schema。
+第二批没有调整 no-op、ID 保留、手性收尾策略；第三批的行为修复见[编辑命令的一致性](./edit-command-semantics.md)。属性与 JSON schema 保持不变。
 
 ## 验证范围
 

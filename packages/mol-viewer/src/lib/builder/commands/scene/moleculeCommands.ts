@@ -1,6 +1,6 @@
 import type { Molecule } from '../../../molecule'
 import { centerMolecule } from '../../../molecule'
-import { editChanged, type EditCommandResult } from '../shared'
+import { editMolecule, type EditCommandResult } from '../shared'
 import type { MoleculeChangedCommandResult } from '../shared'
 
 export function runSetMoleculeCommand(molecule: Molecule): MoleculeChangedCommandResult {
@@ -12,5 +12,5 @@ export function runClearMoleculeCommand(): MoleculeChangedCommandResult {
 }
 
 export function runCenterMoleculeCommand(molecule: Molecule): EditCommandResult {
-  return editChanged(centerMolecule(molecule))
+  return editMolecule(molecule, centerMolecule(molecule))
 }

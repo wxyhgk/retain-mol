@@ -14,6 +14,8 @@ function createState(id: string): MoleculeState {
         molecule: { atoms: [], bonds: [], name: id },
         visible: true,
         locked: false,
+        offset: { x: 0, y: 0, z: 0 },
+        createdAt: 0,
       },
     },
     objectOrder: [id],

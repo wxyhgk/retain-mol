@@ -5,7 +5,7 @@ import {
   getHydrogenAdditionAvailability,
   validateElementSymbol,
 } from '../../../chemistry/policies/atomPolicy'
-import { editChanged, editFailed, editUnchanged, type EditCommandResult } from '../shared'
+import { editMolecule, editFailed, editUnchanged, type EditCommandResult } from '../shared'
 
 export function runAddHydrogensCommand(
   molecule: Molecule,
@@ -14,7 +14,7 @@ export function runAddHydrogensCommand(
   const next = autoAddHydrogens(molecule, atomId)
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }
 
 export function runRemoveHydrogensCommand(
@@ -24,7 +24,7 @@ export function runRemoveHydrogensCommand(
   const next = removeTerminalHydrogens(molecule, targetAtomIds)
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }
 
 export function runAddOneHydrogenCommand(
@@ -36,7 +36,7 @@ export function runAddOneHydrogenCommand(
   const next = addOneHydrogen(molecule, atomId)
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }
 
 export interface AddOneHydrogenAvailability {
@@ -87,7 +87,7 @@ export function runAddOneHydrogensCommand(
   }
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }
 
 export function runReplaceAtomCommand(
@@ -100,7 +100,7 @@ export function runReplaceAtomCommand(
   const next = substituteAtomElement(molecule, atomId, symbol)
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }
 
 export function runReplaceAtomsCommand(
@@ -116,7 +116,7 @@ export function runReplaceAtomsCommand(
   }
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }
 
 export function runGrowFromHydrogenCommand(
@@ -129,5 +129,5 @@ export function runGrowFromHydrogenCommand(
   const next = growByReplacingH(molecule, atomId, symbol)
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }

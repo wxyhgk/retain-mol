@@ -8,6 +8,36 @@ import {
 } from './modeling'
 
 describe('public modeling runtime adapter', () => {
+  it('does not commit a batch whose final molecule equals the original, preserving redo', () => {
+    const runtime = createViewerRuntime()
+    try {
+      const store = getViewerRuntimeServices(runtime).moleculeStore
+      store.getState().setMolecule({
+        name: 'stable', atoms: [{ id: 'c', symbol: 'C', isotope: 13, label: 'anchor', x: 0, y: 0, z: 0 }], bonds: [],
+      })
+      store.temporal.getState().clear()
+      store.getState().moveAtom('c', 2, 0, 0)
+      store.temporal.getState().undo()
+      const target = getModelingContext(runtime).objects[0]!
+      const before = store.getState().objectsById
+      const future = store.temporal.getState().futureStates
+      const result = commitEditPlan({
+        schemaVersion: 1, planId: 'round-trip', source: 'human', targetObjectId: target.objectId,
+        expectedRevision: target.revision,
+        commands: [
+          { commandId: 'away', kind: 'atom.move', atomId: 'c', position: { x: 1, y: 0, z: 0 } },
+          { commandId: 'back', kind: 'atom.move', atomId: 'c', position: { x: 0, y: 0, z: 0 } },
+        ],
+      }, runtime)
+      expect(result).toMatchObject({ ok: true, changed: false, committed: false, transactionId: null, nextRevision: target.revision })
+      expect(store.getState().objectsById).toBe(before)
+      expect(store.temporal.getState().pastStates).toHaveLength(0)
+      expect(store.temporal.getState().futureStates).toBe(future)
+      store.temporal.getState().redo()
+      expect(getModelingContext(runtime).objects[0]!.molecule.atoms[0]?.x).toBe(2)
+    } finally { runtime.dispose() }
+  })
+
   it('matches headless execution and records one undo step without affecting another runtime', () => {
     const first = createViewerRuntime()
     const second = createViewerRuntime()

@@ -2,7 +2,7 @@ import type { Molecule } from '../../../molecule'
 import { planMoleculePlacement } from '../../geometry/placementPlanner'
 import { runAddAtomCommand } from '../atom'
 import { runCreateFragmentPlacementCommand } from '../fragment'
-import { editChanged, editFailed, type EditCommandResult } from '../shared'
+import { editMolecule, editFailed, type EditCommandResult } from '../shared'
 import type { PlacementCommandInput, ResolvePlacementCommandInput } from './placementCommandResolver'
 import { resolvePlacementCommandInput } from './placementCommandResolver'
 
@@ -51,7 +51,7 @@ export function runPlacementCommand(
     return editFailed('放置位置空间不足，请在更远处重试')
   }
   const wasNudged = Math.hypot(plan.offset.x, plan.offset.y, plan.offset.z) > 1e-9
-  return editChanged({
+  return editMolecule(molecule, {
     ...molecule,
     atoms: [...molecule.atoms, ...plan.molecule.atoms],
     bonds: [...molecule.bonds, ...plan.molecule.bonds],

@@ -1,5 +1,5 @@
 import type { Molecule } from '../../../molecule'
-import { editChanged, editUnchanged, type EditCommandResult } from '../shared'
+import { editMolecule, editUnchanged, type EditCommandResult } from '../shared'
 
 export function runMoveAtomCommand(
   molecule: Molecule,
@@ -11,7 +11,7 @@ export function runMoveAtomCommand(
   const atom = molecule.atoms.find(candidate => candidate.id === atomId)
   if (!atom) return editUnchanged()
   if (atom.x === x && atom.y === y && atom.z === z) return editUnchanged()
-  return editChanged({
+  return editMolecule(molecule, {
     ...molecule,
     atoms: molecule.atoms.map(atom => atom.id === atomId ? { ...atom, x, y, z } : atom),
   })
@@ -28,5 +28,5 @@ export function runSetAtomPositionsCommand(
     if (atom.x !== position.x || atom.y !== position.y || atom.z !== position.z) changed = true
     return { ...atom, x: position.x, y: position.y, z: position.z }
   })
-  return changed ? editChanged({ ...molecule, atoms }) : editUnchanged()
+  return changed ? editMolecule(molecule, { ...molecule, atoms }) : editUnchanged()
 }

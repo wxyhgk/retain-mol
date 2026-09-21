@@ -1,7 +1,7 @@
 import { perceiveAtomChirality } from '../../../stereo/perception'
 import type { Molecule } from '../../../molecule'
 import { clearChirality, flipChirality, flipChiralityAvailability, resaturateAtom, setChirality, type FlipChiralityAvailability } from '../../editing/atomOps'
-import { editChanged, editFailed, editUnchanged, type EditCommandResult } from '../shared'
+import { editMolecule, editFailed, editUnchanged, type EditCommandResult } from '../shared'
 
 function withOptionalNumberProperty<
   T extends object,
@@ -26,7 +26,7 @@ export function runSetAtomChargeCommand(
     atoms: molecule.atoms.map(atom =>
       atom.id === atomId ? withOptionalNumberProperty(atom, 'charge', charge) : atom),
   }
-  return editChanged(resaturateAtom(withCharge, atomId))
+  return editMolecule(molecule, resaturateAtom(withCharge, atomId))
 }
 
 export function runSetAtomRadicalCommand(
@@ -42,14 +42,14 @@ export function runSetAtomRadicalCommand(
     atoms: molecule.atoms.map(atom =>
       atom.id === atomId ? withOptionalNumberProperty(atom, 'radical', radical) : atom),
   }
-  return editChanged(resaturateAtom(withRadical, atomId))
+  return editMolecule(molecule, resaturateAtom(withRadical, atomId))
 }
 
 export function runFlipChiralityCommand(molecule: Molecule, atomId: string): EditCommandResult {
   const availability = flipChiralityAvailability(molecule, atomId)
   if (availability.ok === false) return editFailed(availability.reason)
   const next = flipChirality(molecule, atomId)
-  return next === molecule ? editUnchanged() : editChanged(next)
+  return next === molecule ? editUnchanged() : editMolecule(molecule, next)
 }
 
 export function getFlipChiralityAvailabilityCommand(
@@ -71,7 +71,7 @@ export function runSetChiralityCommand(
   if (!center) return editFailed('原子不存在')
   if (chirality === 'none') {
     const next = clearChirality(molecule, atomId)
-    return next === molecule ? editUnchanged() : editChanged(next)
+    return next === molecule ? editUnchanged() : editMolecule(molecule, next)
   }
   const availability = flipChiralityAvailability(molecule, atomId)
   if (availability.ok === false) return editFailed(availability.reason)
@@ -79,7 +79,7 @@ export function runSetChiralityCommand(
   if (perceiveAtomChirality(next).get(atomId) !== chirality) {
     return editFailed('无法安全设置目标 CIP 构型：手性不明确或分支无法独立交换')
   }
-  return next === molecule ? editUnchanged() : editChanged(next)
+  return next === molecule ? editUnchanged() : editMolecule(molecule, next)
 }
 
 export function runSetAtomChargesCommand(
@@ -101,5 +101,5 @@ export function runSetAtomChargesCommand(
   }
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }

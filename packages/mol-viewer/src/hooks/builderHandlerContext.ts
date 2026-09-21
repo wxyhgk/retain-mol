@@ -1,3 +1,4 @@
+import { reconcileAtomChirality } from '../lib/stereo/perception'
 import { selectActiveMoleculeOrEmpty } from '../store/moleculeStore'
 import { useEditorStore, type EditorStoreApi } from '../store/editorStore'
 import type { Molecule } from '../lib/molecule'
@@ -58,7 +59,7 @@ export function readBuilderEditSnapshot(
   const executor = createEditUseCaseExecutor({
     commitMolecule: (molecule, selectionPolicy) => {
       const current = store.getState()
-      if (current.commitEditResult) current.commitEditResult(editChanged(molecule), { selectionPolicy })
+      if (current.commitEditResult) current.commitEditResult(editChanged(reconcileAtomChirality(molecule)), { selectionPolicy })
       else current.setMolecule(molecule)
     },
     flashHint,

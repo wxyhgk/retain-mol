@@ -92,6 +92,7 @@ export function setBondLength(mol: Molecule, aId: string, bId: string, target: n
   const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
   const cur = Math.hypot(dx, dy, dz)
   if (cur < 1e-6) return { ok: false, reason: '两原子重合，无法确定方向' }
+  if (Math.abs(target - cur) <= 1e-10) return { ok: true, molecule: mol }
   const k = (target - cur) / cur
   return { ok: true, molecule: translate(mol, side, dx * k, dy * k, dz * k) }
 }
@@ -133,6 +134,7 @@ export function setBondAngle(mol: Molecule, aId: string, bId: string, cId: strin
   const axis = { x: n.x / nl, y: n.y / nl, z: n.z / nl }
 
   const current = calcAngle(a, b, c)
+  if (Math.abs(targetDeg - current) <= 1e-10) return { ok: true, molecule: mol }
   const delta = ((targetDeg - current) * Math.PI) / 180
   let result = rotate(mol, side, b, axis, delta)
 
@@ -172,7 +174,9 @@ export function setDihedralAngle(
   const axis = { x: ax.x / al, y: ax.y / al, z: ax.z / al }
 
   const current = calcDihedral(a, b, c, d)
-  const delta = ((targetDeg - current) * Math.PI) / 180
+  const deltaDeg = ((targetDeg - current) % 360 + 540) % 360 - 180
+  if (Math.abs(deltaDeg) <= 1e-10) return { ok: true, molecule: mol }
+  const delta = (deltaDeg * Math.PI) / 180
   let result = rotate(mol, side, b, axis, delta)
 
   // 符号约定保险：偏差大则反向

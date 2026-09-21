@@ -8,6 +8,30 @@ import {
 } from './editing'
 
 describe('public editing sessions', () => {
+  it('preserves redo when a committed position session returns to its starting coordinates', () => {
+    const runtime = createViewerRuntime()
+    try {
+      const store = getViewerRuntimeServices(runtime).moleculeStore
+      store.getState().setMolecule({ atoms: [{ id: 'a', symbol: 'C', isotope: 13, x: 0, y: 0, z: 0 }], bonds: [] })
+      store.temporal.getState().clear()
+      store.getState().moveAtom('a', 1, 0, 0)
+      store.temporal.getState().undo()
+      const objectId = store.getState().activeObjectId!
+      const before = store.getState().objectsById[objectId]!.molecule
+      const future = [...store.temporal.getState().futureStates]
+      const session = createObjectPositionWriteEditSession(objectId, runtime)
+      session.start()
+      session.write(new Map([['a', { x: 5, y: 2, z: 1 }]]))
+      session.write(new Map([['a', { x: 0, y: 0, z: 0 }]]))
+      session.end()
+      expect(store.getState().objectsById[objectId]!.molecule).toEqual(before)
+      expect(store.temporal.getState().pastStates).toHaveLength(0)
+      expect(store.temporal.getState().futureStates).toEqual(future)
+      store.temporal.getState().redo()
+      expect(store.getState().objectsById[objectId]!.molecule.atoms[0]?.x).toBe(1)
+    } finally { runtime.dispose() }
+  })
+
   it('cancels position writes without losing a pre-existing redo branch', () => {
     const runtime = createViewerRuntime()
     try {

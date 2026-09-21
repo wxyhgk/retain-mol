@@ -1,3 +1,4 @@
+import { reconcileAtomChirality } from '../lib/stereo/perception'
 import type { Molecule } from '../lib/molecule'
 import { editChanged } from '../lib/builder/commands/shared'
 import type {
@@ -97,7 +98,7 @@ const createActiveObjectController = (store: MoleculeStoreApi) =>
       if (!current || chemicalCommandStateKey(current) !== transaction.expectedStateKey) {
         return false
       }
-      state.commitEditResult(editChanged(transaction.molecule), {
+      state.commitEditResult(editChanged(reconcileAtomChirality(transaction.molecule)), {
         selectionPolicy: 'clear',
       })
       return true

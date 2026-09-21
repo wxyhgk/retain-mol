@@ -1,3 +1,4 @@
+import { reconcileAtomChirality } from '../../../stereo/perception'
 import type { Molecule } from '../../../molecule'
 import { newAtom } from '../../../molecule'
 import { validateAtomCreationInput } from '../../../chemistry/policies/atomPolicy'
@@ -16,7 +17,7 @@ export function runAddAtomCommand(
   return {
     ok: true,
     changed: true,
-    molecule: { ...molecule, atoms: [...molecule.atoms, atom] },
+    molecule: reconcileAtomChirality({ ...molecule, atoms: [...molecule.atoms, atom] }),
     atomId: atom.id,
   }
 }

@@ -4,7 +4,7 @@ import {
   placeFragmentStandalone,
   placeHybridPrototype,
 } from '../../editing/fragment'
-import { editChanged, type EditCommandResult } from '../shared'
+import { editMolecule, type EditCommandResult } from '../shared'
 
 export interface CreateFragmentPlacementCommandInput {
   readonly fragment: FragmentDef
@@ -18,7 +18,8 @@ export function runCreateFragmentPlacementCommand(
 ): EditCommandResult {
   const empty: Molecule = { name: 'Placement', atoms: [], bonds: [] }
   const order = input.fragment.attachOrder ?? 1
-  return editChanged(
+  return editMolecule(
+    empty,
     order > 1 && input.hybridPartner
       ? placeHybridPrototype(
           empty,

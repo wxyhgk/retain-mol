@@ -34,3 +34,5 @@ commands/
 - `bond`: inference、removal、topology、click/drag。
 - `geometry`: atom position、bond geometry、cleanup。
 - `scene`: molecule、scene object、object transform。
+
+编辑结果约定：`shared/commandResult.ts` 只包装结果；已知前后分子的命令使用 `shared/editMolecule` 完成无变化检查与手性协调。纯 no-op 不修复旧标记；几何命令不能绕过收尾。稳定 ID 与历史规则见 [编辑命令的一致性](../../../../../../docs/mol-viewer/edit-command-semantics.md)。

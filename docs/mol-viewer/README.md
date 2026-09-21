@@ -6,6 +6,7 @@ App 层应该把它当成一个独立的分子引擎使用。App 代码应优先
 
 基础字段支持、复制与保存规则见[基础字段与保真边界](./field-fidelity.md)。
 基础模型、图查询、显示契约的归属及自动检查见[包内基础边界](../architecture/mol-viewer-internal-boundaries.md)。
+命令的无变化、手性、稳定 ID 与历史规则见[编辑命令的一致性](./edit-command-semantics.md)。
 Node、后端与浏览器共用的纯编辑入口见[无界面的分子编辑 API](./headless-api.md)。
 
 外部项目可从[独立宿主接入](./consumer-integration.md)与

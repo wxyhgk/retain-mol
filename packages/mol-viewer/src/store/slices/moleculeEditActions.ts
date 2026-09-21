@@ -1,3 +1,5 @@
+import { moleculesEqual } from '../../lib/model/equality'
+import { reconcileAtomChirality } from '../../lib/stereo/perception'
 import type { EditSlice } from './types'
 import type { EditActionContext } from './editActionTypes'
 import {
@@ -19,34 +21,7 @@ import {
   runSetSceneObjectAtomPositionsCommand,
 } from '../../lib/builder/commands/scene'
 import { runClearSelectionCommand } from '../../lib/builder/commands/selection'
-import { editWithSelectionSets } from '../../lib/builder/commands/shared'
-import { editChanged, editUnchanged, type EditCommandResult } from '../../lib/builder/commands/shared'
-import type { Bond } from '../../lib/molecule'
-
-/** 键的规范拓扑键：端点对（无序）+ 键级 + 芳香标记，忽略键 ID。 */
-function bondTopologyKey(bond: Bond): string {
-  const [a, b] = bond.atomId1 < bond.atomId2
-    ? [bond.atomId1, bond.atomId2]
-    : [bond.atomId2, bond.atomId1]
-  return JSON.stringify([a, b, bond.order, bond.aromatic === true])
-}
-
-/** 两组键在拓扑上等价（多重集比较，忽略 ID 与顺序）。 */
-function bondTopologyEqual(before: readonly Bond[], after: readonly Bond[]): boolean {
-  if (before.length !== after.length) return false
-  const counts = new Map<string, number>()
-  for (const bond of before) {
-    const key = bondTopologyKey(bond)
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-  }
-  for (const bond of after) {
-    const key = bondTopologyKey(bond)
-    const count = counts.get(key)
-    if (!count) return false
-    counts.set(key, count - 1)
-  }
-  return true
-}
+import { editChanged, editWithSelectionSets, type EditCommandResult } from '../../lib/builder/commands/shared'
 
 type MoleculeEditActions = Pick<
   EditSlice,
@@ -70,6 +45,8 @@ export function createMoleculeEditActions({
     if (!result.ok || !result.changed) return
     set((s) => {
       if (s.activeObjectId && !getEditableObject(s, s.activeObjectId)) return {}
+      const previous = s.activeObjectId ? s.objectsById[s.activeObjectId]?.molecule : undefined
+      if (previous && moleculesEqual(previous, result.molecule)) return {}
       const sceneResult = runSetMoleculeInSceneCommand(
         s.objectsById,
         s.objectOrder,
@@ -94,7 +71,7 @@ export function createMoleculeEditActions({
   }
 
   return {
-    setMolecule: mol => commitEditResult(editChanged(mol)),
+    setMolecule: mol => commitEditResult(editChanged(reconcileAtomChirality(mol))),
     commitEditResult,
 
     moveAtom: (id, x, y, z) =>
@@ -133,22 +110,11 @@ export function createMoleculeEditActions({
       }),
 
     autoInferBonds: () =>
-      set((s) =>
-        applyActiveMoleculeEdit(s, (mol) => {
-          const result = runAutoInferBondsCommand(mol)
-          if (!result.ok || !result.changed) return result
-          // 无变化短路：推断结果与现有键拓扑等价时不落盘。
-          // 命令层总是全量重建键 ID，直接落盘会把 selectedBondIds 打成
-          // 悬空引用，并在拓扑毫无变化时平白压一步 undo。
-          return bondTopologyEqual(mol.bonds, result.molecule.bonds)
-            ? editUnchanged('键拓扑无变化')
-            : result
-        }),
-      ),
+      set((s) => applyActiveMoleculeEdit(s, runAutoInferBondsCommand)),
 
     clearMolecule: () =>
       set((s) =>
-        applyActiveMoleculeEditWithSelection(s, (_molecule, selection) => {
+        applyActiveMoleculeEditWithSelection(s, (previousMolecule, selection) => {
           const molecule = runClearMoleculeCommand().molecule
           const cleared = runClearSelectionCommand(
             selection.selectedAtomIds,
@@ -159,7 +125,7 @@ export function createMoleculeEditActions({
             cleared.selectedAtomIds,
             cleared.selectedBondIds,
             selection,
-            { moleculeChanged: true },
+            { moleculeChanged: !moleculesEqual(previousMolecule, molecule) },
           )
         }),
       ),

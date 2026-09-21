@@ -1,6 +1,6 @@
 import type { Molecule } from '../../../molecule'
 import { resolveBondDragEndDecision } from './bondDragDecision'
-import { editChanged, editFailed, editUnchanged, type EditCommandResult } from '../shared'
+import { editMolecule, editFailed, editUnchanged, type EditCommandResult } from '../shared'
 import {
   runAddAtomCommand,
   runGrowFromHydrogenCommand,
@@ -59,7 +59,7 @@ function runGrowToEmptyCommand(
   if (addBondResult.ok === false) return editFailed(addBondResult.reason)
   if (!addBondResult.changed) return editUnchanged()
   const withNewAtom = addBondResult.molecule
-  if (input.element === 'H') return editChanged(withNewAtom)
+  if (input.element === 'H') return editMolecule(molecule, withNewAtom)
   const result = runAddHydrogensCommand(withNewAtom, addAtomResult.atomId)
-  return result.ok && result.changed ? result : editChanged(withNewAtom)
+  return result.ok && result.changed ? result : editMolecule(molecule, withNewAtom)
 }

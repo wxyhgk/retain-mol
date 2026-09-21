@@ -97,6 +97,17 @@ if (name === 'core') {
   const stale = api.replayEditPlan(changed.molecule, edit)
   assert.equal(stale.ok, false)
   assert.ok(stale.issues.some(issue => issue.code === 'stale-context'))
+  const roundTrip = api.replayEditPlan(built.molecule, {
+    schemaVersion: 1, planId: 'node-noop', source: 'human', targetObjectId: objectId,
+    commands: [
+      { commandId: 'away', kind: 'atom.move', atomId: 'c', position: { x: 2, y: 0, z: 0 } },
+      { commandId: 'back', kind: 'atom.move', atomId: 'c', position: { x: 0, y: 0, z: 0 } },
+    ],
+  })
+  assert.equal(roundTrip.ok, true)
+  assert.equal(roundTrip.changed, false)
+  assert.equal(roundTrip.nextRevision, revision)
+  assert.deepEqual(roundTrip.molecule, built.molecule)
 } else throw new Error('Unknown pure entry ' + name)
 console.log('Packed pure entry passed: ' + name)
 `)

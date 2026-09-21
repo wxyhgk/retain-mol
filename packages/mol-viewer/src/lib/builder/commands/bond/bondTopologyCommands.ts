@@ -10,7 +10,7 @@ import {
 } from '../../../chemistry/policies/bondPolicy'
 import { detectAromaticity } from '../../../analysis/aromaticity'
 import { kekulizeAromaticBonds } from '../../../io/kekulize'
-import { editChanged, editFailed, editUnchanged, type EditCommandResult } from '../shared'
+import { editMolecule, editFailed, editUnchanged, type EditCommandResult } from '../shared'
 
 export interface AddBondCommandInput {
   readonly atomId1: string
@@ -54,7 +54,7 @@ export function runSetBondOrderCommand(
 ): EditCommandResult {
   const result = planBondOrderChange(molecule, bondId, order)
   if (result.ok === false || !result.changed) return editUnchanged()
-  return editChanged(result.molecule)
+  return editMolecule(molecule, result.molecule)
 }
 
 export function runAddBondCommand(
@@ -64,7 +64,7 @@ export function runAddBondCommand(
   const validation = validateBondAddition(molecule, input)
   if (validation.ok === false) return editFailed(validation.reason)
 
-  return editChanged({
+  return editMolecule(molecule, {
     ...molecule,
     bonds: [...molecule.bonds, newBond(input.atomId1, input.atomId2, validation.order)],
   })
@@ -78,7 +78,7 @@ export function runBondViaHydrogenCommand(
   const result = bondByReplacingH(molecule, sourceHId, targetId)
   return result.ok === false
     ? editFailed(result.reason)
-    : editChanged(result.molecule)
+    : editMolecule(molecule, result.molecule)
 }
 
 export function runSetBondWedgeCommand(
@@ -93,7 +93,7 @@ export function runSetBondWedgeCommand(
   if (!bond) return editUnchanged()
   const nextWedge = wedge === 'none' ? undefined : wedge
   if (bond.wedge === nextWedge) return editUnchanged()
-  return editChanged({
+  return editMolecule(molecule, {
     ...molecule,
     bonds: molecule.bonds.map(candidate => {
       if (candidate.id !== bondId) return candidate
@@ -116,12 +116,12 @@ export function runSetEZCommand(
   if (!bond) return editFailed('键不存在')
   if (ez === 'none') {
     const next = clearBondEZ(molecule, bondId)
-    return next === molecule ? editUnchanged() : editChanged(next)
+    return next === molecule ? editUnchanged() : editMolecule(molecule, next)
   }
   const availability = bondEZAvailability(molecule, bondId)
   if (availability.ok === false) return editFailed(availability.reason)
   const next = setBondEZ(molecule, bondId, ez)
-  if (next !== molecule) return editChanged(next)
+  if (next !== molecule) return editMolecule(molecule, next)
   return bond.ez === ez ? editUnchanged() : editFailed('双键至少一端需要两个显式取代基才能翻转 E/Z')
 }
 
@@ -139,7 +139,7 @@ export function runSetBondOrdersCommand(
   }
   return next === molecule
     ? editUnchanged()
-    : editChanged(next)
+    : editMolecule(molecule, next)
 }
 
 /**
@@ -169,5 +169,5 @@ export function runNormalizeAromaticityCommand(molecule: Molecule): EditCommandR
     })
     if (changed) next = { ...next, bonds: kekulized }
   }
-  return changed ? editChanged(next) : editUnchanged()
+  return changed ? editMolecule(molecule, next) : editUnchanged()
 }

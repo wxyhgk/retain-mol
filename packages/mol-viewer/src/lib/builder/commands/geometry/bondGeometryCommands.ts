@@ -1,7 +1,7 @@
 import type { Molecule } from '../../../molecule'
 import { cycleBondLength } from '../../editing/bondOps'
 import { setBondAngle, setBondLength, setDihedralAngle } from '../../editing/geometryOps'
-import type { GeomCommandResult } from '../shared'
+import { editMolecule, type GeomCommandResult } from '../shared'
 
 export function runCycleBondLengthCommand(
   molecule: Molecule,
@@ -9,7 +9,7 @@ export function runCycleBondLengthCommand(
 ): GeomCommandResult & { readonly moved?: boolean } {
   const result = cycleBondLength(molecule, bondId)
   if (result.ok === false) return { ok: false, reason: result.reason }
-  return { ok: true, changed: true, molecule: result.molecule, moved: result.moved }
+  return { ...editMolecule(molecule, result.molecule), moved: result.moved }
 }
 
 export function runSetBondLengthCommand(
@@ -20,7 +20,7 @@ export function runSetBondLengthCommand(
 ): GeomCommandResult {
   const result = setBondLength(molecule, aId, bId, length)
   if (result.ok === false) return { ok: false, reason: result.reason }
-  return { ok: true, changed: true, molecule: result.molecule }
+  return editMolecule(molecule, result.molecule)
 }
 
 export function runSetBondAngleCommand(
@@ -32,7 +32,7 @@ export function runSetBondAngleCommand(
 ): GeomCommandResult {
   const result = setBondAngle(molecule, aId, bId, cId, deg)
   if (result.ok === false) return { ok: false, reason: result.reason }
-  return { ok: true, changed: true, molecule: result.molecule }
+  return editMolecule(molecule, result.molecule)
 }
 
 export function runSetDihedralAngleCommand(
@@ -45,5 +45,5 @@ export function runSetDihedralAngleCommand(
 ): GeomCommandResult {
   const result = setDihedralAngle(molecule, aId, bId, cId, dId, deg)
   if (result.ok === false) return { ok: false, reason: result.reason }
-  return { ok: true, changed: true, molecule: result.molecule }
+  return editMolecule(molecule, result.molecule)
 }

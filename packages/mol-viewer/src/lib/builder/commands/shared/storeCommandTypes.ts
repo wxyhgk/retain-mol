@@ -82,6 +82,7 @@ export type AddAtomCommandResult =
   | { ok: false; reason: string }
 
 export type CleanupGeometryCommandResult =
+  | { ok: true; changed: false }
   | { ok: true; changed: true; molecule: Molecule }
   | { ok: false; reason: string }
 

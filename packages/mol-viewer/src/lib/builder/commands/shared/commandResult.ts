@@ -1,5 +1,4 @@
 import type { Molecule } from '../../../molecule'
-import { reconcileAtomChirality } from '../../../stereo/perception'
 
 export type EditCommandResult =
   | { ok: true; changed: true; molecule: Molecule; message?: string }
@@ -11,8 +10,8 @@ export type EditCommandResultWithMeta<TMeta extends object> =
   | ({ ok: true; changed: false } & Partial<TMeta>)
   | { ok: false; reason: string }
 
+/** Package an already finalized molecule; no chemistry or state mutation here. */
 export function editChanged(molecule: Molecule, message?: string): EditCommandResult {
-  molecule = reconcileAtomChirality(molecule)
   return message
     ? { ok: true, changed: true, molecule, message }
     : { ok: true, changed: true, molecule }

@@ -8,6 +8,7 @@
  * 的组装层共享，独立成模块避免两者互相 import 形成环。
  */
 
+import { moleculesEqual } from '../../lib/model/equality'
 import type { UndoableSceneState, UndoSnapshot } from '../contracts/undo'
 
 export type { UndoSnapshot } from '../contracts/undo'
@@ -23,7 +24,19 @@ export function partializeForUndo(s: UndoableSceneState): UndoSnapshot {
 }
 
 export function undoSnapshotEqual(a: UndoSnapshot, b: UndoSnapshot): boolean {
-  return a.objectsById === b.objectsById &&
-         a.objectOrder === b.objectOrder &&
-         a.activeObjectId === b.activeObjectId
+  if (a.activeObjectId !== b.activeObjectId || a.objectOrder.length !== b.objectOrder.length ||
+      !a.objectOrder.every((id, index) => id === b.objectOrder[index])) return false
+  if (a.objectsById === b.objectsById) return true
+  const ids = Object.keys(a.objectsById)
+  if (ids.length !== Object.keys(b.objectsById).length) return false
+  return ids.every(id => {
+    const left = a.objectsById[id]
+    const right = b.objectsById[id]
+    if (left === right) return true
+    return left !== undefined && right !== undefined && left.id === right.id &&
+      left.name === right.name && left.visible === right.visible && left.locked === right.locked &&
+      left.createdAt === right.createdAt &&
+      left.offset.x === right.offset.x && left.offset.y === right.offset.y && left.offset.z === right.offset.z &&
+      moleculesEqual(left.molecule, right.molecule)
+  })
 }

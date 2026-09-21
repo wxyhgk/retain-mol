@@ -1,4 +1,4 @@
-import { reconcileAtomChirality } from '../stereo/perception'
+import { moleculesEqual } from '../model/equality'
 import { ELEMENT_CONFIGS } from '../../config/elements.config'
 import type { Molecule } from '../molecule'
 import {
@@ -17,6 +17,7 @@ import {
 } from '../builder/commands/bond'
 import {
   runMoveAtomCommand,
+  runSetAtomPositionsCommand,
   runSetBondAngleCommand,
   runSetBondLengthCommand,
   runSetDihedralAngleCommand,
@@ -161,16 +162,6 @@ function renameAddedEntities(
           }
         : {}),
     })),
-  }
-}
-
-function applyPositionMap(molecule: Molecule, positions: ReadonlyMap<string, { x: number; y: number; z: number }>): Molecule {
-  return {
-    ...molecule,
-    atoms: molecule.atoms.map(atom => {
-      const position = positions.get(atom.id)
-      return position ? { ...atom, ...position } : atom
-    }),
   }
 }
 
@@ -473,11 +464,7 @@ function executeCommand(state: WorkingState, command: ModelingCommand): CommandE
         quaternion,
       )
       if (!result.changed) return { ok: true, changed: false, state }
-      return {
-        ok: true,
-        changed: true,
-        state: { ...state, molecule: applyPositionMap(state.molecule, result.positions) },
-      }
+      return fromEditResult(state, runSetAtomPositionsCommand(state.molecule, result.positions))
     }
   }
 }
@@ -599,8 +586,6 @@ export function dryRunEditPlan(
     },
   }
   const issues: ModelingIssue[] = []
-  let changed = false
-
   for (let commandIndex = 0; commandIndex < plan.commands.length; commandIndex += 1) {
     const command = plan.commands[commandIndex]
     if (!command) continue
@@ -654,8 +639,8 @@ export function dryRunEditPlan(
         },
       ])
     }
-    const nextMolecule = reconcileAtomChirality(result.state.molecule)
-    const commandChanged = result.changed || nextMolecule !== result.state.molecule
+    const nextMolecule = result.state.molecule
+    const commandChanged = !moleculesEqual(state.molecule, nextMolecule)
     const invariantIssues = validateModelingConstraintInvariants(
       target.molecule,
       nextMolecule,
@@ -680,7 +665,6 @@ export function dryRunEditPlan(
         commandId: command.commandId,
       })
     }
-    changed ||= commandChanged
     state = { ...result.state, molecule: nextMolecule }
     for (const atom of state.molecule.atoms) {
       if (!previousAtomIds.has(atom.id)) scopedAtomIds?.add(atom.id)
@@ -690,6 +674,9 @@ export function dryRunEditPlan(
     }
   }
 
+  const changed = !moleculesEqual(target.molecule, state.molecule)
+  // Keep the base revision and representation for net-zero plans.
+  if (!changed) state = { ...state, molecule: target.molecule }
   return {
     ok: true,
     changed,
