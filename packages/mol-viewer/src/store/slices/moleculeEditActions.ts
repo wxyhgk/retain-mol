@@ -53,7 +53,13 @@ export function createMoleculeEditActions({
         s.activeObjectId,
         result.molecule,
       )
-      const patch = applySetMoleculeInSceneResult(s, sceneResult)
+      const patch = applySetMoleculeInSceneResult(
+        s,
+        sceneResult,
+        options.bumpAtomPositionVersion === undefined
+          ? {}
+          : { bumpAtomPositionVersion: options.bumpAtomPositionVersion },
+      )
       if (options.selectionPolicy !== 'preserve') return patch
 
       const validAtomIds = new Set(result.molecule.atoms.map(atom => atom.id))
@@ -63,9 +69,6 @@ export function createMoleculeEditActions({
         selectedAtomIds: new Set([...s.selectedAtomIds].filter(id => validAtomIds.has(id))),
         selectedBondIds: new Set([...s.selectedBondIds].filter(id => validBondIds.has(id))),
         selectionVersion: s.selectionVersion + 1,
-        ...(options.bumpAtomPositionVersion
-          ? { atomPositionVersion: s.atomPositionVersion + 1 }
-          : {}),
       }
     })
   }
@@ -79,9 +82,6 @@ export function createMoleculeEditActions({
         applyActiveMoleculeEdit(
           s,
           (mol) => runMoveAtomCommand(mol, id, x, y, z),
-          {
-            bumpAtomPositionVersion: true,
-          },
         ),
       ),
 
@@ -90,9 +90,6 @@ export function createMoleculeEditActions({
         applyActiveMoleculeEdit(
           s,
           (mol) => runSetAtomPositionsCommand(mol, positions),
-          {
-            bumpAtomPositionVersion: true,
-          },
         ),
       ),
 
@@ -104,9 +101,7 @@ export function createMoleculeEditActions({
           objectId,
           positions,
         )
-        return applySceneObjectUpdatedResult(s, result, {
-          bumpAtomPositionVersion: true,
-        })
+        return applySceneObjectUpdatedResult(s, result)
       }),
 
     autoInferBonds: () =>

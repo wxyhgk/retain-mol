@@ -63,7 +63,7 @@
 
 ### P1：Store 写入一致性
 
-部分 command/store 路径对 `atomPositionVersion` 的递增仍可能不一致。所有坐标写入应经过同一个 helper，并增加“一个用户操作只产生一个版本递增和一个 undo step”的集成测试。
+已于 2026-09-25 完成。所有场景写入现在由 store helper 根据前后坐标差异统一维护 `atomPositionVersion`；事务在提交或取消时把手势期间的多次写入归并为一次版本失效，并由真实 store 拖拽回归测试覆盖“一个用户操作只产生一个版本递增和一个 undo step”。
 
 ### P1：Renderer 缓存与对象视觉状态
 

@@ -59,6 +59,20 @@ describe('applyActiveMoleculeEdit', () => {
     expect(result.atomPositionVersion).toBe(1)
   })
 
+  it('derives a position-version bump from coordinate changes without an action flag', () => {
+    const state = makeState()
+    const result = applyActiveMoleculeEdit(state, mol => ({
+      ok: true,
+      changed: true,
+      molecule: {
+        ...mol,
+        atoms: mol.atoms.map(atom => ({ ...atom, z: atom.z + 1 })),
+      },
+    }))
+
+    expect(result.atomPositionVersion).toBe(1)
+  })
+
   it('returns an empty patch for missing active molecule and unchanged commands', () => {
     const state = makeState()
     expect(applyActiveMoleculeEdit({ ...state, activeObjectId: null }, () => ({

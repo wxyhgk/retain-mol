@@ -22,10 +22,19 @@ export interface UndoTransactionController {
   readonly getOwner: () => string | null
 }
 
+export interface UndoTransactionCommitInfo {
+  readonly before: UndoSnapshot
+  readonly after: UndoSnapshot
+  readonly positionVersionBefore: number
+}
+
+type RestoreState = (snapshot: UndoSnapshot, positionVersionBefore: number) => void
+
 export function createUndoTransactionController(
   getTemporal: GetTemporal,
   getState: GetMoleculeState,
-  restoreState: (snapshot: UndoSnapshot) => void = () => undefined,
+  restoreState: RestoreState = () => undefined,
+  onCommit: (info: UndoTransactionCommitInfo) => void = () => undefined,
 ): UndoTransactionController {
   let depth = 0
   let owner: string | null = null
@@ -33,6 +42,7 @@ export function createUndoTransactionController(
   let snapshotBeforeTransaction: UndoSnapshot | null = null
   let pastBeforeTransaction: TemporalState<MoleculeState>['pastStates'] | null = null
   let futureBeforeTransaction: TemporalState<MoleculeState>['futureStates'] | null = null
+  let positionVersionBeforeTransaction = 0
 
   const reset = () => {
     depth = 0
@@ -40,6 +50,7 @@ export function createUndoTransactionController(
     snapshotBeforeTransaction = null
     pastBeforeTransaction = null
     futureBeforeTransaction = null
+    positionVersionBeforeTransaction = 0
   }
 
   const commitOne = (expectedOwner: string) => {
@@ -51,6 +62,13 @@ export function createUndoTransactionController(
 
     const temporal = getTemporal()
     temporal.getState().resume()
+    if (snapshotBeforeTransaction) {
+      onCommit({
+        before: snapshotBeforeTransaction,
+        after: partializeForUndo(getState()),
+        positionVersionBefore: positionVersionBeforeTransaction,
+      })
+    }
     const past = temporal.getState().pastStates as UndoSnapshot[]
     const top = past[past.length - 1]
     if (top && undoSnapshotEqual(top, partializeForUndo(getState()))) {
@@ -67,7 +85,7 @@ export function createUndoTransactionController(
       throw new Error(`事务所有权不匹配：当前 ${owner ?? '无'}，取消者 ${expectedOwner}`)
     }
     const temporal = getTemporal()
-    if (snapshotBeforeTransaction) restoreState(snapshotBeforeTransaction)
+    if (snapshotBeforeTransaction) restoreState(snapshotBeforeTransaction, positionVersionBeforeTransaction)
     temporal.setState({
       pastStates: pastBeforeTransaction ?? [],
       futureStates: futureBeforeTransaction ?? [],
@@ -88,6 +106,7 @@ export function createUndoTransactionController(
       snapshotBeforeTransaction = partializeForUndo(getState())
       pastBeforeTransaction = [...temporalState.pastStates]
       futureBeforeTransaction = [...temporalState.futureStates]
+      positionVersionBeforeTransaction = getState().atomPositionVersion
       const past = [
         ...(temporalState.pastStates as UndoSnapshot[]),
         snapshotBeforeTransaction,

@@ -60,7 +60,7 @@ describe('edit session with the real molecule store', () => {
     expect(atom(firstId)).toMatchObject({ x: 3, y: 1, z: 0 })
     expect(atom(secondId)).toMatchObject({ x: 4, y: 1, z: 0 })
     expect(store().selectedAtomIds).toEqual(new Set([firstId, secondId]))
-    expect(store().atomPositionVersion).toBe(versionBeforeDrag + 2)
+    expect(store().atomPositionVersion).toBe(versionBeforeDrag + 1)
     expect(temporal().isTracking).toBe(true)
     expect(temporal().pastStates).toHaveLength(1)
     expect(temporal().futureStates).toHaveLength(0)
@@ -81,6 +81,28 @@ describe('edit session with the real molecule store', () => {
     expect(atom(secondId)).toMatchObject({ x: 4, y: 1, z: 0 })
     expect(store().selectedAtomIds).toEqual(new Set([firstId, secondId]))
     expect(temporal().pastStates).toHaveLength(1)
+    expect(temporal().futureStates).toHaveLength(0)
+  })
+
+  it('restores a cancelled drag with one position-version invalidation', () => {
+    const atomId = 'cancelled-a1'
+    store().setMolecule({
+      name: 'cancelled drag',
+      atoms: [{ id: atomId, symbol: 'C', x: 0, y: 0, z: 0 }],
+      bonds: [],
+    })
+    temporal().clear()
+    const versionBeforeDrag = store().atomPositionVersion
+
+    const session = createAtomDragEditSession()
+    session.start(atomId)
+    session.move(atomId, { x: 1, y: 0, z: 0 })
+    session.move(atomId, { x: 2, y: 1, z: 0 })
+    session.cancel()
+
+    expect(atom(atomId)).toMatchObject({ x: 0, y: 0, z: 0 })
+    expect(store().atomPositionVersion).toBe(versionBeforeDrag + 1)
+    expect(temporal().pastStates).toHaveLength(0)
     expect(temporal().futureStates).toHaveLength(0)
   })
 })

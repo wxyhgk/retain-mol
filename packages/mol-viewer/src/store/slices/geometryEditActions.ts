@@ -1,6 +1,6 @@
 import type { EditSlice } from './types'
 import type { EditActionContext } from './editActionTypes'
-import { applyGeomEdit, applyGeomEditWithMeta } from './helpers'
+import { applyGeomEdit, applyGeomEditWithMeta, applySceneObjectUpdatedResult } from './helpers'
 import {
   runCleanupGeometryCommand,
   runCycleBondLengthCommand,
@@ -57,9 +57,10 @@ export function createGeometryEditActions({
       const result = runAlignBondPairGeometry(state.objectsById, state.objectOrder, input)
       if (!result.ok) return result
       if (result.changed) {
-        set((current) => ({
+        set((current) => applySceneObjectUpdatedResult(current, {
+          ok: true,
+          changed: true,
           objectsById: result.objectsById as typeof current.objectsById,
-          atomPositionVersion: current.atomPositionVersion + 1,
         }))
       }
       return { ok: true, diagnostics: result.diagnostics }

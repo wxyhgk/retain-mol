@@ -42,6 +42,45 @@ function isChangedCommandResult(
 
 const EMPTY_MOLECULE: Molecule = { atoms: [], bonds: [], name: 'New Molecule' }
 
+/**
+ * Derive position invalidation from the scene patch. Commands can change
+ * coordinates indirectly (for example while adding/removing an atom), so
+ * individual actions must not decide independently whether to bump the
+ * renderer version.
+ */
+export function sceneAtomPositionsChanged(
+  previous: Record<string, SceneObject>,
+  next: Record<string, SceneObject>,
+): boolean {
+  const objectIds = new Set([...Object.keys(previous), ...Object.keys(next)])
+  for (const objectId of objectIds) {
+    const previousMolecule = previous[objectId]?.molecule
+    const nextMolecule = next[objectId]?.molecule
+    if (!previousMolecule || !nextMolecule) return true
+    if (previousMolecule.atoms.length !== nextMolecule.atoms.length) return true
+
+    const nextAtoms = new Map(nextMolecule.atoms.map(atom => [atom.id, atom]))
+    for (const atom of previousMolecule.atoms) {
+      const nextAtom = nextAtoms.get(atom.id)
+      if (!nextAtom || atom.x !== nextAtom.x || atom.y !== nextAtom.y || atom.z !== nextAtom.z) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function withPositionVersion(
+  s: MoleculeState,
+  patch: Partial<MoleculeState>,
+  force = false,
+): Partial<MoleculeState> {
+  const objectsById = patch.objectsById ?? s.objectsById
+  return force || sceneAtomPositionsChanged(s.objectsById, objectsById)
+    ? { ...patch, atomPositionVersion: s.atomPositionVersion + 1 }
+    : patch
+}
+
 export function selectActiveMolecule(s: MoleculeState): Molecule | null {
   return s.activeObjectId ? (s.objectsById[s.activeObjectId]?.molecule ?? null) : null
 }
@@ -124,12 +163,12 @@ export function applyAddSceneObjectResult(
   s: MoleculeState,
   result: AddSceneObjectCommandResult,
 ): Partial<MoleculeState> {
-  return {
+  return withPositionVersion(s, {
     objectsById: reconcileChangedObjects(s, { ...s.objectsById, [result.object.id]: result.object }),
     objectOrder: [...s.objectOrder, result.object.id],
     activeObjectId: result.object.id,
     ...clearSelectionPatch(s),
-  }
+  })
 }
 
 export type SceneGraphCommandResult = RemoveSceneObjectCommandResult | SplitSceneObjectCommandResult
@@ -139,12 +178,12 @@ export function applySceneGraphResult(
   result: SceneGraphCommandResult,
 ): Partial<MoleculeState> {
   if (!result.changed) return {}
-  return {
+  return withPositionVersion(s, {
     objectsById: reconcileChangedObjects(s, result.objectsById),
     objectOrder: result.objectOrder,
     activeObjectId: result.activeObjectId,
     ...(result.clearSelection ? clearSelectionPatch(s) : {}),
-  }
+  })
 }
 
 export type ActiveSceneObjectCommandResult =
@@ -165,13 +204,14 @@ export function applyActiveSceneObjectResult(
 export function applySetMoleculeInSceneResult(
   s: MoleculeState,
   result: SetMoleculeInSceneCommandResult,
+  options: { readonly bumpAtomPositionVersion?: boolean } = {},
 ): Partial<MoleculeState> {
-  return {
+  return withPositionVersion(s, {
     objectsById: reconcileChangedObjects(s, result.objectsById),
     objectOrder: result.objectOrder,
     activeObjectId: result.activeObjectId,
     ...(result.clearSelection ? clearSelectionPatch(s) : {}),
-  }
+  }, options.bumpAtomPositionVersion === true)
 }
 
 export interface ApplySceneObjectUpdatedResultOptions {
@@ -184,10 +224,9 @@ export function applySceneObjectUpdatedResult(
   options: ApplySceneObjectUpdatedResultOptions = {},
 ): Partial<MoleculeState> {
   if (!result.changed) return {}
-  return {
+  return withPositionVersion(s, {
     objectsById: reconcileChangedObjects(s, result.objectsById),
-    ...(options.bumpAtomPositionVersion ? { atomPositionVersion: s.atomPositionVersion + 1 } : {}),
-  }
+  }, options.bumpAtomPositionVersion === true)
 }
 
 /**
@@ -242,11 +281,10 @@ export function applyActiveMoleculeEdit(
   if (!mol) return {}
   const result = edit(mol)
   if (!result.ok || !result.changed) return {}
-  return {
+  return withPositionVersion(s, {
     ...patchActiveMol(s, result.molecule),
     ...pruneSelectionAfterEdit(s, result.molecule),
-    ...(options.bumpAtomPositionVersion ? { atomPositionVersion: s.atomPositionVersion + 1 } : {}),
-  }
+  }, options.bumpAtomPositionVersion === true)
 }
 
 export function applyActiveMoleculeEditWithMeta<
@@ -267,10 +305,10 @@ export function applyActiveMoleculeEditWithMeta<
   set((s) => {
     const m = getActiveMol(s)
     if (!m) return {}
-    return {
+    return withPositionVersion(s, {
       ...patchActiveMol(s, result.molecule),
       ...pruneSelectionAfterEdit(s, result.molecule),
-    }
+    })
   })
   return { ok: true, ...meta }
 }
@@ -306,7 +344,7 @@ export function applyActiveMoleculeSelectionResult(
   result: EditCommandWithSelectionResult,
 ): Partial<MoleculeState> {
   if (!result.moleculeChanged && !result.selectionChanged) return {}
-  return {
+  return withPositionVersion(s, {
     ...(result.moleculeChanged ? patchActiveMol(s, result.molecule) : {}),
     ...(result.selectionChanged
       ? {
@@ -315,7 +353,7 @@ export function applyActiveMoleculeSelectionResult(
           selectionVersion: s.selectionVersion + 1,
         }
       : {}),
-  }
+  })
 }
 
 /** 几何参数编辑（键长/键角/二面角）的统一落盘：单次 set = 单步 undo，附带位置版本号自增 */
@@ -332,11 +370,10 @@ export function applyGeomEdit(
   set((s) => {
     const m = getActiveMol(s)
     if (!m) return {}
-    return {
+    return withPositionVersion(s, {
       ...patchActiveMol(s, result.molecule),
       ...pruneSelectionAfterEdit(s, result.molecule),
-      atomPositionVersion: s.atomPositionVersion + 1,
-    }
+    })
   })
   return { ok: true }
 }
@@ -364,11 +401,10 @@ export function applyGeomEditWithMeta<
   set((s) => {
     const m = getActiveMol(s)
     if (!m) return {}
-    return {
+    return withPositionVersion(s, {
       ...patchActiveMol(s, result.molecule),
       ...pruneSelectionAfterEdit(s, result.molecule),
-      atomPositionVersion: s.atomPositionVersion + 1,
-    }
+    })
   })
   return { ok: true, ...meta }
 }

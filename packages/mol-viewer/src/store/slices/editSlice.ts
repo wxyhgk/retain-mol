@@ -16,6 +16,7 @@ import {
   createUndoTransactionController,
   type GetTemporal,
 } from './transactionController'
+import { sceneAtomPositionsChanged } from './helpers'
 import { createGeometryEditActions } from './geometryEditActions'
 import { createBondEditActions } from './bondEditActions'
 import { createAtomEditActions } from './atomEditActions'
@@ -27,10 +28,20 @@ export function createEditSlice(
   getTemporal: GetTemporal,
 ): StateCreator<MoleculeState, [], [], EditSlice> {
   return (set, get) => {
-    const transactions = createUndoTransactionController(getTemporal, get, snapshot => {
+    const transactions = createUndoTransactionController(getTemporal, get, (snapshot, positionVersionBefore) => {
       set(state => ({
         ...snapshot,
-        atomPositionVersion: state.atomPositionVersion + 1,
+        atomPositionVersion: positionVersionBefore + 1,
+      }))
+    }, ({ before, after, positionVersionBefore }) => {
+      // Pointer drags and other long gestures can write coordinates several
+      // times while their undo transaction is paused. Expose one committed
+      // position version for the complete user operation, and zero it back
+      // for a gesture that returned to its starting coordinates.
+      set(() => ({
+        atomPositionVersion: positionVersionBefore + (
+          sceneAtomPositionsChanged(before.objectsById, after.objectsById) ? 1 : 0
+        ),
       }))
     })
 
