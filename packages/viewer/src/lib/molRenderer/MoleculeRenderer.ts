@@ -49,9 +49,10 @@ export class MoleculeRenderer {
     renderStyle: RenderStyle = 'realistic',
     visualState: ObjectVisualState = {},
   ) {
-    if (this.renderStyle !== renderStyle) this.clearStyleDependentMeshes()
+    const profile = resolveRenderProfile(renderStyle)
+    if (this.renderStyle !== renderStyle || this.profile !== profile) this.clearStyleDependentMeshes()
     this.renderStyle = renderStyle
-    this.profile = resolveRenderProfile(renderStyle)
+    this.profile = profile
 
     const atomById = new Map(molecule.atoms.map(atom => [atom.id, atom]))
     this.atomRenderer.render(molecule.atoms, displayMode, selectedAtoms)

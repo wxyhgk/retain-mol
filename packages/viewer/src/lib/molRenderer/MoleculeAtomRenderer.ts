@@ -10,10 +10,13 @@ import {
   makeAtomMaterial,
   syncMaterialColor,
 } from './moleculeStylePrimitives'
+import { resolveMaterialFactory, type MaterialFactory } from './materialFactories'
 import { MoleculeSelectionVisuals } from './moleculeSelectionVisuals'
 
 export class MoleculeAtomRenderer {
   readonly meshes = new Map<string, THREE.Mesh>()
+  private readonly materialKeys = new Map<string, string>()
+  private readonly materialFactories = new Map<string, MaterialFactory>()
   private readonly selectionVisuals: MoleculeSelectionVisuals
 
   constructor(
@@ -33,6 +36,8 @@ export class MoleculeAtomRenderer {
       mesh.geometry.dispose()
       ;(mesh.material as THREE.Material).dispose()
       this.meshes.delete(id)
+      this.materialKeys.delete(id)
+      this.materialFactories.delete(id)
     }
     this.selectionVisuals.removeMissing(existingIds)
     for (const atom of atoms) this.renderAtom(atom, displayMode, selectedAtoms.has(atom.id))
@@ -45,6 +50,8 @@ export class MoleculeAtomRenderer {
       ;(mesh.material as THREE.Material).dispose()
     }
     this.meshes.clear()
+    this.materialKeys.clear()
+    this.materialFactories.clear()
     this.selectionVisuals.clearStyleDependentMeshes()
   }
 
@@ -63,13 +70,29 @@ export class MoleculeAtomRenderer {
       ;(mesh.material as THREE.Material).dispose()
     }
     this.meshes.clear()
+    this.materialKeys.clear()
+    this.materialFactories.clear()
     this.selectionVisuals.dispose()
   }
 
   private renderAtom(atom: Atom, displayMode: DisplayMode, selected: boolean) {
     const profile = this.getProfile()
+    const materialFactory = resolveMaterialFactory(profile.materialModel)
     const color = elementColor(this.getTheme(), atom.symbol)
     const radius = atomDisplayRadius(this.getTheme(), profile, atom.symbol, displayMode)
+    const materialKey = [
+      profile.id,
+      profile.materialModel,
+      displayMode,
+      profile.depthCue.mode,
+      profile.depthCue.fadeWidth ?? '',
+      profile.depthCue.fadeBias ?? '',
+      profile.depthCue.color ?? '',
+      profile.iboviewMaterial?.atom.shaderReg0 ?? '',
+      profile.iboviewMaterial?.atom.shaderReg1 ?? '',
+      profile.iboviewMaterial?.atom.shaderReg2 ?? '',
+      profile.iboviewMaterial?.atom.shaderReg3 ?? '',
+    ].join(':')
     let mesh = this.meshes.get(atom.id)
     if (!mesh) {
       mesh = new THREE.Mesh(
@@ -80,7 +103,21 @@ export class MoleculeAtomRenderer {
       mesh.castShadow = true
       this.modelGroup.add(mesh)
       this.meshes.set(atom.id, mesh)
+      this.materialKeys.set(atom.id, materialKey)
+      this.materialFactories.set(atom.id, materialFactory)
     } else {
+      if (
+        this.materialKeys.get(atom.id) !== materialKey ||
+        this.materialFactories.get(atom.id) !== materialFactory
+      ) {
+        const previousMaterial = mesh.material
+        mesh.material = makeAtomMaterial(profile, color, displayMode)
+        for (const material of Array.isArray(previousMaterial) ? previousMaterial : [previousMaterial]) {
+          material.dispose()
+        }
+        this.materialKeys.set(atom.id, materialKey)
+        this.materialFactories.set(atom.id, materialFactory)
+      }
       const previousRadius = (mesh.geometry as THREE.SphereGeometry).parameters.radius
       if (Math.abs(previousRadius - radius) > 1e-4) {
         mesh.geometry.dispose()
