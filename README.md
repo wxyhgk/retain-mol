@@ -2,7 +2,7 @@
 
 > ⚠️ **测试阶段**:接口、界面与数据格式随时可能变更，请勿用于生产数据。
 
-分子查看 / 编辑平台：2D 草图（Ketcher）↔ 3D 编辑（three.js）同处一个工作区，
+分子查看 / 编辑平台：2D 草图（chem-structura）↔ 3D 编辑（three.js）同处一个工作区，
 附带任务管理、分子资产与工作流能力。
 
 ## 仓库结构（Monorepo）
@@ -23,13 +23,12 @@
 ## 技术栈
 
 Vite · TypeScript · Tailwind CSS · shadcn/ui · three.js · zustand · react-resizable-panels ·
-TanStack Query · Ketcher（2D）· OpenChemLib
+TanStack Query · chem-structura（2D）· OpenChemLib
 
 ## 快速开始
 
-前置要求：Node 20+、npm 10+。Ketcher 相关包已 vendoring 进 `third-party/ketcher`
-（含预构建 `dist`，见该目录 README），无需外部目录；`predev` / `prebuild` 会把它的静态资源拷到
-`apps/retainmol/public/ketcher-dist`（生成物，已忽略，不提交）。
+前置要求：Node 20+、npm 10+。2D 编辑器是 [chem-structura](https://github.com/wxyhgk/structura)（npm 包），
+不需要额外的静态资源。
 
 ```bash
 npm install

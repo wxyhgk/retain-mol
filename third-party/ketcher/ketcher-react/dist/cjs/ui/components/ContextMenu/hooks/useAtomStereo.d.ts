@@ -1,4 +1,0 @@
-import type { AtomContextMenuProps, ItemEventParams } from '../contextMenu.types';
-type Params = ItemEventParams<AtomContextMenuProps>;
-declare const useAtomStereo: () => readonly [({ props }: Params) => Promise<void>, ({ props }: Params) => boolean];
-export default useAtomStereo;

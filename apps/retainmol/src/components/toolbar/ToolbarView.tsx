@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Atom, Command, PanelRight, Save, Search } from 'lucide-react'
+import { Command, PanelRight, Save, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import type { ToolbarModel } from './useToolbarModel'
 import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import { useLocalSaveStore } from '@/domain/localMoleculeSave'
+import { isEmbedded, requestHostSave } from '@/app/embed'
 import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { INSPECTOR_ID, INSPECTOR_TOGGLE_ID } from '@/domain/inspectorStore'
@@ -47,7 +48,9 @@ export function ToolbarView({
       if (isWorkspaceShortcutBlocked(event) || !isMoleculeHistoryTracking()) return
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
-        saveActiveMoleculeToBrowser()
+        // 嵌入模式：分子归宿主页面，由它保存
+        if (isEmbedded()) requestHostSave()
+        else saveActiveMoleculeToBrowser()
         return
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -61,70 +64,56 @@ export function ToolbarView({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <header className="relative z-50 flex h-14 shrink-0 select-none items-center gap-2 border-b border-border bg-card px-4 text-card-foreground shadow-sm">
-        {/* 品牌：仅保留 Logo，分子信息移至画布/状态栏 */}
-        <span className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md border border-primary bg-primary text-primary-foreground">
-            <Atom size={16} />
-          </span>
-          <span className="hidden sm:inline">RetainMol</span>
-        </span>
-
-        {/* 保存：只写浏览器本地（编辑器不做后端保存） */}
-        <div className="flex shrink-0 items-center gap-1">
+      {/* 顶栏已去掉：命令/搜索、检查器开关（单独打开时还有保存）浮在 3D 视图右上角 */}
+      <div className="absolute right-2 top-2 z-30 flex select-none items-center gap-1 rounded-lg border border-border bg-[hsl(var(--card)/0.92)] p-1 text-card-foreground shadow-sm backdrop-blur">
+        {!isEmbedded() && (
           <Tip label="保存到浏览器 (Ctrl+S)" side="bottom">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground"
-              onClick={() => saveActiveMoleculeToBrowser()}
-            >
-              <Save size={14} />
-              <span className="hidden sm:inline">保存</span>
-            </Button>
-          </Tip>
-        </div>
-
-        {/* 右侧：命令面板 + 检查器 */}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <Tip label="命令面板 (⌘K)" side="bottom">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground"
-              ref={paletteTriggerRef}
-              aria-label="命令面板"
-              aria-haspopup="dialog"
-              aria-expanded={paletteOpen}
-              onClick={openPalette}
-            >
-              <Search size={14} />
-              <span className="hidden sm:inline">搜索</span>
-              <kbd className="ml-1 hidden rounded bg-background px-1 py-0.5 font-sans text-xs text-muted-foreground md:inline">⌘K</kbd>
-            </Button>
-          </Tip>
-          <Tip label={showInspector ? '收起检查器' : '展开检查器'} side="bottom">
             <Button
               variant="ghost"
               size="sm"
-              className={cn(
-                'h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium transition-all',
-                showInspector
-                  ? 'bg-primary text-primary-foreground ring-1 ring-primary hover:bg-primary/90'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-              )}
-              id={INSPECTOR_TOGGLE_ID}
-              aria-label="检查器"
-              aria-controls={INSPECTOR_ID}
-              aria-expanded={showInspector}
-              onClick={() => { if (isMoleculeHistoryTracking()) onToggleInspector() }}
+              className="h-7 w-7 rounded-md p-0 text-muted-foreground"
+              aria-label="保存到浏览器"
+              onClick={() => saveActiveMoleculeToBrowser()}
             >
-              <PanelRight size={14} />
-              <span className="hidden sm:inline">检查器</span>
+              <Save size={14} />
             </Button>
           </Tip>
-        </div>
-      </header>
+        )}
+        <Tip label="命令面板与搜索 (⌘K)" side="bottom">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground"
+            ref={paletteTriggerRef}
+            aria-label="命令面板"
+            aria-haspopup="dialog"
+            aria-expanded={paletteOpen}
+            onClick={openPalette}
+          >
+            <Search size={14} />
+            <kbd className="hidden rounded bg-background px-1 py-0.5 font-sans text-[10px] text-muted-foreground md:inline">⌘K</kbd>
+          </Button>
+        </Tip>
+        <Tip label={showInspector ? '收起检查器' : '展开检查器'} side="bottom">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'h-7 w-7 rounded-md p-0 transition-all',
+              showInspector
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            )}
+            id={INSPECTOR_TOGGLE_ID}
+            aria-label="检查器"
+            aria-controls={INSPECTOR_ID}
+            aria-expanded={showInspector}
+            onClick={() => { if (isMoleculeHistoryTracking()) onToggleInspector() }}
+          >
+            <PanelRight size={14} />
+          </Button>
+        </Tip>
+      </div>
 
       <EditorCommandPalette
         onRestoreFocus={() => paletteTriggerRef.current?.focus()}
@@ -216,7 +205,10 @@ function EditorCommandPalette({
           { label: '运动路径与扭曲环带 Demo', opensSurface: true, onRun: () => { window.open('/?demo=geometry-paths', '_blank', 'noopener,noreferrer') } },
           { label: 'PubChem 搜索', opensSurface: true, onRun: onSearchOpen },
           { label: '保存到浏览器 (Ctrl+S)', hint: 'Ctrl+S', disabled: isEmpty, onRun: () => saveActiveMoleculeToBrowser() },
-        ].filter(item => filter(item.label)),
+        ]
+          // 嵌入模式：不存浏览器，也不开演示页
+          .filter(item => !isEmbedded() || !(item.label.includes('Demo') || item.label.startsWith('保存到浏览器')))
+          .filter(item => filter(item.label)),
       },
       {
         title: '视图与主题',

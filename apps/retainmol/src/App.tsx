@@ -24,6 +24,7 @@ import {
   resolveJobEditorRoute,
   resolveWorkflowEditRoute,
 } from '@/app/appRoute'
+import { isEmbedded } from '@/app/embed'
 
 export default function App() {
   const uiTheme = useUiThemeStore(state => state.theme)
@@ -65,8 +66,10 @@ export default function App() {
 
   useAppClipboardShortcuts()
   useAppKeyboardShortcuts()
-  useDirtyBeforeUnload()
-  const crashRecovery = useCrashRecovery()
+  // 嵌入模式不在浏览器里存任何东西：分子归宿主页面
+  const embedded = isEmbedded()
+  useDirtyBeforeUnload(!embedded)
+  const crashRecovery = useCrashRecovery(!embedded)
   const offerTime = new Date(crashRecovery.offer?.savedAt ?? '').getTime()
   const snapshotTime = Number.isNaN(offerTime) ? '未知时间' : new Date(offerTime).toLocaleString()
   const workflowEditSession = resolveWorkflowEditRoute(location.search)
@@ -105,7 +108,7 @@ export default function App() {
 type RecoveryOffer = LocalMoleculeRecord & { kind: 'crash' | 'save' }
 
 /** 脏检查：画布非空且与浏览器显式保存不一致（无后端）。 */
-function useDirtyBeforeUnload() {
+function useDirtyBeforeUnload(enabled: boolean) {
   const molecule = useMoleculeStore(state => (
     state.activeObjectId ? state.objectsById[state.activeObjectId]?.molecule ?? null : null
   ))
@@ -116,13 +119,14 @@ function useDirtyBeforeUnload() {
     dirtyRef.current = dirty
   }, [dirty])
   useEffect(() => {
+    if (!enabled) return
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!dirtyRef.current) return
       event.preventDefault()
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [])
+  }, [enabled])
 }
 
 /**
@@ -131,8 +135,9 @@ function useDirtyBeforeUnload() {
  */
 const CRASH_SNAPSHOT_DEBOUNCE_MS = 2000
 
-function useCrashRecovery() {
+function useCrashRecovery(enabled: boolean) {
   const [offer, setOffer] = useState<RecoveryOffer | null>(() => {
+    if (!enabled) return null
     const current = useMoleculeStore.getState()
     const active = current.activeObjectId
       ? current.objectsById[current.activeObjectId]?.molecule ?? null
@@ -165,7 +170,7 @@ function useCrashRecovery() {
   ))
   const savedCanonical = useLocalSaveStore(state => state.savedCanonical)
   useEffect(() => {
-    if (offer) return
+    if (!enabled || offer) return
     if (!activeObjectId || !molecule) return
     if (!isDirtyVsSave(molecule, savedCanonical)) {
       removeCrashSnapshot()
@@ -175,7 +180,7 @@ function useCrashRecovery() {
       writeCrashSnapshot(molecule)
     }, CRASH_SNAPSHOT_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [offer, activeObjectId, molecule, savedCanonical])
+  }, [enabled, offer, activeObjectId, molecule, savedCanonical])
   const restore = useCallback(() => {
     if (!offer) return
     editorHostPort.replaceActiveMolecule(offer.molecule)

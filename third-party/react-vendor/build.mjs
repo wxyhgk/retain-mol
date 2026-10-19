@@ -36,9 +36,6 @@ const ENTRIES = {
   'react-jsx-runtime.mjs': ['react/cjs/react-jsx-runtime.development.js', { react: 'react' }],
   'react-jsx-dev-runtime.mjs': ['react/cjs/react-jsx-dev-runtime.development.js', { react: 'react' }],
   'scheduler.mjs': ['scheduler/cjs/scheduler.development.js', {}],
-  // CJS transitive dep of the (excluded, source-served) ketcher/codemirror chain:
-  // served raw to the browser it exposes no named exports; same treatment.
-  'subscription.mjs': ['subscription/index.js', {}],
 }
 
 for (const [out, [src, siblings]] of Object.entries(ENTRIES)) {

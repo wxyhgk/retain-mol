@@ -9,16 +9,12 @@ consume raw. Regenerate with `node third-party/react-vendor/build.mjs`
 Two independent gaps, same symptom (named import resolves to `undefined`
 or `SyntaxError: ... does not provide an export named ...`):
 
-1. **React family** (`react`, `react-dom`, `react-dom/client`,
+**React family** (`react`, `react-dom`, `react-dom/client`,
    `react/jsx-runtime`, `react/jsx-dev-runtime`): the dev CJS hides every
    `exports.X =` inside `"production" !== process.env.NODE_ENV &&
    (function(){...})()`, opaque to static analysis. The dev optimizer
    therefore emits default-only output; `StrictMode` etc. come back
    `undefined` and React unmounts the whole tree silently.
-2. **CJS transitive deps of excluded, source-served chains**
-   (`subscription`, via ketcher → codemirror): when the importer lives in
-   `node_modules`, the optimizer skips the import and serves the raw CJS
-   file as ESM, which exposes no named exports.
 
 ## How the wrappers work
 
