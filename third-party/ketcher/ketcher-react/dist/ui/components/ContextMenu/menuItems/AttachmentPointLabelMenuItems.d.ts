@@ -1,3 +1,0 @@
-import type { AttachmentPointLabelContextMenuProps, MenuItemsProps } from '../contextMenu.types';
-declare const AttachmentPointLabelMenuItems: ({ propsFromTrigger, }: MenuItemsProps<AttachmentPointLabelContextMenuProps>) => import("react").JSX.Element | null;
-export default AttachmentPointLabelMenuItems;

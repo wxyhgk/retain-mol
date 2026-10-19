@@ -1,7 +1,0 @@
-import type { FunctionalGroupsContextMenuProps, ItemEventParams } from '../contextMenu.types';
-type Params = ItemEventParams<FunctionalGroupsContextMenuProps>;
-/**
- * Fullname: useFunctionalGroupExpandOrContract
- */
-declare const useFunctionalGroupEoc: () => readonly [({ props }: Params, toExpand: boolean) => void, ({ props }: Params, toExpand: boolean) => boolean];
-export default useFunctionalGroupEoc;

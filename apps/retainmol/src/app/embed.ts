@@ -125,7 +125,7 @@ export function connectEmbed(options: EmbedOptions): void {
         if (!molecule.atoms.length) throw new Error('结构里没有原子')
         await placeMoleculeInViewer(molecule, { mode: 'replace' })
         if (!report) known = editorHostPort.getSnapshot().activeMolecule
-        // The 2D sketch follows what was loaded (KetcherPanel listens).
+        // The 2D editor follows what was loaded (StructuraPanel listens).
         window.dispatchEvent(new CustomEvent('retainmol:push-to-2d'))
         post({ type: 'loaded', atoms: molecule.atoms.length })
       } catch (error) {

@@ -1,4 +1,0 @@
-import type { FunctionalGroupsContextMenuProps, ItemEventParams } from '../contextMenu.types';
-type Params = ItemEventParams<FunctionalGroupsContextMenuProps>;
-declare const useFunctionalGroupRemove: () => ({ props }: Params) => void;
-export default useFunctionalGroupRemove;

@@ -16,7 +16,7 @@ import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import { WorkflowJobEditSession } from '@/features/workflow-job-edit'
 import { useViewportStore } from '@/domain/viewer/viewportStore'
 
-const KetcherPanel = lazy(() => import('@/features/ketcher').then(m => ({ default: m.KetcherPanel })))
+const StructuraPanel = lazy(() => import('@/features/structura').then(m => ({ default: m.StructuraPanel })))
 
 function ResizeHandle({ label }: { label: string }) {
   return (
@@ -47,12 +47,6 @@ export function AppShellView({
       className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground"
       data-canvas-interacting={canvasFocus.interacting ? 'true' : 'false'}
     >
-      <Toolbar
-        showInspector={inspector.open}
-        onToggleInspector={inspector.toggle}
-        onOpenTemplateStudio={onOpenTemplateStudio}
-        onSearchOpen={onOpenSearch}
-      />
       {searchOpen && <PubChemSearch onClose={onCloseSearch} />}
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden bg-background">
@@ -62,7 +56,7 @@ export function AppShellView({
               <Panel id="editor-2d" order={1} defaultSize={48} minSize={25} className="min-h-0 min-w-0 overflow-hidden border-r border-border bg-white">
                 <div data-shortcuts="local" className="h-full">
                   <Suspense fallback={<div className="grid h-full place-items-center text-xs text-muted-foreground">加载 2D 编辑器…</div>}>
-                    <KetcherPanel />
+                    <StructuraPanel />
                   </Suspense>
                 </div>
               </Panel>
@@ -80,6 +74,13 @@ export function AppShellView({
                   <BusyOverlay />
                   <ViewportToolbar />
                   <StatusBar />
+                  {/* 原顶栏：命令/搜索与检查器开关，浮在 3D 视图右上角 */}
+                  <Toolbar
+                    showInspector={inspector.open}
+                    onToggleInspector={inspector.toggle}
+                    onOpenTemplateStudio={onOpenTemplateStudio}
+                    onSearchOpen={onOpenSearch}
+                  />
                 </div>
               </Panel>
             </PanelGroup>
