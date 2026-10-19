@@ -1,5 +1,9 @@
 import { perceiveAtomChirality } from '../../../stereo/perception'
 import type { Molecule } from '../../../molecule'
+import {
+  validateFormalCharge,
+  validateRadicalElectronCount,
+} from '../../../chemistry/policies/atomPolicy'
 import { clearChirality, flipChirality, flipChiralityAvailability, resaturateAtom, setChirality, type FlipChiralityAvailability } from '../../editing/atomOps'
 import { editMolecule, editFailed, editUnchanged, type EditCommandResult } from '../shared'
 
@@ -18,7 +22,8 @@ export function runSetAtomChargeCommand(
   atomId: string,
   charge: number,
 ): EditCommandResult {
-  if (!Number.isInteger(charge)) return editFailed('形式电荷必须是整数')
+  const validation = validateFormalCharge(charge)
+  if (validation.ok === false) return editFailed(validation.reason)
   const target = molecule.atoms.find(atom => atom.id === atomId)
   if (!target || (target.charge ?? 0) === charge) return editUnchanged()
   const withCharge: Molecule = {
@@ -34,7 +39,8 @@ export function runSetAtomRadicalCommand(
   atomId: string,
   radical: number,
 ): EditCommandResult {
-  if (!Number.isInteger(radical) || radical < 0) return editFailed('自由基电子数必须是非负整数')
+  const validation = validateRadicalElectronCount(radical)
+  if (validation.ok === false) return editFailed(validation.reason)
   const target = molecule.atoms.find(atom => atom.id === atomId)
   if (!target || (target.radical ?? 0) === radical) return editUnchanged()
   const withRadical: Molecule = {
@@ -87,7 +93,8 @@ export function runSetAtomChargesCommand(
   atomIds: readonly string[],
   charge: number,
 ): EditCommandResult {
-  if (!Number.isInteger(charge)) return editFailed('形式电荷必须是整数')
+  const validation = validateFormalCharge(charge)
+  if (validation.ok === false) return editFailed(validation.reason)
   let next = molecule
   for (const atomId of atomIds) {
     const target = next.atoms.find(atom => atom.id === atomId)

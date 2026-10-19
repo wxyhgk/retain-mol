@@ -98,7 +98,11 @@ describe('fragment fusion store adapter', () => {
       getMolecule: () => current,
       commit: () => {
         current = molecule([...current.atoms, atom('concurrent')], current.bonds)
-        return false
+        return {
+          ok: false,
+          code: 'concurrent-store-change',
+          reason: 'simulated concurrent change',
+        }
       },
     })
     const preview = controller.preview({

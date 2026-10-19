@@ -60,6 +60,7 @@ export interface FragmentFusionRequest {
   readonly fragment: Molecule
   readonly anchors: readonly BondFusionAnchor[]
   readonly reconcileHydrogens?: boolean
+  readonly reservedEntityIds?: readonly string[]
 }
 
 export interface FragmentFusionCandidate extends ChemicalRewriteSuccess {

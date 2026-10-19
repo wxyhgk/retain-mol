@@ -59,6 +59,8 @@ export type SelectedBondFragmentFusionCommitResult =
   | FragmentFusionStoreCommitResult
   | SelectedBondFragmentFusionFailure
 
+const FRAGMENT_FUSION_TRANSACTION_OWNER = 'fragment-fusion'
+
 const addedEntityIds = (
   host: Molecule,
   candidate: FragmentFusionCandidate,
@@ -93,15 +95,32 @@ const createActiveObjectController = (store: MoleculeStoreApi) =>
   createFragmentFusionStoreController({
     getMolecule: () => getActiveMol(store.getState()) ?? { atoms: [], bonds: [] },
     commit: (transaction) => {
-      const state = store.getState()
-      const current = getActiveMol(state)
-      if (!current || chemicalCommandStateKey(current) !== transaction.expectedStateKey) {
-        return false
+      let operationStarted = false
+      try {
+        return store.getState().runTransaction(FRAGMENT_FUSION_TRANSACTION_OWNER, () => {
+          operationStarted = true
+          const state = store.getState()
+          const current = getActiveMol(state)
+          if (!current || chemicalCommandStateKey(current) !== transaction.expectedStateKey) {
+            return {
+              ok: false,
+              code: 'concurrent-store-change',
+              reason: 'molecule changed while the fusion transaction was committing',
+            }
+          }
+          state.commitEditResult(editChanged(reconcileAtomChirality(transaction.molecule)), {
+            selectionPolicy: 'clear',
+          })
+          return { ok: true }
+        })
+      } catch (error) {
+        if (operationStarted) throw error
+        return {
+          ok: false,
+          code: 'transaction-conflict',
+          reason: error instanceof Error ? error.message : 'another edit transaction is active',
+        }
       }
-      state.commitEditResult(editChanged(reconcileAtomChirality(transaction.molecule)), {
-        selectionPolicy: 'clear',
-      })
-      return true
     },
   })
 
@@ -142,6 +161,7 @@ export function previewSelectedBondFragmentFusion(
         hostBondId,
         fragmentBondId: fragmentBondIds[index] as string,
       })),
+      reservedEntityIds: [...outsideIds],
       ...(input.reconcileHydrogens !== undefined
         ? { reconcileHydrogens: input.reconcileHydrogens }
         : {}),

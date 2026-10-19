@@ -91,7 +91,7 @@ export interface SelectedBondFragmentFusionFailure {
 }
 
 // @public (undocumented)
-export type SelectedBondFragmentFusionFailureCode = 'no-editable-active-molecule' | 'requires-two-selected-bonds' | 'selection-changed' | 'target-object-changed' | 'candidate-not-found' | 'stale-host' | 'candidate-no-longer-valid' | 'concurrent-store-change';
+export type SelectedBondFragmentFusionFailureCode = 'no-editable-active-molecule' | 'requires-two-selected-bonds' | 'selection-changed' | 'target-object-changed' | 'candidate-not-found' | 'stale-host' | 'candidate-no-longer-valid' | 'concurrent-store-change' | 'transaction-conflict';
 
 // @public (undocumented)
 export interface SelectedBondFragmentFusionPreview {

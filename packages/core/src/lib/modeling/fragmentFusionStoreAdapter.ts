@@ -18,9 +18,26 @@ export interface MoleculeTransaction {
   readonly effect: FragmentFusionEffect
 }
 
+export interface ConcurrentStoreChangeFailure {
+  readonly ok: false
+  readonly code: 'concurrent-store-change'
+  readonly reason: string
+}
+
+export interface TransactionConflictFailure {
+  readonly ok: false
+  readonly code: 'transaction-conflict'
+  readonly reason: string
+}
+
+export type MoleculeTransactionCommitResult =
+  | { readonly ok: true }
+  | ConcurrentStoreChangeFailure
+  | TransactionConflictFailure
+
 export interface MoleculeTransactionPort {
   getMolecule(): Molecule
-  commit(transaction: MoleculeTransaction): boolean
+  commit(transaction: MoleculeTransaction): MoleculeTransactionCommitResult
 }
 
 export interface ZustandStoreApi<State> {
@@ -50,8 +67,15 @@ export const createZustandMoleculeTransactionPort = <State>(
       committed = true
       return options.replaceMolecule(state, transaction.molecule)
     })
-    if (committed) options.onCommitted?.(transaction)
-    return committed
+    if (!committed) {
+      return {
+        ok: false,
+        code: 'concurrent-store-change',
+        reason: 'molecule changed while the fusion transaction was committing',
+      }
+    }
+    options.onCommitted?.(transaction)
+    return { ok: true }
   },
 })
 
@@ -59,17 +83,13 @@ export interface FragmentFusionPreviewInput {
   readonly fragment: Molecule
   readonly anchors: readonly BondFusionAnchor[]
   readonly reconcileHydrogens?: boolean
-}
-
-export interface ConcurrentStoreChangeFailure {
-  readonly ok: false
-  readonly code: 'concurrent-store-change'
-  readonly reason: string
+  readonly reservedEntityIds?: readonly string[]
 }
 
 export type FragmentFusionStoreCommitResult =
   | FragmentFusionCommitResult
   | ConcurrentStoreChangeFailure
+  | TransactionConflictFailure
 
 export interface FragmentFusionStoreController {
   preview(input: FragmentFusionPreviewInput): PreparedFragmentFusionCommand
@@ -89,6 +109,9 @@ export const createFragmentFusionStoreController = (
     ...(input.reconcileHydrogens !== undefined
       ? { reconcileHydrogens: input.reconcileHydrogens }
       : {}),
+    ...(input.reservedEntityIds !== undefined
+      ? { reservedEntityIds: input.reservedEntityIds }
+      : {}),
   }),
   commit: (prepared, selectedTopologyKey) => {
     const current = transactions.getMolecule()
@@ -100,13 +123,7 @@ export const createFragmentFusionStoreController = (
       molecule: result.molecule,
       effect: result.effect,
     })
-    if (!committed) {
-      return {
-        ok: false,
-        code: 'concurrent-store-change',
-        reason: 'molecule changed while the fusion transaction was committing',
-      }
-    }
+    if (committed.ok === false) return committed
     return result
   },
 })

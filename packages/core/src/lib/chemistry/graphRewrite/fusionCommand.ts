@@ -55,6 +55,64 @@ const cloneMolecule = (molecule: Molecule): Molecule => ({
   bonds: molecule.bonds.map((bond) => ({ ...bond })),
 })
 
+const reserveEntityId = (id: string, reserved: Set<string>): string => {
+  if (!reserved.has(id)) {
+    reserved.add(id)
+    return id
+  }
+  let suffix = 1
+  while (reserved.has(`${id}~${suffix}`)) suffix += 1
+  const rebased = `${id}~${suffix}`
+  reserved.add(rebased)
+  return rebased
+}
+
+const rebaseFragmentEntityIds = (
+  host: Molecule,
+  fragment: Molecule,
+  anchors: readonly BondFusionAnchor[],
+  reservedEntityIds: readonly string[],
+): { readonly fragment: Molecule; readonly anchors: readonly BondFusionAnchor[] } => {
+  const reserved = new Set([
+    ...host.atoms.map((atom) => atom.id),
+    ...host.bonds.map((bond) => bond.id),
+    ...reservedEntityIds,
+  ])
+  const atomIds = new Map(
+    fragment.atoms.map((atom) => [atom.id, reserveEntityId(atom.id, reserved)]),
+  )
+  const bondIds = new Map(
+    fragment.bonds.map((bond) => [bond.id, reserveEntityId(bond.id, reserved)]),
+  )
+  return {
+    fragment: {
+      ...fragment,
+      atoms: fragment.atoms.map((atom) => ({
+        ...atom,
+        id: atomIds.get(atom.id) ?? atom.id,
+      })),
+      bonds: fragment.bonds.map((bond) => ({
+        ...bond,
+        id: bondIds.get(bond.id) ?? bond.id,
+        atomId1: atomIds.get(bond.atomId1) ?? bond.atomId1,
+        atomId2: atomIds.get(bond.atomId2) ?? bond.atomId2,
+        ...(bond.coordinationSites === undefined
+          ? {}
+          : {
+              coordinationSites: bond.coordinationSites.map((site) => ({
+                ...site,
+                atomId: atomIds.get(site.atomId) ?? site.atomId,
+              })),
+            }),
+      })),
+    },
+    anchors: anchors.map((anchor) => ({
+      ...anchor,
+      fragmentBondId: bondIds.get(anchor.fragmentBondId) ?? anchor.fragmentBondId,
+    })),
+  }
+}
+
 const stableValue = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(stableValue)
   if (value && typeof value === 'object') {
@@ -108,8 +166,14 @@ const topologyEffect = (before: Molecule, after: Molecule): FragmentFusionEffect
 export const prepareFragmentFusionCommand = (
   request: FragmentFusionRequest,
 ): PreparedFragmentFusionCommand => {
-  const fragment = cloneMolecule(request.fragment)
-  const anchors = request.anchors.map((anchor) => ({ ...anchor }))
+  const rebased = rebaseFragmentEntityIds(
+    request.host,
+    cloneMolecule(request.fragment),
+    request.anchors,
+    request.reservedEntityIds ?? [],
+  )
+  const fragment = rebased.fragment
+  const anchors = rebased.anchors
   const reconcileHydrogens = request.reconcileHydrogens !== false
   const plan = planFragmentFusionAcrossBonds({
     host: request.host,
