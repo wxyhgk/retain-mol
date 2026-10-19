@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Atom, LoaderCircle, X } from 'lucide-react'
 import { Button } from '@retainmol/ui-kit'
-import type { EditorHostPort } from '@retainmol/mol-viewer/core'
+import type { EditorHostPort } from '@retainmol/core'
 import {
   loadMoleculeRevisionForEditor,
   moleculeAssetsApi,

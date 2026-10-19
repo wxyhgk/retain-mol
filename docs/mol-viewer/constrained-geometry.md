@@ -6,7 +6,7 @@
 
 连接关系沿用现有 `Molecule` 和稳定原子 ID；`ConstrainedGeometryRequest` 独立表达几何要求；结果中的 `molecule` 和 `report` 分别表示坐标与诊断。没有新增 npm 包。
 
-`@retainmol/mol-viewer/geometry` 和 `/headless` 都提供：
+`@retainmol/core/geometry` 和 `/headless` 都提供：
 
 - `validateGeometryConstraints(molecule, constraints)`：纯只读校验；返回每条约束的实际值、单位、超出容差的误差、涉及原子和诊断。
 - `solveConstrainedGeometry(molecule, request)`：有迭代上限的确定性局部求解；只改变 `movableAtomIds` 中的坐标，其余原子精确固定。
@@ -18,7 +18,7 @@
 import {
   createHeadlessModelingContext,
   previewConstrainedGeometry,
-} from '@retainmol/mol-viewer/headless'
+} from '@retainmol/core/headless'
 
 const context = createHeadlessModelingContext(molecule)
 const target = context.objects[0]!

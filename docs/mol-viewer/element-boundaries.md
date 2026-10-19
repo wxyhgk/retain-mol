@@ -4,7 +4,7 @@
 
 ## 元素字段归属
 
-| 文件（相对 `packages/mol-viewer/src`） | 内容 | 典型消费者 |
+| 文件（相对 `packages/core/src` 或 `packages/viewer/src`，两包保持同一相对布局） | 内容 | 典型消费者 |
 | --- | --- | --- |
 | `lib/model/elements.ts` | symbol、名称、原子序数、原子质量、共价/CPK 参考半径、分类 | 分子量、工厂、碰撞/键长计算、渲染半径 |
 | `lib/chemistry/policies/elementDefaults.ts` | 价电子参数、最大成键数、补氢默认价态、默认杂化、`effectiveMaxBonds` | 价态检查、补氢、VSEPR 与编辑命令 |

@@ -5,7 +5,7 @@
  * importScripts 加载最省事（Vite 的 type:'module' worker 不支持 importScripts）。
  * 放 public 不经打包，避免 Vite 对 UMD glue 的处理冲突。
  *
- * OpenBabel 本体是 GPL —— 只在 app 层（private）使用，不进 mol-viewer 公开包。
+ * OpenBabel 本体是 GPL —— 只在 app 层（private）使用，不进 core / viewer 公开包。
  *
  * 消息协议：
  *   in : { id, sdf, forcefield?='UFF', steps?=300, tolerance?=1e-4 }

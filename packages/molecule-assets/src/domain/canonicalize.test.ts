@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   canonicalizeMolecule,

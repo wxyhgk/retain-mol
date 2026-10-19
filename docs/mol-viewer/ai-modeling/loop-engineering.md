@@ -31,7 +31,7 @@ flowchart LR
 
 | 层 | 职责 | 禁止事项 |
 | --- | --- | --- |
-| `mol-viewer/modeling` | 一次 EditPlan 的 schema、dry-run、约束和原子提交 | provider、重试、xTB、评分 |
+| `@retainmol/viewer/modeling` | 一次 EditPlan 的 schema、dry-run、约束和原子提交 | provider、重试、xTB、评分 |
 | `software/backend` | xTB 执行、固定原子和轨迹流 | 读取 viewer store、决定建模策略 |
 | `tools/ai_modeling_loop` | 任务隔离、参考生成、评分、运行记录 | UI 业务、修改化学编辑规则 |
 | 建模 subagent | 根据公开任务生成可重放 EditPlan | 直接写候选 SDF、调用 RDKit 绕过编辑 API、读取隐藏参考 |
@@ -47,7 +47,7 @@ tools/ai_modeling_loop/
   contracts.py     # case 协议
   chemistry.py     # ETKDG 和 xTB adapter
   workspace.py     # 公开任务与隐藏参考
-  retainmol_executor.mjs # 只通过 mol-viewer 重放计划并导出 SDF
+  retainmol_executor.mjs # 只通过 @retainmol/viewer/modeling 重放计划并导出 SDF
   region_proposal.py # 动态化学区域提案与外部校验
   region_tree.py     # 递归裁剪、端口继承与叶图编译
   evaluator.py     # 图同构和几何指标
@@ -192,7 +192,7 @@ subagent 不再提交 `candidate.sdf` 或 `candidate.json`。执行器读取公�
 工作目录不会误写真实历史。
 
 `prepare-references` 默认使用 RDKit ETKDGv3 产生距离几何初始构象，再用
-`retainmol-backend` 环境中的 GFN2-xTB 精修。最后通过 `@retainmol/mol-viewer/io`
+`retainmol-backend` 环境中的 GFN2-xTB 精修。最后通过 `@retainmol/core/io`
 重新导出单一 `reference.sdf`，在一个文件中保存坐标、元素、键和键级。原始二维 SDF
 只参与准备阶段，不进入后续 blind loop。B/N 原子传给 xTB `$fix`；若 xTB 固定原子
 仍漂移，loop 会刚体投影并精确复位锚点，同时记录投影前 RMSD。

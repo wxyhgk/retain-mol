@@ -1,8 +1,17 @@
-# mol-viewer 包结构说明
+# core / viewer 包结构说明
 
-`packages/mol-viewer` 是 RetainMol 的可复用分子查看和建模核心包。它负责分子数据结构、编辑规则、viewer 状态、Three.js 渲染、样式预设、导入导出工具，以及 App 层使用的公开 API。
+RetainMol 的可复用分子能力拆成两个可独立发布的包，二者保持同一套源码相对布局（`src/lib/...`、`src/public/...`）：
 
-App 层应该把它当成一个独立的分子引擎使用。App 代码应优先通过 `@retainmol/mol-viewer/*` 公开子路径导入，不要直接深挖包内部实现。
+| 包 | 目录 | 职责 | 运行时外部依赖 |
+| --- | --- | --- | --- |
+| `@retainmol/core` | `packages/core` | 分子数据结构、编辑规则（builder command）、IO、几何、图查询、无界面建模 | 仅 OpenChemLib、Zod |
+| `@retainmol/viewer` | `packages/viewer` | `MolViewer` 组件、viewer 状态与 runtime、Three.js 渲染、样式预设、交互手势 | `@retainmol/core`（精确同版本）、React/Three（peer）、Zustand 等 |
+
+依赖方向固定为 viewer → core。core 不得依赖 React、Three.js、Zustand 或 viewer，由 `packages/core/scripts/check-boundaries.mjs`（源码含类型导入）、`check-dist.mjs`（产物）和 `test-pack-consumer.mjs`（真实安装后禁用 UI 依赖加载）三重把关。
+
+App 层应该把它们当成独立的分子引擎使用。App 代码应优先通过 `@retainmol/core[/*]`、`@retainmol/viewer/*` 公开入口导入，不要直接深挖包内部实现。
+
+core 额外导出 `@retainmol/core/internal/*`（逐文件产物路径），**只供 `@retainmol/viewer` 使用**，不承诺稳定；viewer 因此精确锁定同版本 core，两包同步发版。viewer 的公共 API 签名不得引用 internal 路径（`api:check` 检查）。
 
 基础字段支持、复制与保存规则见[基础字段与保真边界](./field-fidelity.md)。
 基础模型、图查询、显示契约的归属及自动检查见[包内基础边界](../architecture/mol-viewer-internal-boundaries.md)。
@@ -11,86 +20,101 @@ App 层应该把它当成一个独立的分子引擎使用。App 代码应优先
 Node、后端与浏览器共用的纯编辑入口见[无界面的分子编辑 API](./headless-api.md)。
 
 外部项目可从[独立宿主接入](./consumer-integration.md)与
-[可运行示例](../../examples/mol-viewer-consumer/README.md)开始；示例安装实际 tarball，
+[可运行示例](../../examples/viewer-consumer/README.md)开始；示例安装实际 tarball，
 覆盖编辑、手性、历史和 MOL 往返，并单独记录真实浏览器验收状态。
 
-多人并行开发前先阅读 `docs/architecture/collaboration-audit-2026-07-13.md`，其中列出了可并行 owner 区域、必须协调的共享热点和剩余 P1 风险。
+多人并行开发前先阅读 `docs/architecture/collaboration-audit-2026-07-13.md`，其中列出了可并行 owner 区域、必须协调的共享热点和剩余 P1 风险（该审计早于拆包，路径以拆包前为准）。
 
 ## 目录总览
 
 ```text
-packages/mol-viewer/src
-├── application/    无 UI/store 依赖的编辑会话编排
-├── components/     包内 viewer 使用的 React 组件
-├── config/         camera、render、bonding、geometry、tool 等共享配置
-├── hooks/          把 React 事件连接到 builder command 和 store action 的 hooks
-├── lib/            核心算法、分子工具、IO、renderer 内部实现
+packages/core/src
+├── config/         bonding、geometry、elements 等纯数据配置
+├── lib/
 │   ├── model/      分子类型、ID、结构校验、元素参考数据；不依赖编辑器或显示
-│   ├── chemistry/  元素编辑默认策略和原子/键规则
+│   ├── chemistry/  元素编辑默认策略、原子/键规则、图重写
 │   ├── graph/      邻居、键、连通片段查询；Builder 与 IO 共用
+│   ├── builder/    builder command（atom/bond/fragment/geometry/scene/selection/clipboard/shared）、片段库、几何算法
+│   ├── geometry/   测量、约束求解、路径与环带
+│   ├── io/         MOL/SDF/XYZ/GJF/JSON 解析导出、力场
 │   ├── presentation/ 显示、工具、测量和预览契约，默认元素色与周期表排列
 │   ├── clipboard.ts 可序列化片段剪贴板数据
 │   └── modeling/   AI/协作客户端使用的建模协议、校验与 dry-run 执行器
+├── public/         core 公开入口（core/io/geometry/graph/headless/fragments/coordination/templates/samples/pubchem）
+└── optimize.ts     独立优化入口（无 DOM，供 Worker）
+
+packages/viewer/src
+├── application/    编辑会话编排（不依赖 store/React）
+├── components/     MolViewer 等 React 组件
+├── config/         camera、render、overlay、gizmo、tool capability 配置
+├── hooks/          把 React 事件连接到 builder command 和 store action 的 hooks
+├── lib/
+│   ├── builder/commands/interaction/ 指针手势到 builder command 的决策路由
+│   ├── interaction/、animation/、controls/
+│   └── molRenderer/ Three.js renderer 内部实现
 ├── presets/        theme schema、内置主题、运行时主题注册表
-├── public/         推荐给外部使用的窄 API 子入口
+├── public/         viewer 公开入口（viewer/runtime/state/editing/modeling/styles/three/picking）
 ├── runtime/        实例生命周期、store 适配、viewer 提交与 React provider
 ├── store/          molecule scene state 和 editor state
 ├── styles/         style preset 和 render profile 注册体系
 ├── capture.ts      视口截图桥接
-├── index.ts        兼容旧用法的根导出
-└── optimize.ts     独立优化入口
+└── index.ts        兼容旧用法的根导出
 ```
 
 ## 公开 API
 
-App 层和外部集成优先使用这些子路径：
+App 层和外部集成优先使用这些入口：
 
 ```ts
-import { MolViewer } from '@retainmol/mol-viewer/viewer'
-import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
-import { useMoleculeStore } from '@retainmol/mol-viewer/state'
-import { getModelingContext, commitEditPlan } from '@retainmol/mol-viewer/modeling'
-import { newAtom, centerMolecule } from '@retainmol/mol-viewer/core'
-import { parseMol, exportSdf } from '@retainmol/mol-viewer/io'
-import { listFragments } from '@retainmol/mol-viewer/fragments'
-import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles'
+import { MolViewer } from '@retainmol/viewer/viewer'
+import { createViewerRuntime, getViewerApi } from '@retainmol/viewer/runtime'
+import { useMoleculeStore } from '@retainmol/viewer/state'
+import { getModelingContext, commitEditPlan } from '@retainmol/viewer/modeling'
+import { newAtom, centerMolecule } from '@retainmol/core'
+import { parseMol, exportSdf } from '@retainmol/core/io'
+import { listFragments } from '@retainmol/core/fragments'
+import { registerStylePreset, registerTheme } from '@retainmol/viewer/styles'
 ```
 
-当前公开入口：
+`@retainmol/core` 入口（`packages/core/src`）：
 
-- `src/public/core.ts`：分子类型、分子工具、scene object helper、元素配置。
-- `src/public/viewer.ts`：`MolViewer`、截图和窄视口命令；现存 `useViewportStore` 属于待迁移的兼容出口，新代码从 `/state` 获取可变状态。
-- `src/public/runtime.ts`：viewer 生命周期句柄、provider 与[实例级基础 API](./instance-api.md)；支持快照、编辑、选择、历史、显示和视口命令，不暴露内部 store/services。
-- `src/public/state.ts`：显式的 molecule/editor mutable store 入口。
-- `src/public/editing.ts`：窄化的坐标写入事务，不导出 `useBuilder`。
-- `src/public/modeling.ts`：只读建模上下文、严格 `EditPlan` 协议、dry-run 和单事务提交入口。
-- `src/public/headless.ts`：纯上下文、计划校验与回放，Node 使用时不加载 React/store；旧 `/modeling` 的纯函数出口仍兼容。
-- `src/public/geometry.ts`：测量、几何约束校验/局部求解、路径方向、连续线性碰撞检查、环带区域/guide 与当前兼容的图拓扑查询；见[受约束几何编辑](constrained-geometry.md)、[路径与环带基础能力](geometry-paths.md)。
-- `src/public/graph.ts`：分子图连通片段和连通分量查询。
-- `src/public/io.ts`：MOL/SDF/XYZ/GJF 解析导出、几何松弛 API。
-- `src/public/fragments.ts`：片段列表和查询。
-- `src/public/styles.ts`：theme、style preset、render profile 注册和解析。
-- `src/public/three.ts`：显式依赖 Three.js 的材质工厂扩展点。
-- `src/public/samples.ts`：内置示例分子。
-- `src/public/pubchem.ts`：PubChem 查询。
-- `src/optimize.ts`：给 worker 或 App 工作流使用的优化入口。
+- `public/core.ts`（`@retainmol/core`）：分子类型、分子工具、scene object helper、元素配置、`EditCommandResult`。
+- `public/headless.ts`：纯上下文、计划校验与回放，Node 使用时不加载 React/store；viewer 的 `/modeling` 整体转发它并追加 runtime 绑定。
+- `public/geometry.ts`：测量、几何约束校验/局部求解、路径方向、连续线性碰撞检查、环带区域/guide、键对齐与键对 gizmo 契约类型；见[受约束几何编辑](constrained-geometry.md)、[路径与环带基础能力](geometry-paths.md)。
+- `public/graph.ts`：分子图连通片段和连通分量查询。
+- `public/io.ts`：MOL/SDF/XYZ/GJF 解析导出、几何松弛 API。
+- `public/fragments.ts`、`public/templates.ts`、`public/coordination.ts`：片段、模板、配位构型。
+- `public/samples.ts`：内置示例分子。
+- `public/pubchem.ts`：PubChem 查询。
+- `optimize.ts`（`@retainmol/core/optimize`）：给 worker 或 App 工作流使用的优化入口。
 
-`src/index.ts` 仍然保留用于兼容旧导入方式，但新 App 代码和新文档都应该使用子路径。
+`@retainmol/viewer` 入口（`packages/viewer/src`）：
+
+- `public/viewer.ts`：`MolViewer`、截图和窄视口命令；现存 `useViewportStore` 属于待迁移的兼容出口，新代码从 `/state` 获取可变状态。
+- `public/runtime.ts`：viewer 生命周期句柄、provider 与[实例级基础 API](./instance-api.md)；支持快照、编辑、选择、历史、显示和视口命令，不暴露内部 store/services。
+- `public/state.ts`：显式的 molecule/editor mutable store 入口。
+- `public/editing.ts`：窄化的坐标写入事务，不导出 `useBuilder`。
+- `public/modeling.ts`：只读建模上下文、严格 `EditPlan` 协议、dry-run 和单事务提交入口。
+- `public/styles.ts`：theme、style preset、render profile 注册和解析。
+- `public/three.ts`：显式依赖 Three.js 的材质工厂扩展点。
+- `public/picking.ts`：拾取加速。
+
+`packages/viewer/src/index.ts` 仍然保留用于兼容旧导入方式，但新 App 代码和新文档都应该使用子路径。
 
 ### 多人协作时如何选入口
 
 | 需求 | 使用入口 | 不要做 |
 | --- | --- | --- |
-| 展示分子、适配视口、截图 | `/viewer` | 从 `/viewer` 获取 mutable store 或 Three renderer |
-| 独立编辑器的编辑、选择、历史、订阅和相机 | `/runtime` 的 `getViewerApi(runtime)` | 用默认 `/state` 或全局相机命令操作第二个实例 |
-| 读取或修改全局 molecule/editor state | `/state` | 从其他子入口绕过显式可变边界 |
-| 执行动画或优化坐标写入 | `/editing` | 直接调用内部 transaction 或 `useBuilder` |
-| 让 AI 或协作客户端提出结构编辑 | `/modeling` | 模拟鼠标、直接改 Zustand、绕过 dry-run |
-| 在 Node/后端执行分子构建与修改 | `/headless` | 为纯计划执行初始化 viewer/runtime |
-| 开发纯化学和图算法 | `/core`、`/geometry`、`/graph` | 引入 React、Zustand 或 Three.js |
-| 添加主题、样式和 profile | `/styles` | 在 preset 中直接操作材质对象 |
-| 扩展 Three.js 材质 | `/three` | 把 Three.js 类型泄漏回 `/styles` 或 `/core` |
-| 读取片段、模板、配位构型 | `/fragments`、`/templates`、`/coordination` | 依赖内部 `FragmentDef` 或 registry 实现 |
+| 展示分子、适配视口、截图 | `@retainmol/viewer/viewer` | 从 `/viewer` 获取 mutable store 或 Three renderer |
+| 独立编辑器的编辑、选择、历史、订阅和相机 | `@retainmol/viewer/runtime` 的 `getViewerApi(runtime)` | 用默认 `/state` 或全局相机命令操作第二个实例 |
+| 读取或修改全局 molecule/editor state | `@retainmol/viewer/state` | 从其他子入口绕过显式可变边界 |
+| 执行动画或优化坐标写入 | `@retainmol/viewer/editing` | 直接调用内部 transaction 或 `useBuilder` |
+| 让 AI 或协作客户端提出结构编辑 | `@retainmol/viewer/modeling` | 模拟鼠标、直接改 Zustand、绕过 dry-run |
+| 在 Node/后端执行分子构建与修改 | `@retainmol/core/headless` | 为纯计划执行初始化 viewer/runtime |
+| 开发纯化学和图算法 | `@retainmol/core`、`/geometry`、`/graph` | 引入 React、Zustand 或 Three.js |
+| 添加主题、样式和 profile | `@retainmol/viewer/styles` | 在 preset 中直接操作材质对象 |
+| 扩展 Three.js 材质 | `@retainmol/viewer/three` | 把 Three.js 类型泄漏回 `/styles` 或 `@retainmol/core` |
+| 读取片段、模板、配位构型 | `@retainmol/core/fragments`、`/templates`、`/coordination` | 依赖内部 `FragmentDef` 或 registry 实现 |
 
 以下内容是包内实现，不是团队间可依赖的公共协议：
 
@@ -99,7 +123,7 @@ import { registerStylePreset, registerTheme } from '@retainmol/mol-viewer/styles
 - `store/slices/*`、`lib/builder/commands/*` 的领域实现文件。
 - `lib/builder/fragment/*` 的内部 model、registry 和 catalog 组装细节。
 
-跨团队能力必须先在对应 `src/public/*.ts` 中形成窄接口，再由实现层接入。不要为了临时复用新增深路径导入。
+跨团队能力必须先在对应包的 `src/public/*.ts` 中形成窄接口，再由实现层接入。不要为了临时复用新增深路径导入。
 
 AI 建模的协议、调用示例和后续扩展顺序见
 [AI 建模框架](./ai-modeling/README.md)。
@@ -260,7 +284,7 @@ registerRenderProfile(profile)
 
 `styles/` 是声明式层，禁止导入 `lib/molRenderer`。profile 注册不验证 Three.js
 材质工厂；具体 renderer 在组合或实际渲染时解析 `materialModel`。
-需要返回 `THREE.Material` 的插件只能从 `@retainmol/mol-viewer/three` 导入。
+需要返回 `THREE.Material` 的插件只能从 `@retainmol/viewer/three` 导入。
 
 相关文档：
 
@@ -291,7 +315,7 @@ registerRenderProfile(profile)
 
 ```text
 App layer
-  -> @retainmol/mol-viewer public subpaths
+  -> @retainmol/viewer public subpaths
     -> components/hooks/store
       -> lib/modeling -> lib/builder commands
       -> lib/builder and lib/molRenderer
@@ -300,7 +324,7 @@ App layer
 
 避免这些模式：
 
-- App 直接导入 `packages/mol-viewer/src/lib/...`。
+- App 直接导入 `packages/core/src/lib/...`。
 - renderer 导入 App 代码。
 - 纯 builder 逻辑导入 React 或 Zustand store。
 - store action 依赖 React 组件。

@@ -1,4 +1,4 @@
-import { parseClipboard } from '@retainmol/mol-viewer/io'
+import { parseClipboard } from '@retainmol/core/io'
 import { placeMoleculeInViewer } from './placeMoleculeInViewer'
 
 export function pasteMoleculeText(text: string | undefined) {

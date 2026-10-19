@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 
 export const ENTITY_PAGE_SIZE = 20
 export interface EntityRow {

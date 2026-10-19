@@ -1,5 +1,5 @@
-import { parseXYZ, type Molecule } from '@retainmol/mol-viewer/core'
-import { parseMol, parseSdf } from '@retainmol/mol-viewer/io'
+import { parseXYZ, type Molecule } from '@retainmol/core'
+import { parseMol, parseSdf } from '@retainmol/core/io'
 
 export async function parseMoleculeFile(file: File): Promise<{ molecule: Molecule; moleculeCount: number }> {
   const name = file.name.toLowerCase()

@@ -10,7 +10,7 @@ overlay 或 `MolViewer` props 的改动，都应执行一次。
 ## 启动
 
 ```bash
-npm run build --workspace @retainmol/mol-viewer
+npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer
 npm run dev --workspace retainmol -- --host 0.0.0.0
 ```
 

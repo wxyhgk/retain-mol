@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 
 export const MOLECULE_ASSET_SCHEMA_VERSION = 1 as const
 export const MOLECULE_REVISION_SCHEMA_VERSION = 1 as const

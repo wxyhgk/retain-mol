@@ -1,6 +1,6 @@
 # RetainMol AI 建模框架
 
-这套框架的目标不是让 AI 模拟鼠标，而是让 AI 提交一份可检查、可预览、可撤销的结构编辑计划。图片理解模型、对话模型和多人协作客户端都使用同一个协议，化学合法性仍由 `mol-viewer` 的 builder command 判断。
+这套框架的目标不是让 AI 模拟鼠标，而是让 AI 提交一份可检查、可预览、可撤销的结构编辑计划。图片理解模型、对话模型和多人协作客户端都使用同一个协议，化学合法性仍由 `@retainmol/core` 的 builder command 判断。
 
 ## 总体流程
 
@@ -57,14 +57,14 @@ V4 严格意图桥、证据链以及下一代局部端口/刚性关节方法见
 import {
   commitEditPlan,
   getModelingContext,
-} from '@retainmol/mol-viewer/modeling'
+} from '@retainmol/viewer/modeling'
 import {
   createHeadlessModelingContext,
   dryRunEditPlan,
   parseEditPlan,
   replayEditPlan,
   type EditPlan,
-} from '@retainmol/mol-viewer/headless'
+} from '@retainmol/core/headless'
 ```
 
 不要从 App 深路径导入 `lib/modeling`、`lib/builder` 或 store slice。
@@ -72,8 +72,8 @@ import {
 无界面任务与浏览器共享同一执行器：
 
 ```ts
-import { replayEditPlan } from '@retainmol/mol-viewer/headless'
-import { exportSdf } from '@retainmol/mol-viewer/io'
+import { replayEditPlan } from '@retainmol/core/headless'
+import { exportSdf } from '@retainmol/core/io'
 
 const result = replayEditPlan(initialMolecule, plan, {
   objectId: plan.targetObjectId,

@@ -5,8 +5,8 @@ import {
   listThemes,
   resolveTheme,
   type RenderStyle,
-} from '@retainmol/mol-viewer/styles'
-import type { DisplayMode } from '@retainmol/mol-viewer/core'
+} from '@retainmol/viewer/styles'
+import type { DisplayMode } from '@retainmol/core'
 import { Atom, Box, CircleDot, Hash, Minus, StretchHorizontal, Torus } from 'lucide-react'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { cn } from '@/lib/utils'

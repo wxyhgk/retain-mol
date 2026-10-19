@@ -2,7 +2,7 @@ import {
   createFragmentForAttachmentSite,
   getFragment,
   registerFragment,
-} from '@retainmol/mol-viewer/fragments'
+} from '@retainmol/core/fragments'
 import type { WorkspaceToolEffects } from '@/domain/workspaceToolStore'
 import { listSavedTemplateDrafts } from '@/features/template-library'
 import { placeMoleculeInViewer } from '@/features/molecule-placement'

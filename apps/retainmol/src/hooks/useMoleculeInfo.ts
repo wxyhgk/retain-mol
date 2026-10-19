@@ -3,7 +3,7 @@ import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/m
 import {
   calculateMolecularWeight,
   getMolecularFormula,
-} from '@retainmol/mol-viewer/core'
+} from '@retainmol/core'
 
 export interface MoleculeInfo {
   formula: string
@@ -25,4 +25,4 @@ export function useMoleculeInfo(): MoleculeInfo {
 export {
   getMolecularFormula as calcFormula,
   calculateMolecularWeight as calcMW,
-} from '@retainmol/mol-viewer/core'
+} from '@retainmol/core'

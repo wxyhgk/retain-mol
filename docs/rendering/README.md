@@ -9,10 +9,10 @@ See also:
 Primary code:
 
 ```text
-packages/mol-viewer/src/lib/molRenderer
-packages/mol-viewer/src/lib/animation
-packages/mol-viewer/src/config/render.config.ts
-packages/mol-viewer/src/hooks/useRendererBinding.ts
+packages/viewer/src/lib/molRenderer
+packages/viewer/src/lib/animation
+packages/viewer/src/config/render.config.ts
+packages/viewer/src/hooks/useRendererBinding.ts
 ```
 
 ## Boundary

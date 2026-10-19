@@ -1,8 +1,8 @@
-import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
-import { commitEditPlan, getModelingContext } from '@retainmol/mol-viewer/modeling'
-import { computeMoleculeRevision, dryRunEditPlan, previewConstrainedGeometry } from '@retainmol/mol-viewer/headless'
-import type { RendererPort } from '@retainmol/mol-viewer/viewer'
-export { MolViewer as ConstrainedGeometryViewport } from '@retainmol/mol-viewer/viewer'
+import { createViewerRuntime, getViewerApi } from '@retainmol/viewer/runtime'
+import { commitEditPlan, getModelingContext } from '@retainmol/viewer/modeling'
+import { computeMoleculeRevision, dryRunEditPlan, previewConstrainedGeometry } from '@retainmol/core/headless'
+import type { RendererPort } from '@retainmol/viewer/viewer'
+export { MolViewer as ConstrainedGeometryViewport } from '@retainmol/viewer/viewer'
 export { previewConstrainedGeometry }
 export type ConstraintPreview = Extract<ReturnType<typeof previewConstrainedGeometry>, { ok: true }>
 export type ConstrainedGeometryRenderer = RendererPort

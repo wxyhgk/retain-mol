@@ -10,8 +10,10 @@ third-party/ketcher/*/node_modules/
 .DS_Store
 **/.ipynb_checkpoints/
 *.tsbuildinfo
-packages/mol-viewer/node_modules
-packages/mol-viewer/temp/
+packages/core/node_modules
+packages/core/temp/
+packages/viewer/node_modules
+packages/viewer/temp/
 .retainmol-loop/
 **/.lake/
 
@@ -48,4 +50,4 @@ timer.dat
 
 # Persistent local job workspace (SQLite records and calculation artifacts)
 software/backend/data/
-packages/mol-viewer/node_modules
+packages/viewer/node_modules

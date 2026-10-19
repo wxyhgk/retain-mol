@@ -2,7 +2,7 @@ import type {
   EditorHostPort,
   EditorHostSnapshot,
   Molecule,
-} from '@retainmol/mol-viewer/core'
+} from '@retainmol/core'
 import { useEditorStore } from './editorState'
 import { useMoleculeStore } from './moleculeState'
 

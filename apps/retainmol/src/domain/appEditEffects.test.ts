@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MolClipboard } from '@retainmol/mol-viewer/core'
+import type { MolClipboard } from '@retainmol/core'
 import {
   connectSelectedAtomsEffect,
   copySelectionToClipboard,

@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config'
 import path from 'path'
 
-// 与 app/mol-viewer 保持一致:所有运行时依赖外置,由消费方提供单实例
+// 与 app/viewer 保持一致:所有运行时依赖外置,由消费方提供单实例
 const externals = [
   'react',
   'react-dom',

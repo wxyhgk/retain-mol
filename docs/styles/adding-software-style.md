@@ -64,8 +64,8 @@ Classify each visual difference:
 Prefer adding or updating data:
 
 ```text
-packages/mol-viewer/src/presets/themes/*.json
-packages/mol-viewer/src/styles/presets/*.json
+packages/viewer/src/presets/themes/*.json
+packages/viewer/src/styles/presets/*.json
 ```
 
 Theme JSON can be owned independently when it fits the existing theme schema.
@@ -82,10 +82,10 @@ showAtomLabels
 Only add a render profile when the existing `renderStyle` values cannot express the style. That is a coordinated code change, not a data-only change:
 
 ```text
-packages/mol-viewer/src/styles/schema.ts
-packages/mol-viewer/src/styles/renderProfiles.ts
-packages/mol-viewer/src/styles/profiles/*
-packages/mol-viewer/src/lib/molRenderer/*
+packages/viewer/src/styles/schema.ts
+packages/viewer/src/styles/renderProfiles.ts
+packages/viewer/src/styles/profiles/*
+packages/viewer/src/lib/molRenderer/*
 ```
 
 If renderer code is needed, first add a generic capability field to the render profile, then make the renderer consume that field.
@@ -151,8 +151,8 @@ Include:
 
 Before opening a style branch:
 
-- Are you only adding theme JSON? Stay in `packages/mol-viewer/src/presets/themes/` and matching docs.
-- Are you only adding a preset that combines existing options? Stay in `packages/mol-viewer/src/styles/presets/` and matching docs.
+- Are you only adding theme JSON? Stay in `packages/viewer/src/presets/themes/` and matching docs.
+- Are you only adding a preset that combines existing options? Stay in `packages/viewer/src/styles/presets/` and matching docs.
 - Are you adding a new `renderStyle`? Coordinate schema, registry, renderer, tests, and docs as one change.
-- Are you touching public exports? Prefer `@retainmol/mol-viewer/styles` for style APIs and keep root-barrel compatibility.
+- Are you touching public exports? Prefer `@retainmol/viewer/styles` for style APIs and keep root-barrel compatibility.
 - Are you changing renderer behavior? Use profile capability fields and avoid `stylePresetId` or software-name branches.

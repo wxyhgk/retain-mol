@@ -37,7 +37,7 @@
 ## 只读 API
 
 ```ts
-import { getAtomChiralityState } from '@retainmol/mol-viewer/core'
+import { getAtomChiralityState } from '@retainmol/core'
 
 const { specified, computed } = getAtomChiralityState(molecule, atomId)
 // specified: 模型中已指定的 R/S，未指定为 null

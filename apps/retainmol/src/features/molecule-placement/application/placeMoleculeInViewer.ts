@@ -1,5 +1,5 @@
-import { centerMolecule, type Molecule } from '@retainmol/mol-viewer/core'
-import { is2D } from '@retainmol/mol-viewer/io'
+import { centerMolecule, type Molecule } from '@retainmol/core'
+import { is2D } from '@retainmol/core/io'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { flattenMolecule } from '@/features/molecule-animation'
@@ -49,7 +49,7 @@ function commitMolecule(
 
 /**
  * App workflow boundary for putting parsed/search/pasted molecules into the viewer.
- * Data preparation stays here; actual molecule/scene mutation still goes through mol-viewer store actions.
+ * Data preparation stays here; actual molecule/scene mutation still goes through viewer store actions.
  */
 export async function placeMoleculeInViewer(
   molecule: Molecule,

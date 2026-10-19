@@ -4,11 +4,12 @@
 
 # Monorepo 包结构
 * `apps/retainmol`：应用壳与产品 UI。
-* `packages/mol-viewer`（`@retainmol/mol-viewer`）：分子查看/编辑核心库，按子入口导出。
+* `packages/core`（`@retainmol/core`）：分子模型、builder command、IO、几何、无界面建模；只依赖 OpenChemLib/Zod，不含 React/Three。
+* `packages/viewer`（`@retainmol/viewer`）：React + three.js 分子查看/编辑组件、runtime、状态与渲染；精确依赖同版本 core。两包按子入口导出。
 * `packages/ui-kit`（`@retainmol/ui-kit`）：无业务语义的共享 UI 层，禁止依赖业务包。
 * `packages/molecule-assets`（`@retainmol/molecule-assets`）：分子资产与版本能力。
 * `packages/jobs`（`@retainmol/jobs`）：任务管理能力。
-* 依赖方向固定为 ui-kit → mol-viewer/molecule-assets → jobs → app，禁止反向；各包 `npm run check:boundaries` 把关。
+* 依赖方向固定为 ui-kit → core → viewer/molecule-assets → jobs → app，禁止反向；各包 `npm run check:boundaries` 把关。
 * 包内不读 `import.meta.env`；后端地址等配置由 app 在启动时注入（如 `configureJobsApiBase`）。
 * 根 `npm run verify` 做全量校验；改动跨包时先 `npm run build:packages`。
 * 各包根目录有自己的 `CLAUDE.md`（职责/铁律/命令），在某个包内工作时以它为准。

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyzeStericContacts, createHeadlessModelingContext, generateTorsionCandidates, dryRunEditPlan, computeMoleculeRevision, type Molecule } from '@retainmol/mol-viewer/headless'
+import { analyzeStericContacts, createHeadlessModelingContext, generateTorsionCandidates, dryRunEditPlan, computeMoleculeRevision, type Molecule } from '@retainmol/core/headless'
 import { createStericDemoSession } from '@/domain/viewer/stericDemo'
 import fixture from '../fixtures/spiro-benzyl.json'
 

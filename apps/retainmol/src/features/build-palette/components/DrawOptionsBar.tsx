@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ChevronLeft, ChevronRight, Ellipsis, MoreHorizontal } from 'lucide-react'
-import { getElementConfig } from '@retainmol/mol-viewer/core'
-import type { PublicFragmentDef } from '@retainmol/mol-viewer/fragments'
+import { getElementConfig } from '@retainmol/core'
+import type { PublicFragmentDef } from '@retainmol/core/fragments'
 import { cn } from '@/lib/utils'
 import {
   Sheet,

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
-import { AromaticRingCache, MoleculeRenderer, type ResolvedTheme } from '@retainmol/mol-viewer/three'
-import { centerMolecule, type Molecule } from '@retainmol/mol-viewer/core'
+import { AromaticRingCache, MoleculeRenderer, type ResolvedTheme } from '@retainmol/viewer/three'
+import { centerMolecule, type Molecule } from '@retainmol/core'
 import { SHELF } from '../../../domain/shelf/shelfLayout'
 import type { ShelfBoxStyle } from '../../../domain/shelf/shelfStatusStyle'
 import { fitScaleForBox, moleculeBoundingSphere } from '../../../domain/shelf/moleculeFit'

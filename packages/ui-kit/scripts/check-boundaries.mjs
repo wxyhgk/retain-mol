@@ -5,9 +5,9 @@ import { dirname, resolve, sep } from 'node:path'
  * ui-kit 是无业务语义的共享 UI 层:
  * - 禁止 app 别名 '@/'
  * - 禁止相对路径逃出 src
- * - 禁止任何 @retainmol/* 业务包导入(包括 mol-viewer)
+ * - 禁止任何 @retainmol/* 业务包导入(包括 core / viewer)
  */
-const ALLOWED_MOL_VIEWER_SUBPATHS = new Set()
+const ALLOWED_CORE_VIEWER_IMPORTS = new Set()
 const ALLOWED_SIBLING_PACKAGES = new Set()
 const THIRD_PARTY_ADAPTERS = new Map([
   ['@tanstack/react-table', 'data/DataTable.tsx'],
@@ -64,9 +64,9 @@ for (const file of walk(SRC_DIR)) {
         violations.push(`${rel}: 相对导入 ${specifier} 逃出了包 src`)
       }
     }
-    if (specifier === '@retainmol/mol-viewer' || specifier.startsWith('@retainmol/mol-viewer/')) {
-      if (!ALLOWED_MOL_VIEWER_SUBPATHS.has(specifier)) {
-        violations.push(`${rel}: mol-viewer 导入 ${specifier} 不在允许清单`)
+    if (/^@retainmol\/(?:core|viewer)(?:\/|$)/.test(specifier)) {
+      if (!ALLOWED_CORE_VIEWER_IMPORTS.has(specifier)) {
+        violations.push(`${rel}: core/viewer 导入 ${specifier} 不在允许清单`)
       }
     }
     const siblingMatch = specifier.match(/^(@retainmol\/(?:jobs|molecule-assets|ui-kit))(\/.*)?$/)

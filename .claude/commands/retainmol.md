@@ -6,15 +6,22 @@ RetainMol 是一个基于浏览器的分子建模工具，monorepo 结构。
 
 ```
 RetainMol/
-├── packages/mol-viewer/     # 组件库（Three.js 渲染 + Zustand 状态）
+├── packages/core/           # @retainmol/core：纯分子逻辑（只依赖 OpenChemLib/Zod，无 React/Three）
+│   └── src/
+│       ├── lib/
+│       │   ├── molecule.ts      # Atom / Bond / Molecule 类型 + newAtom / newBond
+│       │   ├── model/           # 类型、genId、校验、元素数据
+│       │   ├── builder/         # builder command + analysis (aromaticity, fragments)
+│       │   ├── io/              # parseMol / parseSdf / exportMol / pasteParser
+│       │   └── modeling/        # EditPlan 协议与无界面执行器
+│       └── public/              # core 公开入口（@retainmol/core、/io、/geometry、/headless …）
+├── packages/viewer/         # @retainmol/viewer：组件库（Three.js 渲染 + Zustand 状态），精确依赖同版本 core
 │   └── src/
 │       ├── components/viewer/   # MolViewer 组件 + overlays
 │       ├── hooks/               # useBuilder / useRendererBinding / useMolViewerSync / useCanvasPointerRouter
 │       ├── lib/
-│       │   ├── molecule.ts      # Atom / Bond / Molecule 类型 + newAtom / newBond
 │       │   ├── molRenderer/     # MolRenderer / MoleculeRenderer / InteractionHandler
-│       │   ├── builder/         # BuilderEngine + analysis (aromaticity, fragments)
-│       │   └── io/              # parseMol / parseSdf / exportMol / pasteParser
+│       │   └── builder/commands/interaction/  # 指针手势 → builder command 决策
 │       └── store/
 │           ├── moleculeStore.ts # 分子数据 + 场景 + 选择（有 undo）
 │           └── editorStore.ts   # 工具 / 显示 / 测量 / 主题（无 undo）
@@ -39,15 +46,17 @@ RetainMol/
 ## 启动方式
 
 ```bash
-# 先构建 mol-viewer 再启动前端（predev 脚本自动执行）
+# 先构建 core → viewer 再启动前端（predev 脚本自动执行）
 npm run dev --workspace=apps/retainmol
 
-# 单独构建 mol-viewer（修改包后必须执行）
-npm run build --workspace @retainmol/mol-viewer
+# 单独构建（修改包后必须执行；改了 core 要先 build core 再 build viewer）
+npm run build --workspace @retainmol/core
+npm run build --workspace @retainmol/viewer
 ```
 
-> **重要**：修改 `packages/mol-viewer/src/` 下任何文件后，必须重新 build mol-viewer，
-> 否则 app 仍使用旧的编译产物。
+> **重要**：修改 `packages/core/src/` 或 `packages/viewer/src/` 下任何文件后，必须重新 build 对应包，
+> 否则 app 仍使用旧的编译产物。viewer 通过 `@retainmol/core[/entry]` 或
+> `@retainmol/core/internal/<src 相对路径>` 导入 core，不得用相对路径跨包。
 
 ## 架构要点
 
@@ -96,7 +105,7 @@ Container（capture） → useCanvasPointerRouter
   └── 其他 → 放行给 InteractionHandler（canvas capture）
 ```
 
-### mol-viewer 包的 hook 分工
+### viewer 包的 hook 分工
 
 | Hook | 职责 |
 |------|------|
@@ -116,12 +125,11 @@ Container（capture） → useCanvasPointerRouter
 **规范**：项目中**禁止直接使用 `crypto.randomUUID()`**，统一使用 `genId()`：
 
 ```ts
-import { genId } from '../utils'  // mol-viewer 内部
-// 或
-import { genId } from '@retainmol/mol-viewer'  // app 层（如需）
+import { genId } from '../model/identity'                          // core 内部（按相对路径）
+import { genId } from '@retainmol/core/internal/lib/model/identity'  // viewer 内部
 ```
 
-`genId()` 在 `packages/mol-viewer/src/lib/utils.ts`，会自动降级到 `Math.random()` polyfill。
+`genId()` 在 `packages/core/src/lib/model/identity.ts`，会自动降级到 `Math.random()` polyfill（不是公开 API，app 层不直接使用）。
 
 ### OCL y/z 坐标取反
 
@@ -160,8 +168,10 @@ container capture 会优先拦截 move-object，Shift 只在非 move-object 工�
 1. **ID 生成**：一律用 `genId()`，不用 `crypto.randomUUID()`
 2. **editor 状态**（工具/显示/测量）从 `useEditorStore` 读写
 3. **分子数据**（原子/键/场景对象）从 `useMoleculeStore` 读写
-4. **修改 mol-viewer 后**：必须 `npm run build --workspace @retainmol/mol-viewer`
+4. **修改 core / viewer 后**：必须 `npm run build --workspace @retainmol/core`（及 `@retainmol/viewer`）
 5. **新增工具**：在 `editorStore` 的 `Tool` 类型里加，在 `useCanvasPointerRouter` 里
    添加路由分支，在 `ToolStrip` 里加按钮
-6. **mol-viewer 新增运行时依赖**：必须同时加进 `vite.config.ts` 的 externals 名单
-   和 `package.json` dependencies，否则整库内联进 dist（openchemlib 3MB 教训）
+6. **包新增运行时依赖**：必须同时加进该包 `vite.config.ts` 的 externals 名单
+   和 `package.json` dependencies，否则整库内联进 dist（openchemlib 3MB 教训）。
+   core 只允许 OpenChemLib/Zod；需要 React/Three/状态的代码放 viewer
+7. **新增纯化学/几何/IO 逻辑放 core**，UI/状态/渲染放 viewer；viewer 公共入口只转发 core 公共入口

@@ -1,5 +1,5 @@
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
-import { getMolecularFormula } from '@retainmol/mol-viewer/core'
+import { getMolecularFormula } from '@retainmol/core'
 
 export function CanvasLabel() {
   const molecule = useMoleculeStore(selectActiveMoleculeOrEmpty)

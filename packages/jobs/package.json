@@ -22,7 +22,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "peerDependencies": {
-    "@retainmol/mol-viewer": ">=0.1.29",
+    "@retainmol/core": ">=0.2.0",
+    "@retainmol/viewer": ">=0.2.0",
     "react": ">=18",
     "react-dom": ">=18",
     "three": ">=0.184.0 <0.185.0"
@@ -39,7 +40,8 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@retainmol/mol-viewer": "file:../mol-viewer",
+    "@retainmol/core": "file:../core",
+    "@retainmol/viewer": "file:../viewer",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.0",

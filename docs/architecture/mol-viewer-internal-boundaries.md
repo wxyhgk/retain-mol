@@ -1,4 +1,6 @@
-# mol-viewer 包内基础边界
+# core / viewer 包内基础边界
+
+> 拆包后：下表 `src/lib/model`、`src/lib/graph`、`src/lib/presentation` 等基础模块都在 `packages/core/src`；`store`、`runtime`、`hooks`、`components` 在 `packages/viewer/src`。规则由 `packages/core/scripts/module-graph.mjs` 提供，两包的 `check:boundaries` 共用。
 
 第一批整理保持现有 npm 包、公开 API、JSON 格式和编辑行为，仅调整实现归属与依赖门禁。
 第二批新增纯 `/headless` 子入口，迁出 hooks 中的编辑会话和 public 中的 runtime 提交实现；旧入口继续兼容。

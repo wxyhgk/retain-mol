@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { registerForceFieldFromUrl } from '@retainmol/mol-viewer/io'
+import { registerForceFieldFromUrl } from '@retainmol/core/io'
 import { configureJobsApiBase } from '@retainmol/jobs'
 import { configureMoleculeAssetsApiBase } from '@retainmol/molecule-assets'
 import { configureBackendUrl } from '@/infrastructure/backendUrl'

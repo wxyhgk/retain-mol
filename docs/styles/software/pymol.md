@@ -59,7 +59,7 @@ Implemented theme:
 
 ```text
 theme id: pymol
-file: packages/mol-viewer/src/presets/themes/pymol.json
+file: packages/viewer/src/presets/themes/pymol.json
 ```
 
 ### Render Profile

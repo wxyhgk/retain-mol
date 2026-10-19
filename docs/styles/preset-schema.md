@@ -6,8 +6,8 @@ This is the proposed schema for a unified style preset system. It is intentional
 
 Current state:
 
-- Runtime style presets are JSON files under `packages/mol-viewer/src/styles/presets/*.json`.
-- They are validated by `StylePresetSchema` in `packages/mol-viewer/src/styles/schema.ts`.
+- Runtime style presets are JSON files under `packages/viewer/src/styles/presets/*.json`.
+- They are validated by `StylePresetSchema` in `packages/viewer/src/styles/schema.ts`.
 - The current schema maps directly to existing editor fields: `displayMode`, `themeId`, `renderStyle`, and optional `showAtomLabels`.
 - People can independently add preset JSON when it references existing schema values.
 - People cannot add a new `renderStyle` value by JSON alone. That requires schema, render profile registry, and renderer coordination.
@@ -20,7 +20,7 @@ Target state:
 
 ## Current Runtime Preset
 
-Use this shape today for files in `packages/mol-viewer/src/styles/presets/*.json`:
+Use this shape today for files in `packages/viewer/src/styles/presets/*.json`:
 
 ```ts
 type StylePreset = {
@@ -203,4 +203,4 @@ gaussview-publication
 - Adding preset JSON is safe to do independently only when `displayMode`, `themeId`, and `renderStyle` already exist.
 - Adding theme JSON for a preset is separate and can be independent if the existing theme schema is enough.
 - Adding a new `renderStyle` or render profile field requires coordinated edits to schema, registry, renderer behavior, validation, and docs.
-- Public style helpers should be consumed from `@retainmol/mol-viewer/styles` in new docs, while root-barrel exports remain compatible during migration.
+- Public style helpers should be consumed from `@retainmol/viewer/styles` in new docs, while root-barrel exports remain compatible during migration.

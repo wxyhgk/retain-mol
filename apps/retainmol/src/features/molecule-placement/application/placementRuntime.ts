@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { moleculePositionWriter } from '@/domain/moleculePositionWriter'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { relaxAnimate } from '@/features/molecule-animation'

@@ -3,7 +3,7 @@
 无业务语义的共享 UI 层。这里的组件不知道"分子""任务""工作流"是什么。
 
 ## 铁律
-* **禁止**依赖任何业务包（jobs/molecule-assets）和 mol-viewer；禁止出现化学/任务词汇的 props 或文案。
+* **禁止**依赖任何业务包（jobs/molecule-assets）和 core / viewer；禁止出现化学/任务词汇的 props 或文案。
 * 不读 `import.meta.env`；不发网络请求；不持久化。
 * 第三方库单入口：`@tanstack/react-table` 只经 `data/DataTable`，`react-virtuoso` 只经 `data/VirtualList`。
 * 样式走 Tailwind token（`--border`/`--muted` 等），禁止字面色。

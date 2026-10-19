@@ -18,7 +18,7 @@
 
 ## 编辑器会话边界
 
-完整 `MoleculeAsset` 与 `MoleculeRevision` 由 TanStack Query 缓存；`mol-viewer` 的 Zustand 仍只保存分子工作副本。App 另有一个很小的会话绑定，以场景 `objectId` 为键保存：
+完整 `MoleculeAsset` 与 `MoleculeRevision` 由 TanStack Query 缓存；`@retainmol/viewer` 的 Zustand 仍只保存分子工作副本。App 另有一个很小的会话绑定，以场景 `objectId` 为键保存：
 
 ```text
 objectId -> assetId + headRevisionId + assetVersion + savedContentHash

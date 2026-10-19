@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Check, FlipHorizontal2, MousePointer2, Rotate3D } from 'lucide-react'
 import * as THREE from 'three'
-import { getElementConfig, type Molecule } from '@retainmol/mol-viewer/core'
+import { getElementConfig, type Molecule } from '@retainmol/core'
 import type { RuntimeTemplateSite } from '../../application/runtimeTemplateBrush'
 
 export function WorkspaceTemplateSiteCanvas({

@@ -1,4 +1,4 @@
-import type { Atom, Bond, Molecule } from '@retainmol/mol-viewer/core'
+import type { Atom, Bond, Molecule } from '@retainmol/core'
 
 const CONTENT_SCHEMA_VERSION = 1 as const
 const TOPOLOGY_SCHEMA_VERSION = 1 as const

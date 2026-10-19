@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { computeMoleculeRevision } from '@retainmol/mol-viewer/headless'
+import { computeMoleculeRevision } from '@retainmol/core/headless'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { useMoleculeHistoryTracking } from '@/domain/viewer/history'
 import { selectAppBusyMessage, useAppTaskStore } from '@/store/appTaskStore'

@@ -1,5 +1,5 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
-import type { OptimizeResult } from '@retainmol/mol-viewer/io'
+import type { Molecule } from '@retainmol/core'
+import type { OptimizeResult } from '@retainmol/core/io'
 import { MOLECULE_OPT_WORKER_TIMEOUT_MS } from '@/config/optimize.config'
 import type { MoleculeComputationOperation } from '../domain/computationTypes'
 

@@ -1,6 +1,6 @@
 import { useId, useMemo } from 'react'
-import { depictMolecule2D } from '@retainmol/mol-viewer/io'
-import type { Molecule } from '@retainmol/mol-viewer/io'
+import { depictMolecule2D } from '@retainmol/core/io'
+import type { Molecule } from '@retainmol/core/io'
 
 export interface Molecule2DProps {
   molecule: Molecule

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { createEditorHostPort, type EditorHostAdapterDependencies } from './editorHostPort'
 
 const firstMolecule: Molecule = { name: 'first', atoms: [], bonds: [] }

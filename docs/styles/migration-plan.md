@@ -26,11 +26,11 @@ This is enough for the current UI, but it will become hard to scale when adding 
 
 Current implementation status:
 
-- Initial style preset infrastructure exists under `packages/mol-viewer/src/styles`.
-- Style preset JSON files are loaded from `packages/mol-viewer/src/styles/presets/*.json`.
-- Theme JSON files are loaded from `packages/mol-viewer/src/presets/themes/*.json`.
+- Initial style preset infrastructure exists under `packages/viewer/src/styles`.
+- Style preset JSON files are loaded from `packages/viewer/src/styles/presets/*.json`.
+- Theme JSON files are loaded from `packages/viewer/src/presets/themes/*.json`.
 - Render profile ids are still enumerated in TypeScript and resolved through the render profile registry.
-- Public style helpers belong to the `@retainmol/mol-viewer/styles` sub-entry contract. Root-barrel exports may mirror them only for compatibility.
+- Public style helpers belong to the `@retainmol/viewer/styles` sub-entry contract. Root-barrel exports may mirror them only for compatibility.
 
 Target state:
 
@@ -63,7 +63,7 @@ ResolvedMolecularStyle
 
 Do not remove existing `displayMode`, `renderStyle`, or `themeId` yet.
 
-Status: initial implementation exists under `packages/mol-viewer/src/styles`.
+Status: initial implementation exists under `packages/viewer/src/styles`.
 
 ## Phase 3: Resolve Current State Through a Preset
 
@@ -135,26 +135,26 @@ This is where IboView-like orbital and localization views should plug in.
 
 ## Compatibility Rule
 
-External app code should use public APIs from explicit `@retainmol/mol-viewer/*` sub-entries. Any new public style API must first be exported from:
+External app code should use public APIs from explicit `@retainmol/core[/*]`、`@retainmol/viewer/*` sub-entries. Any new public style API must first be exported from:
 
 ```text
-packages/mol-viewer/src/public/styles.ts
+packages/viewer/src/public/styles.ts
 ```
 
-Deep imports from `packages/mol-viewer/src/styles/...` should remain internal unless explicitly exported.
+Deep imports from `packages/viewer/src/styles/...` should remain internal unless explicitly exported.
 
 During the compatibility period:
 
 - Root-barrel imports stay supported for compatibility:
 
 ```ts
-import { MolViewer, listStylePresets } from '@retainmol/mol-viewer'
+import { MolViewer, listStylePresets } from '@retainmol/viewer'
 ```
 
 - New documentation and app code should prefer the relevant sub-entry:
 
 ```ts
-import { listStylePresets, resolveStylePreset } from '@retainmol/mol-viewer/styles'
+import { listStylePresets, resolveStylePreset } from '@retainmol/viewer/styles'
 ```
 
 - Sub-entries are the target public contracts for new consumers, but they must not require deep source imports.
@@ -166,4 +166,4 @@ import { listStylePresets, resolveStylePreset } from '@retainmol/mol-viewer/styl
 - Preset-only branch: edit preset JSON and matching style docs only.
 - Render-profile branch: reserve schema, registry, renderer consumers, checks, and docs together.
 - Public API branch: prefer sub-entry shape first, then mirror through the root barrel for compatibility.
-- UI branch: consume public style APIs; do not deep import from `packages/mol-viewer/src/styles/...`.
+- UI branch: consume public style APIs; do not deep import from `packages/viewer/src/styles/...`.

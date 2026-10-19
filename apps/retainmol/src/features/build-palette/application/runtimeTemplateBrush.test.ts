@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { newAtom, newBond } from '@retainmol/mol-viewer/core'
+import { newAtom, newBond } from '@retainmol/core'
 import { activateRuntimeTemplateBrush } from './runtimeTemplateBrush'
 
 describe('runtime template brush', () => {

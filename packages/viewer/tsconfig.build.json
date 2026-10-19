@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": false
+  },
+  "files": [
+    "src/index.ts",
+    "src/public/picking.ts",
+    "src/public/styles.ts",
+    "src/public/three.ts",
+    "src/public/viewer.ts",
+    "src/public/runtime.ts",
+    "src/public/state.ts",
+    "src/public/editing.ts",
+    "src/public/modeling.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
+}

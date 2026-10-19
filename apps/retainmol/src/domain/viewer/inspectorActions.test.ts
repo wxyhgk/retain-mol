@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeMoleculeRevision } from '@retainmol/mol-viewer/headless'
-import { defaultViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
+import { computeMoleculeRevision } from '@retainmol/core/headless'
+import { defaultViewerRuntime, getViewerApi } from '@retainmol/viewer/runtime'
 import { useMoleculeStore, selectActiveMoleculeOrEmpty } from './moleculeState'
 import { useEditorStore } from './editorState'
 import { beginAppTask, endAppTask, useAppTaskStore } from '@/store/appTaskStore'

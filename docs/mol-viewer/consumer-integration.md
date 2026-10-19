@@ -1,8 +1,26 @@
-# mol-viewer 独立宿主接入
+# core / viewer 独立宿主接入
 
-入口：[可运行示例](../../examples/mol-viewer-consumer/README.md)、[实例级 API](./instance-api.md)。
+入口：[可运行示例](../../examples/viewer-consumer/README.md)、[实例级 API](./instance-api.md)。
 根目录运行 `npm run example:viewer`，打开脚本输出的 `127.0.0.1:5273`。
 示例安装真实 tarball，不依赖 RetainMol App、Ketcher、后端或 API 密钥。
+
+## 选包
+
+| 需要 | 安装 | 依赖 |
+| --- | --- | --- |
+| 只做分子数据、MOL/SDF/XYZ 读写、几何计算、Node/后端无界面编辑 | `@retainmol/core` | 只带入 OpenChemLib、Zod；不需要 React/Three |
+| 需要 3D 查看/编辑组件 | `@retainmol/core` + `@retainmol/viewer` | viewer 精确依赖同版本 core；宿主提供 React ≥18、Three 0.184.x |
+
+两包尚未发布到 registry 时，在 RetainMol 仓库里分别构建并打包，再在宿主项目一起安装：
+
+```sh
+npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer
+(cd packages/core && npm pack) && (cd packages/viewer && npm pack)
+# 宿主项目：
+npm install /path/to/retainmol-core-0.2.0.tgz /path/to/retainmol-viewer-0.2.0.tgz
+```
+
+`@retainmol/core/internal/*` 只供 viewer 使用，宿主不要依赖它。
 
 ## 安装与渲染
 
@@ -10,8 +28,8 @@
 Three.js 0.184、Vite、Tailwind。每个独立编辑器分别创建 runtime 和 API：
 
 ```tsx
-import { MolViewer } from '@retainmol/mol-viewer/viewer'
-import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
+import { MolViewer } from '@retainmol/viewer/viewer'
+import { createViewerRuntime, getViewerApi } from '@retainmol/viewer/runtime'
 
 // 在宿主 effect 中创建，cleanup 中释放；完整代码见示例的 EditorPanel.tsx。
 const runtime = createViewerRuntime()
@@ -24,7 +42,7 @@ Tailwind 4 宿主需显式扫描安装包，例如 CSS 位于 `src/` 时：
 
 ```css
 @import "tailwindcss";
-@source "../node_modules/@retainmol/mol-viewer/dist";
+@source "../node_modules/@retainmol/viewer/dist";
 ```
 
 宿主必须使用同一套 React/Three 实例，不要把源码 alias 到另一个拥有独立依赖的 checkout。

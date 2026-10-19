@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
-import type { TemplateDraftCategory } from '@retainmol/mol-viewer/templates'
+import type { TemplateDraftCategory } from '@retainmol/core/templates'
 import { cn } from '@/lib/utils'
 import type { TemplateStudioController } from '../model/useTemplateStudioController'
 

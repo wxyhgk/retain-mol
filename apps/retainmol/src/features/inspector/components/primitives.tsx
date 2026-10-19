@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Minus, Plus } from 'lucide-react'
-import type { Atom } from '@retainmol/mol-viewer/core'
-import { getElementConfig } from '@retainmol/mol-viewer/core'
+import type { Atom } from '@retainmol/core'
+import { getElementConfig } from '@retainmol/core'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 

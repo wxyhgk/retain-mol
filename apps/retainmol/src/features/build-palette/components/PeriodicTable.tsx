@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Ellipsis } from 'lucide-react'
-import { getElementConfig } from '@retainmol/mol-viewer/core'
+import { getElementConfig } from '@retainmol/core'
 import { cn } from '@/lib/utils'
 import {
   Sheet,

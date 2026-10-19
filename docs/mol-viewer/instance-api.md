@@ -1,12 +1,12 @@
 # 实例级基础 API
 
-`@retainmol/mol-viewer/runtime` 提供 `getViewerApi(runtime)`。它绑定明确的实例，
+`@retainmol/viewer/runtime` 提供 `getViewerApi(runtime)`。它绑定明确的实例，
 不暴露 Zustand store、Three renderer 或内部 services；UI 与 API 继续复用现有编辑命令。
 同一个 runtime 重复获取得到同一个 API 对象。
 
 ```ts
-import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
-import { parseMol, exportMol } from '@retainmol/mol-viewer/io'
+import { createViewerRuntime, getViewerApi } from '@retainmol/viewer/runtime'
+import { parseMol, exportMol } from '@retainmol/core/io'
 
 const runtime = createViewerRuntime()
 const api = getViewerApi(runtime)

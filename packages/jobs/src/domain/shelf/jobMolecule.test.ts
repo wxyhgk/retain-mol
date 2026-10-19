@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import type { JobDetail } from '../jobTypes'
 import {
   SHELF_MAX_ATOMS,

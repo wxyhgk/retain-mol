@@ -7,14 +7,14 @@ Molecule themes define semantic colors and a small set of display-size tokens. T
 Theme files:
 
 ```text
-packages/mol-viewer/src/presets/themes/*.json
+packages/viewer/src/presets/themes/*.json
 ```
 
 Schema and loader:
 
 ```text
-packages/mol-viewer/src/presets/schema.ts
-packages/mol-viewer/src/presets/loader.ts
+packages/viewer/src/presets/schema.ts
+packages/viewer/src/presets/loader.ts
 ```
 
 Public API:
@@ -85,7 +85,7 @@ These belong in render profiles, config, renderer internals, or builder logic de
 1. Add a JSON file under:
 
 ```text
-packages/mol-viewer/src/presets/themes/
+packages/viewer/src/presets/themes/
 ```
 
 2. Set a stable `metadata.id`. The id is the registry key, not the file name.

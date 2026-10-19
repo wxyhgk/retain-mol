@@ -53,13 +53,13 @@
 公共几何目录位于：
 
 ```text
-packages/mol-viewer/src/lib/builder/coordination/geometryCatalog.ts
+packages/core/src/lib/builder/coordination/geometryCatalog.ts
 ```
 
 它只定义稳定构型 ID、默认名称、点群和理想方向。每个元素必须拥有独立配置文件：
 
 ```text
-packages/mol-viewer/src/lib/builder/coordination/elements/<symbol>.ts
+packages/core/src/lib/builder/coordination/elements/<symbol>.ts
 ```
 
 即使当前 38 个元素的显示相同，也不能让多个元素共享同一个可变 spec 数组。后续调整 Fe 的方向、名称或点群覆盖时，只修改 `fe.ts`，不能影响 Co、Ni 等元素。

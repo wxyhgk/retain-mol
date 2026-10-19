@@ -26,7 +26,7 @@ Vite 默认监听局域网。端口占用时显式指定空闲端口，例如 `-
 
 ## 公开 API
 
-通过 `@retainmol/mol-viewer/headless` 使用：
+通过 `@retainmol/core/headless` 使用：
 
 - `analyzeStericContacts(molecule)`：只读，返回原子对、实际距离、严重/接触阈值、分离键数分类、单位、策略版本、显式氢覆盖和汇总。
 - `generateTorsionCandidates(context, {targetObjectId, bondId, movingAtomId, fixedAtomIds})`：只读，返回采样/通过数量、诊断和最多六个候选。每个候选带 molecule、revision、metrics、EditPlan。

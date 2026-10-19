@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* workspace 包(ui-kit/molecule-assets/jobs/mol-viewer)的 Tailwind 类也要参与编译 */
+/* workspace 包(ui-kit/molecule-assets/jobs/core/viewer)的 Tailwind 类也要参与编译 */
 @source "../../../packages";
 
 @custom-variant dark (&:is(.dark *));

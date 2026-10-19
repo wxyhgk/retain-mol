@@ -1,0 +1,131 @@
+import { moleculesEqual } from '@retainmol/core/internal/lib/model/equality'
+import { reconcileAtomChirality } from '@retainmol/core/internal/lib/stereo/perception'
+import type { EditSlice } from './types'
+import type { EditActionContext } from './editActionTypes'
+import {
+  applyActiveMoleculeEdit,
+  applyActiveMoleculeEditWithSelection,
+  applySceneObjectUpdatedResult,
+  applySetMoleculeInSceneResult,
+  getEditableObject,
+} from './helpers'
+import { runAutoInferBondsCommand } from '@retainmol/core/internal/lib/builder/commands/bond/index'
+import {
+  runMoveAtomCommand,
+  runSetAtomPositionsCommand,
+} from '@retainmol/core/internal/lib/builder/commands/geometry/index'
+import {
+  runCenterMoleculeCommand,
+  runClearMoleculeCommand,
+  runSetMoleculeInSceneCommand,
+  runSetSceneObjectAtomPositionsCommand,
+} from '@retainmol/core/internal/lib/builder/commands/scene/index'
+import { runClearSelectionCommand } from '@retainmol/core/internal/lib/builder/commands/selection/index'
+import { editChanged, editWithSelectionSets, type EditCommandResult } from '@retainmol/core/internal/lib/builder/commands/shared/index'
+
+type MoleculeEditActions = Pick<
+  EditSlice,
+  | 'setMolecule'
+  | 'commitEditResult'
+  | 'moveAtom'
+  | 'setAtomPositions'
+  | 'setObjectAtomPositions'
+  | 'autoInferBonds'
+  | 'clearMolecule'
+  | 'centerMolecule'
+>
+
+export function createMoleculeEditActions({
+  set,
+}: EditActionContext): MoleculeEditActions {
+  const commitEditResult = (
+    result: EditCommandResult,
+    options: { selectionPolicy?: 'clear' | 'preserve'; bumpAtomPositionVersion?: boolean } = {},
+  ) => {
+    if (!result.ok || !result.changed) return
+    set((s) => {
+      if (s.activeObjectId && !getEditableObject(s, s.activeObjectId)) return {}
+      const previous = s.activeObjectId ? s.objectsById[s.activeObjectId]?.molecule : undefined
+      if (previous && moleculesEqual(previous, result.molecule)) return {}
+      const sceneResult = runSetMoleculeInSceneCommand(
+        s.objectsById,
+        s.objectOrder,
+        s.activeObjectId,
+        result.molecule,
+      )
+      const patch = applySetMoleculeInSceneResult(
+        s,
+        sceneResult,
+        options.bumpAtomPositionVersion === undefined
+          ? {}
+          : { bumpAtomPositionVersion: options.bumpAtomPositionVersion },
+      )
+      if (options.selectionPolicy !== 'preserve') return patch
+
+      const validAtomIds = new Set(result.molecule.atoms.map(atom => atom.id))
+      const validBondIds = new Set(result.molecule.bonds.map(bond => bond.id))
+      return {
+        ...patch,
+        selectedAtomIds: new Set([...s.selectedAtomIds].filter(id => validAtomIds.has(id))),
+        selectedBondIds: new Set([...s.selectedBondIds].filter(id => validBondIds.has(id))),
+        selectionVersion: s.selectionVersion + 1,
+      }
+    })
+  }
+
+  return {
+    setMolecule: mol => commitEditResult(editChanged(reconcileAtomChirality(mol))),
+    commitEditResult,
+
+    moveAtom: (id, x, y, z) =>
+      set((s) =>
+        applyActiveMoleculeEdit(
+          s,
+          (mol) => runMoveAtomCommand(mol, id, x, y, z),
+        ),
+      ),
+
+    setAtomPositions: (positions) =>
+      set((s) =>
+        applyActiveMoleculeEdit(
+          s,
+          (mol) => runSetAtomPositionsCommand(mol, positions),
+        ),
+      ),
+
+    setObjectAtomPositions: (objectId, positions) =>
+      set((s) => {
+        if (!getEditableObject(s, objectId)) return {}
+        const result = runSetSceneObjectAtomPositionsCommand(
+          s.objectsById,
+          objectId,
+          positions,
+        )
+        return applySceneObjectUpdatedResult(s, result)
+      }),
+
+    autoInferBonds: () =>
+      set((s) => applyActiveMoleculeEdit(s, runAutoInferBondsCommand)),
+
+    clearMolecule: () =>
+      set((s) =>
+        applyActiveMoleculeEditWithSelection(s, (previousMolecule, selection) => {
+          const molecule = runClearMoleculeCommand().molecule
+          const cleared = runClearSelectionCommand(
+            selection.selectedAtomIds,
+            selection.selectedBondIds,
+          )
+          return editWithSelectionSets(
+            molecule,
+            cleared.selectedAtomIds,
+            cleared.selectedBondIds,
+            selection,
+            { moleculeChanged: !moleculesEqual(previousMolecule, molecule) },
+          )
+        }),
+      ),
+
+    centerMolecule: () =>
+      set((s) => applyActiveMoleculeEdit(s, runCenterMoleculeCommand)),
+  }
+}

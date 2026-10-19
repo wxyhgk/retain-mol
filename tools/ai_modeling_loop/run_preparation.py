@@ -122,7 +122,7 @@ def prepare_run(
         "caseId": case.case_id,
         "gitCommit": git_commit,
         "gitDirty": git_dirty,
-        "executor": "@retainmol/mol-viewer/modeling",
+        "executor": "@retainmol/viewer/modeling",
         "editPlanSha256": sha256(copied_plan),
         "referenceSdfSha256": sha256(archived_reference),
         "evaluatorSourceSha256": sha256(archived_evaluator),

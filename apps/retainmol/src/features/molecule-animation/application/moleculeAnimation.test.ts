@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { isMoleculeHistoryTracking } from '@/domain/viewer/history'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { relaxAnimate } from './moleculeAnimation'

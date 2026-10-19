@@ -61,7 +61,7 @@ Implemented theme:
 
 ```text
 theme id: gaussview
-file: packages/mol-viewer/src/presets/themes/gaussview.json
+file: packages/viewer/src/presets/themes/gaussview.json
 ```
 
 ### Render Profile

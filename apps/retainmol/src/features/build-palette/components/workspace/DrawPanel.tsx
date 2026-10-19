@@ -1,5 +1,5 @@
 import { Link2, MousePointer2, Trash2 } from 'lucide-react'
-import type { PublicFragmentDef } from '@retainmol/mol-viewer/fragments'
+import type { PublicFragmentDef } from '@retainmol/core/fragments'
 import { cn } from '@/lib/utils'
 import { HYBRID_GROUP_LABEL } from '../../domain/buildCatalog'
 import { QUICK_ELEMENTS } from '../../domain/periodicTableLayout'

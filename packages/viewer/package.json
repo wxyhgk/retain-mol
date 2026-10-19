@@ -1,0 +1,90 @@
+{
+  "name": "@retainmol/viewer",
+  "version": "0.2.0",
+  "private": false,
+  "description": "RetainMol React + three.js molecule viewer/editor built on @retainmol/core.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./viewer": {
+      "types": "./dist/public/viewer.d.ts",
+      "import": "./dist/public/viewer.js"
+    },
+    "./runtime": {
+      "types": "./dist/public/runtime.d.ts",
+      "import": "./dist/public/runtime.js"
+    },
+    "./state": {
+      "types": "./dist/public/state.d.ts",
+      "import": "./dist/public/state.js"
+    },
+    "./editing": {
+      "types": "./dist/public/editing.d.ts",
+      "import": "./dist/public/editing.js"
+    },
+    "./modeling": {
+      "types": "./dist/public/modeling.d.ts",
+      "import": "./dist/public/modeling.js"
+    },
+    "./styles": {
+      "types": "./dist/public/styles.d.ts",
+      "import": "./dist/public/styles.js"
+    },
+    "./three": {
+      "types": "./dist/public/three.d.ts",
+      "import": "./dist/public/three.js"
+    },
+    "./picking": {
+      "types": "./dist/public/picking.d.ts",
+      "import": "./dist/public/picking.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/prune-declarations.mjs && node scripts/rewrite-declaration-imports.mjs && node scripts/check-dist.mjs",
+    "preapi:report": "npm run build",
+    "api:report": "node scripts/check-api.mjs --local",
+    "preapi:check": "npm run build",
+    "api:check": "node scripts/check-api.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "test:pack": "npm run build && node scripts/test-pack-consumer.mjs",
+    "typecheck": "tsc --noEmit",
+    "typecheck:strict": "tsc -p tsconfig.strict.json",
+    "test": "vitest run",
+    "bench:picking": "vitest bench src/lib/molRenderer/picking/PickingAcceleration.bench.ts",
+    "pretest": "npm run build --workspace @retainmol/core"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "three": ">=0.184.0 <0.185.0"
+  },
+  "dependencies": {
+    "@retainmol/core": "0.2.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.4.3",
+    "zundo": "^2.3.0",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@microsoft/api-extractor": "^7.58.9",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.0",
+    "openchemlib": "^9.21.0",
+    "three": "^0.184.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.10",
+    "vitest": "^4.1.5"
+  }
+}

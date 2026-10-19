@@ -73,14 +73,14 @@ Implemented theme:
 
 ```text
 theme id: iboview
-file: packages/mol-viewer/src/presets/themes/iboview.json
+file: packages/viewer/src/presets/themes/iboview.json
 ```
 
 ### Render Profile
 
 ```text
 material: IboView glossy renderer using the `shiny chic '21` atom/bond registers
-profile file: packages/mol-viewer/src/styles/profiles/iboview-renderer-profile.ts
+profile file: packages/viewer/src/styles/profiles/iboview-renderer-profile.ts
 lighting: shader contains the original three-direction light formula
 fog/depth cueing: Three.js scene fog disabled; IboView fragment depth cue capability exists but is off by default until true OrthographicCamera support is implemented
 outline: none for molecule primitives

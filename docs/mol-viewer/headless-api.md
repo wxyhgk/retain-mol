@@ -1,6 +1,6 @@
 # 无界面的分子编辑 API
 
-`@retainmol/mol-viewer/headless` 在 Node、后端或浏览器中执行同一套确定性编辑命令，
+`@retainmol/core/headless` 在 Node、后端或浏览器中执行同一套确定性编辑命令，
 不创建 viewer、默认 store、React context 或撤销栈。它是现有包的新子入口，不是新增 npm 包。
 模型识别、计算软件和 AI provider 不属于这条入口。
 
@@ -12,7 +12,7 @@ import {
   computeMoleculeRevision,
   replayEditPlan,
   type Molecule,
-} from '@retainmol/mol-viewer/headless'
+} from '@retainmol/core/headless'
 
 const empty: Molecule = { atoms: [], bonds: [] }
 const built = replayEditPlan(empty, {

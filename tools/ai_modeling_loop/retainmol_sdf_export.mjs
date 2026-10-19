@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 
-import { exportSdf, parseSdf } from '@retainmol/mol-viewer/io'
+import { exportSdf, parseSdf } from '@retainmol/core/io'
 
 const [input, output] = process.argv.slice(2)
 if (!input || !output) {

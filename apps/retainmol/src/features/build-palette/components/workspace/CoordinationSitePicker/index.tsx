@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { ArrowLeft, Check, MousePointer2, Rotate3D } from 'lucide-react'
 import * as THREE from 'three'
-import type { FragmentAttachmentSite } from '@retainmol/mol-viewer/fragments'
+import type { FragmentAttachmentSite } from '@retainmol/core/fragments'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { AttachmentSitePickerModel } from '../../../domain/fragmentGeometry'

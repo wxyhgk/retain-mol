@@ -1,7 +1,7 @@
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { calcAngle, calcDihedral, calcDistance } from '@/domain/viewer/geometry'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
-import { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT, type MeasureType } from '@retainmol/mol-viewer/core'
+import { DEFAULT_MEASURE_STYLE, MEASURE_ATOM_COUNT, type MeasureType } from '@retainmol/core'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
 

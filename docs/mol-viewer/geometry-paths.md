@@ -4,7 +4,7 @@
 
 ## 线性路径检查
 
-`@retainmol/mol-viewer/geometry` 与 `/headless` 导出 `validateGeometryMotion(before, after, options)`。两份分子的原子、键和连接关系必须一致。它检查每个原子沿 `p(t) = (1 - t) * before + t * after` 移动的完整区间，`t` 从 0 到 1。
+`@retainmol/core/geometry` 与 `/headless` 导出 `validateGeometryMotion(before, after, options)`。两份分子的原子、键和连接关系必须一致。它检查每个原子沿 `p(t) = (1 - t) * before + t * after` 移动的完整区间，`t` 从 0 到 1。
 
 检查三类几何间距：原子—原子、原子—键段、键段—键段。默认分别为 0.8、0.15、0.1 Å。原子对排除图距离不超过两键的邻居；原子—键排除端点及与端点直接相连的原子；键对排除共享端点。它们是明确的骨架几何下界，不是元素相关的范德华半径。
 

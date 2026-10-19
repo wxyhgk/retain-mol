@@ -1,5 +1,5 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
-import { GeometryRelaxer } from '@retainmol/mol-viewer/io'
+import type { Molecule } from '@retainmol/core'
+import { GeometryRelaxer } from '@retainmol/core/io'
 import { createObjectPositionWriteEditSession } from '@/domain/viewer/editSessions'
 import type { AtomPosition, MoleculePositionWriter } from '@/domain/viewer/positionWriter'
 import { OPTIMIZE_ANIM } from '@/config/optimize.config'

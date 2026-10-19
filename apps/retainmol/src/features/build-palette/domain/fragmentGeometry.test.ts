@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FragmentAttachmentSite } from '@retainmol/mol-viewer/fragments'
+import type { FragmentAttachmentSite } from '@retainmol/core/fragments'
 import { groupEquivalentAttachmentSites } from './fragmentGeometry'
 
 function site(id: string, equivalenceGroup: string, bondOrder: 1 | 2 | 3): FragmentAttachmentSite {

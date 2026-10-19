@@ -1,0 +1,86 @@
+{
+  "name": "@retainmol/core",
+  "version": "0.2.0",
+  "private": false,
+  "description": "RetainMol molecule model, IO, geometry and headless editing without UI dependencies.",
+  "type": "module",
+  "main": "./dist/public/core.js",
+  "module": "./dist/public/core.js",
+  "types": "./dist/public/core.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/public/core.d.ts",
+      "import": "./dist/public/core.js"
+    },
+    "./io": {
+      "types": "./dist/public/io.d.ts",
+      "import": "./dist/public/io.js"
+    },
+    "./geometry": {
+      "types": "./dist/public/geometry.d.ts",
+      "import": "./dist/public/geometry.js"
+    },
+    "./graph": {
+      "types": "./dist/public/graph.d.ts",
+      "import": "./dist/public/graph.js"
+    },
+    "./headless": {
+      "types": "./dist/public/headless.d.ts",
+      "import": "./dist/public/headless.js"
+    },
+    "./fragments": {
+      "types": "./dist/public/fragments.d.ts",
+      "import": "./dist/public/fragments.js"
+    },
+    "./coordination": {
+      "types": "./dist/public/coordination.d.ts",
+      "import": "./dist/public/coordination.js"
+    },
+    "./templates": {
+      "types": "./dist/public/templates.d.ts",
+      "import": "./dist/public/templates.js"
+    },
+    "./samples": {
+      "types": "./dist/public/samples.d.ts",
+      "import": "./dist/public/samples.js"
+    },
+    "./pubchem": {
+      "types": "./dist/public/pubchem.d.ts",
+      "import": "./dist/public/pubchem.js"
+    },
+    "./optimize": {
+      "types": "./dist/optimize.d.ts",
+      "import": "./dist/optimize.js"
+    },
+    "./internal/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/rewrite-declaration-imports.mjs && node scripts/check-dist.mjs",
+    "preapi:report": "npm run build",
+    "api:report": "node scripts/check-api.mjs --local",
+    "preapi:check": "npm run build",
+    "api:check": "node scripts/check-api.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "test:pack": "npm run build && node scripts/test-pack-consumer.mjs",
+    "typecheck": "tsc --noEmit",
+    "typecheck:strict": "tsc -p tsconfig.strict.json",
+    "test": "node --test scripts/module-graph.test.mjs && vitest run"
+  },
+  "dependencies": {
+    "openchemlib": "^9.21.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@microsoft/api-extractor": "^7.58.9",
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.10",
+    "vitest": "^4.1.5"
+  }
+}

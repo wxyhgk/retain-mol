@@ -1,13 +1,14 @@
 import { defineConfig } from 'vitest/config'
 import path from 'path'
 
-// three 与 mol-viewer 必须外置:渲染实例与编辑状态 store 需要与 app 保持单实例
+// three 与 core/viewer 必须外置:渲染实例、编辑状态 store 与 core 注册表需要与 app 保持单实例
 const externals = [
   'react',
   'react-dom',
   'react/jsx-runtime',
   'three',
-  '@retainmol/mol-viewer',
+  '@retainmol/core',
+  '@retainmol/viewer',
   '@retainmol/molecule-assets',
   '@retainmol/ui-kit',
   '@tanstack/react-query',

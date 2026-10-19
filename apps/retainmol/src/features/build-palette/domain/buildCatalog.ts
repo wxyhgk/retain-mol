@@ -4,13 +4,13 @@ import {
   getMolecularFormula,
   getElementConfig,
   type Molecule,
-} from '@retainmol/mol-viewer/core'
-import { listFragments } from '@retainmol/mol-viewer/fragments'
+} from '@retainmol/core'
+import { listFragments } from '@retainmol/core/fragments'
 import {
   createCenteredMoleculeFromTemplate,
   listMoleculeTemplates,
-} from '@retainmol/mol-viewer/templates'
-import { cloneTemplateMolecule } from '@retainmol/mol-viewer/templates'
+} from '@retainmol/core/templates'
+import { cloneTemplateMolecule } from '@retainmol/core/templates'
 
 export const COMMON_HYBRID_IDS = ['c-sp3', 'c-sp2', 'c-sp', 'n-sp3', 'n-sp2', 'n-sp', 'o-sp3', 'o-sp2', 's-sp3', 's-sp2']
 export const COMMON_ATOMS = ['C', 'H', 'N', 'O', 'S', 'P', 'F', 'Cl', 'Br', 'I']
