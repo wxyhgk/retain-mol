@@ -6,7 +6,7 @@
 
 | 数据 | 唯一归属 | 说明 |
 |---|---|---|
-| 分子、选择、编辑工具、视口、撤销事务 | Zustand + `@retainmol/mol-viewer` | 需要低延迟同步更新的本地编辑状态 |
+| 分子、选择、编辑工具、视口、撤销事务 | Zustand + `@retainmol/viewer` | 需要低延迟同步更新的本地编辑状态 |
 | Job、Artifact、Workflow、模板库、分子数据库 | TanStack Query | 后端是事实来源，禁止复制进 Zustand |
 | 计算提交参数 | React Hook Form + Zod | 每种计算方法有独立 schema |
 | 后端请求校验 | Pydantic | 最终权威校验，错误映射回前端字段 |
@@ -58,7 +58,7 @@ Analyze 工作区读取已完成任务的轨迹 Artifact。ECharts 只渲染后�
 
 ### 跨任务工作流
 
-React Flow 只编辑 Job DAG。边被持久化为 `WorkflowInputLink`，连接来源 Job 的命名 Input 或 Artifact。分子结构本身仍由 `mol-viewer` 管理，不能存入 React Flow 节点状态。
+React Flow 只编辑 Job DAG。边被持久化为 `WorkflowInputLink`，连接来源 Job 的命名 Input 或 Artifact。分子结构本身仍由 `@retainmol/viewer` 管理，不能存入 React Flow 节点状态。
 
 ### 协作
 

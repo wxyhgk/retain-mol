@@ -107,8 +107,8 @@ hooks、store 和 public API 只能从 `commands/<domain>` 导入；`Decision`�
 
 ## 公共 API 边界
 
-- `@retainmol/mol-viewer/viewer` 只暴露 store、viewer 组件和编辑 session，不再暴露旧的独立编辑函数。
-- `@retainmol/mol-viewer/viewer` 可以暴露只读几何测量函数，但不能直接暴露底层构建/编辑算法。
+- `@retainmol/viewer/viewer` 只暴露 store、viewer 组件和编辑 session，不再暴露旧的独立编辑函数。
+- `@retainmol/viewer/viewer` 可以暴露只读几何测量函数，但不能直接暴露底层构建/编辑算法。
 - 新宿主通过 `/runtime` 的 `getViewerApi(runtime)` 调用实例编辑、选择、历史和视口能力；现有 App 的默认实例继续通过 store action 调用。
 - 实例 API 只转发到对应 runtime 的 command/store，不暴露内部 services；快照订阅合并同步更新，详见[实例级基础 API](./instance-api.md)。
 
@@ -128,9 +128,9 @@ hooks、store 和 public API 只能从 `commands/<domain>` 导入；`Decision`�
 常用扫描：
 
 ```bash
-rg -n "store/|useMoleculeStore|patchActiveMol|setState\\(" packages/mol-viewer/src/lib/builder/commands
-rg -n "useMoleculeStore\\.setState|molecule\\.atoms\\s*=|molecule\\.bonds\\s*=" packages/mol-viewer/src apps/retainmol/src --glob '!**/*.test.ts'
-rg -n "beginTransaction\\(|endTransaction\\(" packages/mol-viewer/src apps/retainmol/src --glob '!**/*.test.ts'
+rg -n "store/|useMoleculeStore|patchActiveMol|setState\\(" packages/core/src/lib/builder/commands
+rg -n "useMoleculeStore\\.setState|molecule\\.atoms\\s*=|molecule\\.bonds\\s*=" packages/core/src packages/viewer/src apps/retainmol/src --glob '!**/*.test.ts'
+rg -n "beginTransaction\\(|endTransaction\\(" packages/core/src packages/viewer/src apps/retainmol/src --glob '!**/*.test.ts'
 ```
 
 当前期望：
@@ -148,7 +148,7 @@ rg -n "beginTransaction\\(|endTransaction\\(" packages/mol-viewer/src apps/retai
 ```bash
 npm run check:boundaries --workspace retainmol
 npx vitest run src/lib/builder src/store --config vite.config.ts
-npm run build --workspace @retainmol/mol-viewer
+npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer
 npm run build --workspace retainmol
 ```
 

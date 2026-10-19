@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Atom, FlaskConical, LoaderCircle } from 'lucide-react'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { Button } from '@retainmol/ui-kit'
 import { cn } from '@retainmol/ui-kit'
 import type { JobArtifact, JobDetail, XtbStructureInput } from '../domain/jobTypes'

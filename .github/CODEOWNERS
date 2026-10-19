@@ -14,8 +14,10 @@
 /apps/retainmol/src/features/template-library/ @wxyhgk
 /apps/retainmol/src/features/template-studio/ @wxyhgk
 
-/packages/mol-viewer/src/public/ @wxyhgk
-/packages/mol-viewer/src/lib/builder/ @wxyhgk
-/packages/mol-viewer/src/lib/molRenderer/ @wxyhgk
-/packages/mol-viewer/src/store/ @wxyhgk
-/packages/mol-viewer/package.json @wxyhgk
+/packages/core/src/public/ @wxyhgk
+/packages/core/src/lib/builder/ @wxyhgk
+/packages/core/package.json @wxyhgk
+/packages/viewer/src/public/ @wxyhgk
+/packages/viewer/src/lib/molRenderer/ @wxyhgk
+/packages/viewer/src/store/ @wxyhgk
+/packages/viewer/package.json @wxyhgk

@@ -10,14 +10,15 @@
 | 路径 | 包名 | 职责 |
 | --- | --- | --- |
 | `apps/retainmol` | `retainmol` | 应用壳与产品 UI（开发端口 `5300`） |
-| `packages/mol-viewer` | `@retainmol/mol-viewer` | 分子数据模型、Three.js 渲染、构建引擎、IO（按子入口导出） |
+| `packages/core` | `@retainmol/core` | 分子数据模型、构建引擎（builder command）、IO、几何、无界面建模；不依赖 React/Three（按子入口导出） |
+| `packages/viewer` | `@retainmol/viewer` | React + three.js 分子查看/编辑组件、runtime、状态与渲染（按子入口导出，精确依赖同版本 core） |
 | `packages/ui-kit` | `@retainmol/ui-kit` | 无业务语义的共享 UI（禁止依赖业务包） |
 | `packages/molecule-assets` | `@retainmol/molecule-assets` | 不可变 Revision + CAS 并发的分子资产 |
 | `packages/jobs` | `@retainmol/jobs` | 任务提交 / 管理 + 3D 展柜 |
-| `examples/mol-viewer-consumer` | 独立消费者示例（非 workspace） | 通过真实打包产物验证外部 React 宿主接入 |
+| `examples/viewer-consumer` | 独立消费者示例（非 workspace） | 通过真实打包产物验证外部 React 宿主接入 |
 
 依赖方向（由 `check:boundaries` 强制）：
-`ui-kit → mol-viewer / molecule-assets → jobs → app`，禁止反向依赖。
+`ui-kit → core → viewer / molecule-assets → jobs → app`，禁止反向依赖。
 
 ## 技术栈
 
@@ -32,7 +33,7 @@ TanStack Query · Ketcher（2D）· OpenChemLib
 
 ```bash
 npm install
-npm run build:packages   # 依次构建 ui-kit → mol-viewer → molecule-assets → jobs
+npm run build:packages   # 依次构建 ui-kit → core → viewer → molecule-assets → jobs
 npm run dev --workspace retainmol
 ```
 
@@ -45,7 +46,7 @@ npm run verify:viewer-consumer  # tarball 安装、公共 API 回归、消费者
 ```
 
 外部项目接入步骤、实例边界及浏览器验收状态见
-[mol-viewer 独立宿主接入](docs/mol-viewer/consumer-integration.md)。
+[core / viewer 独立宿主接入](docs/mol-viewer/consumer-integration.md)。
 
 螺芴碰撞避让演示：`/?demo=steric`，操作、Jev 配置和几何策略见
 [Demo 文档](docs/mol-viewer/steric-demo.md)。
@@ -61,8 +62,10 @@ npm run verify:viewer-consumer  # tarball 安装、公共 API 回归、消费者
 
 几点约定：
 
-- `packages/mol-viewer`：`three` 只能是 peer 依赖；改 `src/public/*` 后必须跑
-  `npm run api:report --workspace @retainmol/mol-viewer`；改 `src` 后必须重新构建，
+- `packages/core`：运行时外部依赖只允许 OpenChemLib/Zod；`internal/*` 只供 viewer 使用，不承诺稳定。
+- `packages/viewer`：`three` 只能是 peer 依赖；core 精确锁定同版本，两包同步发版。
+- 改任一包 `src/public/*` 后必须跑该包的
+  `npm run api:report --workspace @retainmol/<core|viewer>`；改 `src` 后必须重新构建（先 core 后 viewer），
   否则消费方用到的是旧 `dist`。
 - 各包不读 `import.meta.env`；后端地址由 app 在启动时注入（如 `configureJobsApiBase`）。
 - 跨 feature 引用只走门面（`@/features/<name>`），规则见

@@ -1,17 +1,17 @@
-import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
-import { commitEditPlan, getModelingContext } from '@retainmol/mol-viewer/modeling'
-import { computeMoleculeRevision, dryRunEditPlan, previewConstrainedGeometry, validateGeometryMotion } from '@retainmol/mol-viewer/headless'
-import type { RendererPort } from '@retainmol/mol-viewer/viewer'
+import { createViewerRuntime, getViewerApi } from '@retainmol/viewer/runtime'
+import { commitEditPlan, getModelingContext } from '@retainmol/viewer/modeling'
+import { computeMoleculeRevision, dryRunEditPlan, previewConstrainedGeometry, validateGeometryMotion } from '@retainmol/core/headless'
+import type { RendererPort } from '@retainmol/viewer/viewer'
 
-export { MolViewer as GeometryPathViewport } from '@retainmol/mol-viewer/viewer'
+export { MolViewer as GeometryPathViewport } from '@retainmol/viewer/viewer'
 export {
   computeMoleculeRevision, previewConstrainedGeometry, validateGeometryMotion,
   createRibbonGuide, validateRibbonRegion, measureRibbonGeometry,
-} from '@retainmol/mol-viewer/headless'
+} from '@retainmol/core/headless'
 export type {
   Molecule, ConstrainedGeometryRequest, GeometryMotionReport, GeometryMotionIssue,
   GeometryRibbonRegion,
-} from '@retainmol/mol-viewer/headless'
+} from '@retainmol/core/headless'
 export type GeometryPathRenderer = RendererPort
 export type GeometryPathPreview = Extract<ReturnType<typeof previewConstrainedGeometry>, { ok: true }>
 type Side = 'current' | 'preview'

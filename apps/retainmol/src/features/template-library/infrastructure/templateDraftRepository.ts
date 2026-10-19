@@ -4,8 +4,8 @@ import {
   type MolecularTemplateDraft,
   type TemplateAttachmentSite,
   type TemplateDraftCategory,
-} from '@retainmol/mol-viewer/templates'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+} from '@retainmol/core/templates'
+import type { Molecule } from '@retainmol/core'
 
 const STORAGE_KEY = 'retainmol.template-drafts.v1'
 

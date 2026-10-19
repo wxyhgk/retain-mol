@@ -6,8 +6,8 @@
 import { useCallback } from 'react'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { captureViewportImage } from '@/domain/viewer/viewport'
-import { exportXYZ } from '@retainmol/mol-viewer/core'
-import { exportGJF, exportMol, exportSdf } from '@retainmol/mol-viewer/io'
+import { exportXYZ } from '@retainmol/core'
+import { exportGJF, exportMol, exportSdf } from '@retainmol/core/io'
 import { parseMoleculeFile, placeMoleculeInViewer } from '@/features/molecule-placement'
 
 function download(text: string, filename: string, mime = 'text/plain') {

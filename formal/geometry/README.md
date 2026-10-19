@@ -1,7 +1,7 @@
 # RetainMol 三维几何形式化验证
 
 这个目录使用 Lean 4 验证 AI 建模候选中的离散拓扑和关键三维不变量。它不是坐标生成器，
-也不替代距离几何、MMFF/UFF、GFN2-xTB 或 `mol-viewer` 的 builder command。
+也不替代距离几何、MMFF/UFF、GFN2-xTB 或 `@retainmol/core` 的 builder command。
 
 ## 为什么使用 Lean
 

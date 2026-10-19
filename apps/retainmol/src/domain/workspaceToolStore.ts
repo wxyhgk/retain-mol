@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Tool } from '@retainmol/mol-viewer/core'
+import type { Tool } from '@retainmol/core'
 
 export const WORKSPACE_TOOLS = ['select', 'draw', 'template', 'move', 'measure'] as const
 

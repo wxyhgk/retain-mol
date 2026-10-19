@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 
 /** Engine adapters own concrete values; the shared task center must accept future kinds. */
 export type JobKind = string

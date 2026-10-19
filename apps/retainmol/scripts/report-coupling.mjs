@@ -3,7 +3,8 @@ import { join, relative } from 'node:path'
 
 const ROOTS = [
   ['app', new URL('../src', import.meta.url).pathname],
-  ['mol-viewer', new URL('../../../packages/mol-viewer/src', import.meta.url).pathname],
+  ['core', new URL('../../../packages/core/src', import.meta.url).pathname],
+  ['viewer', new URL('../../../packages/viewer/src', import.meta.url).pathname],
 ]
 
 function walk(dir) {
@@ -32,7 +33,7 @@ function collectImports(source) {
 
 function classify(specifier) {
   if (specifier.startsWith('@/domain/viewer/')) return 'viewer-adapter'
-  if (specifier.startsWith('@retainmol/mol-viewer')) return 'mol-viewer-public'
+  if (/^@retainmol\/(?:core|viewer)(?:\/|$)/.test(specifier)) return 'core-viewer-public'
   if (specifier.includes('moleculeStore') || specifier.includes('editorStore')) return 'viewer-store-internal'
   if (specifier.startsWith('@/')) return 'app-local'
   if (specifier.startsWith('.')) return 'relative-local'
@@ -50,7 +51,7 @@ for (const [name, root] of ROOTS) {
     return {
       file: relative(root, file),
       imports: imports.length,
-      publicPackageImports: counts['mol-viewer-public'] ?? 0,
+      publicPackageImports: counts['core-viewer-public'] ?? 0,
       viewerAdapterImports: counts['viewer-adapter'] ?? 0,
       internalStoreImports: counts['viewer-store-internal'] ?? 0,
       localImports: (counts['app-local'] ?? 0) + (counts['relative-local'] ?? 0),

@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import type { JobArtifact, JobDetail } from '../domain/jobTypes'
 import { isMoleculeSnapshot } from '../domain/shelf/jobMolecule'
 

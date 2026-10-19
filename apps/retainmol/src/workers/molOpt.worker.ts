@@ -8,7 +8,7 @@
 import {
   generate3D, minimizeGeometry, registerForceFieldFromUrl,
   type OptimizeResult,
-} from '@retainmol/mol-viewer/optimize'
+} from '@retainmol/core/optimize'
 import type { MoleculeComputationRequest } from '../features/molecular-computation/domain/computationTypes'
 
 self.onmessage = async (e: MessageEvent<MoleculeComputationRequest>) => {

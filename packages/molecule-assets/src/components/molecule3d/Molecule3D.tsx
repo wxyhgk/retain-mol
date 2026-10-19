@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { AromaticRingCache, MoleculeRenderer } from '@retainmol/mol-viewer/three'
-import { resolveTheme, type ResolvedTheme } from '@retainmol/mol-viewer/styles'
-import { centerMolecule } from '@retainmol/mol-viewer/core'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import { AromaticRingCache, MoleculeRenderer } from '@retainmol/viewer/three'
+import { resolveTheme, type ResolvedTheme } from '@retainmol/viewer/styles'
+import { centerMolecule } from '@retainmol/core'
+import type { Molecule } from '@retainmol/core'
 
 export interface Molecule3DProps {
   molecule: Molecule
-  /** mol-viewer 主题 id（分子配色）；缺省 'default' */
+  /** viewer 主题 id（分子配色）；缺省 'default' */
   themeId?: string
   autoRotate?: boolean
   /** 拖拽旋转 */

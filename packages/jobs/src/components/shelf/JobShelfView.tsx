@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { resolveTheme, type ResolvedTheme } from '@retainmol/mol-viewer/styles'
+import { resolveTheme, type ResolvedTheme } from '@retainmol/viewer/styles'
 import { useUiThemeStore } from '@retainmol/ui-kit'
 import type { JobSummary } from '../../domain/jobTypes'
 import type { ShelfMoleculeEntry } from '../../domain/shelf/jobMolecule'

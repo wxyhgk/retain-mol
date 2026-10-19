@@ -6,5 +6,5 @@ export {
   resetViewport,
   setViewportAxesVisible,
   setViewportGridVisible,
-} from '@retainmol/mol-viewer/viewer'
-export type { MolViewerProps } from '@retainmol/mol-viewer/viewer'
+} from '@retainmol/viewer/viewer'
+export type { MolViewerProps } from '@retainmol/viewer/viewer'

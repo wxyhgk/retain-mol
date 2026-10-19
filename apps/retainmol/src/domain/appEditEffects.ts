@@ -1,4 +1,4 @@
-import type { MolClipboard } from '@retainmol/mol-viewer/core'
+import type { MolClipboard } from '@retainmol/core'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 

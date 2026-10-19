@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
-import { exportSdf, parseSdf } from '@retainmol/mol-viewer/io'
+import { exportSdf, parseSdf } from '@retainmol/core/io'
 import {
   MODELING_COMMAND_KINDS,
   EXPECTED_EFFECT_SCHEMA_VERSION,
@@ -16,9 +16,9 @@ import {
   createCanonicalMoleculeSnapshot,
   createHeadlessModelingContext,
   replayEditPlan,
-} from '@retainmol/mol-viewer/modeling'
+} from '@retainmol/viewer/modeling'
 
-const EXECUTOR_ID = '@retainmol/mol-viewer/modeling'
+const EXECUTOR_ID = '@retainmol/viewer/modeling'
 const EXECUTOR_SCHEMA_VERSION = 1
 
 function parseArgs(argv) {

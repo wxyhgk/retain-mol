@@ -1,6 +1,6 @@
 # Molecule Renderer Boundary
 
-This document describes the current renderer split inside `packages/mol-viewer/src/lib/molRenderer`.
+This document describes the current renderer split inside `packages/viewer/src/lib/molRenderer`.
 
 The goal is to let multiple people add visual styles without all editing `MoleculeRenderer.ts`.
 
@@ -80,8 +80,8 @@ moleculeAromaticVisuals.ts
 After changing renderer internals:
 
 ```bash
-npm run build --workspace @retainmol/mol-viewer
-npx vitest run --root packages/mol-viewer
+npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer
+npx vitest run --root packages/viewer
 npm run build --workspace retainmol
 ```
 

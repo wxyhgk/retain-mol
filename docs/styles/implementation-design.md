@@ -7,7 +7,7 @@ This document maps the target style system to the current codebase.
 Current state lives in:
 
 ```text
-packages/mol-viewer/src/store/editorStore.ts
+packages/viewer/src/store/editorStore.ts
 ```
 
 Current fields:
@@ -28,15 +28,15 @@ apps/retainmol/src/features/style/components/StylePanel.tsx
 Current renderer binding:
 
 ```text
-packages/mol-viewer/src/hooks/useRendererBinding.ts
+packages/viewer/src/hooks/useRendererBinding.ts
 ```
 
 Current theme loading:
 
 ```text
-packages/mol-viewer/src/presets/schema.ts
-packages/mol-viewer/src/presets/loader.ts
-packages/mol-viewer/src/presets/themes/*.json
+packages/viewer/src/presets/schema.ts
+packages/viewer/src/presets/loader.ts
+packages/viewer/src/presets/themes/*.json
 ```
 
 ## Minimal First Implementation
@@ -48,9 +48,9 @@ Add a new preset layer without removing current fields.
 Add to a new module, not to `ThemeSchema` directly:
 
 ```text
-packages/mol-viewer/src/styles/schema.ts
-packages/mol-viewer/src/styles/loader.ts
-packages/mol-viewer/src/styles/presets/*.json
+packages/viewer/src/styles/schema.ts
+packages/viewer/src/styles/loader.ts
+packages/viewer/src/styles/presets/*.json
 ```
 
 Initial schema can be intentionally small:
@@ -108,7 +108,7 @@ manual override keeps stylePresetId but UI indicates "customized"
 Define the public style contract from:
 
 ```text
-packages/mol-viewer/src/public/styles.ts
+packages/viewer/src/public/styles.ts
 ```
 
 Suggested exports:
@@ -118,9 +118,9 @@ export { listStylePresets, resolveStylePreset } from '../styles/loader'
 export type { StylePreset, ResolvedStylePreset } from '../styles/schema'
 ```
 
-Mirror through `packages/mol-viewer/src/index.ts` only when root-barrel compatibility is needed.
+Mirror through `packages/viewer/src/index.ts` only when root-barrel compatibility is needed.
 
-Do not require app code to deep-import from `packages/mol-viewer/src/styles/...`.
+Do not require app code to deep-import from `packages/viewer/src/styles/...`.
 
 ### Style Panel
 
@@ -184,9 +184,9 @@ r.renderStyle = renderStyle
 Avoid adding more style branches in these locations:
 
 ```text
-packages/mol-viewer/src/lib/molRenderer/MoleculeRenderer.ts
-packages/mol-viewer/src/lib/molRenderer/MolRenderer.ts
-packages/mol-viewer/src/lib/molRenderer/sceneRig.ts
+packages/viewer/src/lib/molRenderer/MoleculeRenderer.ts
+packages/viewer/src/lib/molRenderer/MolRenderer.ts
+packages/viewer/src/lib/molRenderer/sceneRig.ts
 ```
 
 Known hot spots:

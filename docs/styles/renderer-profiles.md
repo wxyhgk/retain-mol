@@ -23,9 +23,9 @@ publication shader settings
 These fields are currently split across:
 
 ```text
-packages/mol-viewer/src/config/render.config.ts
-packages/mol-viewer/src/lib/molRenderer/*
-packages/mol-viewer/src/presets/themes/*.json
+packages/viewer/src/config/render.config.ts
+packages/viewer/src/lib/molRenderer/*
+packages/viewer/src/presets/themes/*.json
 ```
 
 The long-term goal is to move style-specific renderer parameters into named profiles.

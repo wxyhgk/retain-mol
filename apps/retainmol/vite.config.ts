@@ -69,7 +69,7 @@ export default defineConfig({
         { find: /^subscription$/, replacement: path.resolve(__dirname, '../../third-party/react-vendor/subscription.mjs') },
       ] : []),
     ],
-    // app 与 mol-viewer 各带一份 three/react，多实例会导致 hooks/ instanceof 失效（ketcher 独立 react 导致 useRef 读空）
+    // app 与 viewer 各带一份 three/react，多实例会导致 hooks/ instanceof 失效（ketcher 独立 react 导致 useRef 读空）
     dedupe: ['three', 'react', 'react-dom', 'react/jsx-runtime'],
   },
   assetsInclude: ['**/*.ket'],

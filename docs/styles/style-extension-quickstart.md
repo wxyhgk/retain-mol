@@ -14,10 +14,10 @@ import {
   listThemes,
   listStylePresets,
   listRenderProfiles,
-} from '@retainmol/mol-viewer/styles'
+} from '@retainmol/viewer/styles'
 ```
 
-The root `@retainmol/mol-viewer` barrel still mirrors these exports for compatibility, but new app code and docs should use the `styles` subpath.
+The root `@retainmol/viewer` barrel still mirrors these exports for compatibility, but new app code and docs should use the `styles` subpath.
 
 ## Choose the Smallest Layer
 
@@ -25,10 +25,10 @@ Start with the smallest layer that can express the style:
 
 | Need | Layer | Files |
 | --- | --- | --- |
-| Element colors, background, highlight color, ball/bond scale tokens | Theme | `packages/mol-viewer/src/presets/themes/*.json` or `registerTheme()` |
-| Combine existing display mode, theme, renderer, labels | Style preset | `packages/mol-viewer/src/styles/presets/*.json` or `registerStylePreset()` |
-| New material, lighting, bond color policy, bond geometry, aromatic style, depth cue | Render profile | `packages/mol-viewer/src/styles/profiles/*` or `registerRenderProfile()` |
-| A new primitive that profiles cannot express | Renderer capability | `packages/mol-viewer/src/lib/molRenderer/*` |
+| Element colors, background, highlight color, ball/bond scale tokens | Theme | `packages/viewer/src/presets/themes/*.json` or `registerTheme()` |
+| Combine existing display mode, theme, renderer, labels | Style preset | `packages/viewer/src/styles/presets/*.json` or `registerStylePreset()` |
+| New material, lighting, bond color policy, bond geometry, aromatic style, depth cue | Render profile | `packages/viewer/src/styles/profiles/*` or `registerRenderProfile()` |
+| A new primitive that profiles cannot express | Renderer capability | `packages/viewer/src/lib/molRenderer/*` |
 
 Do not edit builder, store, import/export, or geometry chemistry code for a visual style.
 
@@ -145,8 +145,8 @@ Then reference the profile from a preset:
 Run these before handing the style to another person:
 
 ```bash
-npm run build --workspace @retainmol/mol-viewer
-npx vitest run --root packages/mol-viewer
+npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer
+npx vitest run --root packages/viewer
 npm run check:boundaries --workspace retainmol
 ```
 
@@ -163,5 +163,5 @@ For renderer-profile changes, also do a browser smoke:
 - Theme-only and preset-only work can be parallelized.
 - New render profile fields need renderer owner review.
 - New material models need renderer owner review and docs in `docs/styles/renderer-profiles.md`.
-- Public exports go through `@retainmol/mol-viewer/styles` first.
+- Public exports go through `@retainmol/viewer/styles` first.
 - Never add software-name branches inside renderer code. Add generic profile fields instead.

@@ -1,5 +1,5 @@
 import { useStore } from 'zustand'
-import { useMoleculeTemporal as moleculeTemporal } from '@retainmol/mol-viewer/state'
+import { useMoleculeTemporal as moleculeTemporal } from '@retainmol/viewer/state'
 
 export function useMoleculeHistory() {
   const undo = useStore(moleculeTemporal, state => state.undo)

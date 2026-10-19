@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeMoleculeRevision, createHeadlessModelingContext, previewConstrainedGeometry } from '@retainmol/mol-viewer/headless'
+import { computeMoleculeRevision, createHeadlessModelingContext, previewConstrainedGeometry } from '@retainmol/core/headless'
 import { createConstrainedGeometrySession } from '@/domain/viewer/constrainedGeometry'
 import { anchorAtomId, bondLengthDelta, ringFixture, ringRequest, targetAtomId } from './ringFixture'
 

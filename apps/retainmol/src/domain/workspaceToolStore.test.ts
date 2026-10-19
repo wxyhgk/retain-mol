@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Tool } from '@retainmol/mol-viewer/core'
+import type { Tool } from '@retainmol/core'
 import {
   activateDrawOperation,
   activateTemplateFragment,

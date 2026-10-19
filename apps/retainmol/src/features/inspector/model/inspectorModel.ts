@@ -7,9 +7,9 @@ import {
   type AtomChiralityState,
   type Bond,
   type Molecule,
-} from '@retainmol/mol-viewer/core'
+} from '@retainmol/core'
 import { calcAngle, calcDihedral, calcDistance } from '@/domain/viewer/geometry'
-import { splitConnectedComponents } from '@retainmol/mol-viewer/graph'
+import { splitConnectedComponents } from '@retainmol/core/graph'
 
 export interface IndexedAtom {
   atom: Atom

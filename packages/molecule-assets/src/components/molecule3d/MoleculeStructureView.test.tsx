@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { newAtom, newBond } from '@retainmol/mol-viewer/core'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import { newAtom, newBond } from '@retainmol/core'
+import type { Molecule } from '@retainmol/core'
 import { MoleculeStructureView } from './MoleculeStructureView'
 import { reset3DPoolForTest } from './molecule3dPool'
 

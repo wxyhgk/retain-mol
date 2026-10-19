@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import {
   captureActiveMoleculeTarget,
   isMoleculeTargetCurrent,

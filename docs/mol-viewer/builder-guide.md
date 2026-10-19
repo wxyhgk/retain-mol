@@ -1,6 +1,6 @@
 # Builder 导航：我想改某个编辑行为，应该看哪里？
 
-`packages/mol-viewer/src/lib/builder` 是分子编辑内核。先不要按文件名硬记，按职责理解更稳：
+`packages/core/src/lib/builder` 是分子编辑内核。先不要按文件名硬记，按职责理解更稳：
 
 ```text
 builder/
@@ -198,6 +198,6 @@ hooks/builderPreviewHandlers.ts
 
 ```bash
 npx vitest run src/lib/builder --config vite.config.ts
-npm run build --workspace @retainmol/mol-viewer
+npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer
 npm run check:boundaries --workspace retainmol
 ```

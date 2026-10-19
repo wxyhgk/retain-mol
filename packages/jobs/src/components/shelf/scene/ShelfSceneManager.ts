@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { AromaticRingCache, type ResolvedTheme } from '@retainmol/mol-viewer/three'
+import { AromaticRingCache, type ResolvedTheme } from '@retainmol/viewer/three'
 import type { JobStatus } from '../../../domain/jobTypes'
 import type { ShelfMoleculeEntry } from '../../../domain/shelf/jobMolecule'
 import { SHELF, layoutShelf, shelfColumns } from '../../../domain/shelf/shelfLayout'

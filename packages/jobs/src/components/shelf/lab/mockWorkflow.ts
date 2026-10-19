@@ -1,5 +1,5 @@
-import { SAMPLE_MOLECULES } from '@retainmol/mol-viewer/samples'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import { SAMPLE_MOLECULES } from '@retainmol/core/samples'
+import type { Molecule } from '@retainmol/core'
 import type { JobSummary } from '../../../domain/jobTypes'
 import type { ShelfMoleculeEntry } from '../../../domain/shelf/jobMolecule'
 import type { ShelfEdgeState, WorkflowNodeVisualState } from '../../../domain/shelf/shelfNodeStyle'

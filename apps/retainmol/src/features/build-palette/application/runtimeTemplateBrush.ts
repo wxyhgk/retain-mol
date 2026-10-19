@@ -1,11 +1,11 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
-import { registerFragment, type PublicFragmentDef } from '@retainmol/mol-viewer/fragments'
+import type { Molecule } from '@retainmol/core'
+import { registerFragment, type PublicFragmentDef } from '@retainmol/core/fragments'
 import {
   createAtomAttachmentSite,
   createEdgeAttachmentSite,
   createFragmentFromTemplateSite,
   createTemplateDraft,
-} from '@retainmol/mol-viewer/templates'
+} from '@retainmol/core/templates'
 
 export type RuntimeTemplateSite =
   | { readonly kind: 'atom'; readonly atomId: string }

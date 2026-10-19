@@ -5,13 +5,13 @@ import { dirname, resolve, sep } from 'node:path'
  * molecule-assets 提供分子资产/版本领域与 API 能力:
  * - 禁止 app 别名 '@/'
  * - 禁止相对路径逃出 src
- * - mol-viewer 只允许白名单子入口;兄弟包只允许 ui-kit 根导入
+ * - @retainmol/core 与 @retainmol/viewer 只允许白名单入口;兄弟包只允许 ui-kit 根导入
  */
-const ALLOWED_MOL_VIEWER_SUBPATHS = new Set([
-  '@retainmol/mol-viewer/core',
-  '@retainmol/mol-viewer/io',
-  '@retainmol/mol-viewer/three',
-  '@retainmol/mol-viewer/styles',
+const ALLOWED_CORE_VIEWER_IMPORTS = new Set([
+  '@retainmol/core',
+  '@retainmol/core/io',
+  '@retainmol/viewer/three',
+  '@retainmol/viewer/styles',
 ])
 const ALLOWED_SIBLING_PACKAGES = new Set(['@retainmol/ui-kit'])
 
@@ -58,9 +58,9 @@ for (const file of walk(SRC_DIR)) {
         violations.push(`${rel}: 相对导入 ${specifier} 逃出了包 src`)
       }
     }
-    if (specifier === '@retainmol/mol-viewer' || specifier.startsWith('@retainmol/mol-viewer/')) {
-      if (!ALLOWED_MOL_VIEWER_SUBPATHS.has(specifier)) {
-        violations.push(`${rel}: mol-viewer 导入 ${specifier} 不在允许清单`)
+    if (/^@retainmol\/(?:core|viewer)(?:\/|$)/.test(specifier)) {
+      if (!ALLOWED_CORE_VIEWER_IMPORTS.has(specifier)) {
+        violations.push(`${rel}: core/viewer 导入 ${specifier} 不在允许清单`)
       }
     }
     const siblingMatch = specifier.match(/^(@retainmol\/(?:jobs|molecule-assets|ui-kit))(\/.*)?$/)

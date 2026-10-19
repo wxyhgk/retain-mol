@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 
 const mocks = vi.hoisted(() => ({
   generateInitial3D: vi.fn(),

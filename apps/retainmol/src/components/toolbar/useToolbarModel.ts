@@ -1,4 +1,4 @@
-import { getMolecularFormula } from '@retainmol/mol-viewer/core'
+import { getMolecularFormula } from '@retainmol/core'
 import { useMoleculeHistory } from '@/domain/viewer/history'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { useFileIO } from '@/hooks/useFileIO'

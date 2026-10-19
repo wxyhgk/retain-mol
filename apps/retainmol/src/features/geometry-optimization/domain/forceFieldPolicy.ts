@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 
 export type FastForceField = 'MMFF94' | 'UFF'
 

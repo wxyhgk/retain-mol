@@ -1,7 +1,7 @@
-import { createViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
-import { commitEditPlan, getModelingContext } from '@retainmol/mol-viewer/modeling'
-import { analyzeStericContacts, computeMoleculeRevision, dryRunEditPlan, type TorsionCandidate } from '@retainmol/mol-viewer/headless'
-export { MolViewer as StericViewport } from '@retainmol/mol-viewer/viewer'
+import { createViewerRuntime, getViewerApi } from '@retainmol/viewer/runtime'
+import { commitEditPlan, getModelingContext } from '@retainmol/viewer/modeling'
+import { analyzeStericContacts, computeMoleculeRevision, dryRunEditPlan, type TorsionCandidate } from '@retainmol/core/headless'
+export { MolViewer as StericViewport } from '@retainmol/viewer/viewer'
 
 export function createStericDemoSession() {
   const currentRuntime = createViewerRuntime()

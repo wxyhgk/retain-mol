@@ -6,8 +6,8 @@ Render profiles describe how the renderer draws an already chosen molecular repr
 
 Current state:
 
-- Render profile ids are constrained by `RenderStyleSchema` in `packages/mol-viewer/src/styles/schema.ts`.
-- Built-in profile data lives in TypeScript, primarily `packages/mol-viewer/src/styles/renderProfiles.ts` and profile modules under `packages/mol-viewer/src/styles/profiles/`.
+- Render profile ids are constrained by `RenderStyleSchema` in `packages/viewer/src/styles/schema.ts`.
+- Built-in profile data lives in TypeScript, primarily `packages/viewer/src/styles/renderProfiles.ts` and profile modules under `packages/viewer/src/styles/profiles/`.
 - Style preset JSON can reference only existing `renderStyle` ids.
 - Adding a theme JSON or a style preset JSON can be independent work, but adding a new render profile is not data-only.
 
@@ -30,8 +30,8 @@ stylePreset   -> user-facing bundle of displayMode + theme + renderProfile
 Current implementation:
 
 ```text
-packages/mol-viewer/src/styles/renderProfiles.ts
-packages/mol-viewer/src/styles/profiles/iboview-renderer-profile.ts
+packages/viewer/src/styles/renderProfiles.ts
+packages/viewer/src/styles/profiles/iboview-renderer-profile.ts
 ```
 
 Public API:
@@ -46,9 +46,9 @@ Renderer entry points should depend on the resolved profile object instead of ch
 Current consumers:
 
 ```text
-packages/mol-viewer/src/lib/molRenderer/MolRenderer.ts
-packages/mol-viewer/src/lib/molRenderer/MoleculeRenderer.ts
-packages/mol-viewer/src/lib/molRenderer/sceneRig.ts
+packages/viewer/src/lib/molRenderer/MolRenderer.ts
+packages/viewer/src/lib/molRenderer/MoleculeRenderer.ts
+packages/viewer/src/lib/molRenderer/sceneRig.ts
 apps/retainmol/src/features/style/components/StylePanel.tsx
 ```
 
@@ -132,17 +132,17 @@ IboView ships shader preset scripts in `resources/preset_*.js`. These are materi
 
 Adding a profile is a coordinated code change. Do not treat it like adding theme JSON.
 
-1. Add the render style id to `RenderStyleSchema` in `packages/mol-viewer/src/styles/schema.ts`.
-2. Add a profile object in `packages/mol-viewer/src/styles/renderProfiles.ts`, or a dedicated file under `packages/mol-viewer/src/styles/profiles/` when the profile has enough parameters to tune independently.
+1. Add the render style id to `RenderStyleSchema` in `packages/viewer/src/styles/schema.ts`.
+2. Add a profile object in `packages/viewer/src/styles/renderProfiles.ts`, or a dedicated file under `packages/viewer/src/styles/profiles/` when the profile has enough parameters to tune independently.
 3. If the existing fields cannot express the behavior, add a generic capability field to the profile type and implement it in renderer consumers.
-4. Reference the profile id from a style preset in `packages/mol-viewer/src/styles/presets/*.json`.
+4. Reference the profile id from a style preset in `packages/viewer/src/styles/presets/*.json`.
 5. Update docs for current behavior and target behavior.
 6. Build the package and app.
 
 Required checks:
 
 ```bash
-npm run build --workspace @retainmol/mol-viewer
+npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer
 npm test --workspace retainmol -- --run
 npm run build --workspace retainmol
 ```
@@ -169,4 +169,4 @@ If the profile cannot express a renderer behavior, add a named capability field 
 - Theme-only work belongs in theme JSON and should not touch this registry.
 - Preset-only work can reference an existing `renderStyle` and should not add schema values.
 - New profile ids must update schema, registry, preset references, renderer consumers if needed, and docs together.
-- Public style APIs should be exported through the `@retainmol/mol-viewer/styles` sub-entry and kept compatible through the root barrel during the migration.
+- Public style APIs should be exported through the `@retainmol/viewer/styles` sub-entry and kept compatible through the root barrel during the migration.

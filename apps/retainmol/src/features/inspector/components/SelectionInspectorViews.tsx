@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { ArrowLeftRight, Atom as AtomIcon, Eraser, FlaskConical, Hexagon, Link2, Minus, Plus, Trash2 } from 'lucide-react'
-import { COMMON_ELEMENT_SYMBOLS, getElementConfig } from '@retainmol/mol-viewer/core'
+import { COMMON_ELEMENT_SYMBOLS, getElementConfig } from '@retainmol/core'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { OptimizationControls } from '@/features/geometry-optimization'
@@ -27,7 +27,7 @@ type AtomModel = Extract<InspectorModel, { mode: 'atom' }>
 type BondModel = Extract<InspectorModel, { mode: 'bond' }>
 type MultiModel = Extract<InspectorModel, { mode: 'multi' }>
 
-/** 去氢由 mol-viewer 的 P1 构建操作提供；可选成员使其在落地前保持兼容。 */
+/** 去氢由 viewer 的 P1 构建操作提供；可选成员使其在落地前保持兼容。 */
 type RemoveHydrogensFn = (options?: { onlySelected?: boolean }) => void
 
 /** 三段式分段选择：与键级按钮组共用视觉语言（选中态 bg-primary） */

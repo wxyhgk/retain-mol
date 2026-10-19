@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { Button, cn } from '@retainmol/ui-kit'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { Molecule2D } from '../Molecule2D'
 import { Molecule3D } from './Molecule3D'
 import { acquire3DSlot, release3DSlot, use3DSlotActive } from './molecule3dPool'

@@ -2,28 +2,33 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, normalize, relative, resolve } from 'node:path'
 
 const SRC_DIR = new URL('../src', import.meta.url).pathname
-const MOL_VIEWER_SRC_DIR = new URL('../../../packages/mol-viewer/src', import.meta.url).pathname
-const MOL_VIEWER_COMMANDS_DIR = join(MOL_VIEWER_SRC_DIR, 'lib/builder/commands')
-const allowedMolViewerImports = new Set([
-  '@retainmol/mol-viewer/core',
-  '@retainmol/mol-viewer/coordination',
-  '@retainmol/mol-viewer/fragments',
-  '@retainmol/mol-viewer/io',
-  '@retainmol/mol-viewer/optimize',
-  '@retainmol/mol-viewer/pubchem',
-  '@retainmol/mol-viewer/samples',
-  '@retainmol/mol-viewer/styles',
-  '@retainmol/mol-viewer/templates',
-  '@retainmol/mol-viewer/three',
-  '@retainmol/mol-viewer/viewer',
-  '@retainmol/mol-viewer/runtime',
-  '@retainmol/mol-viewer/state',
-  '@retainmol/mol-viewer/editing',
-  '@retainmol/mol-viewer/geometry',
-  '@retainmol/mol-viewer/graph',
-  '@retainmol/mol-viewer/modeling',
-  '@retainmol/mol-viewer/headless',
-  '@retainmol/mol-viewer/picking',
+const VIEWER_SRC_DIR = new URL('../../../packages/viewer/src', import.meta.url).pathname
+const CORE_SRC_DIR = new URL('../../../packages/core/src', import.meta.url).pathname
+// core 与 viewer 拆包后保持同一相对布局；下列包内规则把两棵源码树视为一棵检查。
+const PACKAGE_SRC_DIRS = [CORE_SRC_DIR, VIEWER_SRC_DIR]
+const CORE_INTERNAL = '@retainmol/core/internal/'
+const COMMANDS_REL = 'lib/builder/commands'
+const PACKAGE_COMMANDS_DIRS = PACKAGE_SRC_DIRS.map(dir => join(dir, COMMANDS_REL)).filter(dir => existsSync(dir))
+const allowedCoreViewerImports = new Set([
+  '@retainmol/core',
+  '@retainmol/core/coordination',
+  '@retainmol/core/fragments',
+  '@retainmol/core/io',
+  '@retainmol/core/optimize',
+  '@retainmol/core/pubchem',
+  '@retainmol/core/samples',
+  '@retainmol/viewer/styles',
+  '@retainmol/core/templates',
+  '@retainmol/viewer/three',
+  '@retainmol/viewer/viewer',
+  '@retainmol/viewer/runtime',
+  '@retainmol/viewer/state',
+  '@retainmol/viewer/editing',
+  '@retainmol/core/geometry',
+  '@retainmol/core/graph',
+  '@retainmol/viewer/modeling',
+  '@retainmol/core/headless',
+  '@retainmol/viewer/picking',
 ])
 
 function walk(dir) {
@@ -63,8 +68,23 @@ function collectModuleSpecifiers(source) {
 }
 
 function resolveRelativeSpecifier(file, specifier) {
+  if (specifier.startsWith(CORE_INTERNAL)) return join(CORE_SRC_DIR, specifier.slice(CORE_INTERNAL.length))
   if (!specifier.startsWith('.')) return null
   return normalize(resolve(dirname(file), specifier))
+}
+
+/** Path relative to whichever package src (core or viewer) contains it. */
+function packageRel(path) {
+  const root = PACKAGE_SRC_DIRS.find(dir => path === dir || path.startsWith(`${dir}/`)) ?? VIEWER_SRC_DIR
+  return relative(root, path)
+}
+
+function walkPackages(subdir = '') {
+  return PACKAGE_SRC_DIRS.map(dir => join(dir, subdir)).filter(dir => existsSync(dir)).flatMap(walk)
+}
+
+function walkPackagesIncludingTests(subdir = '') {
+  return PACKAGE_SRC_DIRS.map(dir => join(dir, subdir)).filter(dir => existsSync(dir)).flatMap(walkIncludingTests)
 }
 
 const violations = []
@@ -241,12 +261,12 @@ const removedBuilderCompatibilityModules = new Set(
 )
 
 for (const rel of removedBuilderCompatibilityFiles) {
-  if (existsSync(join(MOL_VIEWER_SRC_DIR, rel))) {
+  if (PACKAGE_SRC_DIRS.some(dir => existsSync(join(dir, rel)))) {
     violations.push(`${rel}: removed builder compatibility entry must not be restored`)
   }
 }
 
-const rootEntrySource = readFileSync(join(MOL_VIEWER_SRC_DIR, 'index.ts'), 'utf8')
+const rootEntrySource = readFileSync(join(VIEWER_SRC_DIR, 'index.ts'), 'utf8')
 for (const symbol of ['FRAGMENTS', 'bondSelectedAtoms', 'canBond', 'calcAddAtomOnExisting', 'useBuilder', 'cn']) {
   if (new RegExp(`\\b${symbol}\\b`).test(rootEntrySource)) {
     violations.push(`index.ts: root entry must not expose internal or mutable symbol "${symbol}"`)
@@ -254,7 +274,7 @@ for (const symbol of ['FRAGMENTS', 'bondSelectedAtoms', 'canBond', 'calcAddAtomO
 }
 
 const molRendererSource = readFileSync(
-  join(MOL_VIEWER_SRC_DIR, 'lib/molRenderer/MolRenderer.ts'),
+  join(VIEWER_SRC_DIR, 'lib/molRenderer/MolRenderer.ts'),
   'utf8',
 )
 if (/\b(_molRenderers|_objectGroups)\b/.test(molRendererSource)) {
@@ -262,7 +282,7 @@ if (/\b(_molRenderers|_objectGroups)\b/.test(molRendererSource)) {
 }
 
 const moleculeRendererSource = readFileSync(
-  join(MOL_VIEWER_SRC_DIR, 'lib/molRenderer/MoleculeRenderer.ts'),
+  join(VIEWER_SRC_DIR, 'lib/molRenderer/MoleculeRenderer.ts'),
   'utf8',
 )
 if (/MoleculeSelectionVisuals|new\s+THREE\.SphereGeometry/.test(moleculeRendererSource)) {
@@ -279,30 +299,30 @@ for (const file of walk(SRC_DIR)) {
       violations.push(`${rel}: malformed package import "${specifier}"`)
     }
 
-    if (specifier === '@retainmol/mol-viewer') {
-      violations.push(`${rel}: use an explicit @retainmol/mol-viewer/* subpath instead of the root barrel`)
+    if (specifier === '@retainmol/viewer') {
+      violations.push(`${rel}: use an explicit @retainmol/viewer/* subpath instead of the root barrel`)
       continue
     }
 
-    if (specifier.startsWith('@retainmol/mol-viewer/') && !allowedMolViewerImports.has(specifier)) {
-      violations.push(`${rel}: unsupported mol-viewer subpath "${specifier}"`)
+    if (/^@retainmol\/(?:core|viewer)(?:\/|$)/.test(specifier) && !allowedCoreViewerImports.has(specifier)) {
+      violations.push(`${rel}: unsupported core/viewer entry "${specifier}"`)
     }
 
     if (
       new Set([
-        '@retainmol/mol-viewer/viewer',
-        '@retainmol/mol-viewer/runtime',
-        '@retainmol/mol-viewer/state',
-        '@retainmol/mol-viewer/editing',
-        '@retainmol/mol-viewer/geometry',
+        '@retainmol/viewer/viewer',
+        '@retainmol/viewer/runtime',
+        '@retainmol/viewer/state',
+        '@retainmol/viewer/editing',
+        '@retainmol/core/geometry',
       ]).has(specifier)
       && !rel.replaceAll('\\', '/').startsWith('domain/viewer/')
     ) {
       violations.push(`${rel}: import viewer runtime through a focused "@/domain/viewer/*" adapter`)
     }
 
-    if (rel.startsWith('components/ui/') && specifier.startsWith('@retainmol/mol-viewer')) {
-      violations.push(`${rel}: shared UI primitives must not depend on mol-viewer`)
+    if (rel.startsWith('components/ui/') && /^@retainmol\/(?:core|viewer)(?:\/|$)/.test(specifier)) {
+      violations.push(`${rel}: shared UI primitives must not depend on core/viewer`)
     }
 
     if (rel.startsWith('features/') && /\bbondSelectedAtoms\s*\(/.test(source)) {
@@ -310,7 +330,7 @@ for (const file of walk(SRC_DIR)) {
     }
 
     if (specifier.includes('/lib/builder/editing') || specifier.includes('/src/lib/builder/editing')) {
-      violations.push(`${rel}: app code must use mol-viewer public APIs, not builder editing internals`)
+      violations.push(`${rel}: app code must use core/viewer public APIs, not builder editing internals`)
     }
 
     if (
@@ -373,8 +393,8 @@ for (const rel of [
   'hooks/useMoleculeInfo.ts',
 ]) {
   const source = readFileSync(join(SRC_DIR, rel), 'utf8')
-  if (!source.includes("from '@retainmol/mol-viewer/core'")) {
-    violations.push(`${rel}: derive molecular formula and weight through @retainmol/mol-viewer/core`)
+  if (!source.includes("from '@retainmol/core'")) {
+    violations.push(`${rel}: derive molecular formula and weight through @retainmol/core`)
   }
   if (/new\s+Map\s*<\s*string\s*,\s*number\s*>|\.atomicMass\b/.test(source)) {
     violations.push(`${rel}: do not duplicate molecular formula or weight calculations in the app`)
@@ -407,15 +427,15 @@ for (const file of walk(join(SRC_DIR, 'domain'))) {
   }
 }
 
-for (const file of walk(MOL_VIEWER_COMMANDS_DIR)) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file)
+for (const file of walkPackages(COMMANDS_REL)) {
+  const rel = packageRel(file)
   const source = readFileSync(file, 'utf8')
   const imports = collectModuleSpecifiers(source)
 
   for (const specifier of imports) {
     const resolved = resolveRelativeSpecifier(file, specifier)
     const normalizedSpecifier = specifier.replaceAll('\\', '/')
-    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const normalizedResolved = resolved ? packageRel(resolved).replaceAll('\\', '/') : ''
 
     if (normalizedSpecifier === 'react' || normalizedSpecifier.startsWith('react/')) {
       violations.push(`${rel}: builder commands must not import React`)
@@ -430,18 +450,18 @@ for (const file of walk(MOL_VIEWER_COMMANDS_DIR)) {
       violations.push(`${rel}: builder commands must not import "${normalizedResolved}"`)
     }
 
-    if (normalizedSpecifier.startsWith('@/') || normalizedSpecifier.startsWith('@retainmol/')) {
+    if (normalizedSpecifier.startsWith('@/') || (normalizedSpecifier.startsWith('@retainmol/') && !/^@retainmol\/core(?:\/|$)/.test(normalizedSpecifier))) {
       violations.push(`${rel}: builder commands must not import app or package public API "${specifier}"`)
     }
   }
 }
 
-for (const file of walkIncludingTests(MOL_VIEWER_SRC_DIR)) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walkPackagesIncludingTests()) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
-    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const normalizedResolved = resolved ? packageRel(resolved).replaceAll('\\', '/') : ''
     if (removedBuilderCompatibilityModules.has(normalizedResolved)) {
       violations.push(`${rel}: import the focused builder module instead of removed compatibility entry "${specifier}"`)
     }
@@ -494,14 +514,14 @@ for (const file of walk(join(SRC_DIR, 'features'))) {
   if (imports.some(specifier =>
     specifier.startsWith('@/domain/viewer/') ||
     specifier.startsWith('@/store/') ||
-    specifier === '@retainmol/mol-viewer/viewer'
+    specifier === '@retainmol/viewer/viewer'
   )) {
     violations.push(`${rel}: feature infrastructure must not depend on viewer or app runtime stores`)
   }
 }
 
-for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'public'))) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walkPackages('public')) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   if (rel === 'public/viewer.ts' || rel === 'public/state.ts') continue
   const source = readFileSync(file, 'utf8')
   if (/from ['"]\.\.\/store\//.test(source) || /\buse(?:Molecule|Editor)Store\b/.test(source)) {
@@ -533,8 +553,13 @@ const commandDomainDependencies = new Map([
   ['shared', new Set()],
 ])
 
+function isCommandFacadeSpecifier(specifier, domain) {
+  const normalized = specifier.replaceAll('\\', '/')
+  return normalized === `../${domain}` || normalized === `${CORE_INTERNAL}${COMMANDS_REL}/${domain}/index`
+}
+
 function commandDomainForResolvedPath(resolved) {
-  const rel = relative(MOL_VIEWER_COMMANDS_DIR, resolved).replaceAll('\\', '/')
+  const rel = relative(COMMANDS_REL, packageRel(resolved)).replaceAll('\\', '/')
   const domain = rel.split('/')[0]
   return commandDomains.has(domain) ? domain : null
 }
@@ -543,8 +568,8 @@ const commandDomainGraph = new Map(
   [...commandDomains].map(domain => [domain, new Set()]),
 )
 
-for (const file of walk(MOL_VIEWER_COMMANDS_DIR)) {
-  const rel = relative(MOL_VIEWER_COMMANDS_DIR, file).replaceAll('\\', '/')
+for (const file of walkPackages(COMMANDS_REL)) {
+  const rel = relative(COMMANDS_REL, packageRel(file)).replaceAll('\\', '/')
   const sourceDomain = rel.split('/')[0]
   if (!commandDomains.has(sourceDomain)) continue
   const source = readFileSync(file, 'utf8')
@@ -555,17 +580,17 @@ for (const file of walk(MOL_VIEWER_COMMANDS_DIR)) {
     if (!targetDomain || targetDomain === sourceDomain) continue
     commandDomainGraph.get(sourceDomain).add(targetDomain)
     if (!commandDomainDependencies.get(sourceDomain)?.has(targetDomain)) {
-      violations.push(`${relative(MOL_VIEWER_SRC_DIR, file)}: commands/${sourceDomain} must not depend on commands/${targetDomain}`)
+      violations.push(`${packageRel(file)}: commands/${sourceDomain} must not depend on commands/${targetDomain}`)
     }
-    if (specifier.replaceAll('\\', '/') !== `../${targetDomain}`) {
-      violations.push(`${relative(MOL_VIEWER_SRC_DIR, file)}: import commands/${targetDomain} through its domain facade`)
+    if (!isCommandFacadeSpecifier(specifier, targetDomain)) {
+      violations.push(`${packageRel(file)}: import commands/${targetDomain} through its domain facade`)
     }
   }
 }
 
 // Tests may exercise another domain, but still go through that domain's public facade.
-for (const file of walkIncludingTests(MOL_VIEWER_COMMANDS_DIR)) {
-  const rel = relative(MOL_VIEWER_COMMANDS_DIR, file).replaceAll('\\', '/')
+for (const file of walkPackagesIncludingTests(COMMANDS_REL)) {
+  const rel = relative(COMMANDS_REL, packageRel(file)).replaceAll('\\', '/')
   const sourceDomain = rel.split('/')[0]
   if (!commandDomains.has(sourceDomain)) continue
   const source = readFileSync(file, 'utf8')
@@ -576,22 +601,22 @@ for (const file of walkIncludingTests(MOL_VIEWER_COMMANDS_DIR)) {
     if (
       targetDomain &&
       targetDomain !== sourceDomain &&
-      specifier.replaceAll('\\', '/') !== `../${targetDomain}`
+      !isCommandFacadeSpecifier(specifier, targetDomain)
     ) {
-      violations.push(`${relative(MOL_VIEWER_SRC_DIR, file)}: test imports commands/${targetDomain} through an internal file`)
+      violations.push(`${packageRel(file)}: test imports commands/${targetDomain} through an internal file`)
     }
   }
 }
 
 for (const domain of commandDomains) {
-  const facade = join(MOL_VIEWER_COMMANDS_DIR, domain, 'index.ts')
-  if (!existsSync(facade)) continue
+  const facade = PACKAGE_COMMANDS_DIRS.map(dir => join(dir, domain, 'index.ts')).find(path => existsSync(path))
+  if (!facade) continue
   for (const specifier of collectModuleSpecifiers(readFileSync(facade, 'utf8'))) {
     if (!specifier.startsWith('./')) {
-      violations.push(`${relative(MOL_VIEWER_SRC_DIR, facade)}: a domain facade may only export its own files`)
+      violations.push(`${packageRel(facade)}: a domain facade may only export its own files`)
     }
     if (/Decision(?:\.ts)?$/.test(specifier)) {
-      violations.push(`${relative(MOL_VIEWER_SRC_DIR, facade)}: decision modules are domain-internal`)
+      violations.push(`${packageRel(facade)}: decision modules are domain-internal`)
     }
   }
 }
@@ -640,12 +665,12 @@ for (const component of stronglyConnectedComponents(commandDomainGraph)) {
   }
 }
 
-for (const file of walkIncludingTests(MOL_VIEWER_SRC_DIR)) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walkPackagesIncludingTests()) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
-    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const normalizedResolved = resolved ? packageRel(resolved).replaceAll('\\', '/') : ''
     if (
       normalizedResolved === 'lib/builder/commands' ||
       normalizedResolved === 'lib/builder/commands/index'
@@ -655,26 +680,27 @@ for (const file of walkIncludingTests(MOL_VIEWER_SRC_DIR)) {
   }
 }
 
-for (const file of walkIncludingTests(MOL_VIEWER_SRC_DIR)) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walkPackagesIncludingTests()) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   if (rel.startsWith('lib/builder/commands/')) continue
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
-    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const normalizedResolved = resolved ? packageRel(resolved).replaceAll('\\', '/') : ''
     const match = normalizedResolved.match(/^lib\/builder\/commands\/([^/]+)\/(.+)$/)
-    if (match && commandDomains.has(match[1])) {
+    // 跨包时 internal/* 必须写到文件，`<domain>/index` 即门面本身。
+    if (match && commandDomains.has(match[1]) && !(match[2] === 'index' && specifier.startsWith(CORE_INTERNAL))) {
       violations.push(`${rel}: import the commands/${match[1]} domain facade instead of "${normalizedResolved}"`)
     }
   }
 }
 
-for (const file of walk(MOL_VIEWER_SRC_DIR)) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walkPackages()) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
-    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const normalizedResolved = resolved ? packageRel(resolved).replaceAll('\\', '/') : ''
     const importsBuilderEditing =
       normalizedResolved.startsWith('lib/builder/editing') ||
       specifier.replaceAll('\\', '/').includes('/builder/editing')
@@ -694,25 +720,25 @@ for (const file of walk(MOL_VIEWER_SRC_DIR)) {
   }
 }
 
-for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'store/slices'))) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walk(join(VIEWER_SRC_DIR, 'store/slices'))) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   if (rel !== 'store/slices/editSlice.ts') continue
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
-    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const normalizedResolved = resolved ? packageRel(resolved).replaceAll('\\', '/') : ''
     if (normalizedResolved.startsWith('lib/builder/commands/')) {
       violations.push(`${rel}: keep concrete command mappings in focused *EditActions.ts files`)
     }
   }
 }
 
-for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'store/slices'))) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walk(join(VIEWER_SRC_DIR, 'store/slices'))) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
-    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const normalizedResolved = resolved ? packageRel(resolved).replaceAll('\\', '/') : ''
     if (
       normalizedResolved === 'lib/builder/graph' ||
       normalizedResolved === 'lib/builder/valence' ||
@@ -724,21 +750,21 @@ for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'store/slices'))) {
   }
 }
 
-for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'hooks'))) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walk(join(VIEWER_SRC_DIR, 'hooks'))) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   if (!/hooks\/builder.*Handlers\.ts$/.test(rel)) continue
   const source = readFileSync(file, 'utf8')
   for (const specifier of collectModuleSpecifiers(source)) {
     const resolved = resolveRelativeSpecifier(file, specifier)
-    const normalizedResolved = resolved ? relative(MOL_VIEWER_SRC_DIR, resolved).replaceAll('\\', '/') : ''
+    const normalizedResolved = resolved ? packageRel(resolved).replaceAll('\\', '/') : ''
     if (normalizedResolved.startsWith('lib/builder/commands/')) {
       violations.push(`${rel}: route through builder*Effects.ts instead of importing builder commands directly`)
     }
   }
 }
 
-for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'hooks'))) {
-  const rel = relative(MOL_VIEWER_SRC_DIR, file).replaceAll('\\', '/')
+for (const file of walk(join(VIEWER_SRC_DIR, 'hooks'))) {
+  const rel = packageRel(file).replaceAll('\\', '/')
   if (rel === 'hooks/builderEditCommandEffects.ts') continue
   const source = readFileSync(file, 'utf8')
   if (/\bapplyEditCommandResult\s*\(/.test(source)) {
@@ -746,7 +772,7 @@ for (const file of walk(join(MOL_VIEWER_SRC_DIR, 'hooks'))) {
   }
 }
 
-const canvasPointerRouterFile = join(MOL_VIEWER_SRC_DIR, 'hooks/useCanvasPointerRouter.ts')
+const canvasPointerRouterFile = join(VIEWER_SRC_DIR, 'hooks/useCanvasPointerRouter.ts')
 const canvasPointerRouterSource = readFileSync(canvasPointerRouterFile, 'utf8')
 if (/\b(runObjectPointerTransformCommand|applyObjectTransformResult)\s*\(/.test(canvasPointerRouterSource)) {
   violations.push('hooks/useCanvasPointerRouter.ts: commit object transforms through commitObjectPointerTransform')
@@ -755,7 +781,7 @@ if (/\bresolveBoxSelectResult\s*\(/.test(canvasPointerRouterSource)) {
   violations.push('hooks/useCanvasPointerRouter.ts: commit box selection through commitBoxSelect')
 }
 
-const interactionHandlerFile = join(MOL_VIEWER_SRC_DIR, 'lib/molRenderer/InteractionHandler.ts')
+const interactionHandlerFile = join(VIEWER_SRC_DIR, 'lib/molRenderer/InteractionHandler.ts')
 const interactionHandlerSource = readFileSync(interactionHandlerFile, 'utf8')
 if (!interactionHandlerSource.includes("from './interactionGestureState'")) {
   violations.push('lib/molRenderer/InteractionHandler.ts: route atom/bond pointer lifecycle through interactionGestureState')
@@ -770,32 +796,33 @@ if (/\.intersectObjects\s*\(/.test(interactionHandlerSource)) {
   violations.push('lib/molRenderer/InteractionHandler.ts: keep raycast collection and hit resolution inside InteractionPicker')
 }
 
-const molViewerSyncFile = join(MOL_VIEWER_SRC_DIR, 'hooks/useMolViewerSync.ts')
+const molViewerSyncFile = join(VIEWER_SRC_DIR, 'hooks/useMolViewerSync.ts')
 const molViewerSyncSource = readFileSync(molViewerSyncFile, 'utf8')
 if (/useMoleculeStore\.getState\(\)\.(setMolecule|selectAtoms)\s*\(/.test(molViewerSyncSource)) {
   violations.push('hooks/useMolViewerSync.ts: commit controlled molecule/selection props through useMolViewerSyncEffects')
 }
 
-const atomContextMenuFile = join(MOL_VIEWER_SRC_DIR, 'components/viewer/AtomContextMenu.tsx')
+const atomContextMenuFile = join(VIEWER_SRC_DIR, 'components/viewer/AtomContextMenu.tsx')
 const atomContextMenuSource = readFileSync(atomContextMenuFile, 'utf8')
 if (/useMoleculeStore\.getState\(\)\.(selectAtom|addOneHydrogen|replaceAtoms|removeAtoms|setAtomCharge|setAtomRadical)\s*\(/.test(atomContextMenuSource)) {
   violations.push('components/viewer/AtomContextMenu.tsx: commit context menu edits through atomContextMenuEffects')
 }
 
-const rotateGizmoFile = join(MOL_VIEWER_SRC_DIR, 'components/viewer/RotateGizmo.tsx')
+const rotateGizmoFile = join(VIEWER_SRC_DIR, 'components/viewer/RotateGizmo.tsx')
 const rotateGizmoSource = readFileSync(rotateGizmoFile, 'utf8')
 if (/useMoleculeStore\.getState\(\)\.setAtomPositions\s*\(/.test(rotateGizmoSource)) {
   violations.push('components/viewer/RotateGizmo.tsx: create gizmo store callbacks through rotateGizmoEffects')
 }
 
 const directTransactionAllowed = new Set([
-  'packages/mol-viewer/src/store/slices/editSlice.ts',
-  'packages/mol-viewer/src/runtime/editingSessions.ts',
+  'packages/viewer/src/store/slices/editSlice.ts',
+  'packages/viewer/src/runtime/editingSessions.ts',
 ])
 
 for (const [rootName, rootDir] of [
   ['apps/retainmol/src', SRC_DIR],
-  ['packages/mol-viewer/src', MOL_VIEWER_SRC_DIR],
+  ['packages/core/src', CORE_SRC_DIR],
+  ['packages/viewer/src', VIEWER_SRC_DIR],
 ]) {
   for (const file of walk(rootDir)) {
     const rel = `${rootName}/${relative(rootDir, file).replaceAll('\\', '/')}`

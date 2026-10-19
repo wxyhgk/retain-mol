@@ -1,12 +1,13 @@
-# mol-viewer 包开发者文档
+# viewer / core 包开发者文档
 
-> 适用版本：当前 monorepo `packages/mol-viewer`
+> 适用版本：当前 monorepo `packages/viewer`（`@retainmol/viewer`）与 `packages/core`（`@retainmol/core`）。
+> 拆包前两者是同一个 `packages/mol-viewer`；两包保持同一相对源码布局，本文路径按文件实际所属包标注，§2 目录树为拆包前的合并视图。
 
 ---
 
 ## 1. 整体定位
 
-`mol-viewer` 是一个**独立的 React 组件库**，封装了 3D 分子可视化与交互编辑的全部能力，以 Three.js 为渲染后端、Zustand 为状态管理。
+`@retainmol/viewer` 是一个**独立的 React 组件库**，封装了 3D 分子可视化与交互编辑能力，以 Three.js 为渲染后端、Zustand 为状态管理；分子模型、builder command、IO 与几何等纯逻辑在不依赖 React/Three 的 `@retainmol/core`。
 
 上层 app（`apps/retainmol`）通过以下两种方式使用它：
 
@@ -20,8 +21,8 @@
 ## 2. 目录结构
 
 ```
-packages/mol-viewer/src/
-├── index.ts                  公开 API 入口，所有外部可用符号从此导出
+packages/{core,viewer}/src/   （合并视图：UI/渲染/状态在 viewer，其余在 core）
+├── index.ts                  viewer 根兼容入口
 │
 ├── config/                   纯常量配置，无副作用
 │   ├── bonding.config.ts     键合推断参数（tolerance、minBondLength、orderMidpointBias）
@@ -330,7 +331,7 @@ THREE.Scene
 - **终点用 ConformerGenerator**（`generate3D`，`io/molFormat.ts`）：成熟的距离几何，
   环正确、自动补氢、固定种子可复现。跑在 Worker（`workers/molOpt.worker.ts`）——大分子
   嵌入 ~7.7s 不冻结 UI；Worker **不能 import 包 barrel**（拉进 three 引用 window 崩），
-  用无 DOM 入口 `@retainmol/mol-viewer/optimize`。**注意 MMFF94 不支持硼/过渡金属**
+  用无 DOM 入口 `@retainmol/core/optimize`。**注意 MMFF94 不支持硼/过渡金属**
   （`Couldn't assign atom type`），故 generate3D 里的 MMFF 抛光步对硼分子会被 catch 跳过、
   只用 CG 嵌入——但 CG 嵌入本身对全元素都工作，质量足够（硼 OLED 就靠这个）。
 - **过程用 GeometryRelaxer 锚定展开**（`lib/geometry/relax.ts` + `moleculeOpt.relaxAnimate`）：
@@ -661,7 +662,7 @@ ticker.subscribe('my-overlay', Phase.Overlay, fn)  // Phase.Overlay = 30
 
 ## 12. 公开 API 速查
 
-通过 `packages/mol-viewer/src/index.ts` 导出的主要符号：
+通过 `packages/viewer/src/index.ts` 导出的主要符号：
 
 ```ts
 // 组件

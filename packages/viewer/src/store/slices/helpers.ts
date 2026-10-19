@@ -1,0 +1,430 @@
+/**
+ * moleculeStore 共享纯工具
+ *
+ * 全部接收 state（或 get/set），不持有 store 引用，供各 slice 复用。
+ */
+
+import type { Molecule } from '@retainmol/core'
+import { reconcileAtomChirality } from '@retainmol/core/internal/lib/stereo/perception'
+import type { SceneObject } from '@retainmol/core'
+import type {
+  EditCommandResult,
+  EditCommandResultWithMeta,
+  EditCommandWithSelectionResult,
+  GeomCommandResult,
+} from '@retainmol/core/internal/lib/builder/commands/shared/index'
+import type {
+  AddSceneObjectCommandResult,
+  RemoveSceneObjectCommandResult,
+  SceneObjectUpdatedCommandResult,
+  SetMoleculeInSceneCommandResult,
+  SplitSceneObjectCommandResult,
+} from '@retainmol/core/internal/lib/builder/commands/scene/index'
+import {
+  runPruneSelectionCommand,
+  type SelectionCommandResult,
+} from '@retainmol/core/internal/lib/builder/commands/selection/index'
+import type { MoleculeState } from './types'
+
+function isSuccessfulCommandResult<TResult extends { readonly ok: boolean }>(
+  result: TResult,
+): result is TResult & { readonly ok: true } {
+  return result.ok
+}
+
+function isChangedCommandResult(
+  result: EditCommandResultWithMeta<object>,
+): result is { readonly ok: true; readonly changed: true; readonly molecule: Molecule } {
+  return result.ok && result.changed
+}
+
+// ── Selectors ─────────────────────────────────────────────────────────────────
+
+const EMPTY_MOLECULE: Molecule = { atoms: [], bonds: [], name: 'New Molecule' }
+
+/**
+ * Derive position invalidation from the scene patch. Commands can change
+ * coordinates indirectly (for example while adding/removing an atom), so
+ * individual actions must not decide independently whether to bump the
+ * renderer version.
+ */
+export function sceneAtomPositionsChanged(
+  previous: Record<string, SceneObject>,
+  next: Record<string, SceneObject>,
+): boolean {
+  const objectIds = new Set([...Object.keys(previous), ...Object.keys(next)])
+  for (const objectId of objectIds) {
+    const previousMolecule = previous[objectId]?.molecule
+    const nextMolecule = next[objectId]?.molecule
+    if (!previousMolecule || !nextMolecule) return true
+    if (previousMolecule.atoms.length !== nextMolecule.atoms.length) return true
+
+    const nextAtoms = new Map(nextMolecule.atoms.map(atom => [atom.id, atom]))
+    for (const atom of previousMolecule.atoms) {
+      const nextAtom = nextAtoms.get(atom.id)
+      if (!nextAtom || atom.x !== nextAtom.x || atom.y !== nextAtom.y || atom.z !== nextAtom.z) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function withPositionVersion(
+  s: MoleculeState,
+  patch: Partial<MoleculeState>,
+  force = false,
+): Partial<MoleculeState> {
+  const objectsById = patch.objectsById ?? s.objectsById
+  return force || sceneAtomPositionsChanged(s.objectsById, objectsById)
+    ? { ...patch, atomPositionVersion: s.atomPositionVersion + 1 }
+    : patch
+}
+
+export function selectActiveMolecule(s: MoleculeState): Molecule | null {
+  return s.activeObjectId ? (s.objectsById[s.activeObjectId]?.molecule ?? null) : null
+}
+
+export function selectActiveMoleculeOrEmpty(s: MoleculeState): Molecule {
+  return selectActiveMolecule(s) ?? EMPTY_MOLECULE
+}
+
+// ── 内部工具 ──────────────────────────────────────────────────────────────────
+
+export function isSceneObjectEditable(object: SceneObject | undefined): object is SceneObject {
+  return Boolean(object && object.visible !== false && object.locked !== true)
+}
+
+export function getEditableObject(
+  s: MoleculeState,
+  objectId: string | null,
+): SceneObject | null {
+  if (!objectId) return null
+  const object = s.objectsById[objectId]
+  return isSceneObjectEditable(object) ? object : null
+}
+
+export function getActiveMol(s: MoleculeState): Molecule | null {
+  return getEditableObject(s, s.activeObjectId)?.molecule ?? null
+}
+
+export function patchActiveMol(s: MoleculeState, newMol: Molecule): Partial<MoleculeState> {
+  newMol = reconcileAtomChirality(newMol)
+  const objectId = s.activeObjectId
+  const obj = getEditableObject(s, objectId)
+  if (!objectId || !obj) return {}
+  return {
+    objectsById: {
+      ...s.objectsById,
+      [objectId]: { ...obj, molecule: newMol, name: newMol.name ?? obj.name },
+    },
+  }
+}
+
+export function applySelectionResult(
+  s: MoleculeState,
+  result: SelectionCommandResult,
+): Partial<MoleculeState> {
+  if (!result.selectionChanged) return {}
+  return {
+    selectedAtomIds: result.selectedAtomIds,
+    selectedBondIds: result.selectedBondIds,
+    selectionVersion: s.selectionVersion + 1,
+  }
+}
+
+function clearSelectionPatch(
+  s: MoleculeState,
+): Partial<Pick<MoleculeState, 'selectedAtomIds' | 'selectedBondIds' | 'selectionVersion'>> {
+  if (s.selectedAtomIds.size === 0 && s.selectedBondIds.size === 0) return {}
+  return {
+    selectedAtomIds: new Set(),
+    selectedBondIds: new Set(),
+    selectionVersion: s.selectionVersion + 1,
+  }
+}
+
+function reconcileChangedObjects(
+  state: MoleculeState,
+  objects: Record<string, SceneObject>,
+): Record<string, SceneObject> {
+  let result = objects
+  for (const [id, object] of Object.entries(objects)) {
+    if (object.molecule === state.objectsById[id]?.molecule) continue
+    const molecule = reconcileAtomChirality(object.molecule)
+    if (molecule === object.molecule) continue
+    if (result === objects) result = { ...objects }
+    result[id] = { ...object, molecule }
+  }
+  return result
+}
+
+export function applyAddSceneObjectResult(
+  s: MoleculeState,
+  result: AddSceneObjectCommandResult,
+): Partial<MoleculeState> {
+  return withPositionVersion(s, {
+    objectsById: reconcileChangedObjects(s, { ...s.objectsById, [result.object.id]: result.object }),
+    objectOrder: [...s.objectOrder, result.object.id],
+    activeObjectId: result.object.id,
+    ...clearSelectionPatch(s),
+  })
+}
+
+export type SceneGraphCommandResult = RemoveSceneObjectCommandResult | SplitSceneObjectCommandResult
+
+export function applySceneGraphResult(
+  s: MoleculeState,
+  result: SceneGraphCommandResult,
+): Partial<MoleculeState> {
+  if (!result.changed) return {}
+  return withPositionVersion(s, {
+    objectsById: reconcileChangedObjects(s, result.objectsById),
+    objectOrder: result.objectOrder,
+    activeObjectId: result.activeObjectId,
+    ...(result.clearSelection ? clearSelectionPatch(s) : {}),
+  })
+}
+
+export type ActiveSceneObjectCommandResult =
+  | { readonly ok: true; readonly changed: true; readonly activeObjectId: string | null; readonly clearSelection: boolean }
+  | { readonly ok: true; readonly changed: false }
+
+export function applyActiveSceneObjectResult(
+  s: MoleculeState,
+  result: ActiveSceneObjectCommandResult,
+): Partial<MoleculeState> {
+  if (!result.changed) return {}
+  return {
+    activeObjectId: result.activeObjectId,
+    ...(result.clearSelection ? clearSelectionPatch(s) : {}),
+  }
+}
+
+export function applySetMoleculeInSceneResult(
+  s: MoleculeState,
+  result: SetMoleculeInSceneCommandResult,
+  options: { readonly bumpAtomPositionVersion?: boolean } = {},
+): Partial<MoleculeState> {
+  return withPositionVersion(s, {
+    objectsById: reconcileChangedObjects(s, result.objectsById),
+    objectOrder: result.objectOrder,
+    activeObjectId: result.activeObjectId,
+    ...(result.clearSelection ? clearSelectionPatch(s) : {}),
+  }, options.bumpAtomPositionVersion === true)
+}
+
+export interface ApplySceneObjectUpdatedResultOptions {
+  readonly bumpAtomPositionVersion?: boolean
+}
+
+export function applySceneObjectUpdatedResult(
+  s: MoleculeState,
+  result: SceneObjectUpdatedCommandResult,
+  options: ApplySceneObjectUpdatedResultOptions = {},
+): Partial<MoleculeState> {
+  if (!result.changed) return {}
+  return withPositionVersion(s, {
+    objectsById: reconcileChangedObjects(s, result.objectsById),
+  }, options.bumpAtomPositionVersion === true)
+}
+
+/**
+ * 引用完整性清扫：分子编辑落盘的统一出口。
+ *
+ * 有些命令会隐式删原子或重建键 ID——resaturateAtom 删 H（setAtomCharge/
+ * setAtomRadical）、removeExcessHydrogens（cycleBondLength 升键级）、
+ * autoInferBonds 全量重建键等。这些路径不是显式的"删除"action，不走
+ * selection-aware command，会把 selectedAtomIds/selectedBondIds 留成悬空 id。
+ * 这里对照编辑后的分子统一剪枝（与 afterTimeTravel 的清理逻辑同源），
+ * 避免每个 action 各补一刀。
+ *
+ * editorStore 侧的 measurements/pendingAtomIds/bondingAtomId 由
+ * integrity.ts 订阅 objectsById 级联清理，不需要在这里处理。
+ */
+export function pruneSelectionAfterEdit(
+  s: MoleculeState,
+  newMol: Molecule,
+): Partial<MoleculeState> {
+  if (s.selectedAtomIds.size === 0 && s.selectedBondIds.size === 0) return {}
+  const validAtomIds = new Set<string>()
+  const validBondIds = new Set<string>()
+  for (const [objectId, obj] of Object.entries(s.objectsById)) {
+    const mol = objectId === s.activeObjectId ? newMol : obj.molecule
+    for (const atom of mol.atoms) validAtomIds.add(atom.id)
+    for (const bond of mol.bonds) validBondIds.add(bond.id)
+  }
+  const result = runPruneSelectionCommand(
+    s.selectedAtomIds,
+    s.selectedBondIds,
+    validAtomIds,
+    validBondIds,
+  )
+  if (!result.selectionChanged) return {}
+  return {
+    selectedAtomIds: result.selectedAtomIds,
+    selectedBondIds: result.selectedBondIds,
+    selectionVersion: s.selectionVersion + 1,
+  }
+}
+
+export interface ApplyActiveMoleculeEditOptions {
+  readonly bumpAtomPositionVersion?: boolean
+}
+
+export function applyActiveMoleculeEdit(
+  s: MoleculeState,
+  edit: (mol: Molecule) => EditCommandResult,
+  options: ApplyActiveMoleculeEditOptions = {},
+): Partial<MoleculeState> {
+  const mol = getActiveMol(s)
+  if (!mol) return {}
+  const result = edit(mol)
+  if (!result.ok || !result.changed) return {}
+  return withPositionVersion(s, {
+    ...patchActiveMol(s, result.molecule),
+    ...pruneSelectionAfterEdit(s, result.molecule),
+  }, options.bumpAtomPositionVersion === true)
+}
+
+export function applyActiveMoleculeEditWithMeta<
+  TMeta extends object,
+  TResult extends EditCommandResultWithMeta<object> = EditCommandResultWithMeta<TMeta>,
+>(
+  get: () => MoleculeState,
+  set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
+  edit: (mol: Molecule) => TResult,
+  readMeta: (result: TResult & { readonly ok: true }) => TMeta,
+): ({ ok: true } & TMeta) | { ok: false; reason?: string } {
+  const mol = getActiveMol(get())
+  if (!mol) return { ok: false, reason: '没有活跃分子' }
+  const result = edit(mol)
+  if (!isSuccessfulCommandResult(result)) return result
+  const meta = readMeta(result)
+  if (!isChangedCommandResult(result)) return { ok: true, ...meta }
+  set((s) => {
+    const m = getActiveMol(s)
+    if (!m) return {}
+    return withPositionVersion(s, {
+      ...patchActiveMol(s, result.molecule),
+      ...pruneSelectionAfterEdit(s, result.molecule),
+    })
+  })
+  return { ok: true, ...meta }
+}
+
+export function applyActiveMoleculeEditWithSelection(
+  s: MoleculeState,
+  edit: (mol: Molecule, selection: MoleculeState) => EditCommandWithSelectionResult | { ok: false; reason: string },
+): Partial<MoleculeState> {
+  const mol = getActiveMol(s)
+  if (!mol) return {}
+  const result = edit(mol, s)
+  if (!result.ok) return {}
+  return applyActiveMoleculeSelectionResult(s, result)
+}
+
+export function applyActiveMoleculeSelectionCommand(
+  get: () => MoleculeState,
+  set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
+  edit: (mol: Molecule, selection: MoleculeState) => EditCommandWithSelectionResult | { ok: false; reason: string },
+): { ok: boolean; reason?: string } {
+  const state = get()
+  const mol = getActiveMol(state)
+  if (!mol) return { ok: false, reason: '没有活跃分子' }
+  const result = edit(mol, state)
+  if (result.ok === false) return { ok: false, reason: result.reason }
+  if (!result.moleculeChanged && !result.selectionChanged) return { ok: true }
+  set((s) => applyActiveMoleculeSelectionResult(s, result))
+  return { ok: true }
+}
+
+export function applyActiveMoleculeSelectionResult(
+  s: MoleculeState,
+  result: EditCommandWithSelectionResult,
+): Partial<MoleculeState> {
+  if (!result.moleculeChanged && !result.selectionChanged) return {}
+  return withPositionVersion(s, {
+    ...(result.moleculeChanged ? patchActiveMol(s, result.molecule) : {}),
+    ...(result.selectionChanged
+      ? {
+          selectedAtomIds: result.selectedAtomIds,
+          selectedBondIds: result.selectedBondIds,
+          selectionVersion: s.selectionVersion + 1,
+        }
+      : {}),
+  })
+}
+
+/** 几何参数编辑（键长/键角/二面角）的统一落盘：单次 set = 单步 undo，附带位置版本号自增 */
+export function applyGeomEdit(
+  get: () => MoleculeState,
+  set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
+  edit: (mol: Molecule) => GeomCommandResult,
+): { ok: boolean; reason?: string } {
+  const mol = getActiveMol(get())
+  if (!mol) return { ok: false, reason: '没有活跃分子' }
+  const result = edit(mol)
+  if (!result.ok) return result
+  if (!result.changed) return { ok: true }
+  set((s) => {
+    const m = getActiveMol(s)
+    if (!m) return {}
+    return withPositionVersion(s, {
+      ...patchActiveMol(s, result.molecule),
+      ...pruneSelectionAfterEdit(s, result.molecule),
+    })
+  })
+  return { ok: true }
+}
+
+export type GeomCommandResultWithMeta<TMeta extends object> =
+  | ({ ok: true; changed: true; molecule: Molecule } & TMeta)
+  | ({ ok: true; changed: false } & Partial<TMeta>)
+  | { ok: false; reason: string }
+
+export function applyGeomEditWithMeta<
+  TMeta extends object,
+  TResult extends GeomCommandResultWithMeta<object> = GeomCommandResultWithMeta<TMeta>,
+>(
+  get: () => MoleculeState,
+  set: (fn: (s: MoleculeState) => Partial<MoleculeState>) => void,
+  edit: (mol: Molecule) => TResult,
+  readMeta: (result: TResult & { readonly ok: true }) => TMeta,
+): ({ ok: true } & TMeta) | { ok: false; reason?: string } {
+  const mol = getActiveMol(get())
+  if (!mol) return { ok: false, reason: '没有活跃分子' }
+  const result = edit(mol)
+  if (!isSuccessfulCommandResult(result)) return result
+  const meta = readMeta(result)
+  if (!isChangedCommandResult(result)) return { ok: true, ...meta }
+  set((s) => {
+    const m = getActiveMol(s)
+    if (!m) return {}
+    return withPositionVersion(s, {
+      ...patchActiveMol(s, result.molecule),
+      ...pruneSelectionAfterEdit(s, result.molecule),
+    })
+  })
+  return { ok: true, ...meta }
+}
+
+/**
+ * activateObjectContainingAtom / activateObjectContainingBond 的共同实现：
+ * 按 objectOrder 找到宿主对象后先做可编辑性守卫——不可见/锁定的对象拒绝激活，
+ * 编辑手势不应"穿透"到用户看不见或已锁定的分子上。
+ */
+export function activateObjectWhere(
+  s: MoleculeState,
+  contains: (obj: SceneObject) => boolean,
+): boolean {
+  for (const oid of s.objectOrder) {
+    const obj = s.objectsById[oid]
+    if (!obj || !contains(obj)) continue
+    if (obj.visible === false || obj.locked === true) return false
+    // set 是同步的：返回 true 时调用方立即读到新的 activeObjectId
+    if (s.activeObjectId !== oid) s.setActiveObject(oid)
+    return true
+  }
+  return false
+}

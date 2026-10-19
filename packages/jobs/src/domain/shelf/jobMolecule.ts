@@ -1,5 +1,5 @@
-import { inferBonds } from '@retainmol/mol-viewer/core'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import { inferBonds } from '@retainmol/core'
+import type { Molecule } from '@retainmol/core'
 import type { JobDetail } from '../jobTypes'
 
 /** 超过该原子数的分子不在展柜内渲染（overlay 显示原子数提示）。 */

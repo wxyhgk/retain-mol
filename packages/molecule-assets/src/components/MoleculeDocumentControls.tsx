@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@retainmol/ui-kit'
-import type { EditorHostPort } from '@retainmol/mol-viewer/core'
+import type { EditorHostPort } from '@retainmol/core'
 import { computeContentHash } from '../domain/canonicalize'
 import type { MoleculeAsset, MoleculeRevision } from '../domain/types'
 import {

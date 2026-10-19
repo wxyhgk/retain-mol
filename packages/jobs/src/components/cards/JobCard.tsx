@@ -1,7 +1,7 @@
 import { Atom } from 'lucide-react'
 import { Chip, ElapsedTime, MonoId } from '@retainmol/ui-kit'
 import { Molecule2D, MoleculeCard, type MoleculeCardVariant } from '@retainmol/molecule-assets'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { calculationLabel } from '../../domain/jobPresentation'
 import type { JobSummary } from '../../domain/jobTypes'
 import { isTerminalJobStatus } from '../../application/jobQueries'

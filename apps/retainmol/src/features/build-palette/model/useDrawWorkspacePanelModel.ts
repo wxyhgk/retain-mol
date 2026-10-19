@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
-import { getElementConfig } from '@retainmol/mol-viewer/core'
+import { getElementConfig } from '@retainmol/core'
 import {
   getFragment,
   getFragmentAttachmentSites,
-} from '@retainmol/mol-viewer/fragments'
+} from '@retainmol/core/fragments'
 import { getBuildFragmentsForElement } from '../domain/buildCatalog'
 import {
   groupEquivalentAttachmentSites,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { analyzeStericContacts, generateTorsionCandidates, type Molecule, type TorsionCandidateResult } from '@retainmol/mol-viewer/headless'
+import { analyzeStericContacts, generateTorsionCandidates, type Molecule, type TorsionCandidateResult } from '@retainmol/core/headless'
 import type { StericDemoSession } from '@/domain/viewer/stericDemo'
 import fixture from '../fixtures/spiro-benzyl.json'
 import { getDecisionAvailability, requestDecision } from '../infrastructure/decisionClient'

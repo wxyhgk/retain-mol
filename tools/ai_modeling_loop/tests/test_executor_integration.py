@@ -13,13 +13,13 @@ from tools.ai_modeling_loop.execution_evidence import validate_execution_evidenc
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXECUTOR = REPO_ROOT / "tools" / "ai_modeling_loop" / "retainmol_executor.mjs"
-MODELING_DIST = REPO_ROOT / "packages" / "mol-viewer" / "dist" / "public" / "modeling.js"
+MODELING_DIST = REPO_ROOT / "packages" / "viewer" / "dist" / "public" / "modeling.js"
 
 
 class RetainMolExecutorIntegrationTests(unittest.TestCase):
     def test_executor_emits_matching_independent_and_production_effects(self) -> None:
         if not MODELING_DIST.is_file():
-            self.skipTest("build @retainmol/mol-viewer before running executor integration")
+            self.skipTest("build @retainmol/core and @retainmol/viewer before running executor integration")
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -146,7 +146,7 @@ class RetainMolExecutorIntegrationTests(unittest.TestCase):
 
     def test_executor_does_not_publish_when_effect_is_indeterminate(self) -> None:
         if not MODELING_DIST.is_file():
-            self.skipTest("build @retainmol/mol-viewer before running executor integration")
+            self.skipTest("build @retainmol/core and @retainmol/viewer before running executor integration")
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

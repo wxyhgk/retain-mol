@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { computeMoleculeRevision, validateGeometryConstraints, type GeometryConstraintReport } from '@retainmol/mol-viewer/headless'
+import { computeMoleculeRevision, validateGeometryConstraints, type GeometryConstraintReport } from '@retainmol/core/headless'
 import { previewConstrainedGeometry, type ConstraintPreview, type ConstrainedGeometrySession } from '@/domain/viewer/constrainedGeometry'
 import { bondLengthDelta, ringFixture, ringRequest, type ConstraintScenario } from './ringFixture'
 

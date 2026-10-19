@@ -1,12 +1,13 @@
 import { defineConfig } from 'vitest/config'
 import path from 'path'
 
-// mol-viewer 必须外置:编辑状态 store 需要与 app 保持单实例
+// core/viewer 必须外置:编辑状态 store 与 core 注册表需要与 app 保持单实例
 const externals = [
   'react',
   'react-dom',
   'react/jsx-runtime',
-  '@retainmol/mol-viewer',
+  '@retainmol/core',
+  '@retainmol/viewer',
   '@retainmol/ui-kit',
   '@tanstack/react-query',
   'zustand',

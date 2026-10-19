@@ -1,4 +1,4 @@
-import { getFragment } from '@retainmol/mol-viewer/fragments'
+import { getFragment } from '@retainmol/core/fragments'
 import { useEditorStore } from '@/domain/viewer/editorState'
 import {
   deriveWorkspaceTool,

@@ -1,5 +1,5 @@
-import { computeMoleculeRevision, commitEditPlan, type ModelingCommand } from '@retainmol/mol-viewer/modeling'
-import { defaultViewerRuntime, getViewerApi } from '@retainmol/mol-viewer/runtime'
+import { computeMoleculeRevision, commitEditPlan, type ModelingCommand } from '@retainmol/viewer/modeling'
+import { defaultViewerRuntime, getViewerApi } from '@retainmol/viewer/runtime'
 import { useMoleculeStore } from './moleculeState'
 import { activateAppWorkspaceTool } from '../workspaceToolController'
 import { selectAppBusyMessage, useAppTaskStore } from '@/store/appTaskStore'

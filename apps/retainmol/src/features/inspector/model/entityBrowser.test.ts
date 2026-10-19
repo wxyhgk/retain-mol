@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { buildEntityRows, queryEntityRows, ENTITY_PAGE_SIZE } from './entityBrowser'
 const molecule: Molecule = {
   atoms: Array.from({ length: 100 }, (_, i) => ({ id: `oxygen-in-id-${i}`, symbol: i % 10 === 0 ? 'O' : 'C', label: i === 50 ? 'reaction center' : undefined, x: i, y: 0, z: 0 })),

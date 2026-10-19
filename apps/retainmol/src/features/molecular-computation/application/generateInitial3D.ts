@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { runMoleculeComputation } from '../infrastructure/molWorkerClient'
 
 export function generateInitial3D(molecule: Molecule) {

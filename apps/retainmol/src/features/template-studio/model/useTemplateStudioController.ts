@@ -4,7 +4,7 @@ import {
   validateTemplateDraft,
   type MolecularTemplateDraft,
   type TemplateDraftCategory,
-} from '@retainmol/mol-viewer/templates'
+} from '@retainmol/core/templates'
 import { activateAppWorkspaceTool } from '@/domain/workspaceToolController'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { placeMoleculeInViewer } from '@/features/molecule-placement'

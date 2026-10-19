@@ -1,4 +1,4 @@
-import type { FragmentAttachmentSite } from '@retainmol/mol-viewer/fragments'
+import type { FragmentAttachmentSite } from '@retainmol/core/fragments'
 
 export function groupEquivalentAttachmentSites(
   sites: readonly FragmentAttachmentSite[],

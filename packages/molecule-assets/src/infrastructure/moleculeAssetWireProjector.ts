@@ -1,4 +1,4 @@
-import { parseMolecule } from '@retainmol/mol-viewer/core'
+import { parseMolecule } from '@retainmol/core'
 import {
   MOLECULE_ASSET_SCHEMA_VERSION,
   MOLECULE_REVISION_SCHEMA_VERSION,

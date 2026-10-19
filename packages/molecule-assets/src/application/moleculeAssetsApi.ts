@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import type { MoleculeAsset, MoleculeRevision, Sha256Hex } from '../domain/types'
 
 export interface MoleculeAssetsRequestOptions {

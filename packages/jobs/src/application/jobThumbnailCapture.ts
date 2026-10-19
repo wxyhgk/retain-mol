@@ -1,4 +1,4 @@
-import { captureViewportImage } from '@retainmol/mol-viewer/viewer'
+import { captureViewportImage } from '@retainmol/viewer/viewer'
 import { useUploadJobThumbnailMutation } from './jobQueries'
 
 export const JOB_THUMBNAIL_SCALE = 0.28

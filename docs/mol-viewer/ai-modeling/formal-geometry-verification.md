@@ -39,7 +39,7 @@ flowchart TD
 | 层 | 输入 | 输出 | 权威职责 |
 | --- | --- | --- | --- |
 | 多模态 provider | 图片、文本、当前选择 | 图提案与 `EditPlan` | 识别和规划 |
-| `mol-viewer/modeling` | `EditPlan` | dry-run Molecule | 命令语义、价态和事务 |
+| `@retainmol/viewer/modeling` | `EditPlan` | dry-run Molecule | 命令语义、价态和事务 |
 | 几何/优化器 | 初始 Molecule、约束 | 候选坐标 | 连续数值求解 |
 | Lean 验证器 | expected 快照、最终候选、可信 policy | issue 列表 | 精确离散与几何不变量 |
 | xTB/Psi4 等 | 已验证结构 | 能量、力、波函数产物 | 计算化学结果 |

@@ -7,7 +7,8 @@
 ## 边界检查
 
 - [ ] 跨 feature 引用只经过对应 `index.ts` facade
-- [ ] App 只使用 `@retainmol/mol-viewer/*` 公共子路径
+- [ ] App 只使用 `@retainmol/core[/*]`、`@retainmol/viewer/*` 公共入口（不使用 `@retainmol/core/internal`）
+- [ ] 纯化学/几何/IO 逻辑放 `packages/core`，UI/状态/渲染放 `packages/viewer`
 - [ ] 化学编辑规则没有进入 UI 或 renderer
 - [ ] Three.js 细节没有进入 App 或 builder 领域模型
 - [ ] 多步骤编辑具有明确的 transaction/undo 边界

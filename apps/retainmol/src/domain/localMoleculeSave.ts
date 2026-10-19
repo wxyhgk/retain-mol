@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { parseMolecule, type Molecule } from '@retainmol/mol-viewer/core'
+import { parseMolecule, type Molecule } from '@retainmol/core'
 import { canonicalizeMolecule } from '@retainmol/molecule-assets'
 
 /**

@@ -18,8 +18,8 @@ Current state:
 
 - The app still stores and renders `displayMode`, `themeId`, `theme`, and `renderStyle`.
 - `stylePresetId` exists as a user-facing grouping layer, but resolved presets currently map back to `displayMode + themeId + renderStyle`.
-- Theme files under `packages/mol-viewer/src/presets/themes/*.json` are auto-loaded and can be added independently when they fit the existing theme schema.
-- Style preset files under `packages/mol-viewer/src/styles/presets/*.json` are auto-loaded and can be added independently when they reference existing `displayMode`, `themeId`, and `renderStyle` values.
+- Theme files under `packages/viewer/src/presets/themes/*.json` are auto-loaded and can be added independently when they fit the existing theme schema.
+- Style preset files under `packages/viewer/src/styles/presets/*.json` are auto-loaded and can be added independently when they reference existing `displayMode`, `themeId`, and `renderStyle` values.
 - Render profiles are TypeScript-backed. New render profile ids or capabilities still require schema, registry, and renderer changes.
 
 Target state:
@@ -85,8 +85,8 @@ Coordinate before adding:
 
 | Work type | Can edit | Must not edit without coordination | Minimum validation |
 | --- | --- | --- | --- |
-| Theme-only | `packages/mol-viewer/src/presets/themes/*.json`, theme docs | renderer, store, public exports | `npm run build --workspace @retainmol/mol-viewer` |
-| Preset-only | `packages/mol-viewer/src/styles/presets/*.json`, preset docs | renderer, `styles/schema.ts`, `styles/renderProfiles.ts` | `npm run build --workspace @retainmol/mol-viewer` |
+| Theme-only | `packages/viewer/src/presets/themes/*.json`, theme docs | renderer, store, public exports | `npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer` |
+| Preset-only | `packages/viewer/src/styles/presets/*.json`, preset docs | renderer, `styles/schema.ts`, `styles/renderProfiles.ts` | `npm run build --workspace @retainmol/core && npm run build --workspace @retainmol/viewer` |
 | New `renderStyle` id | `styles/schema.ts`, `styles/renderProfiles.ts`, renderer consumers, docs/tests | unrelated UI/layout files | app build plus focused renderer smoke |
 | New render profile field | `styles/renderProfiles.ts`, renderer consumer, docs/tests | preset/theme files unrelated to the field | app build plus a visual smoke case |
 | Renderer behavior | `lib/molRenderer/*`, render config/profile files | builder/store chemistry logic | app build plus browser smoke |
@@ -95,18 +95,18 @@ Coordinate before adding:
 
 ## Public Style API Export Policy
 
-New style APIs should first belong to `@retainmol/mol-viewer/styles`. The root barrel may mirror a symbol only for compatibility, and removal of root exports should happen in a separate documented breaking-change window.
+New style APIs should first belong to `@retainmol/viewer/styles`. The root barrel may mirror a symbol only for compatibility, and removal of root exports should happen in a separate documented breaking-change window.
 
 Do:
 
 ```ts
-import { listStylePresets, resolveRenderProfile } from '@retainmol/mol-viewer/styles'
+import { listStylePresets, resolveRenderProfile } from '@retainmol/viewer/styles'
 ```
 
 Avoid for new code:
 
 ```ts
-import { listStylePresets } from '@retainmol/mol-viewer'
+import { listStylePresets } from '@retainmol/viewer'
 ```
 
 ## Design Goals

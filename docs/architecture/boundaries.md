@@ -12,15 +12,17 @@ This document defines ownership boundaries for multi-person work. The goal is to
 
 Current state:
 
-- `@retainmol/mol-viewer` exposes stable consumer APIs through explicit package sub-entries. The root barrel at `packages/mol-viewer/src/index.ts` is compatibility-only.
-- Package sub-entries separate `./core`, `./io`, `./viewer`, `./runtime`, `./state`, `./editing`, `./modeling`, `./geometry`, `./graph`, `./styles`, `./three`, fragments/templates and optimization APIs.
+- The reusable molecule engine is split into `@retainmol/core` (model, IO, geometry, graph, builder commands, headless modeling; OpenChemLib/Zod only) and `@retainmol/viewer` (React component, runtime, state, Three.js renderer, styles). viewer depends on the exact same core version; core never depends on viewer.
+- Both packages expose stable consumer APIs through explicit entries. The viewer root barrel at `packages/viewer/src/index.ts` is compatibility-only.
+- core entries: `.` (`@retainmol/core`), `./io`, `./geometry`, `./graph`, `./headless`, `./fragments`, `./coordination`, `./templates`, `./samples`, `./pubchem`, `./optimize`. viewer entries: `./viewer`, `./runtime`, `./state`, `./editing`, `./modeling`, `./styles`, `./three`, `./picking`.
+- `@retainmol/core/internal/*` exposes core's per-file build output for `@retainmol/viewer` only; it is not a stable API and must not appear in either package's public API reports.
 - App code imports viewer capabilities through focused files under `apps/retainmol/src/domain/viewer/`; feature/UI files do not import viewer state directly.
 - Theme JSON and style preset JSON can be added independently when they use existing schema values and existing render profiles.
 - Adding a new render profile id or a new renderer behavior still requires coordinated TypeScript changes in the style schema, render profile registry, and renderer consumers.
 
 Target state:
 
-- Consumer imports use the smallest public sub-entry; mutable stores come only from `@retainmol/mol-viewer/state`.
+- Consumer imports use the smallest public sub-entry; mutable stores come only from `@retainmol/viewer/state`.
 - The root barrel remains a compatibility facade during the migration, not the place to grow every new public API by default.
 - Software styles should be mostly data-driven: a style preset resolves representation, theme, render profile, and optional feature profiles without software-specific renderer branches.
 - Render profile additions should become narrow capability additions with schema, registry, renderer, tests, and docs updated together.
@@ -42,8 +44,8 @@ Must not own:
 - Builder geometry algorithms.
 
 Allowed dependency direction:
-- May import public APIs from `@retainmol/mol-viewer`.
-- Should not import deep internal files from `packages/mol-viewer/src/lib/...`.
+- May import public APIs from `@retainmol/viewer`.
+- Should not import deep internal files from `packages/core/src/lib/...`.
 
 ### `packages/ui-kit`
 
@@ -54,7 +56,7 @@ Owns:
 
 Must not own:
 - 任何化学/任务业务语义。
-- 对 `@retainmol/*` 业务包(含 mol-viewer)的依赖。
+- 对 `@retainmol/*` 业务包(含 core / viewer)的依赖。
 
 Rule:
 - App 与 feature 包通过 `@retainmol/ui-kit` 根导入使用;app 侧 `components/ui/*`、`components/data/{DataTable,VirtualList}`、`lib/utils.ts`、`domain/uiThemeStore.ts` 是兼容 re-export 薄壳,不再新增实现。
@@ -67,7 +69,7 @@ Owns:
 - 资产/版本类型、canonicalize、保存与加载、React Query hooks、`MoleculeDocumentControls`。
 
 Allowed dependency direction:
-- `@retainmol/mol-viewer` 仅限 `/core`、`/io`、`/three`、`/styles` 子入口;`@retainmol/ui-kit` 根导入。
+- 仅限 `@retainmol/core`、`@retainmol/core/io`、`@retainmol/viewer/three`、`@retainmol/viewer/styles`;`@retainmol/ui-kit` 根导入。
 - 不得依赖 `@retainmol/jobs` 或 app 代码。
 
 Rule:
@@ -83,7 +85,7 @@ Owns:
 - `JobsApi` 接口与其 HTTP 实现之间的 wire 投影。
 
 Allowed dependency direction:
-- `@retainmol/mol-viewer` 仅限 `/core`、`/samples`、`/styles`、`/three`、`/viewer` 子入口。
+- 仅限 `@retainmol/core`、`@retainmol/core/samples`、`@retainmol/viewer/styles`、`@retainmol/viewer/three`、`@retainmol/viewer/viewer`。
 - `@retainmol/molecule-assets`、`@retainmol/ui-kit` 根导入。
 - 不得依赖 app 代码;app 的 workflows 编辑器通过 `SimulationWorkspace` 的 `workflowEditor` prop 注入。
 
@@ -91,7 +93,7 @@ Rule:
 - 后端地址由宿主 app 启动时通过 `configureJobsApiBase` 注入;包内不读 `import.meta.env`。
 - 包对外 API 只从 `src/index.ts` 导出;app 不再持有 `features/jobs` 目录。
 
-### `packages/mol-viewer/src/index.ts`
+### `packages/viewer/src/index.ts`
 
 Public API surface for the app and future consumers.
 
@@ -106,10 +108,10 @@ Rule:
 - New public APIs should prefer the relevant sub-entry contract first. Add a root-barrel export only when existing app or downstream compatibility needs it.
 
 Compatibility policy:
-- Existing root imports such as `import { MolViewer } from '@retainmol/mol-viewer'` stay valid for the compatibility period.
+- Existing root imports such as `import { MolViewer } from '@retainmol/viewer'` stay valid for the compatibility period.
 - New app code should use explicit sub-entries, and app viewer runtime state should go through focused adapters in `apps/retainmol/src/domain/viewer/`.
 - Do not remove root exports in the same change that introduces a sub-entry. Deprecation should be documented first, then removed in a later breaking-change window.
-- Public sub-entries should never require consumers to deep import from `packages/mol-viewer/src/...`.
+- Public sub-entries should never require consumers to deep import from `packages/viewer/src/...`.
 
 ### Public sub-entry contracts
 
@@ -136,7 +138,7 @@ Internal-only contracts:
 - Store slices, command implementation files, and internal fragment model/registry files are not consumer APIs.
 - Renderer adapter registration stays internal until a renderer-neutral overlay and interaction contract exists; exporting it earlier would promise unsupported adapters.
 
-### `packages/mol-viewer/src/lib/builder`
+### `packages/core/src/lib/builder`
 
 Pure molecule editing and analysis logic.
 
@@ -160,7 +162,7 @@ Current policy:
 - Atom replacement is pure element replacement: keep id, coordinates, bonds, and explicit hydrogens.
 - Hydrogen addition, bond inference, aromaticity detection, and geometry cleanup are explicit operations, not implicit side effects of replacement.
 
-### `packages/mol-viewer/src/lib/modeling`
+### `packages/core/src/lib/modeling`
 
 面向 AI、远程协作客户端和批量编辑器的中立协议层。
 
@@ -180,13 +182,13 @@ Current policy:
 `public/headless.ts` 直接公开纯执行模块。上下文转换接收普通 snapshot/intent DTO，不依赖 store 类型。
 模型 provider、图片识别和提示词编排属于 App/服务层，不进入核心协议层。
 
-### `packages/mol-viewer/src/application/editing`
+### `packages/viewer/src/application/editing`
 
 会话只消费所需的分子读取、坐标写入、对齐和事务回调，不持有 store 或 React hook。
 `runtime/editingSessions.ts` 负责把实例 store 适配到这些端口，hooks 和公开 editing API 调用同一适配层。
 旧 `hooks/editSessionFactory.ts` 只保留兼容转发，不再承载实现。
 
-### `packages/mol-viewer/src/store`
+### `packages/viewer/src/store`
 
 State orchestration and undo boundaries.
 
@@ -209,7 +211,7 @@ Rules:
 - Undo scope must be deliberate. Use transactions for multi-step user actions.
 - Selection and UI-only state should not pollute undo history.
 
-### `packages/mol-viewer/src/hooks`
+### `packages/viewer/src/hooks`
 
 Interaction adapters.
 
@@ -231,7 +233,7 @@ Risk area:
 - `useCanvasPointerRouter.ts` owns DOM pointer routing and transient gesture state only. Object transform and box selection result commits should go through `commitObjectPointerTransform` and `commitBoxSelect` in `useCanvasPointerRouterEffects.ts`.
 - `InteractionHandler.ts` owns raycast/coordinate conversion only；atom/bond pointer lifecycle 必须通过 `interactionGestureState.ts` 的判别联合状态迁移，禁止重新引入并行 drag booleans。
 
-### `packages/mol-viewer/src/lib/molRenderer`
+### `packages/viewer/src/lib/molRenderer`
 
 Three.js rendering and picking internals.
 
@@ -268,7 +270,7 @@ Use this table when deciding where work belongs.
 | Work type | Primary owner |
 | --- | --- |
 | Add a toolbar button or panel control | `apps/retainmol` |
-| Add a stable viewer capability for app use | `packages/mol-viewer/src/public/viewer.ts` plus internal implementation, then optional root compatibility |
+| Add a stable viewer capability for app use | `packages/viewer/src/public/viewer.ts` plus internal implementation, then optional root compatibility |
 | Change atom replacement behavior | `lib/builder/commands/*` for the interaction contract, `lib/builder/editing/atomOps.ts` for the low-level algorithm, tests |
 | Change point/click gesture semantics | `hooks/builderAtomHandlers.ts`, `hooks/builderBondHandlers.ts`, `hooks/builderBackgroundHandlers.ts` |
 | Change undo behavior | `store/slices/*`, `store/moleculeStore.ts` |
@@ -284,16 +286,16 @@ Use this table when deciding where work belongs.
 Compatibility root import:
 
 ```ts
-import { MolViewer, useMoleculeStore } from '@retainmol/mol-viewer'
+import { MolViewer, useMoleculeStore } from '@retainmol/viewer'
 ```
 
 Preferred public sub-entry imports for package consumers:
 
 ```ts
-import { MolViewer } from '@retainmol/mol-viewer/viewer'
-import { useMoleculeStore } from '@retainmol/mol-viewer/state'
-import { listStylePresets, resolveStylePreset } from '@retainmol/mol-viewer/styles'
-import { parseMol, exportMol } from '@retainmol/mol-viewer/io'
+import { MolViewer } from '@retainmol/viewer/viewer'
+import { useMoleculeStore } from '@retainmol/viewer/state'
+import { listStylePresets, resolveStylePreset } from '@retainmol/viewer/styles'
+import { parseMol, exportMol } from '@retainmol/core/io'
 ```
 
 Preferred app import for viewer runtime state:
@@ -306,10 +308,10 @@ import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 Avoid from `apps/retainmol`:
 
 ```ts
-import { someInternal } from '../../../packages/mol-viewer/src/lib/...'
+import { someInternal } from '../../../packages/core/src/lib/...'
 ```
 
-Inside `packages/mol-viewer`, keep dependencies directional:
+Inside `packages/core` and `packages/viewer` (same relative layout), keep dependencies directional; viewer reaches core only through `@retainmol/core[/*]` package specifiers:
 
 ```text
 components/hooks -> store -> lib/builder
@@ -338,25 +340,27 @@ Run this before merging boundary-sensitive changes:
 npm run verify
 ```
 
-Root `check:boundaries` runs both the mol-viewer package checker and the app checker.
-The app checker also owns the existing command-domain matrix, facade and transaction-routing rules below;
-running only the mol-viewer checker does not replace the root gate.
+Root `check:boundaries` runs the core and viewer package checkers and the app checker.
+The app checker also owns the existing command-domain matrix, facade and transaction-routing rules below; it treats
+`packages/core/src` and `packages/viewer/src` as one tree (cross-package `@retainmol/core/internal/<path>` imports resolve
+to core files) so these rules survive the split. Running only a package checker does not replace the root gate.
 
-The mol-viewer checker additionally enforces foundation ownership (including type imports),
-explicit runtime import cycles, and transitive `/core`, `/io`, `/geometry`, `/graph`, `/headless` dependencies.
-`check-dist` applies the same external dependency allowlist to generated JavaScript chunks.
+The core checker enforces an OpenChemLib/Zod-only external allowlist for every source file (including type imports),
+foundation ownership, explicit runtime import cycles, and transitive `@retainmol/core`, `/io`, `/geometry`, `/graph`, `/headless` dependencies;
+core `check-dist` applies the same allowlist to the whole built package. The viewer checker requires core to be imported by
+package name, forbids `@retainmol/core/internal` in viewer public entries, and keeps Builder/Renderer/Style directions.
 
 Together the scripts currently enforce these rules:
 
-- App code must import mol-viewer through explicit public subpaths, not the root barrel.
+- App code must import core/viewer through explicit public entries, not the viewer root barrel.
 - App code must import viewer runtime state through focused adapters in `apps/retainmol/src/domain/viewer/`.
-- Shared app UI primitives must not depend on mol-viewer.
-- `packages/mol-viewer/src/lib/builder/commands` must not import React, app aliases, store, hooks, components, or renderer internals.
+- Shared app UI primitives must not depend on core/viewer.
+- `packages/core/src/lib/builder/commands` must not import React, app aliases, store, hooks, components, or renderer internals.
 - hooks、store、components、public API 和包根入口只能从 `lib/builder/commands/<domain>` 领域 facade 导入，不能深度导入领域实现文件。
 - `lib/builder/commands` 不提供根聚合入口；package 代码和测试必须明确导入所属领域 facade。
 - 已删除 `BuilderEngine.ts`、`fragmentOps.ts`、根命令 barrels 和旧混合命令文件；边界检查禁止恢复或引用这些路径。
-- App code and mol-viewer hooks/store/components/public entries must not import `lib/builder/editing`; user-facing edits go through builder commands.
-- The root `packages/mol-viewer/src/index.ts` barrel must not import `lib/builder/editing` directly; legacy root APIs should be bridged through command, public, or focused non-editing helper modules.
+- App code and viewer hooks/store/components/public entries must not import `lib/builder/editing`; user-facing edits go through builder commands.
+- The root `packages/viewer/src/index.ts` barrel must not import `lib/builder/editing` directly; legacy root APIs should be bridged through command, public, or focused non-editing helper modules.
 - `store/slices` must not import low-level builder rules such as `lib/builder/valence`, `lib/builder/kernel`, or `lib/builder/editing`; store slices consume command results and shared store helpers. Shared graph queries now belong to `lib/graph/`; old graph paths are compatibility-only.
 - `hooks/builder*Handlers.ts` files must route through `builder*Effects.ts` rather than importing builder commands directly.
 - Hook files other than `builderEditCommandEffects.ts` must use `runEditCommand` instead of calling `applyEditCommandResult` directly.
@@ -367,11 +371,11 @@ Together the scripts currently enforce these rules:
 - Declarative `styles/` may not import renderer implementation.
 - Three.js material extensions live in `/three`; `/styles` stays renderer-neutral.
 - `public/viewer.ts` may not expose `ThreeRendererPort` implementation types.
-- API Extractor reports freeze every package sub-entry, and the pack consumer test installs the produced tarball in a clean project.
+- API Extractor reports freeze every package entry (except core `./internal/*`), and the pack consumer tests install the produced tarballs in a clean project (core alone with React/Three loading blocked; viewer together with core).
 
 ## Strict TypeScript gate
 
-`packages/mol-viewer/tsconfig.strict.json` covers all production `.ts` and `.tsx` files under `src` with
+`packages/core/tsconfig.strict.json` and `packages/viewer/tsconfig.strict.json` cover all production `.ts` and `.tsx` files under `src` with
 `strict + exactOptionalPropertyTypes + noUncheckedIndexedAccess`. Test files remain under the normal package
 typecheck and Vitest gates so production strictness cannot be bypassed by adding a new source directory.
 
@@ -382,7 +386,8 @@ Before merging a change, check:
 - Does this change cross a layer boundary without going through a public or local adapter API?
 - Is a chemistry policy encoded in UI or renderer code?
 - Is a rendering decision encoded in builder/store code?
-- Does an app-specific workflow leak into `packages/mol-viewer`?
+- Does an app-specific workflow leak into `packages/core` or `packages/viewer`?
+- Does new pure chemistry land in core instead of viewer, and does new UI code stay out of core?
 - Does a new store action create the right undo history?
 - Are pure builder behavior changes covered by tests?
 - Are visual changes controlled by config/theme instead of scattered constants?
@@ -392,9 +397,9 @@ Before merging a change, check:
 Use this before starting parallel work:
 
 - Are you only editing files owned by your task? If not, coordinate before touching shared schema, registry, renderer, store, or root barrel files.
-- If you are adding a theme, can it be expressed as JSON under `packages/mol-viewer/src/presets/themes/` without TypeScript changes?
-- If you are adding a style preset, can it reference existing `displayMode`, `themeId`, and `renderStyle` values under `packages/mol-viewer/src/styles/presets/`?
+- If you are adding a theme, can it be expressed as JSON under `packages/viewer/src/presets/themes/` without TypeScript changes?
+- If you are adding a style preset, can it reference existing `displayMode`, `themeId`, and `renderStyle` values under `packages/viewer/src/styles/presets/`?
 - If you need a new `renderStyle` or render profile behavior, have you reserved the schema, registry, renderer, test, and docs changes as one coordinated task?
 - Are you changing public API exports? Prefer a sub-entry contract and keep root-barrel compatibility unless the change is an explicit breaking migration.
-- Are you avoiding deep imports from `apps/retainmol` into `packages/mol-viewer/src/lib/...`?
+- Are you avoiding deep imports from `apps/retainmol` into `packages/core/src/lib/...`?
 - Are you leaving unrelated dirty files untouched?

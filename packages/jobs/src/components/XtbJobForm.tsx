@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { FlaskConical, LoaderCircle } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { Button } from '@retainmol/ui-kit'
 import { Field } from '@retainmol/ui-kit'
 import { Input } from '@retainmol/ui-kit'

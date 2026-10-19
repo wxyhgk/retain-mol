@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { newAtom, newBond } from '@retainmol/mol-viewer/core'
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import { newAtom, newBond } from '@retainmol/core'
+import type { Molecule } from '@retainmol/core'
 import { Molecule2D } from './Molecule2D'
 
 function ethanol(): Molecule {

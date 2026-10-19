@@ -29,8 +29,8 @@ MOL 的 singlet radical 标记无法由现有“未配对电子数”字段完�
 ## 公开入口
 
 ```ts
-import { parseMolecule, findElementConfig } from '@retainmol/mol-viewer/core'
-import { parseMoleculeJson, exportMoleculeJson } from '@retainmol/mol-viewer/io'
+import { parseMolecule, findElementConfig } from '@retainmol/core'
+import { parseMoleculeJson, exportMoleculeJson } from '@retainmol/core/io'
 
 const molecule = parseMolecule(externalValue)
 const text = exportMoleculeJson(molecule)

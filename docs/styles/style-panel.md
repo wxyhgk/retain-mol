@@ -22,7 +22,7 @@ themeId
 These are stored in:
 
 ```text
-packages/mol-viewer/src/store/editorStore.ts
+packages/viewer/src/store/editorStore.ts
 ```
 
 ## Future Controls

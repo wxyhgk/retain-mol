@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTemplateDraft } from '@retainmol/mol-viewer/templates'
-import { newAtom } from '@retainmol/mol-viewer/core'
+import { createTemplateDraft } from '@retainmol/core/templates'
+import { newAtom } from '@retainmol/core'
 import {
   listSavedTemplateDrafts,
   saveTemplateDraft,

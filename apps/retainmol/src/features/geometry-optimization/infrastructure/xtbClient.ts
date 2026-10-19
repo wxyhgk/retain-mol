@@ -1,4 +1,4 @@
-import type { Molecule } from '@retainmol/mol-viewer/core'
+import type { Molecule } from '@retainmol/core'
 import { resolveBackendUrl } from '@/infrastructure/backendUrl'
 
 // HTTP/SSE transport only. Store writes and task state belong to the application layer.

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowLeft, Save, Upload } from 'lucide-react'
-import { getMolecularFormula } from '@retainmol/mol-viewer/core'
+import { getMolecularFormula } from '@retainmol/core'
 import { cn } from '@/lib/utils'
 import type { TemplateStudioController } from '../model/useTemplateStudioController'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'

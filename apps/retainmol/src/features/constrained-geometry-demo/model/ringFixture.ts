@@ -1,4 +1,4 @@
-import type { ConstrainedGeometryRequest, Molecule } from '@retainmol/mol-viewer/headless'
+import type { ConstrainedGeometryRequest, Molecule } from '@retainmol/core/headless'
 
 /** Procedural heavy-atom geometry test, not a validated cyclohexane conformer. */
 export const ringFixture: Molecule = {
