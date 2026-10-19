@@ -5,7 +5,7 @@ import type { ResolvedTheme } from '../../presets'
 import type { ResolvedRenderProfile } from '../../styles'
 import { RENDER } from '../../config/render.config'
 import { getSideBondPerp } from './bondGeometry'
-import { syncMaterialColor } from './moleculeStylePrimitives'
+import { outlineColor, syncMaterialColor } from './moleculeStylePrimitives'
 import { disposeObject3D } from './disposeObject3D'
 import { BondMeshFactory, type BondLineSpec } from './BondMeshFactory'
 
@@ -101,6 +101,8 @@ export class MoleculeBondRenderer {
       aromaticCentroid ? 1 : 0,
       displayMode,
       profile.id,
+      profile.materialModel,
+      profile.outline ? 1 : 0,
       profile.bondGeometry,
       profile.bondOpenEnded ? 1 : 0,
       profile.bondTaper ?? 1,
@@ -196,6 +198,7 @@ export class MoleculeBondRenderer {
     selected: boolean
   }) {
     const profile = this.getProfile()
+    const outlineHex = profile.outline ? outlineColor(this.getTheme()) : undefined
     let index = 0
     for (const child of input.group.children) {
       const cylinder = child as THREE.Mesh
@@ -245,6 +248,10 @@ export class MoleculeBondRenderer {
           cylinder.material,
           input.selected ? RENDER.bondSelectedColor : RENDER.aromaticDashColor,
         )
+      }
+      if (outlineHex !== undefined) {
+        const outline = cylinder.children.find(child => (child as THREE.Mesh).isMesh) as THREE.Mesh | undefined
+        if (outline) (outline.material as THREE.MeshBasicMaterial).color.setHex(outlineHex)
       }
       index += 1
     }

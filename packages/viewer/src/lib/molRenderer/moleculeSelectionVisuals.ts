@@ -125,6 +125,10 @@ export class MoleculeSelectionVisuals {
         hl.geometry = new THREE.SphereGeometry(radius, RENDER.sphereSegments, RENDER.sphereSegments)
       }
     }
+    const material = hl.material as THREE.MeshBasicMaterial
+    material.color.setHex(hexToInt(theme.scene.highlightColor))
+    material.opacity = theme.scene.highlightOpacity
+    material.transparent = theme.scene.highlightOpacity < 1
     hl.position.set(x, y, z)
   }
 
