@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import type { ToolbarModel } from './useToolbarModel'
 import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import { useLocalSaveStore } from '@/domain/localMoleculeSave'
+import { isEmbedded, requestHostSave } from '@/app/embed'
 import { useUiPaletteStore } from '@/domain/uiPaletteStore'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { INSPECTOR_ID, INSPECTOR_TOGGLE_ID } from '@/domain/inspectorStore'
@@ -47,7 +48,9 @@ export function ToolbarView({
       if (isWorkspaceShortcutBlocked(event) || !isMoleculeHistoryTracking()) return
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
-        saveActiveMoleculeToBrowser()
+        // 嵌入模式：分子归宿主页面，由它保存
+        if (isEmbedded()) requestHostSave()
+        else saveActiveMoleculeToBrowser()
         return
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -70,8 +73,8 @@ export function ToolbarView({
           <span className="hidden sm:inline">RetainMol</span>
         </span>
 
-        {/* 保存：只写浏览器本地（编辑器不做后端保存） */}
-        <div className="flex shrink-0 items-center gap-1">
+        {/* 保存：只写浏览器本地（编辑器不做后端保存）；嵌入模式下由宿主页面保存，不显示 */}
+        {!isEmbedded() && <div className="flex shrink-0 items-center gap-1">
           <Tip label="保存到浏览器 (Ctrl+S)" side="bottom">
             <Button
               variant="outline"
@@ -83,7 +86,7 @@ export function ToolbarView({
               <span className="hidden sm:inline">保存</span>
             </Button>
           </Tip>
-        </div>
+        </div>}
 
         {/* 右侧：命令面板 + 检查器 */}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -216,7 +219,10 @@ function EditorCommandPalette({
           { label: '运动路径与扭曲环带 Demo', opensSurface: true, onRun: () => { window.open('/?demo=geometry-paths', '_blank', 'noopener,noreferrer') } },
           { label: 'PubChem 搜索', opensSurface: true, onRun: onSearchOpen },
           { label: '保存到浏览器 (Ctrl+S)', hint: 'Ctrl+S', disabled: isEmpty, onRun: () => saveActiveMoleculeToBrowser() },
-        ].filter(item => filter(item.label)),
+        ]
+          // 嵌入模式：不存浏览器，也不开演示页
+          .filter(item => !isEmbedded() || !(item.label.includes('Demo') || item.label.startsWith('保存到浏览器')))
+          .filter(item => filter(item.label)),
       },
       {
         title: '视图与主题',

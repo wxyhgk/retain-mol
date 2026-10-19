@@ -5,6 +5,7 @@ import type { Ketcher, StructServiceProvider } from 'ketcher-core'
 import { exportMol } from '@retainmol/core/io'
 import { parseMoleculeFile, placeMoleculeInViewer } from '@/features/molecule-placement'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
+import { isEmbedded } from '@/app/embed'
 import { molfileSyncKey } from './molfileSyncKey'
 
 class KetcherErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
@@ -145,7 +146,10 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
       selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
     ;(window as unknown as Record<string, unknown>).__getMolfile = () => lastMolfileRef.current
     const active = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
-    if (active.atoms.length === 0) {
+    if (isEmbedded()) {
+      // 嵌入模式：分子由宿主页面给出，不放默认的苯；已经载入的推到 2D
+      if (active.atoms.length > 0) void pushTo2D(ketcher)
+    } else if (active.atoms.length === 0) {
       ketcher.setMolecule('c1ccccc1').catch((e) => console.warn('[Ketcher setMolecule]', e))
       setTimeout(() => doSync(ketcher), 900)
     } else {
@@ -181,6 +185,15 @@ function KetcherEditorInner({ provider }: { provider: StructServiceProvider }) {
     ;(ketcher as unknown as Record<string, unknown>).__retainmolPollId = pollId
     ;(ketcher as unknown as Record<string, unknown>).__retainmolOnChange = onChange
   }
+
+  // 嵌入模式载入分子后（app/embed.ts）：把 3D 推到 2D
+  useEffect(() => {
+    const onPush = () => {
+      if (ketcherRef.current) void pushTo2D(ketcherRef.current)
+    }
+    window.addEventListener('retainmol:push-to-2d', onPush)
+    return () => window.removeEventListener('retainmol:push-to-2d', onPush)
+  }, [])
 
   // 组件卸载时清理轮询与订阅
   useEffect(() => {
