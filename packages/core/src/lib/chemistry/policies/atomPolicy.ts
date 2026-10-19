@@ -6,6 +6,12 @@ export type AtomRuleResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: string }
 
+export const MIN_FORMAL_CHARGE = -8
+export const MAX_FORMAL_CHARGE = 8
+export const MIN_RADICAL_ELECTRONS = 0
+export const MAX_RADICAL_ELECTRONS = 8
+export const MAX_AUTOMATIC_HYDROGENS_PER_ATOM = 20
+
 export function validateElementSymbol(symbol: string): AtomRuleResult {
   return Object.hasOwn(ELEMENT_DATA, symbol)
     ? { ok: true }
@@ -27,6 +33,28 @@ export function validateAtomCreationInput(
   const element = validateElementSymbol(symbol)
   if (element.ok === false) return element
   return validateAtomPosition(x, y, z)
+}
+
+export function validateFormalCharge(charge: number): AtomRuleResult {
+  return Number.isSafeInteger(charge)
+    && charge >= MIN_FORMAL_CHARGE
+    && charge <= MAX_FORMAL_CHARGE
+    ? { ok: true }
+    : {
+        ok: false,
+        reason: `形式电荷必须是 ${MIN_FORMAL_CHARGE} 到 ${MAX_FORMAL_CHARGE} 之间的安全整数`,
+      }
+}
+
+export function validateRadicalElectronCount(radical: number): AtomRuleResult {
+  return Number.isSafeInteger(radical)
+    && radical >= MIN_RADICAL_ELECTRONS
+    && radical <= MAX_RADICAL_ELECTRONS
+    ? { ok: true }
+    : {
+        ok: false,
+        reason: `自由基电子数必须是 ${MIN_RADICAL_ELECTRONS} 到 ${MAX_RADICAL_ELECTRONS} 之间的安全整数`,
+      }
 }
 
 export function getHydrogenAdditionAvailability(

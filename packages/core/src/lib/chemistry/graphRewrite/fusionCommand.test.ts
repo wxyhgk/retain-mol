@@ -102,4 +102,45 @@ describe('fragment fusion command workflow', () => {
     if (!result.ok) return
     expect(result.molecule.atoms.find(({ id }) => id === 'h1')?.x).toBe(42)
   })
+
+  it('rebases fragment entity ids when the same template is fused repeatedly', () => {
+    const initial = molecule(
+      [atom('h1'), atom('h2'), atom('h3'), atom('h4')],
+      [bond('hb1', 'h1', 'h2'), bond('hb2', 'h3', 'h4')],
+    )
+    const firstPreview = prepareFragmentFusionCommand({
+      host: initial,
+      fragment: fragment(),
+      anchors: [{ hostBondId: 'hb1', fragmentBondId: 'rb' }],
+    })
+    const firstCandidate = firstPreview.candidates[0]
+    expect(firstCandidate).toBeDefined()
+    if (!firstCandidate) return
+    const first = commitFragmentFusionCommand(firstPreview, firstCandidate.topologyKey, initial)
+    expect(first.ok).toBe(true)
+    if (!first.ok) return
+
+    const secondPreview = prepareFragmentFusionCommand({
+      host: first.molecule,
+      fragment: fragment(),
+      anchors: [{ hostBondId: 'hb2', fragmentBondId: 'rb' }],
+    })
+    const secondCandidate = secondPreview.candidates[0]
+    expect(secondCandidate).toBeDefined()
+    if (!secondCandidate) return
+    const second = commitFragmentFusionCommand(
+      secondPreview,
+      secondCandidate.topologyKey,
+      first.molecule,
+    )
+    expect(second.ok).toBe(true)
+    if (!second.ok) return
+    expect(second.effect.addedAtomIds).toEqual(['r3~1'])
+    expect(second.effect.addedBondIds).toEqual(['r23~1', 'r31~1'])
+    const entityIds = [
+      ...second.molecule.atoms.map(({ id }) => id),
+      ...second.molecule.bonds.map(({ id }) => id),
+    ]
+    expect(new Set(entityIds).size).toBe(entityIds.length)
+  })
 })

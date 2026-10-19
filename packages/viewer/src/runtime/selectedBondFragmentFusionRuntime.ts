@@ -24,6 +24,7 @@ export type SelectedBondFragmentFusionFailureCode =
   | 'stale-host'
   | 'candidate-no-longer-valid'
   | 'concurrent-store-change'
+  | 'transaction-conflict'
 
 export interface SelectedBondFragmentFusionFailure {
   readonly ok: false

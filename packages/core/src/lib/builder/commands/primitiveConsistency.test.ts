@@ -6,6 +6,7 @@ import {
   runAddAtomCommand,
   runAddOneHydrogenCommand,
   runSetAtomChargeCommand,
+  runSetAtomChargesCommand,
   runSetAtomRadicalCommand,
 } from './atom'
 import { runSetBondOrderCommand } from './bond'
@@ -34,6 +35,10 @@ describe('atom and bond primitive consistency', () => {
     expect(runSetAtomRadicalCommand(molecule, nitrogen.id, 1)).toEqual({ ok: true, changed: false })
     expect(runSetAtomChargeCommand(molecule, nitrogen.id, 0.5).ok).toBe(false)
     expect(runSetAtomRadicalCommand(molecule, nitrogen.id, -1).ok).toBe(false)
+    expect(runSetAtomChargeCommand(molecule, nitrogen.id, 9).ok).toBe(false)
+    expect(runSetAtomChargeCommand(molecule, nitrogen.id, Number.MAX_SAFE_INTEGER).ok).toBe(false)
+    expect(runSetAtomRadicalCommand(molecule, nitrogen.id, 9).ok).toBe(false)
+    expect(runSetAtomChargesCommand(molecule, [nitrogen.id], 9).ok).toBe(false)
   })
 
   it('consumes terminal hydrogens when a bond order increases', () => {

@@ -82,4 +82,29 @@ describe('selected-bond fragment fusion with the real molecule store', () => {
     )).toMatchObject({ ok: false, code: 'selection-changed' })
     expect(store.temporal.getState().pastStates).toHaveLength(0)
   })
+
+  it('rejects commit while another edit transaction owns undo history', () => {
+    const store = createMoleculeStore()
+    const state = store.getState()
+    state.setMolecule(host())
+    state.setSelection([], ['ha', 'hb'])
+    store.temporal.getState().clear()
+    const preview = previewSelectedBondFragmentFusion(store, {
+      fragment: sevenMemberedRing(),
+      fragmentBondIds: ['rb1', 'rb4'],
+    })
+    if (!preview.ok || !preview.candidates[0]) return
+
+    const competing = store.getState().beginTransaction('atom-drag')
+    const result = commitSelectedBondFragmentFusion(
+      store,
+      preview,
+      preview.candidates[0].key,
+    )
+    expect(result).toMatchObject({ ok: false, code: 'transaction-conflict' })
+    const moleculeAfterConflict = store.getState().objectsById[store.getState().activeObjectId!]?.molecule
+    expect(moleculeAfterConflict?.atoms).toHaveLength(4)
+    expect(moleculeAfterConflict?.bonds).toHaveLength(2)
+    competing.cancel()
+  })
 })

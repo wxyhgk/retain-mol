@@ -1,4 +1,10 @@
 import { z } from 'zod'
+import {
+  MAX_FORMAL_CHARGE,
+  MAX_RADICAL_ELECTRONS,
+  MIN_FORMAL_CHARGE,
+  MIN_RADICAL_ELECTRONS,
+} from '../chemistry/policies/atomPolicy'
 import type { EditPlanParseResult } from './contracts'
 import { constrainedGeometryRequestSchema } from './geometryConstraintSchema'
 
@@ -79,13 +85,13 @@ export const modelingCommandSchema = z.discriminatedUnion('kind', [
     ...commandBase,
     kind: z.literal('atom.setCharge'),
     atomId: idSchema,
-    charge: z.number().int().min(-8).max(8),
+    charge: z.number().int().min(MIN_FORMAL_CHARGE).max(MAX_FORMAL_CHARGE),
   }).strict(),
   z.object({
     ...commandBase,
     kind: z.literal('atom.setRadical'),
     atomId: idSchema,
-    radical: z.number().int().min(0).max(8),
+    radical: z.number().int().min(MIN_RADICAL_ELECTRONS).max(MAX_RADICAL_ELECTRONS),
   }).strict(),
   z.object({
     ...commandBase,

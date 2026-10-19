@@ -9,7 +9,11 @@ import { getElementEditingDefaults } from '../../chemistry/policies/elementDefau
 import { degree, hParentOf, hNeighborsOf } from '../../graph/queries'
 import { calcAddAtomOnExisting, calcBondLength } from '../geometry/vsepr'
 import { maxValence, targetValence, valenceUsed } from '../valence'
-import { getHydrogenAdditionAvailability, isPotentialStereoCenter } from '../../chemistry/policies/atomPolicy'
+import {
+  getHydrogenAdditionAvailability,
+  isPotentialStereoCenter,
+  MAX_AUTOMATIC_HYDROGENS_PER_ATOM,
+} from '../../chemistry/policies/atomPolicy'
 import { getConnectedFragment } from '../../graph/components'
 import { flipTetraBranches, parityFromCoords } from '../../stereo/geometry'
 import { perceiveAtomChirality, reconcileAtomChirality } from '../../stereo/perception'
@@ -174,6 +178,7 @@ export function autoAddHydrogens(mol: Molecule, atomId?: string): Molecule {
 
     const needed = Math.max(0, Math.floor(targetMax - valenceUsed(current, target.id) + 1e-6))
     if (needed <= 0) continue
+    if (!Number.isSafeInteger(needed) || needed > MAX_AUTOMATIC_HYDROGENS_PER_ATOM) continue
 
     for (let i = 0; i < needed; i++) {
       const centerAtom = current.atoms.find(a => a.id === target.id)
