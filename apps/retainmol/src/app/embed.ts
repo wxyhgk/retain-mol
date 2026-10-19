@@ -1,7 +1,9 @@
 import { exportXYZ } from '@retainmol/core'
 import { exportMol, parseClipboard } from '@retainmol/core/io'
+import { useMoleculeTemporal } from '@retainmol/viewer/state'
 import { useUiThemeStore } from '@/domain/uiThemeStore'
 import { editorHostPort } from '@/domain/viewer/editorHostPort'
+import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { placeMoleculeInViewer } from '@/features/molecule-placement'
 
 /**
@@ -121,13 +123,17 @@ export function connectEmbed(options: EmbedOptions): void {
     loading = true
     void (async () => {
       try {
-        const { molecule } = parseClipboard(text)
-        if (!molecule.atoms.length) throw new Error('结构里没有原子')
-        await placeMoleculeInViewer(molecule, { mode: 'replace' })
-        if (!report) known = editorHostPort.getSnapshot().activeMolecule
-        // The 2D editor follows what was loaded (StructuraPanel listens).
+        const molecule = text.trim() ? parseClipboard(text).molecule : null
+        if (molecule && !molecule.atoms.length) throw new Error('结构里没有原子')
+        // A new session: what the scene held (another molecule of the page) goes, and its history with it.
+        const scene = useMoleculeStore.getState()
+        for (const id of Object.keys(scene.objectsById)) useMoleculeStore.getState().removeSceneObject(id)
+        if (molecule) await placeMoleculeInViewer(molecule, { mode: 'replace' })
+        useMoleculeTemporal.getState().clear()
+        known = report ? null : editorHostPort.getSnapshot().activeMolecule
+        // The 2D editor follows what was loaded, an empty canvas too (StructuraPanel listens).
         window.dispatchEvent(new CustomEvent('retainmol:push-to-2d'))
-        post({ type: 'loaded', atoms: molecule.atoms.length })
+        post({ type: 'loaded', atoms: molecule?.atoms.length ?? 0 })
       } catch (error) {
         post({ type: 'error', message: error instanceof Error ? error.message : String(error) })
       } finally {
@@ -135,7 +141,7 @@ export function connectEmbed(options: EmbedOptions): void {
         window.setTimeout(() => {
           loading = false
           if (report) tell()
-          else known = editorHostPort.getSnapshot().activeMolecule ?? known
+          else known = editorHostPort.getSnapshot().activeMolecule ?? null
         }, CHANGE_DEBOUNCE_MS * 2)
       }
     })()

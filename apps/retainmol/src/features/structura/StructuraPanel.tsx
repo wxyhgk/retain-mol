@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { StructuraEditor, type EditorHandle } from 'chem-structura'
+import { configureRDKit, StructuraEditor, type EditorHandle } from 'chem-structura'
 import 'chem-structura/style.css'
+import rdkitWasm from '@rdkit/rdkit/RDKit_minimal.wasm?url'
 import { exportMol } from '@retainmol/core/io'
 import { isEmbedded } from '@/app/embed'
 import { parseMoleculeFile, placeMoleculeInViewer } from '@/features/molecule-placement'
 import { selectActiveMoleculeOrEmpty, useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { molfileSyncKey } from './molfileSyncKey'
+
+// RDKit（SMILES、2D 重排）用本地这份，不从 CDN 下载：离线可用，也不必等网络
+configureRDKit({ wasmUrl: rdkitWasm })
 
 /** 单独打开时 2D 的起始结构：苯（与原先 Ketcher 面板一致）。 */
 const BENZENE = [
@@ -95,12 +99,16 @@ export function StructuraPanel() {
     timerRef.current = window.setTimeout(() => void syncTo3D(molfile), SYNC_DEBOUNCE_MS)
   }
 
-  /** 3D → 2D：当前 3D 分子交给 2D，经 SMILES 由 RDKit 重排成干净的 2D 布局。 */
+  /** 3D → 2D：当前 3D 分子交给 2D，经 SMILES 由 RDKit 重排成干净的 2D 布局；3D 为空时 2D 也清空。 */
   const pushTo2D = async () => {
     const editor = editorRef.current
     if (!editor) return
     const active = selectActiveMoleculeOrEmpty(useMoleculeStore.getState())
-    if (active.atoms.length === 0) return
+    if (active.atoms.length === 0) {
+      editor.setMolfile('')
+      lastMolfileRef.current = editor.getMolfile()
+      return
+    }
     try {
       setSyncState('syncing')
       editor.setMolfile(exportMol(active))
@@ -140,6 +148,21 @@ export function StructuraPanel() {
     window.clearTimeout(flashRef.current)
   }, [])
 
+  // 从隐藏变为可见（嵌入时 iframe 先藏着，或面板刚展开）：重新适配视野，不停在隐藏时算出的缩放
+  const areaRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const area = areaRef.current
+    if (!area) return
+    let width = area.clientWidth
+    const observer = new ResizeObserver(() => {
+      const next = area.clientWidth
+      if (width < 50 && next >= 50) editorRef.current?.fit()
+      width = next
+    })
+    observer.observe(area)
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-white">
       <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-b bg-card px-2 text-[11px]">
@@ -163,7 +186,7 @@ export function StructuraPanel() {
           </button>
         </div>
       </div>
-      <div className="min-h-0 w-full flex-1">
+      <div ref={areaRef} className="min-h-0 w-full flex-1">
         <StructuraEditor ref={editorRef} initialMolfile={initialMolfile} onChange={onChange} />
       </div>
     </div>
