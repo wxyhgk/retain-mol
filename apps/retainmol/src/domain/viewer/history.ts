@@ -16,3 +16,8 @@ export function isMoleculeHistoryTracking(): boolean {
 export function useMoleculeHistoryTracking(): boolean {
   return useStore(moleculeTemporal, state => state.isTracking)
 }
+
+/** Forgets the undo history: a new session starts from what is on screen now. */
+export function clearMoleculeHistory(): void {
+  moleculeTemporal.getState().clear()
+}

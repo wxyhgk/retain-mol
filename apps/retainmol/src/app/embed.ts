@@ -1,7 +1,7 @@
 import { exportXYZ } from '@retainmol/core'
 import { exportMol, parseClipboard } from '@retainmol/core/io'
-import { useMoleculeTemporal } from '@retainmol/viewer/state'
 import { useUiThemeStore } from '@/domain/uiThemeStore'
+import { clearMoleculeHistory } from '@/domain/viewer/history'
 import { editorHostPort } from '@/domain/viewer/editorHostPort'
 import { useMoleculeStore } from '@/domain/viewer/moleculeState'
 import { placeMoleculeInViewer } from '@/features/molecule-placement'
@@ -129,7 +129,7 @@ export function connectEmbed(options: EmbedOptions): void {
         const scene = useMoleculeStore.getState()
         for (const id of Object.keys(scene.objectsById)) useMoleculeStore.getState().removeSceneObject(id)
         if (molecule) await placeMoleculeInViewer(molecule, { mode: 'replace' })
-        useMoleculeTemporal.getState().clear()
+        clearMoleculeHistory()
         known = report ? null : editorHostPort.getSnapshot().activeMolecule
         // The 2D editor follows what was loaded, an empty canvas too (StructuraPanel listens).
         window.dispatchEvent(new CustomEvent('retainmol:push-to-2d'))
